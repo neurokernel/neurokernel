@@ -5,7 +5,8 @@ Broker for routing between modules run in separate processes; data is
 read from all modules before data is routed between modules.
 """
 
-import time, signal
+import logging
+import signal
 import numpy as np
 import multiprocessing as mp
 import zmq
@@ -46,6 +47,7 @@ class Module(mp.Process):
     def __init__(self, *args, **kwargs):
         self.id = kwargs.pop('id')
         self.port = kwargs.pop('port')
+        self.logger = logging.getLogger('module %s' % self.id)
 
         mp.Process.__init__(self, *args, **kwargs)
         
@@ -70,7 +72,7 @@ class Module(mp.Process):
             data = ''
             if is_poll_in(self.sock, self.poller):
                 data = self.sock.recv()
-                print 'process %s <-: %s' % (self.id, data)
+                self.logger.info('received: %s' % data)
                 if data == 'quit':
                     break
 
@@ -79,7 +81,7 @@ class Module(mp.Process):
 
         # Restore SIGINT signal handler before exiting:
         signal.signal(signal.SIGINT, orig_handler)
-        print 'process %s: done' % self.id
+        self.logger.info('done')
         
     def process_data(self, data):
         """
@@ -120,6 +122,8 @@ class ModuleBroker(object):
     """
     
     def __init__(self, port=5000):
+
+        self.logger = logging.getLogger('broker  ')
         self.port = port
 
         # Number of modules:
@@ -164,7 +168,7 @@ class ModuleBroker(object):
             if is_poll_in(self.sock, self.poller):
                 from_id = self.sock.recv()
                 data = self.sock.recv()
-                print 'broker  <- %s: %s' % (from_id, data)
+                self.logger.info('received from %s: %s' % (from_id, data))
                 if from_id in ack_list:
                     ack_list.remove(from_id)
 
@@ -181,7 +185,7 @@ class ModuleBroker(object):
         """
 
         for entry in out_data:
-            print 'broker  -> %s: %s' % entry    
+            self.logger.info('sent to %s: %s' % entry)
             self.sock.send_multipart(entry)
 
     def send_all_quit(self):
@@ -202,7 +206,7 @@ class ModuleBroker(object):
                 in_data = self.recv_all()
             except KeyboardInterrupt:
                 break
-            print 'broker: barrier reached'
+            self.logger.info('barrier reached')
             
             # Figure out what needs to be routed to each module:
             out_data = self.process_data(in_data)
@@ -215,7 +219,7 @@ class ModuleBroker(object):
             
         # Tell the modules to terminate:
         self.send_all_quit()
-        print 'broker: done'
+        self.logger.info('done')
         
     def process_data(self, in_data):
         """
@@ -227,6 +231,8 @@ class ModuleBroker(object):
         return in_data
     
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s %(name)s %(levelname)s %(message)s')
     b = ModuleBroker()
     b.create(Module)
     b.create(Module)
