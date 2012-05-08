@@ -5,7 +5,7 @@ Broker for routing between modules run in separate processes; data is
 read from all modules before data is routed between modules.
 """
 
-import time
+import time, signal
 import numpy as np
 import multiprocessing as mp
 import zmq
@@ -30,9 +30,8 @@ class Module(mp.Process):
     ----------
     id : int
         Module ID.
-    broker_port : int
-        Port to use when communicating with other modules through
-        broker.
+    port : int
+        Port to use when communicating with broker.
 
     Methods
     -------
@@ -46,18 +45,21 @@ class Module(mp.Process):
 
     def __init__(self, *args, **kwargs):
         self.id = kwargs.pop('id')
-        self.broker_port = kwargs.pop('broker_port')
+        self.port = kwargs.pop('port')
 
         mp.Process.__init__(self, *args, **kwargs)
         
     def run(self):
 
+        # Make the module processes ignore Ctrl-C:
+        orig_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        
         # Connect to the broker:
         self.ctx = zmq.Context()
         self.poller = zmq.Poller()
         self.sock = self.ctx.socket(zmq.DEALER)
         self.sock.setsockopt(zmq.IDENTITY, str(self.id))
-        self.sock.connect("tcp://localhost:%i" % self.broker_port)
+        self.sock.connect("tcp://localhost:%i" % self.port)
         self.poller.register(self.sock, zmq.POLLIN)
 
         # The modules send an initialization signal after connecting:
@@ -68,13 +70,17 @@ class Module(mp.Process):
             data = ''
             if is_poll_in(self.sock, self.poller):
                 data = self.sock.recv()
-                print 'process %i <- %s' % (self.id, data)
+                print 'process %s <-: %s' % (self.id, data)
                 if data == 'quit':
                     break
 
                 result = self.process_data(data)                
                 self.sock.send(result)
 
+        # Restore SIGINT signal handler before exiting:
+        signal.signal(signal.SIGINT, orig_handler)
+        print 'process %s: done' % self.id
+        
     def process_data(self, data):
         """
         This method should be implemented to do something with its
@@ -84,63 +90,134 @@ class Module(mp.Process):
         return ''
     
 class ModuleBroker(object):
+    """
+    Broker for communicating between modules.
+
+    Parameters
+    ----------
+    port : int
+        Port to use for communication with modules.
+
+    Methods
+    -------
+    create(module_class)
+        Create an instance of the specified module class and connect
+        it to the broker.
+    recv_all()
+        Wait for all modules to transmit data to the broker.
+    send_all(out_data)
+        Send data to modules. The list must contain tuples that each
+        contain the destination module ID and the data payload.
+    send_all_quit()
+        Send a quit signal to all modules.
+    run()
+        Body of broker.
+    process_data(in_data)
+        Process data from modules; the output should be in a format
+        that can be transmitted to the modules by the `send_all()`
+        method.
     
-    def __init__(self, N, broker_port=5000):
-        self.N = N
-        self.broker_port = broker_port
+    """
+    
+    def __init__(self, port=5000):
+        self.port = port
+
+        # Number of modules:
+        self.N = 0
         
         # Set up a router socket to communicate with the started
         # processes:
         self.ctx = zmq.Context()
         self.poller = zmq.Poller()
         self.sock = self.ctx.socket(zmq.ROUTER)
-        self.sock.bind("tcp://*:%i" % self.broker_port)
+        self.sock.bind("tcp://*:%i" % self.port)
         self.poller.register(self.sock, zmq.POLLIN)
         
-        # Create and start all of the processes:
-        self.proc_list = []
-        for i in xrange(N):
-            m = Module(id=i, broker_port=5000)
-            m.start()
-            self.proc_list.append(m)
+        # Dictionary for mapping module IDs to module instances:
+        self.id_to_mod_dict = {}
 
-        # Allow modules time to start:
-        time.sleep(1)
+        # Dictionary for mapping module instances to module IDs:
+        self.mod_to_id_dict = {}
 
+    def create(self, module_class):
+        """
+        Create instance of module to the network managed by the broker.
+        """
+
+        if not issubclass(module_class, Module):
+            raise ValueError('subclass of Module class must be specified')
+        m = module_class(id=self.N, port=self.port)
+        m.start()
+        self.id_to_mod_dict[str(self.N)] = m
+        self.mod_to_id_dict[m] = str(self.N)
+        self.N += 1
+
+    def recv_all(self):
+        """
+        Wait for data to be received from all modules.
+        """
+                
+        # Wait for data from all of the modules:
+        in_data = []
+        ack_list = self.id_to_mod_dict.keys()
+        while ack_list:
+            if is_poll_in(self.sock, self.poller):
+                from_id = self.sock.recv()
+                data = self.sock.recv()
+                print 'broker  <- %s: %s' % (from_id, data)
+                if from_id in ack_list:
+                    ack_list.remove(from_id)
+
+                # Save incoming data:
+                in_data.append((from_id, data))
+
+        return in_data
+
+    def send_all(self, out_data):
+        """
+        Send data to all modules. Each entry in the specified list
+        must be a tuple containing the destination module ID and the
+        data payload.
+        """
+
+        for entry in out_data:
+            print 'broker  -> %s: %s' % entry    
+            self.sock.send_multipart(entry)
+
+    def send_all_quit(self):
+        """
+        Tell all of the modules to quit.
+        """
+        self.send_all(zip(self.id_to_mod_dict.keys(), ['quit']*len(self.id_to_mod_dict)))
+        
     def run(self):
         """
-        Route data between modules.
+        Body of broker.
         """
 
-        for i in xrange(10):
-            
-            # Wait for data from all of the modules:
-            in_data = []
-            ack_list = range(self.N)
-            while ack_list:
-                if is_poll_in(self.sock, self.poller):
-                    from_id = self.sock.recv()
-                    data = self.sock.recv()
-                    print 'broker <- %s: %s' % (from_id, data)
-                    ack_list.remove(int(from_id))
+        while True:
 
-                    # Save incoming data:
-                    in_data.append((from_id, data))
+            # Get data from all modules:
+            try:
+                in_data = self.recv_all()
+            except KeyboardInterrupt:
+                break
             print 'broker: barrier reached'
-             
+            
             # Figure out what needs to be routed to each module:
-            out_data = self.route(in_data)
+            out_data = self.process_data(in_data)
             
             # Send all data to the appropriate destinations:
-            for entry in out_data:
-                print 'broker -> %s: %s' % entry
-                self.sock.send_multipart(entry)
-
+            try:                
+                self.send_all(out_data)
+            except KeyboardInterrupt:
+                break            
+            
         # Tell the modules to terminate:
-        for i in xrange(self.N):
-            self.sock.send_multipart((str(i), 'quit'))
-
-    def route(self, in_data):
+        self.send_all_quit()
+        print 'broker: done'
+        
+    def process_data(self, in_data):
         """
         Figure out how to route data entries in the specified
         list. Each entry is a tuple containing the ID of the source
@@ -150,6 +227,9 @@ class ModuleBroker(object):
         return in_data
     
 if __name__ == '__main__':
-    b = ModuleBroker(3)
+    b = ModuleBroker()
+    b.create(Module)
+    b.create(Module)
+    b.create(Module)
 
     b.run()
