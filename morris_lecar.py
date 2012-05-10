@@ -8,6 +8,7 @@ import numpy as np
 import scipy as sp
 import scipy.integrate
 
+# Parameters used by Yiyin and Nikul:
 params = {'phi': 0.01,
           'G_ca': 1.1,
           'V3': -0.4,
@@ -21,6 +22,8 @@ params = {'phi': 0.01,
           'V2': 0.15,
           'C_m': 1.0}
 
+# Other parameters from Foundations of Mathematical Neuroscience (G.B.
+# Ermentrout et al. 2010):
 params_hopf = {'phi': 0.04,
                'G_ca': 4.4,
                'V3': 2.0,
@@ -35,6 +38,11 @@ params_hopf = {'phi': 0.04,
                'C_m': 20.0}
 
 def morris_lecar_neuron(t, I_func, params=params):
+    """
+    Compute the response of a Morris-Lecar neuron with the specified parameters
+    and external input current function over the specified range of times.
+    """
+
     V3 = params['V3']
     V4 = params['V4']
     V1 = params['V1']
