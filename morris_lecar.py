@@ -2,6 +2,10 @@
 
 """
 Demonstration of how to implement a Morris-Lecar neuron.
+
+Can you please construct an object-oriented PyCUDA implementation of a network of ML neurons randomly connected by alpha function synapses (similar to the IAF network you implemented for E9070) that we can use for testing the architecture?
+I imagine that a standard numerical ODE solver such as low-order Runge-Kutta should be sufficient for simulating the network.
+Also, I'm not sure what dynamics we should expect to observe for such a network. You may need to talk to Yiyin or Nikul for further information about both of these points.
 """
 
 import numpy as np
@@ -63,7 +67,7 @@ def morris_lecar_neuron(t, I_func, params=params):
         M_ss = 0.5*(1.0+np.tanh((V-V1)/V2))
         tau_N = 1.0/(phi*np.cosh((V-V3)/(2*V4)))
 
-        dN = (N_ss-N)/tau_N        
+        dN = (N_ss-N)/tau_N
         dV = (I_func(t)-G_l*(V-V_l)-G_ca*M_ss*(V-V_ca)-G_k*N*(V-V_k))/C_m
         return dN, dV
 
