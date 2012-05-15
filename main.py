@@ -3,8 +3,8 @@ import Network as nn
 import atexit
 import numpy as np
 import pycuda.gpuarray as garray
-from simpleio import *
-import parray
+from tools.simpleio import *
+import tools.parray as parray
 import time
 import getpass
 import progressbar as pb

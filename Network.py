@@ -2,7 +2,7 @@
 import numpy as np
 from multiprocessing import Process
 import time
-import parray
+import tools.parray as parray
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
 from MorrisLecar import MorrisLecar

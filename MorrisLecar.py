@@ -3,7 +3,7 @@ import numpy as np
 import pycuda.gpuarray as garray
 from pycuda.compiler import SourceModule
 import time
-import parray
+import tools.parray as parray
 from pycuda.tools import dtype_to_ctype
 
 # In Yiyin, this class is called 'vector_neurons'
@@ -66,7 +66,7 @@ class MorrisLecar:
                                         self.ddt * 1000, self.steps)
 
     def get_euler_kernel(self, neuron_start, V1, V2, V3, V4, Tphi, offset):
-        template = open('euler_kernel.cu', 'r')
+        template = open('cuda_code/euler_kernel.cu', 'r')
 
         dtype = self.dtype
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
@@ -100,7 +100,7 @@ class MorrisLecar:
         return func
 
     def get_euler_kernel1(self, neuron_start, V1, V2, V3, V4, Tphi, offset):
-        template = open('euler_kernel1.cu', 'r')
+        template = open('cuda_code/euler_kernel1.cu', 'r')
 
         dtype = self.dtype
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
@@ -135,7 +135,7 @@ class MorrisLecar:
         return func
 
     def get_input_func(self):
-        template = open('input_func.cu', 'r')
+        template = open('cuda_code/input_func.cu', 'r')
 
         mod = SourceModule(template.read() % {"num_neurons": self.num_neurons},
                            options = ["--ptxas-options=-v"])

@@ -3,7 +3,7 @@ import numpy as np
 import pycuda.gpuarray as garray
 from pycuda.compiler import SourceModule
 import time
-import parray
+import tools.parray as parray
 from pycuda.tools import dtype_to_ctype
 
 # Old name: vector_synapse
@@ -46,7 +46,7 @@ class VectorSynapse:
                                                     self.mem_tmp.gpudata)
 
     def get_update_terminal_synapse_func(self):
-        template = open('terminal_synapse.cu', 'r')
+        template = open('cuda_code/terminal_synapse.cu', 'r')
 
         mod = SourceModule(template.read() % {"n_synapse": self.num_synapse},
                            options = ["--ptxas-options=-v"])
