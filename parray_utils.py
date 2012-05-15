@@ -5,7 +5,7 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 import numpy as np
 from pycuda.tools import dtype_to_ctype
-from kernel_utils import func_compile
+#from kernel_utils import func_compile
 
 
 
@@ -13,15 +13,15 @@ from kernel_utils import func_compile
 def get_fill_function(dtype, pitch = True):
     type_dst = dtype_to_ctype(dtype)
     name = "fill"
-    
+
     if pitch:
         func = func_compile(name, fill_pitch_template % {"name": name,
                        "type_dst": type_dst})
-        func.prepare([np.int32, np.int32, np.intp, np.int32, dtype.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, dtype.type], (32, 8, 1))
     else:
         func = func_compile(name, fill_nonpitch_template % {"name": name,
                        "type_dst": type_dst})
-        func.prepare([np.int32, np.intp, dtype.type], (256,1,1))
+        func.prepare([np.int32, np.intp, dtype.type], (256, 1, 1))
     return func
 
 
@@ -29,30 +29,30 @@ def get_astype_function(dtype_dest, dtype_src, pitch = True):
     type_dest = dtype_to_ctype(dtype_dest)
     type_src = dtype_to_ctype(dtype_src)
     name = "astype"
-    
+
     operation = ""
-    
+
     if pitch:
         func = func_compile(name, pitch_template % {"name": name,
                    "dest_type": type_dest,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_template % {"name": name,
                    "dest_type": type_dest,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.intp, np.intp, np.int32], (256,1,1))
+        func.prepare([np.intp, np.intp, np.int32], (256, 1, 1))
     return func
 
 
-    
+
 def get_realimag_function(dtype, real = True, pitch = True):
     type_src = dtype_to_ctype(dtype)
-    
+
     if dtype == np.complex64:
         type_dest = "float"
         if real:
@@ -71,25 +71,25 @@ def get_realimag_function(dtype, real = True, pitch = True):
             name = "imag"
     else:
         raise TypeError("only support complex inputs as numpy.complex64 or numpy.complex128")
-    
+
     if pitch:
         func = func_compile(name, pitch_template % {"name": name,
                    "dest_type": type_dest,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_template % {"name": name,
                    "dest_type": type_dest,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.intp, np.intp, np.int32], (256,1,1))
+        func.prepare([np.intp, np.intp, np.int32], (256, 1, 1))
     return func
 
 
-    
+
 
 
 
@@ -111,30 +111,30 @@ def get_abs_function(dtype, pitch = True):
     else:
         operation = "abs"
         type_dest = dtype_to_ctype(dtype)
-    
+
     name = "abs_function"
-    
-    
+
+
     if pitch:
         func = func_compile(name, pitch_template % {"name": name,
                    "dest_type": type_dest,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_template % {"name": name,
                    "dest_type": type_dest,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.intp, np.intp, np.int32], (256,1,1))
-    
+        func.prepare([np.intp, np.intp, np.int32], (256, 1, 1))
+
     return func
 
 
 def get_conj_function(dtype, pitch = True):
-    
+
     type_src = dtype_to_ctype(dtype)
     if dtype == np.complex128:
         operation = "pycuda::conj"
@@ -142,24 +142,24 @@ def get_conj_function(dtype, pitch = True):
         operation = "pycuda::conj"
     else:
         raise TypeError("Only complex arrays are allowed to perform conjugation")
-    
+
     name = "conj"
-    
+
     if pitch:
         func = func_compile(name, pitch_template % {"name": name,
                    "dest_type": type_src,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_template % {"name": name,
                    "dest_type": type_src,
                    "src_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.intp, np.intp, np.int32], (256,1,1))
-    
+        func.prepare([np.intp, np.intp, np.int32], (256, 1, 1))
+
     return func
 
 
@@ -167,13 +167,13 @@ def get_conj_function(dtype, pitch = True):
 def get_resize_function(dtype):
     type_src = dtype_to_ctype(dtype)
     name = "resize"
-    
+
     func = func_compile(name, reshape_template % {"name": name,
                    "dest_type": type_src,
                    "src_type": type_src,
                    "operation": "",
                    })
-    func.prepare([np.int32, np.int32, np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (256,1,1))
+    func.prepare([np.int32, np.int32, np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (256, 1, 1))
     return func
 
 
@@ -187,9 +187,9 @@ def get_transpose_function(dtype, conj = False):
             operation = "pycuda::conj"
         elif dtype == np.complex64:
             operation = "pycuda::conj"
-    
+
     func = func_compile(name, transpose_template % {"name": name, "type": src_type, "operation": operation})
-    func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+    func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     return func
 
 def get_addarray_function(left_dtype, right_dtype, rslt_dtype, pitch = True):
@@ -207,7 +207,7 @@ def get_addarray_function(left_dtype, right_dtype, rslt_dtype, pitch = True):
                    "right_type": type_right,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_array_op_template % {"name": name,
                    "dest_type": type_rslt,
@@ -223,13 +223,13 @@ def get_addscalar_function(src_type, pitch = True):
 
     name = "addscalar"
     operation = "+"
-    
+
     if pitch:
         func = func_compile(name, pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
@@ -253,7 +253,7 @@ def get_subarray_function(left_dtype, right_dtype, rslt_dtype, pitch = True):
                    "right_type": type_right,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_array_op_template % {"name": name,
                    "dest_type": type_rslt,
@@ -269,13 +269,13 @@ def get_subscalar_function(src_type, pitch = True):
 
     name = "subscalar"
     operation = "-"
-    
+
     if pitch:
         func = func_compile(name, pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
@@ -289,13 +289,13 @@ def get_scalarsub_function(src_type, pitch = True):
 
     name = "scalarsub"
     operation = "-"
-    
+
     if pitch:
         func = func_compile(name, pitch_right_scalar_op_template % {"name": name,
                    "dest_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_right_scalar_op_template % {"name": name,
                    "dest_type": type_src,
@@ -319,7 +319,7 @@ def get_mularray_function(left_dtype, right_dtype, rslt_dtype, pitch = True):
                    "right_type": type_right,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_array_op_template % {"name": name,
                    "dest_type": type_rslt,
@@ -335,13 +335,13 @@ def get_mulscalar_function(src_type, pitch = True):
 
     name = "mulscalar"
     operation = "*"
-    
+
     if pitch:
         func = func_compile(name, pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
@@ -366,7 +366,7 @@ def get_divarray_function(left_dtype, right_dtype, rslt_dtype, pitch = True):
                    "right_type": type_right,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, np.intp, np.int32], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_array_op_template % {"name": name,
                    "dest_type": type_rslt,
@@ -382,13 +382,13 @@ def get_divscalar_function(src_type, pitch = True):
 
     name = "divscalar"
     operation = "/"
-    
+
     if pitch:
         func = func_compile(name, pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_left_scalar_op_template % {"name": name,
                    "dest_type": type_src,
@@ -402,13 +402,13 @@ def get_scalardiv_function(src_type, pitch = True):
 
     name = "scalardiv"
     operation = "/"
-    
+
     if pitch:
         func = func_compile(name, pitch_right_scalar_op_template % {"name": name,
                    "dest_type": type_src,
                    "operation": operation,
                    })
-        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32,8,1))
+        func.prepare([np.int32, np.int32, np.intp, np.int32, np.intp, np.int32, src_type.type], (32, 8, 1))
     else:
         func = func_compile(name, non_pitch_right_scalar_op_template % {"name": name,
                    "dest_type": type_src,
@@ -423,7 +423,7 @@ transpose_template = """
     #include <pycuda/pycuda-complex.hpp>
     #define TILE_DIM 32
     #define BLOCK_ROWS 8
-    
+
     __global__ void %(name)s(const int M, const int N, %(type)s *odata, const int ldo, const %(type)s *idata, const int ldi)
     {
         __shared__ %(type)s tile[TILE_DIM][TILE_DIM+1];
@@ -464,7 +464,7 @@ transpose_template = """
                 }
             }
             __syncthreads();
-        
+
         }
     }
     """
@@ -490,7 +490,7 @@ pitch_template = """
                 %(src_type)s tmp;
                 int segment_per_row = ((N - 1) >> 5) + 1;
                 int total_segments = M * segment_per_row;
-                
+
                 for(int i = sid; i < total_segments; i+=total)
                 {
                     m = i / segment_per_row;
@@ -507,11 +507,11 @@ pitch_template = """
 """ launching MULTIPROCESSOR_COUNT*6 blocks of (32,8,1), M: number of rows, N: number of columns, ld: leading dimension entries(aasumed to be row major)"""
 
 
-            
+
 non_pitch_template = """
             #include <pycuda/pycuda-complex.hpp>
             #include <cuComplex.h>
-            
+
             __global__ void %(name)s (%(dest_type)s *dest, const %(src_type)s *src, const int N)
             {
                 const int totalthreads = blockDim.x * gridDim.x;
@@ -536,7 +536,7 @@ reshape_template = """
             {
                 const int totalthreads = blockDim.x * gridDim.x;
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-                
+
                 %(src_type)s tmp;
 
                 for (int i = tid; i < Nsrc * Msrc; i += totalthreads)
@@ -555,7 +555,7 @@ irregular_pitch_template = """
             {
                 const int totalthreads = blockDim.x * gridDim.x;
                 const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-                
+
                 %(src_type)s tmp;
                 int m,n;
 
@@ -573,7 +573,7 @@ irregular_pitch_template = """
 
 pitch_array_op_template = """
     #include <pycuda/pycuda-complex.hpp>
-    
+
     extern "C++" {
 	namespace pycuda{
 
@@ -611,8 +611,8 @@ pitch_array_op_template = """
 
 	}
 }
-    
-    
+
+
     __global__ void %(name)s(const int M, const int N, %(dest_type)s *dest, const int ld_dest, const %(left_type)s *left, const int ld_left, const %(right_type)s *right, const int ld_right)
     {
         //M is the number of rows, N is the number of columns
@@ -625,7 +625,7 @@ pitch_array_op_template = """
         %(right_type)s tmp_right;
         int segment_per_row = ((N - 1) >> 5) + 1;
         int total_segments = M * segment_per_row;
-        
+
         for(int i = sid; i < total_segments; i+=total)
         {
             m = i / segment_per_row;
@@ -643,8 +643,8 @@ pitch_array_op_template = """
 
 non_pitch_array_op_template = """
     #include <pycuda/pycuda-complex.hpp>
-    
-    
+
+
     extern "C++" {
 	namespace pycuda{
 
@@ -715,7 +715,7 @@ pitch_left_scalar_op_template = """
         %(dest_type)s tmp_left;
         int segment_per_row = ((N - 1) >> 5) + 1;
         int total_segments = M * segment_per_row;
-        
+
         for(int i = sid; i < total_segments; i+=total)
         {
             m = i / segment_per_row;
@@ -762,7 +762,7 @@ pitch_right_scalar_op_template = """
         %(dest_type)s tmp_left;
         int segment_per_row = ((N - 1) >> 5) + 1;
         int total_segments = M * segment_per_row;
-        
+
         for(int i = sid; i < total_segments; i+=total)
         {
             m = i / segment_per_row;
@@ -809,12 +809,12 @@ fill_pitch_template = """
                 int m, n;
                 int segment_per_row = ((N - 1) >> 5) + 1;
                 int total_segments = M * segment_per_row;
-                
+
                 for(int i = sid; i < total_segments; i+=total)
                 {
                     m = i / segment_per_row;
                     n = i %% segment_per_row;
-                    dst[m * ld_dst + (n<<5) + tid] = value; 
+                    dst[m * ld_dst + (n<<5) + tid] = value;
                 }
             }
             """
@@ -829,11 +829,11 @@ fill_nonpitch_template = """
                 const int tid = threadIdx.x + blockDim.x * blockIdx.x;
                 const int total = gridDim.x * blockDim.x;
 
-                
-                
+
+
                 for(int i = tid; i < M; i+=total)
                 {
-                    dst[i] = value; 
+                    dst[i] = value;
                 }
             }
             """

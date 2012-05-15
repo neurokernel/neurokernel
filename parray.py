@@ -78,7 +78,10 @@ class PitchArray(object):
         shape: shape of the array
         dtype: dtype of the array
         gpudata: DeviceAllocation object indicating the device memory allocated
-        pitch: if gpudata is specified and pitch is True, gpudata will be treated as if it was allocated by cudaMallocPitch with pitch        attributes:
+        pitch: if gpudata is specified and pitch is True, gpudata will be treated
+                as if it was allocated by cudaMallocPitch with pitch
+
+        attributes:
         .shape: shape of self
         .size:  number of elements of the array
         .mem_size: number of elements of total memory allocated
@@ -816,7 +819,9 @@ class PitchArray(object):
         func.set_block_shape(256,1,1)
         func.prepared_call(self._grid, self.shape[0], _pd(self.shape), result.shape[0], _pd(result.shape), result.gpudata, result.ld, self.gpudata, self.ld)
         return result
-
+    
+    
+    
     def astype(self, dtype):
         """ convert dtype of self to dtype """
         if self.dtype == dtype:
@@ -877,6 +882,8 @@ class PitchArray(object):
         
         return result
     
+    
+    
     def copy_rows(self, start, stop, step = 1):
         nrows = len(range(start,stop,step))
         if nrows:
@@ -898,6 +905,8 @@ class PitchArray(object):
         elif nrows == 1:
             cuda.memcpy_dtod(result.gpudata, int(self.gpudata) + start * self.ld * self.dtype.itemsize, self.dtype.itemsize * _pd(shape))
         return result
+        
+        
 
 def to_gpu(ary):
     """ transfer a numpy ndarray to a PitchArray """
@@ -917,6 +926,7 @@ def empty_like(other_ary):
     result = PitchArray(other_ary.shape, other_ary.dtype)
     return result
 
+
 def zeros(shape, dtype):
     result = PitchArray(shape, dtype)
     result.fill(0)
@@ -926,6 +936,7 @@ def zeros_like(other_ary):
     result = PitchArray(other_ary.shape, other_ary.dtype)
     result.fill(0)
     return result
+
 
 def ones(shape, dtype):
     result = PitchArray(shape, dtype)
@@ -937,6 +948,7 @@ def ones_like(other_ary):
     result.fill(1)
     return result    
 
+    
 def make_pitcharray(dptr, shape, dtype, linear = False, pitch=None):
     """
     create a PitchArray from a DeviceAllocation pointer
@@ -958,10 +970,12 @@ def make_pitcharray(dptr, shape, dtype, linear = False, pitch=None):
     
     return result
 
+
 def arrayg2p(other_gpuarray):
     """convert a GPUArray to a PitchArray"""
     result = make_pitcharray(other_gpuarray.gpudata, other_gpuarray.shape, other_gpuarray.dtype, linear = True)
     return result
+
 
 
 def arrayp2g(pary):
@@ -976,6 +990,14 @@ def arrayp2g(pary):
             
     return result
 
+
 def conj(pary):
     """ returns the conjugation of 2D PitchArray"""
     return pary.conj(inplace = False)
+
+
+
+
+
+
+

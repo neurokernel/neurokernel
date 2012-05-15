@@ -3,9 +3,14 @@
 """
 Demonstration of how to implement a Morris-Lecar neuron.
 
-Can you please construct an object-oriented PyCUDA implementation of a network of ML neurons randomly connected by alpha function synapses (similar to the IAF network you implemented for E9070) that we can use for testing the architecture?
-I imagine that a standard numerical ODE solver such as low-order Runge-Kutta should be sufficient for simulating the network.
-Also, I'm not sure what dynamics we should expect to observe for such a network. You may need to talk to Yiyin or Nikul for further information about both of these points.
+Can you please construct an object-oriented PyCUDA implementation of a network
+of ML neurons randomly connected by alpha function synapses (similar to the IAF
+network you implemented for E9070) that we can use for testing the architecture?
+I imagine that a standard numerical ODE solver such as low-order Runge-Kutta
+should be sufficient for simulating the network.
+Also, I'm not sure what dynamics we should expect to observe for such a
+network. You may need to talk to Yiyin or Nikul for further information about
+both of these points.
 """
 
 import numpy as np
@@ -15,14 +20,14 @@ import scipy.integrate
 # Parameters used by Yiyin and Nikul:
 params = {'phi': 0.01,
           'G_ca': 1.1,
-          'V3': -0.4,
+          'V3':-0.4,
           'V4': 0.1,
           'V_ca': 1.0,
-          'V_k': -0.7,
-          'V_l': -0.5,
+          'V_k':-0.7,
+          'V_l':-0.5,
           'G_k': 2.0,
           'G_l': 0.5,
-          'V1': -1.2,
+          'V1':-1.2,
           'V2': 0.15,
           'C_m': 1.0}
 
@@ -33,15 +38,15 @@ params_hopf = {'phi': 0.04,
                'V3': 2.0,
                'V4': 30.0,
                'V_ca': 120.0,
-               'V_k': -84.0,
-               'V_l': -60.0,
+               'V_k':-84.0,
+               'V_l':-60.0,
                'G_k': 8.0,
                'G_l': 2.0,
-               'V1': -1.2,
+               'V1':-1.2,
                'V2': 18.0,
                'C_m': 20.0}
 
-def morris_lecar_neuron(t, I_func, params=params):
+def morris_lecar_neuron(t, I_func, params = params):
     """
     Compute the response of a Morris-Lecar neuron with the specified parameters
     and external input current function over the specified range of times.
@@ -63,12 +68,13 @@ def morris_lecar_neuron(t, I_func, params=params):
     def f(x, t):
         N, V = x
 
-        N_ss = 0.5*(1.0+np.tanh((V-V3)/V4))
-        M_ss = 0.5*(1.0+np.tanh((V-V1)/V2))
-        tau_N = 1.0/(phi*np.cosh((V-V3)/(2*V4)))
+        N_ss = 0.5 * (1.0 + np.tanh((V - V3) / V4))
+        M_ss = 0.5 * (1.0 + np.tanh((V - V1) / V2))
+        tau_N = 1.0 / (phi * np.cosh((V - V3) / (2 * V4)))
 
-        dN = (N_ss-N)/tau_N
-        dV = (I_func(t)-G_l*(V-V_l)-G_ca*M_ss*(V-V_ca)-G_k*N*(V-V_k))/C_m
+        dN = (N_ss - N) / tau_N
+        dV = (I_func(t) - G_l * (V - V_l) - G_ca * M_ss * (V - V_ca) - G_k * \
+              N * (V - V_k)) / C_m
         return dN, dV
 
     return sp.integrate.odeint(f, (1.0, 5.0), t)
