@@ -25,6 +25,7 @@ t = np.arange(0, 1, dt)
 # Number of dendrites per neuron
 num_dendrites = read_file('example/n_dendrites.h5').astype(np.int32)
 num_neurons = num_dendrites.size
+# 
 pre_neuron = read_file('example/pre.h5').astype(np.int32)
 num_synapse = pre_neuron.size
 post_neuron = read_file('example/post.h5').astype(np.int32)
@@ -48,22 +49,22 @@ offset = read_file('example/offset.h5')
 V = read_file('example/initV.h5')
 n = read_file('example/initn.h5')
 
-network = nn.Network(num_types, num_neurons, 24 * 32, start_idx, num_dendrites,
-                     num_synapse, pre_neuron, post_neuron, thres, slope, power,
-                     saturation, delay, reverse, dt, V, n, V_1, V_2, V_3, V_4,
-                     Tphi, offset, 6)
-
-#input video
-h_I_ext = np.zeros([10000, 4608])
-
-I_ext = parray.to_gpu(h_I_ext)
-
-out = np.empty((Nt, num_neurons), np.double)
-
-#turn this on to allow visual output
-prin = False
-
-playstep = 100
-for i in range(Nt):
-    network.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i,
-                     out[i, :])
+#network = nn.Network(num_types, num_neurons, 24 * 32, start_idx, num_dendrites,
+#                     num_synapse, pre_neuron, post_neuron, thres, slope, power,
+#                     saturation, delay, reverse, dt, V, n, V_1, V_2, V_3, V_4,
+#                     Tphi, offset, 6)
+#
+##input video
+#h_I_ext = np.zeros([10000, 4608])
+#
+#I_ext = parray.to_gpu(h_I_ext)
+#
+#out = np.empty((Nt, num_neurons), np.double)
+#
+##turn this on to allow visual output
+#prin = False
+#
+#playstep = 100
+#for i in range(Nt):
+#    network.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i,
+#                     out[i, :])

@@ -8,8 +8,9 @@ from pycuda.tools import dtype_to_ctype
 
 # In Yiyin, this class is called 'vector_neurons'
 class MorrisLecar:
-    def __init__(self, num_neurons, num_types, num_cart, neuron_start, dt, num_dendrite,
-                 V, n, V1, V2, V3, V4, Tphi, offset, non_input_start):
+    def __init__(self, num_neurons, num_types, num_cart, neuron_start, dt,
+                 num_dendrite, V, n, V1, V2, V3, V4, Tphi, offset,
+                 non_input_start):
         """
         Set Morris Lecar neurons in the network.
 
@@ -35,7 +36,10 @@ class MorrisLecar:
         self.h_V = cuda.pagelocked_empty((self.num_types, self.num_cart),
                                          np.double)
 
-        self.cum_num_dendrite = garray.to_gpu(np.concatenate((np.asarray([0, ], dtype = np.int32), np.cumsum(num_dendrite, dtype = np.int32))))
+        self.cum_num_dendrite = garray.to_gpu(np.concatenate((np.asarray([0, ],
+                                                dtype = np.int32),
+                                                np.cumsum(num_dendrite,
+                                                          dtype = np.int32))))
         self.num_dendrite = garray.to_gpu(num_dendrite)
         self.num_input = int(neuron_start[non_input_start])
 
