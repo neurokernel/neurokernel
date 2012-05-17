@@ -1,42 +1,41 @@
-#!/usr/bin/env python
-import numpy as np
-from multiprocessing import Process
-import time
-import tools.parray as parray
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
+import numpy as np
+import time
+import tools.parray as parray
 from MorrisLecar import MorrisLecar
 from VectorSynapse import VectorSynapse
 
-"""
-Can you please construct an object-oriented PyCUDA implementation of a network
-of ML neurons randomly connected by alpha function synapses (similar to the
-IAF network you implemented for E9070) that we can use for testing the
-architecture?
-I imagine that a standard numerical ODE solver such as low-order Runge-Kutta
-should be sufficient for simulating the network.
-Also, I'm not sure what dynamics we should expect to observe for such a
-network. You may need to talk to Yiyin or Nikul for further information about
-both of these points.
-"""
-class Network (Process):
+class Network:
     """
     Neural network class.
-
-    Parameters
-    ----------
-    dt : float
-        Time resolution of simulation (in ms)
-    N : int
-        Number of entries in simulation; the duration of the
-        simulation is N * dt (in ms).
     """
-    def __init__(self, num_types, num_neurons, num_cart, neuron_start,
-                 num_dendrite, num_synapse, pre_neuron, post_neuron, syn_thres,
-                 syn_slope, syn_power, syn_saturation, syn_delay, V_rev, dt, V,
-                 n, V_1, V_2, V_3, V_4, Tphi, offset, non_input_start):
+    def __init__(self, in_non_list, in_spike_list, proj_non, proj_spike, param):
+        num_types = param[0]
+        num_neurons = param[1]
+        num_cart = param[2]
+        neuron_start = param[3]
+        num_dendrite = param[4]
+        num_synapse = param[5]
+        pre_neuron = param[6]
+        post_neuron = param[7]
+        syn_thres = param[8]
+        syn_slope = param[9]
+        syn_power = param[10]
+        syn_saturation = param[11]
+        syn_delay = param[12]
+        V_rev = param[13]
+        dt = param[14]
+        V = param[15]
+        n = param[16]
+        V_1 = param[17]
+        V_2 = param[18]
+        V_3 = param[19]
+        V_4 = param[20]
+        Tphi = param[21]
+        offset = param[22]
+        non_input_start = param[23]
 
-        Process.__init__(self)
         self.num_neurons = num_neurons
         self.dt = dt
 

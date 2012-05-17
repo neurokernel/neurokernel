@@ -2,9 +2,6 @@ import pycuda.driver as cuda
 import numpy as np
 import pycuda.gpuarray as garray
 from pycuda.compiler import SourceModule
-import time
-import tools.parray as parray
-from pycuda.tools import dtype_to_ctype
 
 # Old name: vector_synapse
 class VectorSynapse:
