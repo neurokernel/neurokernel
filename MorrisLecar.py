@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import pycuda.driver as cuda
 import numpy as np
 import pycuda.gpuarray as garray

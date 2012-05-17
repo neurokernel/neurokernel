@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import pycuda.driver as cuda
 import Module
 import numpy as np

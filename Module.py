@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import atexit
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
