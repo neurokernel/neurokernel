@@ -16,8 +16,7 @@ both of these points.
 """
 class Module:
 
-    def __init__(self, in_non_list, in_spike_list, proj_non, proj_spike,
-                 param, dev):
+    def __init__(self, param, dev):
         """
         Interface between LPU and architecture.
             Parameters
@@ -40,17 +39,12 @@ class Module:
                 Indicates which GPU device will be used by this module.
         """
 
-        self.in_non_list = in_non_list
-        self.in_spike_list = in_spike_list
-        self.proj_non = proj_non
-        self.proj_spike = proj_spike
-
         ctx = cuda.Device(dev).make_context()
         atexit.register(ctx.pop)
 
-        self.network = nn.Network(in_non_list, in_spike_list, proj_non,
-                                  proj_spike, param)
+        self.network = nn.Network(param)
 
-    def run_step(self, I_ext, out):
+    def run_step(self, in_non_list = None, in_spike_list = None,
+                 proj_non = None, proj_spike = None):
 
-        self.network.run_step(I_ext, out)
+        self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)

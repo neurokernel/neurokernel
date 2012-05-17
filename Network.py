@@ -10,7 +10,7 @@ class Network:
     """
     Neural network class.
     """
-    def __init__(self, in_non_list, in_spike_list, proj_non, proj_spike, param):
+    def __init__(self, param):
         num_types = param[0]
         num_neurons = param[1]
         num_cart = param[2]
@@ -53,10 +53,11 @@ class Network:
         self.st1 = None
         self.st2 = None
 
-    def run_step(self, I_ext, out, put = False):
+    def run_step(self, in_non_list = None, in_spike_list = None,
+                 proj_non = None, proj_spike = None):
 
         self.neurons.I_pre.fill(0)
-        self.neurons.update_I_pre_input(I_ext)
+        self.neurons.update_I_pre_input(in_non_list)
 
         self.neurons.read_synapse(self.synapses.conductance,
                                   self.synapses.V_rev)
@@ -65,12 +66,11 @@ class Network:
 
         self.synapses.compute_synapse(self.buffer)
 
-        cuda.memcpy_dtoh(out, self.neurons.V.gpudata)
+        cuda.memcpy_dtoh(proj_non, self.neurons.V.gpudata)
         self.buffer.step()
 
 class CircularArray:
     def __init__(self, num_neurons, delay_steps, rest):
-        self.dtype = np.double
         self.num_neurons = num_neurons
         self.delay_steps = delay_steps
 

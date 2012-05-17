@@ -69,8 +69,7 @@ V = np.asarray([rd.gauss(-.51, .01) for x in np.zeros([num_neurons])],
 n = np.asarray([rd.gauss(.3, .05) for x in np.zeros([num_neurons])],
                dtype = np.float64)
 
-m1 = Module.Module(0, 0, 0, 0,
-                   [num_types, num_neurons, 24 * 32, start_idx, num_dendrites,
+m1 = Module.Module([num_types, num_neurons, 24 * 32, start_idx, num_dendrites,
                     num_synapses, pre_neuron, post_neuron, thres, slope, power,
                     saturation, delay, reverse, dt, V, n, V_1, V_2, V_3, V_4,
                     Tphi, offset, 6], dev1)
@@ -84,7 +83,7 @@ playstep = 100
 pbar = pb.ProgressBar(maxval = Nt).start()
 for i in range(Nt):
     pbar.update(i)
-    m1.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i,
-                     out[i, :])
+    m1.run_step(in_non_list = int(I_ext.gpudata) + I_ext.dtype.itemsize * \
+                I_ext.ld * i, proj_non = out[i, :])
 
 pbar.finish()
