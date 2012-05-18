@@ -54,8 +54,7 @@ class Network:
         self.st1 = None
         self.st2 = None
 
-    def run_step(self, in_non_list = None, in_spike_list = None,
-                 proj_non = None, proj_spike = None):
+    def run_step(self, in_non_list, proj_non):
 
         self.neurons.I_pre.fill(0)
         self.neurons.update_I_pre_input(in_non_list)

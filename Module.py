@@ -45,7 +45,6 @@ class Module:
 
         self.network = nn.Network(param)
 
-    def run_step(self, in_non_list = None, in_spike_list = None,
-                 proj_non = None, proj_spike = None):
+    def run_step(self, in_non_list, proj_non):
 
-        self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)
+        self.network.run_step(in_non_list, proj_non)

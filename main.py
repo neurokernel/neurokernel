@@ -13,7 +13,7 @@ cuda.init()
 
 np.random.seed(0)
 
-dt = 1e-4
+dt = 1e-1
 dur = 1.0
 Nt = int(dur / dt)
 t = np.arange(0, 1, dt)
