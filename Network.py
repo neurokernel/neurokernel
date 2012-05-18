@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
 import numpy as np
@@ -54,7 +53,8 @@ class Network:
         self.st1 = None
         self.st2 = None
 
-    def run_step(self, in_non_list, proj_non):
+    def run_step(self, in_non_list = None, in_spike_list = None,
+                 proj_non = None, proj_spike = None):
 
         self.neurons.I_pre.fill(0)
         self.neurons.update_I_pre_input(in_non_list)
@@ -71,6 +71,7 @@ class Network:
 
 class CircularArray:
     def __init__(self, num_neurons, delay_steps, rest):
+        self.dtype = np.double
         self.num_neurons = num_neurons
         self.delay_steps = delay_steps
 

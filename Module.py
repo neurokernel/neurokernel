@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import atexit
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
@@ -45,6 +44,6 @@ class Module:
 
         self.network = nn.Network(param)
 
-    def run_step(self, in_non_list, proj_non):
+    def run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
 
-        self.network.run_step(in_non_list, proj_non)
+        self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)

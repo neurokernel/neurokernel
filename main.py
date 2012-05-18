@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import pycuda.driver as cuda
 import Module
 import numpy as np
@@ -13,7 +12,7 @@ cuda.init()
 
 np.random.seed(0)
 
-dt = 1e-1
+dt = 1e-4
 dur = 1.0
 Nt = int(dur / dt)
 t = np.arange(0, 1, dt)
@@ -84,7 +83,7 @@ playstep = 100
 pbar = pb.ProgressBar(maxval = Nt).start()
 for i in range(Nt):
     pbar.update(i)
-    m1.run_step(in_non_list = int(I_ext.gpudata) + I_ext.dtype.itemsize * \
-                I_ext.ld * i, proj_non = out[i, :])
+    m1.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i, None,
+                     out[i, :], None)
 
 pbar.finish()
