@@ -16,7 +16,8 @@ both of these points.
 """
 class Module:
 
-    def __init__(self, dt, dev):
+    def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
+                 num_proj_spike, dev):
         """
         Interface between LPU and architecture.
             Parameters
@@ -43,7 +44,34 @@ class Module:
         atexit.register(ctx.pop)
 
         self.network = nn.Network(dt)
+        self.manager = manager
+        self.running = True
 
-    def run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
+        self.in_non_list
+        self.in_spike_list
+        self.proj_non
+        self.proj_spike
+
+    def __run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
 
         self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)
+
+    def __send(self, proj_non, proj_spike):
+
+        return 0
+
+    def __receive(self, in_non_list, in_spike_list):
+
+        return 0
+
+    def start(self, in_non_list, in_spike_list, proj_non, proj_spike):
+
+        # First step 
+        __run_step(in_non_list, in_spike_list, proj_non, proj_spike)
+        __send(proj_non, proj_spike)
+
+        while(self.running):
+            __receive(in_non_list, in_spike_list)
+            __run_step(self.in_non_list, self.in_spike_list, self.proj_non,
+                       self.proj_spike)
+            __send(proj_non, proj_spike)
