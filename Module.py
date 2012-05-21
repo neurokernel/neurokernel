@@ -16,7 +16,7 @@ both of these points.
 """
 class Module:
 
-    def __init__(self, param, dev):
+    def __init__(self, dt, dev):
         """
         Interface between LPU and architecture.
             Parameters
@@ -42,7 +42,7 @@ class Module:
         ctx = cuda.Device(dev).make_context()
         atexit.register(ctx.pop)
 
-        self.network = nn.Network(param)
+        self.network = nn.Network(dt)
 
     def run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
 
