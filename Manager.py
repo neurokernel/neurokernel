@@ -1,12 +1,17 @@
-import Network as nn
-import multiprocessing
-import mpi4py
+import pycuda.driver as cuda
+import tools.parray as parray
+import numpy as np
+#import multiprocessing
+#import mpi4py
 import Module
 import Connectivity
 
 class Manager:
 
     def __init__(self):
+
+        cuda.init()
+
         self.modules = []
         self.connectivities = []
 
@@ -21,3 +26,8 @@ class Manager:
 
     def rm_connectivity(self, connecivity):
         self.connectivities.remove(connecivity)
+
+    def start(self):
+
+        for m in self.modules:
+            m.start()

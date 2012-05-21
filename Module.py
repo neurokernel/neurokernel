@@ -1,7 +1,9 @@
 import atexit
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
+import tools.parray as parray
 import Network as nn
+import numpy as np
 
 """
 Can you please construct an object-oriented PyCUDA implementation of a network
@@ -46,32 +48,52 @@ class Module:
         self.network = nn.Network(dt)
         self.manager = manager
         self.running = True
+        self.dt = dt
 
-        self.in_non_list
-        self.in_spike_list
-        self.proj_non
-        self.proj_spike
+        if num_in_non > 0:
+            self.in_non_list = parray.to_gpu(np.ones([1, num_in_non]))
+        else:
+            self.in_non_list = None
+        if num_in_spike > 0:
+            self.in_spike_list = parray.to_gpu(np.ones([1, num_in_spike]))
+        else:
+            self.in_spike_list = None
+
+        self.proj_non = []
+        self.proj_spike = []
 
     def __run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
 
         self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)
 
-    def __send(self, proj_non, proj_spike):
+    def __sync(self):
 
-        return 0
+        # receive input from outside
+        I_ext = parray.to_gpu(np.ones([1, num_in_non]))
+        self.in_non_list = int(I_ext.gpudata) + I_ext.dtype.itemsize
+        self.in_spike_list = None
 
-    def __receive(self, in_non_list, in_spike_list):
+        # send output
+        self.proj_non
+        self.proj_spike
 
-        return 0
+    def start(self):
 
-    def start(self, in_non_list, in_spike_list, proj_non, proj_spike):
+#        proj_non = np.empty((1, len(self.proj_non)), np.double)
+#        proj_spike = np.empty((1, len(self.proj_spike)), np.double)
+        dt = self.dt
 
-        # First step 
-        __run_step(in_non_list, in_spike_list, proj_non, proj_spike)
-        __send(proj_non, proj_spike)
+        I_ext = parray.to_gpu(np.ones([1 / dt, 4608]))
+        out = np.empty((1 / dt, 4608), np.double)
 
-        while(self.running):
-            __receive(in_non_list, in_spike_list)
-            __run_step(self.in_non_list, self.in_spike_list, self.proj_non,
-                       self.proj_spike)
-            __send(proj_non, proj_spike)
+        for i in range(int(1 / dt)):
+            self.__run_step(int(I_ext.gpudata) + \
+                                        I_ext.dtype.itemsize * \
+                                        I_ext.ld * i, None, out[i, :], None)
+
+#        while(self.running):
+#            self.__run_step(self.in_non_list, self.in_spike_list, proj_non,
+#                       proj_spike)
+#            self.proj_non.append(proj_non)
+#            self.proj_spike.append(proj_spike)
+#            __sync()

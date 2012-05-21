@@ -1,9 +1,9 @@
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
+import tools.parray as parray
 import numpy as np
 import random as rd
 from tools.simpleio import *
-import tools.parray as parray
 from MorrisLecar import MorrisLecar
 from VectorSynapse import VectorSynapse
 
@@ -13,6 +13,8 @@ class Network:
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
     def __init__(self, dt):
+
+        np.random.seed(0)
 
         # In order to understand pre_neuron, post_neuron and dendrites it's
         # necessary notice that the process is over the synapses instead of
