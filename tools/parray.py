@@ -18,11 +18,8 @@ def _splay_backend(n):
 
     return (block_count, 1), (32, 8, 1)
 
-
 def splay(n):
     return _splay_backend(n)
-
-
 
 def _get_common_dtype(obj1, obj2):
     return (obj1.dtype.type(0) + obj2.dtype.type(0)).dtype
@@ -41,7 +38,6 @@ def _assignshape(shape, axis, value):
         else:
             a.append(shape[i])
     return tuple(a)
-
 
 def PitchTrans(shape, dst, dst_ld, src, src_ld, dtype, aligned = False,
                async = False, stream = None):
@@ -70,9 +66,6 @@ def PitchTrans(shape, dst, dst_ld, src, src_ld, dtype, aligned = False,
         trans(aligned = aligned)
 
 """end of utilities"""
-
-
-
 
 class PitchArray(object):
     def __init__(self, shape, dtype, gpudata = None, pitch = None):
@@ -909,26 +902,21 @@ class PitchArray(object):
             cuda.memcpy_dtod(result.gpudata, int(self.gpudata) + start * self.ld * self.dtype.itemsize, self.dtype.itemsize * _pd(shape))
         return result
 
-
-
 def to_gpu(ary):
     """ transfer a numpy ndarray to a PitchArray """
     result = PitchArray(ary.shape, ary.dtype)
     result.set(ary)
     return result
 
-
 def to_gpu_async(ary, stream = None):
     result = PitchArray(ary.shape, ary.dtype)
     result.set_async(ary, stream)
-
 
 empty = PitchArray
 
 def empty_like(other_ary):
     result = PitchArray(other_ary.shape, other_ary.dtype)
     return result
-
 
 def zeros(shape, dtype):
     result = PitchArray(shape, dtype)
@@ -940,7 +928,6 @@ def zeros_like(other_ary):
     result.fill(0)
     return result
 
-
 def ones(shape, dtype):
     result = PitchArray(shape, dtype)
     result.fill(1)
@@ -950,7 +937,6 @@ def ones_like(other_ary):
     result = PitchArray(other_ary.shape, other_ary.dtype)
     result.fill(1)
     return result
-
 
 def make_pitcharray(dptr, shape, dtype, linear = False, pitch = None):
     """
@@ -973,13 +959,10 @@ def make_pitcharray(dptr, shape, dtype, linear = False, pitch = None):
 
     return result
 
-
 def arrayg2p(other_gpuarray):
     """convert a GPUArray to a PitchArray"""
     result = make_pitcharray(other_gpuarray.gpudata, other_gpuarray.shape, other_gpuarray.dtype, linear = True)
     return result
-
-
 
 def arrayp2g(pary):
     """convert a PitchArray to a GPUArray"""
@@ -993,14 +976,6 @@ def arrayp2g(pary):
 
     return result
 
-
 def conj(pary):
     """ returns the conjugation of 2D PitchArray"""
     return pary.conj(inplace = False)
-
-
-
-
-
-
-

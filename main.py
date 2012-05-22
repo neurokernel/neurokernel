@@ -1,32 +1,8 @@
-import pycuda.driver as cuda
-import Module
-import numpy as np
-import tools.parray as parray
-import progressbar as pb
+import Manager
+import Mock.MockNetwork as NN
 
-dev1 = 1
+manager = Manager.Manager()
+manager.add_module(NN(manager, dt = 1e-4, num_in_non = 4608, num_in_spike = 0,
+                      num_proj_non = 4608, num_proj_spike = 0, device = 1))
 
-cuda.init()
-
-np.random.seed(0)
-
-dt = 1e-4
-dur = 1.0
-Nt = int(dur / dt)
-t = np.arange(0, 1, dt)
-
-m1 = Module.Module(dt, dev1)
-
-#input video
-I_ext = parray.to_gpu(np.ones([dur / dt, 4608]))
-
-out = np.empty((Nt, m1.network.num_neurons), np.double)
-
-playstep = 100
-pbar = pb.ProgressBar(maxval = Nt).start()
-for i in range(Nt):
-    pbar.update(i)
-    m1.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i, None,
-                     out[i, :], None)
-
-pbar.finish()
+manager.start()

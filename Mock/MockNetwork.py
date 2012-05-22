@@ -1,18 +1,25 @@
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
+import tools.parray as parray
 import numpy as np
 import random as rd
 from tools.simpleio import *
-import tools.parray as parray
 from MorrisLecar import MorrisLecar
 from VectorSynapse import VectorSynapse
+import Module as Mod
 
-class Network:
+class MockNetwork (Mod):
     """
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, dt):
+    def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
+                 num_proj_spike, device):
+
+        np.random.seed(0)
+
+        Mod.__init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
+                 num_proj_spike, device)
 
         # In order to understand pre_neuron, post_neuron and dendrites it's
         # necessary notice that the process is over the synapses instead of
@@ -82,7 +89,7 @@ class Network:
                                       thres, slope, power, saturation, delay,
                                       reverse, dt)
 
-    def run_step(self, in_non_list = None, in_spike_list = None,
+    def __run_step(self, in_non_list = None, in_spike_list = None,
                  proj_non = None, proj_spike = None):
 
         self.neurons.I_pre.fill(0)

@@ -1,7 +1,8 @@
 import atexit
-import pycuda.gpuarray as garray
 import pycuda.driver as cuda
-import Network as nn
+import tools.parray as parray
+from multiprocessing import Process
+import numpy as np
 
 """
 Can you please construct an object-oriented PyCUDA implementation of a network
@@ -14,9 +15,10 @@ Also, I'm not sure what dynamics we should expect to observe for such a
 network. You may need to talk to Yiyin or Nikul for further information about
 both of these points.
 """
-class Module:
+class Module (Process):
 
-    def __init__(self, dt, dev):
+    def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
+                 num_proj_spike, device):
         """
         Interface between LPU and architecture.
             Parameters
@@ -39,11 +41,58 @@ class Module:
                 Indicates which GPU device will be used by this module.
         """
 
-        ctx = cuda.Device(dev).make_context()
+        Process.__init__(self)
+        ctx = cuda.Device(device).make_context()
         atexit.register(ctx.pop)
 
-        self.network = nn.Network(dt)
+        self.manager = manager
+        self.running = True
+        self.dt = dt
 
-    def run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
+        if num_in_non > 0:
+            self.in_non_list = parray.to_gpu(np.ones([1, num_in_non]))
+        else:
+            self.in_non_list = None
+        if num_in_spike > 0:
+            self.in_spike_list = parray.to_gpu(np.ones([1, num_in_spike]))
+        else:
+            self.in_spike_list = None
 
-        self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)
+        self.proj_non = []
+        self.proj_spike = []
+
+    def __run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
+
+        raise NotImplementedError('You have to instantiate a derivate class.')
+
+    def __sync(self):
+
+        # receive input from outside
+        I_ext = parray.to_gpu(np.ones([1, num_in_non]))
+        self.in_non_list = int(I_ext.gpudata) + I_ext.dtype.itemsize
+        self.in_spike_list = None
+
+        # send output
+        self.proj_non
+        self.proj_spike
+
+    def run(self):
+
+#        proj_non = np.empty((1, len(self.proj_non)), np.double)
+#        proj_spike = np.empty((1, len(self.proj_spike)), np.double)
+        dt = self.dt
+
+        I_ext = parray.to_gpu(np.ones([1 / dt, 4608]))
+        out = np.empty((1 / dt, 4608), np.double)
+
+        for i in range(int(1 / dt)):
+            self.__run_step(int(I_ext.gpudata) + \
+                                        I_ext.dtype.itemsize * \
+                                        I_ext.ld * i, None, out[i, :], None)
+
+#        while(self.running):
+#            self.__run_step(self.in_non_list, self.in_spike_list, proj_non,
+#                       proj_spike)
+#            self.proj_non.append(proj_non)
+#            self.proj_spike.append(proj_spike)
+#            __sync()
