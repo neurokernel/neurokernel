@@ -6,7 +6,7 @@ import random as rd
 from tools.simpleio import *
 from MorrisLecar import MorrisLecar
 from VectorSynapse import VectorSynapse
-import Module as Mod
+from ..Module as Mod
 
 class MockNetwork (Mod):
     """
