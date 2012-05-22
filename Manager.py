@@ -1,12 +1,8 @@
 import pycuda.driver as cuda
-import tools.parray as parray
-import numpy as np
 #import multiprocessing
 #import mpi4py
-import Module
-import Connectivity
 
-class Manager:
+class Manager (object):
 
     def __init__(self):
 
@@ -30,4 +26,4 @@ class Manager:
     def start(self):
 
         for m in self.modules:
-            m.start()
+            m.run()

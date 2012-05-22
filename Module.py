@@ -1,8 +1,7 @@
 import atexit
-import pycuda.gpuarray as garray
 import pycuda.driver as cuda
 import tools.parray as parray
-import Network as nn
+from multiprocessing import Process
 import numpy as np
 
 """
@@ -16,10 +15,10 @@ Also, I'm not sure what dynamics we should expect to observe for such a
 network. You may need to talk to Yiyin or Nikul for further information about
 both of these points.
 """
-class Module:
+class Module (Process):
 
     def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
-                 num_proj_spike, dev):
+                 num_proj_spike, device):
         """
         Interface between LPU and architecture.
             Parameters
@@ -42,10 +41,10 @@ class Module:
                 Indicates which GPU device will be used by this module.
         """
 
-        ctx = cuda.Device(dev).make_context()
+        Process.__init__(self)
+        ctx = cuda.Device(device).make_context()
         atexit.register(ctx.pop)
 
-        self.network = nn.Network(dt)
         self.manager = manager
         self.running = True
         self.dt = dt
@@ -64,7 +63,7 @@ class Module:
 
     def __run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
 
-        self.network.run_step(in_non_list, in_spike_list, proj_non, proj_spike)
+        raise NotImplementedError('You have to instantiate a derivate class.')
 
     def __sync(self):
 
@@ -77,7 +76,7 @@ class Module:
         self.proj_non
         self.proj_spike
 
-    def start(self):
+    def run(self):
 
 #        proj_non = np.empty((1, len(self.proj_non)), np.double)
 #        proj_spike = np.empty((1, len(self.proj_spike)), np.double)
