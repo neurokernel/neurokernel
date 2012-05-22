@@ -1,5 +1,5 @@
-import Manager
-import Mock.MockNetwork as NN
+import neurokernel.Manager as Manager
+import neurokernel.Mock.MockNetwork as NN
 
 manager = Manager.Manager()
 manager.add_module(NN(manager, dt = 1e-4, num_in_non = 4608, num_in_spike = 0,
