@@ -2,11 +2,11 @@ import numpy as np
 import random as rd
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
-from tools.simpleio import *
-from tools.parray import *
-from .. import Module
+from neurokernel.tools.simpleio import *
+from neurokernel.tools.parray import *
+from neurokernel import Module
 
-class MockNetwork (Module):
+class MockNetwork(Module.Module):
     """
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
@@ -16,8 +16,8 @@ class MockNetwork (Module):
 
         np.random.seed(0)
 
-        Module.__init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
-                 num_proj_spike, device)
+        Module.__init__(self, manager, dt, num_in_non, num_in_spike,
+                        num_proj_non, num_proj_spike, device)
 
         # In order to understand pre_neuron, post_neuron and dendrites it's
         # necessary notice that the process is over the synapses instead of

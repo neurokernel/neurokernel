@@ -1,6 +1,6 @@
 import atexit
 import pycuda.driver as cuda
-import tools.parray as parray
+from neurokernel.tools import parray
 from multiprocessing import Process
 import numpy as np
 
