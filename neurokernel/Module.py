@@ -46,18 +46,25 @@ class Module (Process):
         self.manager = manager
         self.running = True
         self.dt = dt
+        self.device = device
+
+        self.num_in_non = num_in_non
+        self.num_in_spike = num_in_spike
 
         self.proj_non = []
         self.proj_spike = []
 
-    def __run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
+    def init_gpu(self):
+        raise NotImplementedError('You have to provide this method.')
 
-        raise NotImplementedError('You have to instantiate a derivate class.')
+    def run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
+
+        raise NotImplementedError('You have to provide this method.')
 
     def __sync(self):
 
         # receive input from outside
-        I_ext = parray.to_gpu(np.ones([1, num_in_non]))
+        I_ext = parray.to_gpu(np.ones([1, self.num_in_non]))
         self.in_non_list = int(I_ext.gpudata) + I_ext.dtype.itemsize
         self.in_spike_list = None
 
@@ -68,15 +75,19 @@ class Module (Process):
     def run(self):
 
         cuda.init()
-        ctx = cuda.Device(device).make_context()
+        ctx = cuda.Device(self.device).make_context()
         atexit.register(ctx.pop)
 
-        if num_in_non > 0:
-            self.in_non_list = parray.to_gpu(np.ones([1, num_in_non]))
+        # If the system encapsulated by this module has any GPU initialization,
+        # it must be invoked here.
+        self.init_gpu()
+
+        if self.num_in_non > 0:
+            self.in_non_list = parray.to_gpu(np.ones([1, self.num_in_non]))
         else:
             self.in_non_list = None
-        if num_in_spike > 0:
-            self.in_spike_list = parray.to_gpu(np.ones([1, num_in_spike]))
+        if self.num_in_spike > 0:
+            self.in_spike_list = parray.to_gpu(np.ones([1, self.num_in_spike]))
         else:
             self.in_spike_list = None
 
@@ -88,7 +99,7 @@ class Module (Process):
         out = np.empty((1 / dt, 4608), np.double)
 
         for i in range(int(1 / dt)):
-            self.__run_step(int(I_ext.gpudata) + \
+            self.run_step(int(I_ext.gpudata) + \
                                         I_ext.dtype.itemsize * \
                                         I_ext.ld * i, None, out[i, :], None)
 

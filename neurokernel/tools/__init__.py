@@ -1,14 +1,9 @@
 #!/usr/bin/env python
-
-
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 import numpy as np
 from pycuda.tools import dtype_to_ctype
 #from kernel_utils import func_compile
-
-
-
 
 def get_fill_function(dtype, pitch = True):
     type_dst = dtype_to_ctype(dtype)
@@ -23,7 +18,6 @@ def get_fill_function(dtype, pitch = True):
                        "type_dst": type_dst})
         func.prepare([np.int32, np.intp, dtype.type], (256, 1, 1))
     return func
-
 
 def get_astype_function(dtype_dest, dtype_src, pitch = True):
     type_dest = dtype_to_ctype(dtype_dest)
@@ -47,8 +41,6 @@ def get_astype_function(dtype_dest, dtype_src, pitch = True):
                    })
         func.prepare([np.intp, np.intp, np.int32], (256, 1, 1))
     return func
-
-
 
 def get_realimag_function(dtype, real = True, pitch = True):
     type_src = dtype_to_ctype(dtype)
@@ -87,11 +79,6 @@ def get_realimag_function(dtype, real = True, pitch = True):
                    })
         func.prepare([np.intp, np.intp, np.int32], (256, 1, 1))
     return func
-
-
-
-
-
 
 def get_abs_function(dtype, pitch = True):
     type_src = dtype_to_ctype(dtype)
@@ -132,7 +119,6 @@ def get_abs_function(dtype, pitch = True):
 
     return func
 
-
 def get_conj_function(dtype, pitch = True):
 
     type_src = dtype_to_ctype(dtype)
@@ -162,8 +148,6 @@ def get_conj_function(dtype, pitch = True):
 
     return func
 
-
-
 def get_resize_function(dtype):
     type_src = dtype_to_ctype(dtype)
     name = "resize"
@@ -175,7 +159,6 @@ def get_resize_function(dtype):
                    })
     func.prepare([np.int32, np.int32, np.int32, np.int32, np.intp, np.int32, np.intp, np.int32], (256, 1, 1))
     return func
-
 
 def get_transpose_function(dtype, conj = False):
 
@@ -350,7 +333,6 @@ def get_mulscalar_function(src_type, pitch = True):
         func.prepare([np.intp, np.intp, src_type.type, np.int32], (256, 1, 1))
     return func
 
-
 def get_divarray_function(left_dtype, right_dtype, rslt_dtype, pitch = True):
     type_left = dtype_to_ctype(left_dtype)
     type_right = dtype_to_ctype(right_dtype)
@@ -417,8 +399,6 @@ def get_scalardiv_function(src_type, pitch = True):
         func.prepare([np.intp, np.intp, src_type.type, np.int32], (256, 1, 1))
     return func
 
-
-
 transpose_template = """
     #include <pycuda/pycuda-complex.hpp>
     #define TILE_DIM 32
@@ -469,10 +449,6 @@ transpose_template = """
     }
     """
 
-
-
-
-
 """templates"""
 
 pitch_template = """
@@ -506,8 +482,6 @@ pitch_template = """
             """
 """ launching MULTIPROCESSOR_COUNT*6 blocks of (32,8,1), M: number of rows, N: number of columns, ld: leading dimension entries(aasumed to be row major)"""
 
-
-
 non_pitch_template = """
             #include <pycuda/pycuda-complex.hpp>
             #include <cuComplex.h>
@@ -527,7 +501,6 @@ non_pitch_template = """
             }
             """
 """ launching MULTIPROCESSOR_COUNT*6 blocks of (256,1,1), N = totalsize"""
-
 
 reshape_template = """
             #include <pycuda/pycuda-complex.hpp>
@@ -569,7 +542,6 @@ irregular_pitch_template = """
             }
             """
 """ launching MULTIPROCESSOR_COUNT*6 blocks of (256,1,1), M: number of rows, N: number of columns, ld: leading dimension entries(aasumed to be row major)"""
-
 
 pitch_array_op_template = """
     #include <pycuda/pycuda-complex.hpp>

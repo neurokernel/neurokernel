@@ -1,93 +1,99 @@
+import sys
 import numpy as np
+import scipy as sp
 import random as rd
+import numpy.random as np_rd
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
-from neurokernel.tools.simpleio import *
-from neurokernel.tools.parray import *
-from neurokernel import Module
+#from neurokernel.tools import parray
+#from neurokernel.Module import Module
+from ..tools import parray
+from ..Module import Module
 
-class MockNetwork(Module.Module):
+class MockSystem(Module):
     """
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
-                 num_proj_spike, device):
+    def __init__(self, manager, num_neurons, num_synapses, dt, num_in_non,
+                 num_in_spike, num_proj_non, num_proj_spike, device):
 
         np.random.seed(0)
 
         Module.__init__(self, manager, dt, num_in_non, num_in_spike,
                         num_proj_non, num_proj_spike, device)
 
+        self.num_neurons = num_neurons
+        self.num_synapses = num_synapses
+
+        # It corresponds to different neuron types and these types mean
+        # a different set of parameters. In this example, there is 15 types of
+        # neurons.  
+        start_idx = np.array([0, 768, 1536, 2304, 3072, 3840, 4608, 5376, 6144,
+                              6912, 7680, 8448, 9216, 9984, 10752],
+                             dtype = np.int32)
+        self.start_idx = start_idx
+        self.num_types = start_idx.size
+
+    def init_gpu(self):
+
         # In order to understand pre_neuron, post_neuron and dendrites it's
         # necessary notice that the process is over the synapses instead of
         # neurons. So, in fact there is no neurons, but connection between
         # neurons. Number of dendrites per neuron. A dendrite is a neuron's
-        # input connection. Shape of num_dendrites: (num_neurons,)
-        num_dendrites = read_file('example/n_dendrites.h5').astype(np.int32)
-        num_neurons = num_dendrites.size
-        # A pre_neuron is the sender neuron's index. Shape: (num_dendrites,)
-        pre_neuron = read_file('example/pre.h5').astype(np.int32)
-        num_synapses = pre_neuron.size
-        # A post_neuron is the receiver neuron's index, and it is organized as
-        # a set. The elements are organized in crescent order. Shape:
-        # (num_dendrites,)
-        post_neuron = read_file('example/post.h5').astype(np.int32)
+        pre_neuron = np_rd.random_integers(0, self.num_neurons,
+                                size = (self.num_synapses,)).astype(np.int32)
 
-        # TODO: start_idx is the initial memory address for what? 
-        start_idx = np.array([0, 768, 1536, 2304, 3072, 3840, 4608, 5376, 6144,
-                              6912, 7680, 8448, 9216, 9984, 10752],
-                             dtype = np.int32)
-        num_types = start_idx.size
-        offset = np.array([ 0. , 0. , 0. , 0. , 0. , 0. , 0.2, 0.2, 0.2, 0.2,
-                           0.2, 0.2, 0.2, 0.2, 0. ], dtype = np.float64)
+        post_neuron = np.sort(np_rd.random_integers(0, self.num_neurons,
+                                size = (self.num_synapses,)).astype(np.int32))
+
+        self.num_dendrites = sp.bincount(post_neuron)
 
         # Parameters of the model: threshold, slope, saturation, Vs and phy.
         # Shape: (num_synapses,)
         thres = np.asarray([rd.gauss(-.5, .01) for x in \
-                            np.zeros([num_synapses])], dtype = np.float64)
+                            np.zeros([self.num_synapses])], dtype = np.float64)
         slope = np.asarray([rd.gauss(-.5, .1) for x in \
-                            np.zeros([num_synapses])], dtype = np.float64)
+                            np.zeros([self.num_synapses])], dtype = np.float64)
         saturation = np.asarray([rd.gauss(.1, .01) for x in \
-                                 np.zeros([num_synapses])], dtype = np.float64)
-        power = np.ones([num_synapses], dtype = np.float64)
+                            np.zeros([self.num_synapses])], dtype = np.float64)
+        power = np.ones([self.num_synapses], dtype = np.float64)
         reverse = np.asarray([rd.gauss(-.4, .1) for x in \
-                              np.zeros([num_synapses])], dtype = np.float64)
+                            np.zeros([self.num_synapses])], dtype = np.float64)
         V_1 = np.asarray([rd.gauss(.13, .03) for x in \
-                          np.zeros([num_types])], dtype = np.float64)
+                          np.zeros([self.num_types])], dtype = np.float64)
         V_2 = np.asarray([rd.gauss(.15, .001) for x in \
-                          np.zeros([num_types])], dtype = np.float64)
+                          np.zeros([self.num_types])], dtype = np.float64)
         V_3 = np.asarray([rd.gauss(-.25, .1) for x in \
-                          np.zeros([num_types])], dtype = np.float64)
+                          np.zeros([self.num_types])], dtype = np.float64)
         V_4 = np.asarray([rd.gauss(.15, .05) for x in \
-                          np.zeros([num_types])], dtype = np.float64)
+                          np.zeros([self.num_types])], dtype = np.float64)
         Tphi = np.asarray([rd.gauss(.2, .01) for x in \
-                           np.zeros([num_types])], dtype = np.float64)
+                           np.zeros([self.num_types])], dtype = np.float64)
+        offset = np.array([ 0. , 0. , 0. , 0. , 0. , 0. , 0.2, 0.2, 0.2, 0.2,
+                           0.2, 0.2, 0.2, 0.2, 0. ], dtype = np.float64)
 
         # Parameters of alpha function. Shape: (num_synapses,)
-        delay = np.ones([num_synapses], dtype = np.float64)
+        delay = np.ones([self.num_synapses], dtype = np.float64)
 
         # Initial condition at resting potential. Shape of both: (num_neurons,)
-        V = np.asarray([rd.gauss(-.51, .01) for x in np.zeros([num_neurons])],
-                       dtype = np.float64)
-        n = np.asarray([rd.gauss(.3, .05) for x in np.zeros([num_neurons])],
-                       dtype = np.float64)
+        V = np.asarray([rd.gauss(-.51, .01) for x in \
+                        np.zeros([self.num_neurons])], dtype = np.float64)
+        n = np.asarray([rd.gauss(.3, .05) for x in \
+                        np.zeros([self.num_neurons])], dtype = np.float64)
 
-        self.num_neurons = num_neurons
-        self.dt = dt
+        self.delay_steps = int(round(max(delay) * 1e-3 / self.dt))
 
-        delay_steps = int(round(max(delay) * 1e-3 / dt))
+        self.buffer = CircularArray(self.num_neurons, self.delay_steps, V)
 
-        self.buffer = CircularArray(num_neurons, delay_steps, V)
-
-        self.neurons = MorrisLecar(num_neurons, num_types, 24 * 32,
-                                   start_idx, dt, num_dendrites, V, n, V_1,
-                                   V_2, V_3, V_4, Tphi, offset, 6)
-        self.synapses = VectorSynapse(num_synapses, pre_neuron, post_neuron,
+        self.neurons = MorrisLecar(self.num_neurons, self.num_types, 24 * 32,
+                                   self.start_idx, self.dt, self.num_dendrites,
+                                   V, n, V_1, V_2, V_3, V_4, Tphi, offset, 6)
+        self.synapses = VectorSynapse(self.num_synapses, pre_neuron, post_neuron,
                                       thres, slope, power, saturation, delay,
-                                      reverse, dt)
+                                      reverse, self.dt)
 
-    def __run_step(self, in_non_list = None, in_spike_list = None,
+    def run_step(self, in_non_list = None, in_spike_list = None,
                  proj_non = None, proj_spike = None):
 
         self.neurons.I_pre.fill(0)
@@ -267,8 +273,6 @@ class MorrisLecar:
 
         return func
 
-# Old name: vector_synapse
-
 class VectorSynapse:
     def __init__(self, num_synapse, pre_neuron, post_neuron, syn_thres,
                  syn_slope, syn_power, syn_saturation, syn_delay, V_rev, dt):
@@ -321,3 +325,21 @@ class VectorSynapse:
                               (self.num_synapse - 1) / 256 + 1), 1)
 
         return func
+
+def main(argv):
+
+    system = MockSystem(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4],
+                        sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8],
+                        sys.argv[9])
+
+    I_ext = parray.to_gpu(np.ones([1 / system.dt, 4608]))
+    out = np.empty((1 / system.dt, 4608), np.double)
+
+    for i in range(int(1 / system.dt)):
+        system.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * \
+                        I_ext.ld * i, None, out[i, :], None)
+
+if __name__ == '__main__':
+
+    # parameters = None, 11520, 72218, 1e-4, 4608, 0, 4608, 0, 1
+    main(sys.argv[1:])
