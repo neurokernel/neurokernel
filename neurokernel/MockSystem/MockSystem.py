@@ -5,6 +5,8 @@ import random as rd
 import numpy.random as np_rd
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
+from pycuda.compiler import SourceModule
+from pycuda.tools import dtype_to_ctype
 #from neurokernel.tools import parray
 #from neurokernel.Module import Module
 from ..tools import parray
@@ -193,7 +195,7 @@ class MorrisLecar:
                                         self.ddt * 1000, self.steps)
 
     def get_euler_kernel(self, neuron_start, V1, V2, V3, V4, Tphi, offset):
-        template = open('cuda_code/euler_kernel.cu', 'r')
+        template = open('neurokernel/MockSystem/cuda_code/euler_kernel.cu', 'r')
 
         dtype = self.dtype
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
@@ -227,7 +229,7 @@ class MorrisLecar:
         return func
 
     def get_euler_kernel1(self, neuron_start, V1, V2, V3, V4, Tphi, offset):
-        template = open('cuda_code/euler_kernel1.cu', 'r')
+        template = open('neurokernel/MockSystem/cuda_code/euler_kernel1.cu', 'r')
 
         dtype = self.dtype
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
@@ -262,7 +264,7 @@ class MorrisLecar:
         return func
 
     def get_input_func(self):
-        template = open('cuda_code/input_func.cu', 'r')
+        template = open('neurokernel/MockSystem/cuda_code/input_func.cu', 'r')
 
         mod = SourceModule(template.read() % {"num_neurons": self.num_neurons},
                            options = ["--ptxas-options=-v"])
@@ -312,7 +314,7 @@ class VectorSynapse:
                                                     self.mem_tmp.gpudata)
 
     def get_update_terminal_synapse_func(self):
-        template = open('cuda_code/terminal_synapse.cu', 'r')
+        template = open('neurokernel/MockSystem/cuda_code/terminal_synapse.cu', 'r')
 
         mod = SourceModule(template.read() % {"n_synapse": self.num_synapse},
                            options = ["--ptxas-options=-v"])
