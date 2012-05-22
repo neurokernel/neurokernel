@@ -42,21 +42,10 @@ class Module (Process):
         """
 
         Process.__init__(self)
-        ctx = cuda.Device(device).make_context()
-        atexit.register(ctx.pop)
 
         self.manager = manager
         self.running = True
         self.dt = dt
-
-        if num_in_non > 0:
-            self.in_non_list = parray.to_gpu(np.ones([1, num_in_non]))
-        else:
-            self.in_non_list = None
-        if num_in_spike > 0:
-            self.in_spike_list = parray.to_gpu(np.ones([1, num_in_spike]))
-        else:
-            self.in_spike_list = None
 
         self.proj_non = []
         self.proj_spike = []
@@ -77,6 +66,19 @@ class Module (Process):
         self.proj_spike
 
     def run(self):
+
+        cuda.init()
+        ctx = cuda.Device(device).make_context()
+        atexit.register(ctx.pop)
+
+        if num_in_non > 0:
+            self.in_non_list = parray.to_gpu(np.ones([1, num_in_non]))
+        else:
+            self.in_non_list = None
+        if num_in_spike > 0:
+            self.in_spike_list = parray.to_gpu(np.ones([1, num_in_spike]))
+        else:
+            self.in_spike_list = None
 
 #        proj_non = np.empty((1, len(self.proj_non)), np.double)
 #        proj_spike = np.empty((1, len(self.proj_spike)), np.double)

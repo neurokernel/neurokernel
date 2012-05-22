@@ -124,7 +124,6 @@ class CircularArray:
         if self.current >= self.delay_steps:
             self.current = 0
 
-# In Yiyin, this class is called 'vector_neurons'
 class MorrisLecar:
     def __init__(self, num_neurons, num_types, num_cart, neuron_start, dt,
                  num_dendrite, V, n, V1, V2, V3, V4, Tphi, offset,

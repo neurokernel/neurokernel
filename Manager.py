@@ -6,8 +6,6 @@ class Manager (object):
 
     def __init__(self):
 
-        cuda.init()
-
         self.modules = []
         self.connectivities = []
 
