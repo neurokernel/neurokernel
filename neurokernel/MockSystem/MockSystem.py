@@ -3,14 +3,13 @@ import numpy as np
 import scipy as sp
 import random as rd
 import numpy.random as np_rd
+import atexit
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 from pycuda.tools import dtype_to_ctype
-#from neurokernel.tools import parray
-#from neurokernel.Module import Module
-from ..tools import parray
-from ..Module import Module
+from neurokernel.tools import parray
+from neurokernel.Module import Module
 
 class MockSystem(Module):
     """
@@ -31,9 +30,8 @@ class MockSystem(Module):
         # It corresponds to different neuron types and these types mean
         # a different set of parameters. In this example, there is 15 types of
         # neurons.  
-        start_idx = np.array([0, 768, 1536, 2304, 3072, 3840, 4608, 5376, 6144,
-                              6912, 7680, 8448, 9216, 9984, 10752],
-                             dtype = np.int32)
+        start_idx = np.asarray([num_neurons / 15 * i for i in range(15)],
+                               dtype = np.int32)
         self.start_idx = start_idx
         self.num_types = start_idx.size
 
@@ -330,12 +328,34 @@ class VectorSynapse:
 
 def main(argv):
 
-    system = MockSystem(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4],
-                        sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8],
-                        sys.argv[9])
+#    import pdb
 
-    I_ext = parray.to_gpu(np.ones([1 / system.dt, 4608]))
-    out = np.empty((1 / system.dt, 4608), np.double)
+    manager = None
+    try:
+        num_neurons = int(sys.argv[1][:-1])
+        num_synapses = int(sys.argv[2][:-1])
+        dt = np.double(sys.argv[3][:-1])
+        num_in_non = int(sys.argv[4][:-1])
+        num_in_spike = int(sys.argv[5][:-1])
+        num_proj_non = int(sys.argv[6][:-1])
+        num_proj_spike = int(sys.argv[7][:-1])
+        device = int(sys.argv[8])
+    except IOError:
+        print "Wrong number of parameters. Exemple: 11520, 72218, 1e-4, " + \
+              "4608, 0, 4608, 0, 1"
+
+    cuda.init()
+    ctx = cuda.Device(device).make_context()
+    atexit.register(ctx.pop)
+
+#    pdb.set_trace()
+    system = MockSystem(manager, num_neurons, num_synapses, dt, num_in_non,
+                 num_in_spike, num_proj_non, num_proj_spike, device)
+
+    system.init_gpu()
+
+    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.num_in_non]))
+    out = np.empty((1 / system.dt, num_proj_non), np.double)
 
     for i in range(int(1 / system.dt)):
         system.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * \
@@ -343,5 +363,5 @@ def main(argv):
 
 if __name__ == '__main__':
 
-    # parameters = None, 11520, 72218, 1e-4, 4608, 0, 4608, 0, 1
+    # parameters = 11520, 72218, 1e-4, 4608, 0, 4608, 0, 1
     main(sys.argv[1:])
