@@ -16,21 +16,22 @@ class MockSystem(Module):
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, manager, num_neurons, num_synapses, dt, num_in_non,
-                 num_in_spike, num_proj_non, num_proj_spike, device):
+    def __init__(self, manager, num_neurons_per_type, avr_synapses_per_neuron,
+                 dt, num_in_non, num_in_spike, num_proj_non, num_proj_spike,
+                 device):
 
         np.random.seed(0)
 
         Module.__init__(self, manager, dt, num_in_non, num_in_spike,
                         num_proj_non, num_proj_spike, device)
 
-        self.num_neurons = num_neurons
-        self.num_synapses = num_synapses
+        self.num_neurons = num_neurons_per_type * 15
+        self.num_synapses = int(avr_synapses_per_neuron * self.num_neurons)
 
         # It corresponds to different neuron types and these types mean
         # a different set of parameters. In this example, there is 15 types of
         # neurons.  
-        start_idx = np.asarray([num_neurons / 15 * i for i in range(15)],
+        start_idx = np.asarray([self.num_neurons / 15 * i for i in range(15)],
                                dtype = np.int32)
         self.start_idx = start_idx
         self.num_types = start_idx.size
@@ -86,9 +87,11 @@ class MockSystem(Module):
 
         self.buffer = CircularArray(self.num_neurons, self.delay_steps, V)
 
-        self.neurons = MorrisLecar(self.num_neurons, self.num_types, 24 * 32,
-                                   self.start_idx, self.dt, self.num_dendrites,
-                                   V, n, V_1, V_2, V_3, V_4, Tphi, offset, 6)
+        self.neurons = MorrisLecar(self.num_neurons, self.num_types,
+                                   self.num_neurons / 15, self.start_idx,
+                                   self.dt, self.num_dendrites, V, n, V_1, V_2,
+                                   V_3, V_4, Tphi, offset,
+                                   self.num_in_non / self.num_neurons)
         self.synapses = VectorSynapse(self.num_synapses, pre_neuron, post_neuron,
                                       thres, slope, power, saturation, delay,
                                       reverse, self.dt)
@@ -171,8 +174,7 @@ class MorrisLecar:
         self.get_input = self.get_input_func()
 
     def update_I_pre_input(self, I_ext):
-        cuda.memcpy_dtod(int(self.I_pre.gpudata), I_ext,
-                self.num_input * self.I_pre.dtype.itemsize)
+        cuda.memcpy_dtod(int(self.I_pre.gpudata), I_ext, self.num_input * self.I_pre.dtype.itemsize)
 
     def read_synapse(self, conductance, V_rev, st = None):
         self.get_input.prepared_async_call(self.grid_get_input,
@@ -276,6 +278,7 @@ class MorrisLecar:
 class VectorSynapse:
     def __init__(self, num_synapse, pre_neuron, post_neuron, syn_thres,
                  syn_slope, syn_power, syn_saturation, syn_delay, V_rev, dt):
+
         self.dt = dt
         self.num_synapse = num_synapse
         self.pre_neuron = garray.to_gpu(pre_neuron)
@@ -328,12 +331,10 @@ class VectorSynapse:
 
 def main(argv):
 
-#    import pdb
-
     manager = None
     try:
         num_neurons = int(sys.argv[1][:-1])
-        num_synapses = int(sys.argv[2][:-1])
+        avr_synapses = np.double(sys.argv[2][:-1])
         dt = np.double(sys.argv[3][:-1])
         num_in_non = int(sys.argv[4][:-1])
         num_in_spike = int(sys.argv[5][:-1])
@@ -341,15 +342,17 @@ def main(argv):
         num_proj_spike = int(sys.argv[7][:-1])
         device = int(sys.argv[8])
     except IOError:
-        print "Wrong number of parameters. Exemple: 11520, 72218, 1e-4, " + \
+        print "Wrong number of parameters. Exemple: 768, 6, 1e-4, " + \
               "4608, 0, 4608, 0, 1"
 
     cuda.init()
     ctx = cuda.Device(device).make_context()
     atexit.register(ctx.pop)
 
-#    pdb.set_trace()
-    system = MockSystem(manager, num_neurons, num_synapses, dt, num_in_non,
+    start = cuda.Event()
+    end = cuda.Event()
+
+    system = MockSystem(manager, num_neurons, avr_synapses, dt, num_in_non,
                  num_in_spike, num_proj_non, num_proj_spike, device)
 
     system.init_gpu()
@@ -357,11 +360,19 @@ def main(argv):
     I_ext = parray.to_gpu(np.ones([1 / system.dt, system.num_in_non]))
     out = np.empty((1 / system.dt, num_proj_non), np.double)
 
+    start.record()
     for i in range(int(1 / system.dt)):
         system.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * \
                         I_ext.ld * i, None, out[i, :], None)
 
+    end.record()
+    end.synchronize()
+    secs = start.time_till(end) * 1e-3
+    print "Time: %fs" % secs
+
 if __name__ == '__main__':
 
-    # parameters = 11520, 72218, 1e-4, 4608, 0, 4608, 0, 1
+    # number of neurons per type that will be multiplied by 15
+    # average number of synapses per neuron 
+    # parameters = 768, 6, 1e-4, 4608, 0, 4608, 0, 1
     main(sys.argv[1:])
