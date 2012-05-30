@@ -27,7 +27,7 @@ class Connectivity:
     def rm_connectivity(self, connecivity):
         self.connectivities.remove(connecivity)
 
-    # Gets the output signal in the form (num_inputs, 1) and 
+    # Gets the output signal in the form (num_inputs, 1) and
     def get_output(self):
         return self.in_module.neurons.V.get() * self.map
 
