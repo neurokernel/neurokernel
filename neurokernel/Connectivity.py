@@ -41,6 +41,6 @@ def main():
 if __name__ == '__main__':
 
     # number of neurons per type that will be multiplied by 15
-    # average number of synapses per neuron
+    # average number of synapses per neuron 
     # parameters = 768, 6, 1e-4, 4608, 0, 4608, 0, 1
     main()
