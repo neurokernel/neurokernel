@@ -10,6 +10,8 @@ from pycuda.compiler import SourceModule
 from pycuda.tools import dtype_to_ctype
 from neurokernel.tools import parray
 from neurokernel.Module import Module
+from neurokernel.Connectivity import Connectivity
+import pdb
 
 class MockSystem(Module):
     """
@@ -354,6 +356,9 @@ def main(argv):
 
     system = MockSystem(manager, num_neurons, avr_synapses, dt, num_in_non,
                  num_in_spike, num_proj_non, num_proj_spike, device)
+    system.connectivities.append(Connectivity(np.random.randint(2,
+                            size = (5, system.num_neurons)).astype(np.bool),
+                                              system))
 
     system.init_gpu()
 
@@ -364,8 +369,8 @@ def main(argv):
     for i in range(int(1 / system.dt)):
         system.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * \
                         I_ext.ld * i, None, out[i, :], None)
-
-        print system.neurons.V.get()[0:4]
+        a = system.connectivities[0].get_output()
+        pdb.set_trace()
 
     end.record()
     end.synchronize()

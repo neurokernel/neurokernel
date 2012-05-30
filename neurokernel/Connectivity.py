@@ -2,10 +2,9 @@ import numpy as np
 
 class Connectivity:
 
-    def __init__(self, mapping):
+    def __init__(self, mapping, in_module):
 
-        self.in_module
-        self.out_module
+        self.in_module = in_module
 
         # 2D array (bool) as shown below:
         #       out1  out2  out3  out4
@@ -19,7 +18,7 @@ class Connectivity:
             raise IOError, "You must provide a 2D numpy.darray"
         self.map = mapping
 
-        self.syn_parameters
+#        self.syn_parameters
 
     def add_connectivity(self, connectivity):
         self.connectivities.append(connectivity)
