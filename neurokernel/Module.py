@@ -47,6 +47,8 @@ class Module (Process):
         self.proj_non = []
         self.proj_spike = []
 
+        self.connectivities = []
+
     def init_gpu(self):
         """
         Because the module can run as an independent process, the CUDA driver
