@@ -342,8 +342,8 @@ def main(argv):
         num_proj_spike = int(sys.argv[7][:-1])
         device = int(sys.argv[8])
     except IOError:
-        print "Wrong number of parameters. Exemple: 768, 6, 1e-4, " + \
-              "4608, 0, 4608, 0, 1"
+        print "Wrong number of parameters. Exemple: 768, 6, 1e-4, \
+               4608, 0, 4608, 0, 1"
 
     cuda.init()
     ctx = cuda.Device(device).make_context()
@@ -364,6 +364,8 @@ def main(argv):
     for i in range(int(1 / system.dt)):
         system.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * \
                         I_ext.ld * i, None, out[i, :], None)
+
+        print system.neurons.V.get()[0:4]
 
     end.record()
     end.synchronize()

@@ -1,7 +1,3 @@
-import pycuda.driver as cuda
-#import multiprocessing
-#import mpi4py
-
 class Manager (object):
 
     def __init__(self):
@@ -24,4 +20,4 @@ class Manager (object):
     def start(self):
 
         for m in self.modules:
-            m.run()
+            m.start()
