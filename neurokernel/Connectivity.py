@@ -1,10 +1,10 @@
 import numpy as np
 
+# We have to make a choice between apply every time the mask over the output
+# values for each module or send the entire output vector to each module.
 class Connectivity:
 
-    def __init__(self, mapping, in_module):
-
-        self.in_module = in_module
+    def __init__(self, mapping, proj_module):
 
         # 2D array (bool) as shown below:
         #       out1  out2  out3  out4
@@ -18,6 +18,10 @@ class Connectivity:
             raise IOError, "You must provide a 2D numpy.darray"
         self.map = mapping
 
+        self.proj_module = proj_module
+        self.output_mask = self.map.sum(axis = 0).astype(np.bool)
+        self.compressed = np.compress(self.output_mask, self.map, axis = 1)
+
 #        self.syn_parameters
 
     def add_connectivity(self, connectivity):
@@ -28,12 +32,14 @@ class Connectivity:
 
     # Gets the output signal in the form (num_inputs, 1) and
     def get_output(self):
-        return self.in_module.neurons.V.get() * self.map
+        return self.proj_module.neurons.V.get() * self.map
 
 def main():
-    m = np.asarray([[1, 1, 0, 1],
-                    [0, 1, 0, 1],
-                    [0, 0, 0, 1]], dtype = np.bool)
+    m = np.asarray([[0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
+                    [1, 0, 0, 0, 1, 0, 0, 1, 0, 0],
+                    [0, 0, 0, 0, 1, 0, 1, 0, 0, 0],
+                    [1, 0, 0, 0, 1, 0, 1, 1, 0, 0],
+                    [0, 0, 1, 0, 1, 0, 1, 1, 0, 0]], dtype = np.bool)
     m = Connectivity(m)
     m.get_output(np.asarray([[1.4, 3.2, 1.7]]))
 
