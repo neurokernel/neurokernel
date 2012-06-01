@@ -5,10 +5,7 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 import numpy as np
 from pycuda.tools import dtype_to_ctype
-#from kernel_utils import func_compile
-
-
-
+from kernel_utils import func_compile
 
 def get_fill_function(dtype, pitch = True):
     type_dst = dtype_to_ctype(dtype)
