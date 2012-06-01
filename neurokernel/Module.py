@@ -5,35 +5,41 @@ from multiprocessing import Process
 import numpy as np
 
 class Module (Process):
+    """
+    A module comprises one or more local processing units and it is the
+    interface between those LPU and the manager.
+
+    Parameters
+    ----------
+    manager : neurokernel.Manager
+        Module manager that manages this module instance.
+    dt : numpy.double
+        Time resolution.
+    num_in_non : int
+        Number of non-spiking neuron's states (membrane voltages)
+        of external non-spiking neurons presynaptic to the module at
+        the current time.
+    num_in_spike : int
+        Number of non-spiking neuron's indices of external spiking
+        neurons presynaptic to the module that emitted a spike at the
+        current time.
+    num_proj_non : int
+        Number of non-spiking neuron's states (membrane voltages) of
+        non-spiking projec- tion neurons at current time.
+    num_proj_spike : int
+        Number of non-spiking neuron's indices of spiking projection
+        neurons that emitted a spike at the current time.
+    device : int
+        GPU device used by the module instance.
+
+    See Also
+    --------
+    Manager.Manager
+    
+    """
 
     def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
                  num_proj_spike, device):
-        """
-        A module comprises one or more local processing units and it is the
-        interface between those LPU and the manager.
-            Parameters
-            ----------
-            manager : neurokernel.Manager
-                See Manager.py for more information
-            dt : numpy.double
-            num_in_non : int
-                Number of non-spiking neuron's states (membrane voltages)
-                of external non-spiking neurons presynaptic to the module at
-                the current time.
-            num_in_spike : int
-                Number of non-spiking neuron's indices of external spiking
-                neurons presynaptic to the module that emitted a spike at the
-                current time.
-            num_proj_non : int
-                Number of non-spiking neuron's states (membrane voltages) of
-                non-spiking projec- tion neurons at current time.
-            num_proj_spike : int
-                Number of non-spiking neuron's indices of spiking projection
-                neurons that emitted a spike at the current time.
-            device : int
-                Indicates which GPU device will be used by this module.
-        """
-
         Process.__init__(self)
 
         self.manager = manager
@@ -51,23 +57,33 @@ class Module (Process):
 
     def init_gpu(self):
         """
-        Because the module can run as an independent process, the CUDA driver
-        is initialized in run-time and after the module has been initialized.
-        However, some variables are stored in GPU and need a CUDA context ready.
+        Code to run after CUDA device initialization
+        
+        Since a CUDA device is initialized in the run() method (i.e.,
+        when the process is forked) rather than the constructor,
+        initialization code that should be run before the module
+        simulation begins should be included in this method.
         """
 
-        raise NotImplementedError('You have to provide this method.')
+        pass
 
-    def run_step(self, in_non_list, in_spike_list, proj_non, proj_spike):
+    def run_step(self, in_non_list, in_spike_list, out_non_list, out_spike_list):
         """
-        Runs one step of the module simulation.
+        Run one step of the module simulation.
 
         Parameters
-            ----------
-            in_non_list : list of
-                See Manager.py for more information
-            dt : numpy.double
-            num_in_non : int
+        ----------
+        in_non_list : list of pycuda.gpuarray.GPUArray
+            States of external non-spiking input neurons.
+        in_spike_list : list of pycuda.gpuarray.GPUArray
+            Indices of external spiking neurons that produced a
+            spike at the previous simulation step.
+        out_non_list : list of pycuda.gpuarray.GPUArray
+            States of non-spiking output neurons.
+        out_spike_list : list of pycuda.gpuarray.GPUArray
+            Indices of spiking output neurons that produce a spike at
+           the current simulation step.
+           
         """
 
         raise NotImplementedError('You have to provide this method.')
@@ -84,13 +100,17 @@ class Module (Process):
         self.proj_spike
 
     def run(self):
+        """
+        Body of process.
+        
+        """
 
+        # Initialize CUDA context:
         cuda.init()
         ctx = cuda.Device(self.device).make_context()
         atexit.register(ctx.pop)
 
-        # If the system encapsulated by this module has any GPU initialization,
-        # it must be invoked here.
+        # Pre-simulation initialization that requires a valid GPU context:
         self.init_gpu()
 
         if self.num_in_non > 0:

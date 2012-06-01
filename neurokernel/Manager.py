@@ -1,23 +1,59 @@
 class Manager (object):
+    """
+    Module manager.
 
+    """
+    
     def __init__(self):
-
-        self.modules = []
-        self.connectivities = []
+        self.module_list = []
+        self.conn_list = []
 
     def add_module(self, module):
-        self.modules.append(module)
+        """
+        Add a module instance to the simulation.
+        """
+        
+        self.module_list.append(module)
 
     def rm_module(self, module):
-        self.modules.remove(module)
+        """
+        Remove a module instance from the simulation.
+        """
+        
+        self.module_list.remove(module)
 
-    def add_connectivity(self, connectivity):
-        self.connectivities.append(connectivity)
+    def add_connectivity(self, conn):
+        """
+        Add a connectivity object to the simulation.
+        """
+        
+        self.conn_list.append(conn)
 
-    def rm_connectivity(self, connecivity):
-        self.connectivities.remove(connecivity)
+    def rm_connectivity(self, conn):
+        """
+        Remove a connectivity object from the simulation.
+        """
+        
+        self.conn_list.remove(conn)
 
+    def connect(self, m1, m2, conn):
+        """
+        Connect two modules using the specified connectivity object.
+        """
+
+        pass
+
+    def connect_all(self):
+        """
+        Connect all modules using their associated connectivity objects.
+        """
+
+        pass
+    
     def start(self):
-
-        for m in self.modules:
+        """
+        Start all of the module processes.
+        """
+        
+        for m in self.module_list:
             m.start()
