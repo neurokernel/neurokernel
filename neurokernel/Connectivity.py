@@ -1,62 +1,67 @@
 import numpy as np
+import neurokernel.tools.misc_utils as mu
 
-class Connectivity:
+class Connectivity(object):
+    """
+    Module connectivity object.
 
-    def __init__(self, mapping, proj_module, input_module):
+    Describes connectivity between the public output neurons in a source
+    module and the neurons in a destination module.
 
-        # 2D array (bool) as shown below:
-        #       out1  out2  out3  out4
-        # in1 |  x  |  x  |     |  x
-        # in2 |     |     |  x  |
-        # in3 |     |  x  |     |  x
-        if mapping.dtype <> bool:
-            raise IOError, "You must provide a mapping as a numpy.darray with \
-                            booleans"
-        if mapping.ndim <> 2:
-            raise IOError, "You must provide a 2D numpy.darray"
-        self.map = mapping
+    Parameters
+    ----------
+    mat : numpy.ndarray of bools with shape (N, M)
+        Boolean connectivity matrix describing connectivity between
+        N source output neurons and M destination neurons.
 
-        # support vector in the form:
-        # | True | False | False | True | True
-        # where True or False mean if it is necessary to transmit or not the
-        # state of determined neuron
-        map_support = self.map.sum(axis = 0).astype(np.bool)
-        # This mask contains the indices of neurons that will have their states
-        # transmitted to the other LPU and will be stored at the same GPU of
-        # the sender module.
-        self.output_mask = np.compress(map_support, map_support * \
-                                       range(1, len(map_support) + 1)) - 1
-        # The compressed matrices will be stored at the same GPU of the
-        # receiver module and represent the connectivity between the neurons
-        # that are indeed connected. E.g.: if one module has 100 projection
-        # neurons, but just 40 neurons are connected to a module, the matrices
-        # need to have a shape like (num_receivers, 40) to map the connections.
-        self.compressed_map = np.compress(map_support, self.map, axis = 1)
+    Notes
+    -----
+    The input connectivity matrix is assumed to be of the
+    following form:
+    
+    in\out  0   1   2   3  
+          +---+---+---+---+
+       0  | x | x |   | x |
+       1  |   |   | x |   |
+       2  |   | x |   | x |        
+       3  | x |   |   |   |  
 
-#        self.syn_parameters
+    """
+    
+    def __init__(self, mat):
+        
+        if mat.dtype <> bool:
+            raise IOError("Boolean connectivity matrix required.")
+        if mat.ndim <> 2:
+            raise IOError("2D connectivity matrix required.")
+        self.mat = mat
 
-    def add_connectivity(self, connectivity):
-        self.connectivities.append(connectivity)
+        # Find the source neurons that have output connections:
+        self.out_mask = np.any(mat, axis=1)
 
-    def rm_connectivity(self, connecivity):
-        self.connectivities.remove(connecivity)
+    @property
+    def get_out_ind(self):
+        """
+        Return indices of source neurons with output connections.
+        """
 
-    # Gets the output signal in the form (num_inputs, 1) and
-    def get_output(self, module):
-        return module.neurons.V.get() * self.map
+        return np.arange(self.mat.shape[0])[self.out_mask]
 
+    @property
+    def get_compressed(self):
+        """
+        Connectivity matrix with connectionless rows discarded.
+        """
+
+        # Discard the rows with no output connections:
+        return np.compress(self.out_mask, self.mat, axis=0)
+        
+    def __repr__(self):
+        return np.asarray(self.mat, int).__repr__()
+    
 def main():
-    m = np.asarray([[0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
-                    [1, 0, 0, 0, 1, 0, 0, 1, 0, 0],
-                    [0, 0, 0, 0, 1, 0, 1, 0, 0, 0],
-                    [1, 0, 0, 0, 1, 0, 1, 1, 0, 0],
-                    [0, 0, 1, 0, 1, 0, 1, 1, 0, 0]], dtype = np.bool)
-    m = Connectivity(m)
-    m.get_output(np.asarray([[1.4, 3.2, 1.7]]))
+    mat = mu.rand_bin_matrix((5, 10), 5, bool)
+    return Connectivity(mat)
 
 if __name__ == '__main__':
-
-    # number of neurons per type that will be multiplied by 15
-    # average number of synapses per neuron
-    # parameters = 768, 6, 1e-4, 4608, 0, 4608, 0, 1
-    main()
+    c=main()
