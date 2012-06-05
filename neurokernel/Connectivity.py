@@ -12,24 +12,24 @@ class Connectivity(object):
     ----------
     mat : numpy.ndarray of bools with shape (N, M)
         Boolean connectivity matrix describing connectivity between
-        N source output neurons and M destination neurons.
+        N destination output neurons and M source neurons.
 
     Notes
     -----
     The input connectivity matrix is assumed to be of the
     following form:
-    
-    in\out  0   1   2   3  
+
+    out\in  0   1   2   3
           +---+---+---+---+
        0  | x | x |   | x |
        1  |   |   | x |   |
-       2  |   | x |   | x |        
-       3  | x |   |   |   |  
+       2  |   | x |   | x |
+       3  | x |   |   |   |
 
     """
-    
+
     def __init__(self, mat):
-        
+
         if mat.dtype <> bool:
             raise IOError("Boolean connectivity matrix required.")
         if mat.ndim <> 2:
@@ -37,7 +37,7 @@ class Connectivity(object):
         self.mat = mat
 
         # Find the source neurons that have output connections:
-        self.out_mask = np.any(mat, axis=1)
+        self.out_mask = np.any(mat, axis=0)
 
     @property
     def get_out_ind(self):
@@ -45,23 +45,23 @@ class Connectivity(object):
         Return indices of source neurons with output connections.
         """
 
-        return np.arange(self.mat.shape[0])[self.out_mask]
+        return np.arange(self.mat.shape[1])[self.out_mask]
 
     @property
     def get_compressed(self):
         """
-        Connectivity matrix with connectionless rows discarded.
+        Connectivity matrix with connectionless columns discarded.
         """
 
-        # Discard the rows with no output connections:
-        return np.compress(self.out_mask, self.mat, axis=0)
-        
+        # Discard the columns with no output connections:
+        return np.compress(self.out_mask, self.mat, axis=1)
+
     def __repr__(self):
         return np.asarray(self.mat, int).__repr__()
-    
+
 def main():
     mat = mu.rand_bin_matrix((5, 10), 5, bool)
     return Connectivity(mat)
 
 if __name__ == '__main__':
-    c=main()
+    c = main()
