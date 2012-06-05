@@ -1,49 +1,229 @@
+"""This is the Connectivity.py module. This module comprises the connectivity
+between neurons (spiking and non-spiking) of two neurokernel modules and the
+parameters associated to the synapses.
+
+"""
 import numpy as np
 
 class Connectivity:
+    """This module comprises the connectivity between neurons (spiking and
+    non-spiking) of two neurokernel modules and the parameters associated to
+    the synapses.
 
-    def __init__(self, mapping, proj_module, input_module):
+    Attributes
+    ----------
+    non_map : array_like
+        This array represents the connections between non-spiking neurons
+        and has the following format:
 
-        # 2D array (bool) as shown below:
-        #       out1  out2  out3  out4
-        # in1 |  x  |  x  |     |  x
-        # in2 |     |     |  x  |
-        # in3 |     |  x  |     |  x
-        if mapping.dtype <> bool:
+              out1  out2  out3  out4
+        in1 |  x  |  x  |     |  x
+        in2 |  x  |     |     |
+        in3 |     |  x  |     |  x
+
+        where 'x' means connected and blank means not connected.
+    spk_map : array_like
+        This array represents the connections between spiking neurons and
+        it's similar to the non-spiking connectivity matrix.
+    output_mask : array_like
+        This mask contains the indices of neurons that will have their states
+        transmitted to the other LPU and will be stored at the same GPU of
+        the sender module.
+    compressed_map : array_like
+        The compressed matrices will be stored at the same GPU of the
+        receiver module and represent the connectivity between the neurons
+        that are indeed connected. E.g.: if one module has 100 projection
+        neurons, but just 40 neurons are connected to a module, the matrices
+        need to have a shape like (num_receivers, 40) to map the connections.
+
+    """
+
+    def __init__(self, non_map, spk_map):
+        r"""Connectivity class contructor.
+
+        Parameters
+        ----------
+        non_map : array_like
+            This array represents the connections between non-spiking neurons
+            and has the following format:
+
+                  out1  out2  out3  out4
+            in1 |  x  |  x  |     |  x
+            in2 |  x  |     |     |
+            in3 |     |  x  |     |  x
+
+            where 'x' means connected and blank means not connected.
+        spk_map : array_like
+            This array represents the connections between spiking neurons and
+            it's similar to the non-spiking connectivity matrix.
+
+        Raises
+        ------
+        IOError
+            When you do not provide a numpy.darray with booleans or when you
+            provide an array with ndim <> 2.
+
+        See Also
+        --------
+        neurokernel.Module : Class connected by the connectivity module.
+        neurokernel.Manager : Class that manages Modules and Connectivities.
+
+        """
+        if non_map.dtype <> bool:
             raise IOError, "You must provide a mapping as a numpy.darray with \
                             booleans"
-        if mapping.ndim <> 2:
+        if non_map.ndim <> 2:
             raise IOError, "You must provide a 2D numpy.darray"
-        self.map = mapping
+        self.non_map = non_map
 
         # support vector in the form:
         # | True | False | False | True | True
         # where True or False mean if it is necessary to transmit or not the
         # state of determined neuron
-        map_support = self.map.sum(axis = 0).astype(np.bool)
-        # This mask contains the indices of neurons that will have their states
-        # transmitted to the other LPU and will be stored at the same GPU of
-        # the sender module.
+        map_support = self.non_map.sum(axis = 0).astype(np.bool)
         self.output_mask = np.compress(map_support, map_support * \
                                        range(1, len(map_support) + 1)) - 1
-        # The compressed matrices will be stored at the same GPU of the
-        # receiver module and represent the connectivity between the neurons
-        # that are indeed connected. E.g.: if one module has 100 projection
-        # neurons, but just 40 neurons are connected to a module, the matrices
-        # need to have a shape like (num_receivers, 40) to map the connections.
-        self.compressed_map = np.compress(map_support, self.map, axis = 1)
+        self.compressed_map = np.compress(map_support, self.non_map, axis = 1)
 
-#        self.syn_parameters
+        self.non_parameters = 0
+        self.spk_parameters = 0
 
-    def add_connectivity(self, connectivity):
-        self.connectivities.append(connectivity)
+    def connect(self, proj_module, input_module):
+        r"""Connects the projection neurons of the source module to the input
+        neurons of the destination module.
 
-    def rm_connectivity(self, connecivity):
-        self.connectivities.remove(connecivity)
+        Parameters
+        ----------
+        proj_module : neurokernel.Module
+            Source Module.
+        input_module : neurokernel.Module
+            Destination Module
+
+        Raises
+        ------
+        BadException
+            Because you shouldn't have done that.
+
+        Notes
+        -----
+        Notes about the implementation algorithm (if needed).
+
+        This can have multiple paragraphs.
+
+        You may include some math:
+
+        .. math:: X(e^{j\omega } ) = x(n)e^{ - j\omega n}
+
+        And even use a greek symbol like :math:`omega` inline.
+
+        Examples
+        --------
+        These are written in doctest format, and should illustrate how to
+        use the function.
+
+        >>> a=[1,2,3]
+        >>> print [x + 3 for x in a]
+        [4, 5, 6]
+        >>> print "a\n\nb"
+        a
+        b
+
+        """
+        # put the mask inside the source
+        # put the compressed matrix inside the destination
+        return 0
+
+    def disconnect(self):
+        r"""A one-line summary that does not use variable names or the
+        function name.
+
+        Several sentences providing an extended description. Refer to
+        variables using back-ticks, e.g. `var`.
+
+        Parameters
+        ----------
+        var1 : array_like
+            Array_like means all those objects -- lists, nested lists, etc. --
+            that can be converted to an array.  We can also refer to
+            variables like `var1`.
+        var2 : int
+            The type above can either refer to an actual Python type
+            (e.g. ``int``), or describe the type of the variable in more
+            detail, e.g. ``(N,) ndarray`` or ``array_like``.
+        Long_variable_name : {'hi', 'ho'}, optional
+            Choices in brackets, default first when optional.
+
+        Returns
+        -------
+        describe : type
+            Explanation
+        output : type
+            Explanation
+        tuple : type
+            Explanation
+        items : type
+            even more explaining
+
+        Other Parameters
+        ----------------
+        only_seldom_used_keywords : type
+            Explanation
+        common_parameters_listed_above : type
+            Explanation
+
+        Raises
+        ------
+        BadException
+            Because you shouldn't have done that.
+
+        See Also
+        --------
+        otherfunc : relationship (optional)
+        newfunc : Relationship (optional), which could be fairly long, in which
+                  case the line wraps here.
+        thirdfunc, fourthfunc, fifthfunc
+
+        Notes
+        -----
+        Notes about the implementation algorithm (if needed).
+
+        This can have multiple paragraphs.
+
+        You may include some math:
+
+        .. math:: X(e^{j\omega } ) = x(n)e^{ - j\omega n}
+
+        And even use a greek symbol like :math:`omega` inline.
+
+        References
+        ----------
+        Cite the relevant literature, e.g. [1]_.  You may also cite these
+        references in the notes section above.
+
+        .. [1] O. McNoleg, "The integration of GIS, remote sensing,
+           expert systems and adaptive co-kriging for environmental habitat
+           modelling of the Highland Haggis using object-oriented, fuzzy-logic
+           and neural-network techniques," Computers & Geosciences, vol. 22,
+           pp. 585-588, 1996.
+
+        Examples
+        --------
+        These are written in doctest format, and should illustrate how to
+        use the function.
+
+        >>> a=[1,2,3]
+        >>> print [x + 3 for x in a]
+        [4, 5, 6]
+        >>> print "a\n\nb"
+        a
+        b
+
+        """
+        return 0
 
     # Gets the output signal in the form (num_inputs, 1) and
     def get_output(self, module):
-        return module.neurons.V.get() * self.map
+        return module.neurons.V.get() * self.non_map
 
 def main():
     m = np.asarray([[0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
