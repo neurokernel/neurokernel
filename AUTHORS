@@ -1,0 +1,18 @@
+.. -*- rst -*- 
+
+Authors & Acknowledgements
+==========================
+
+This software was written by 
+
+* Daniel S. Chevitarese
+* Lev Givon
+* Nikul H. Ukani
+* Yiyin Zhou
+
+under the supervision of Prof. Aurel A. Lazar [2]_. As of 2012, all
+of the above parties are members of the Bionet Group [1]_ at Columbia
+University's Electrical Engineering Department.
+
+.. [1] http://bionet.ee.columbia.edu/
+.. [2] http://www.ee.columbia.edu/~aurel/
