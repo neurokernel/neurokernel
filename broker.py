@@ -61,6 +61,7 @@ class Module(mp.Process):
             data = msg[0].decode()
             self.logger.info('received: %s' % data)
             if data == 'quit':
+                self.stream.flush()
                 self.ioloop.stop()
             result = self.process_data(data)
             self.sock.send(result)
@@ -180,8 +181,11 @@ class ModuleBroker(object):
         handler.ack_list = self.id_to_mod_dict.keys()
         handler.in_data = []
         self.stream.on_recv(handler)
-        self.ioloop.start()
-
+        try:
+            self.ioloop.start()
+        except KeyboardInterrupt:
+            self.ioloop.stop()
+            
         # Tell the modules to terminate:
         for i in self.id_to_mod_dict.keys():
             entry = (str(i), 'quit')
