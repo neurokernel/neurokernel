@@ -5,23 +5,12 @@ Broker for routing between modules run in separate processes; data is
 read from all modules before data is routed between modules.
 """
 
-import logging
-import signal
-import numpy as np
+import logging, signal
 import multiprocessing as mp
+import numpy as np
 import zmq
-
-def is_poll_in(sock, poller, timeout=100):
-    """
-    Check whether a poller detects incoming data on a specified
-    socket.
-    """
-
-    socks = dict(poller.poll(timeout))
-    if sock in socks and socks[sock] == zmq.POLLIN:
-        return True
-    else:
-        return False
+from zmq.eventloop.ioloop import IOLoop
+from zmq.eventloop.zmqstream import ZMQStream
 
 class Module(mp.Process):
     """
@@ -58,27 +47,26 @@ class Module(mp.Process):
         
         # Connect to the broker:
         self.ctx = zmq.Context()
-        self.poller = zmq.Poller()
         self.sock = self.ctx.socket(zmq.DEALER)
         self.sock.setsockopt(zmq.IDENTITY, str(self.id))
         self.sock.connect("tcp://localhost:%i" % self.port)
-        self.poller.register(self.sock, zmq.POLLIN)
-
+        
         # The modules send an initialization signal after connecting:
         self.sock.send('init')
 
         # Wait for data to arrive:
-        while True:
-            data = ''
-            if is_poll_in(self.sock, self.poller):
-                data = self.sock.recv()
-                self.logger.info('received: %s' % data)
-                if data == 'quit':
-                    break
-
-                result = self.process_data(data)                
-                self.sock.send(result)
-
+        self.ioloop = IOLoop.instance()
+        self.stream = ZMQStream(self.sock, self.ioloop)
+        def handler(msg):
+            data = msg[0].decode()
+            self.logger.info('received: %s' % data)
+            if data == 'quit':
+                self.ioloop.stop()
+            result = self.process_data(data)
+            self.sock.send(result)
+        self.stream.on_recv(handler)
+        self.ioloop.start()
+        
         # Restore SIGINT signal handler before exiting:
         signal.signal(signal.SIGINT, orig_handler)
         self.logger.info('done')
@@ -126,16 +114,11 @@ class ModuleBroker(object):
         self.logger = logging.getLogger('broker  ')
         self.port = port
 
-        # Number of modules:
-        self.N = 0
-        
         # Set up a router socket to communicate with the started
         # processes:
         self.ctx = zmq.Context()
-        self.poller = zmq.Poller()
         self.sock = self.ctx.socket(zmq.ROUTER)
         self.sock.bind("tcp://*:%i" % self.port)
-        self.poller.register(self.sock, zmq.POLLIN)
         
         # Dictionary for mapping module IDs to module instances:
         self.id_to_mod_dict = {}
@@ -143,6 +126,14 @@ class ModuleBroker(object):
         # Dictionary for mapping module instances to module IDs:
         self.mod_to_id_dict = {}
 
+    @property
+    def N(self):
+        """
+        Number of module instances.
+        """
+        
+        return len(self.id_to_mod_dict)
+    
     def create(self, module_class):
         """
         Create instance of module to the network managed by the broker.
@@ -154,71 +145,48 @@ class ModuleBroker(object):
         m.start()
         self.id_to_mod_dict[str(self.N)] = m
         self.mod_to_id_dict[m] = str(self.N)
-        self.N += 1
-
-    def recv_all(self):
-        """
-        Wait for data to be received from all modules.
-        """
-                
-        # Wait for data from all of the modules:
-        in_data = []
-        ack_list = self.id_to_mod_dict.keys()
-        while ack_list:
-            if is_poll_in(self.sock, self.poller):
-                from_id = self.sock.recv()
-                data = self.sock.recv()
-                self.logger.info('received from %s: %s' % (from_id, data))
-                if from_id in ack_list:
-                    ack_list.remove(from_id)
-
-                # Save incoming data:
-                in_data.append((from_id, data))
-
-        return in_data
-
-    def send_all(self, out_data):
-        """
-        Send data to all modules. Each entry in the specified list
-        must be a tuple containing the destination module ID and the
-        data payload.
-        """
-
-        for entry in out_data:
-            self.logger.info('sent to %s: %s' % entry)
-            self.sock.send_multipart(entry)
-
-    def send_all_quit(self):
-        """
-        Tell all of the modules to quit.
-        """
-        self.send_all(zip(self.id_to_mod_dict.keys(), ['quit']*len(self.id_to_mod_dict)))
-        
+                    
     def run(self):
         """
         Body of broker.
         """
 
-        while True:
-
-            # Get data from all modules:
+        self.ioloop = IOLoop.instance()
+        self.stream = ZMQStream(self.sock, self.ioloop)
+        def handler(msg):
             try:
-                in_data = self.recv_all()
+                # Need to cast the message contents to non-Unicode
+                # strings for some reason:
+                addr = str(msg[0].decode())
+                data = str(msg[1].decode())
+                self.logger.info('received from %s: %s' % (addr, data))
+                if addr in handler.ack_list:
+                    handler.ack_list.remove(addr)
+                handler.in_data.append((addr, data))
+                if len(handler.ack_list) == 0:
+                    self.logger.info('barrier reached')
+                    out_data = self.process_data(handler.in_data)          
+                    for entry in out_data:
+                        self.logger.info('sent to %s: %s' % entry)
+                        self.sock.send_multipart(entry)
+                            
+                    # Reset variables:
+                    handler.ack_list = self.id_to_mod_dict.keys()
+                    handler.in_data = []        
             except KeyboardInterrupt:
-                break
-            self.logger.info('barrier reached')
-            
-            # Figure out what needs to be routed to each module:
-            out_data = self.process_data(in_data)
-            
-            # Send all data to the appropriate destinations:
-            try:                
-                self.send_all(out_data)
-            except KeyboardInterrupt:
-                break            
-            
+                self.stream.flush()
+                self.ioloop.stop()
+                            
+        handler.ack_list = self.id_to_mod_dict.keys()
+        handler.in_data = []
+        self.stream.on_recv(handler)
+        self.ioloop.start()
+
         # Tell the modules to terminate:
-        self.send_all_quit()
+        for i in self.id_to_mod_dict.keys():
+            entry = (str(i), 'quit')
+            self.logger.info('sent to %s: %s' % entry)
+            self.sock.send_multipart(entry)
         self.logger.info('done')
         
     def process_data(self, in_data):
