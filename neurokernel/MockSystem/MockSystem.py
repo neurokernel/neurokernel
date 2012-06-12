@@ -1,13 +1,15 @@
 import sys
+import random as rd
+
 import numpy as np
 import scipy as sp
-import random as rd
 import numpy.random as np_rd
 import atexit
 import pycuda.gpuarray as garray
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 from pycuda.tools import dtype_to_ctype
+
 from neurokernel.tools import parray
 from neurokernel.Module import Module
 from neurokernel.Connectivity import Connectivity
