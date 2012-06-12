@@ -44,7 +44,8 @@ class Module(mp.Process):
         
     def run(self):
 
-        # Make the module processes ignore Ctrl-C:
+        # Don't allow interrupts to prevent the handler from
+        # completely executing each time it is called: 
         with NoKeyboardInterrupt():
 
             # Connect to the broker:
@@ -149,11 +150,9 @@ class ModuleBroker(object):
         self.stream = ZMQStream(self.sock, self.ioloop)
         def handler(msg):
 
-            # Stop the event loop when an interrupt occurs:
-            def on_interrupt(signum, frame):
-                self.stream.flush()
-                self.ioloop.stop()
-            with OnKeyboardInterrupt(on_interrupt):
+            # Don't allow interrupts to prevent the handler from
+            # completely executing each time it is called:
+            with NoKeyboardInterrupt():
                 
                 # Need to cast the message contents to non-Unicode
                 # strings for some reason:
@@ -177,7 +176,10 @@ class ModuleBroker(object):
         handler.ack_list = self.id_to_mod_dict.keys()
         handler.in_data = []
         self.stream.on_recv(handler)
-        with OnKeyboardInterrupt(lambda signum, frame: self.ioloop.stop()):
+        def on_interrupt(signum, frame):
+            self.stream.flush()
+            self.ioloop.stop()
+        with OnKeyboardInterrupt(on_interrupt):
             self.ioloop.start()
             
         # Tell the modules to terminate:
@@ -200,7 +202,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(name)s %(levelname)s %(message)s')
     b = ModuleBroker()
-    N = 3
+    N = 60
     for i in xrange(N):
         b.create(Module)
     b.run()
