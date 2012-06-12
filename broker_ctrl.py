@@ -112,13 +112,6 @@ class ModuleBroker(object):
     create(module_class)
         Create an instance of the specified module class and connect
         it to the broker.
-    recv_all()
-        Wait for all modules to transmit data to the broker.
-    send_all(out_data)
-        Send data to modules. The list must contain tuples that each
-        contain the destination module ID and the data payload.
-    send_all_quit()
-        Send a quit signal to all modules.
     run()
         Body of broker.
     process_data(in_data)
