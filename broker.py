@@ -177,10 +177,8 @@ class ModuleBroker(object):
         handler.ack_list = self.id_to_mod_dict.keys()
         handler.in_data = []
         self.stream.on_recv(handler)
-        try:
+        with OnKeyboardInterrupt(lambda signum, frame: self.ioloop.stop()):
             self.ioloop.start()
-        except KeyboardInterrupt:
-            self.ioloop.stop()
             
         # Tell the modules to terminate:
         for i in self.id_to_mod_dict.keys():
@@ -202,8 +200,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(name)s %(levelname)s %(message)s')
     b = ModuleBroker()
-    b.create(Module)
-    b.create(Module)
-    b.create(Module)
-
+    N = 3
+    for i in xrange(N):
+        b.create(Module)
     b.run()
