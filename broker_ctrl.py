@@ -6,12 +6,15 @@ read from all modules before data is routed between modules.
 Uses a separate port for control of modules.
 """
 
-import logging, signal
+import logging
 import multiprocessing as mp
 import numpy as np
 import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
+
+from int_ctx import NoKeyboardInterrupt, OnKeyboardInterrupt
+
 
 class Module(mp.Process):
     """
@@ -47,45 +50,43 @@ class Module(mp.Process):
     def run(self):
 
         # Make the module processes ignore Ctrl-C:
-        orig_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        with NoKeyboardInterrupt():
         
-        # Connect to the broker:
-        self.ctx = zmq.Context()
-        self.sock_data = self.ctx.socket(zmq.DEALER)
-        self.sock_data.setsockopt(zmq.IDENTITY, str(self.id))
-        self.sock_data.connect("tcp://localhost:%i" % self.port_data)
+            # Connect to the broker:
+            self.ctx = zmq.Context()
+            self.sock_data = self.ctx.socket(zmq.DEALER)
+            self.sock_data.setsockopt(zmq.IDENTITY, str(self.id))
+            self.sock_data.connect("tcp://localhost:%i" % self.port_data)
 
-        self.sock_ctrl = self.ctx.socket(zmq.DEALER)
-        self.sock_ctrl.setsockopt(zmq.IDENTITY, str(self.id))
-        self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
+            self.sock_ctrl = self.ctx.socket(zmq.DEALER)
+            self.sock_ctrl.setsockopt(zmq.IDENTITY, str(self.id))
+            self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
 
-        # The modules send an initialization signal after connecting:
-        self.sock_data.send('init')
-       
-        # Wait for data to arrive:
-        self.ioloop = IOLoop.instance()
-        self.stream_data = ZMQStream(self.sock_data, self.ioloop)
-        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
+            # The modules send an initialization signal after connecting:
+            self.sock_data.send('init')
 
-        def handler(msg):
-            data = msg[0].decode()
-            if data == 'quit':
-                self.stream_data.flush()                
-                self.stream_ctrl.flush()
-                self.ioloop.stop()
-        self.stream_ctrl.on_recv(handler)
+            # Wait for data to arrive:
+            self.ioloop = IOLoop.instance()
+            self.stream_data = ZMQStream(self.sock_data, self.ioloop)
+            self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
+
+            def handler(msg):
+                data = msg[0].decode()
+                if data == 'quit':
+                    self.stream_data.flush()                
+                    self.stream_ctrl.flush()
+                    self.ioloop.stop()
+            self.stream_ctrl.on_recv(handler)
+
+            def handler(msg):
+                data = msg[0].decode()
+                self.logger.info('received: %s' % data)
+                result = self.process_data(data)
+                self.sock_data.send(result)
+            self.stream_data.on_recv(handler)
+
+            self.ioloop.start()
         
-        def handler(msg):
-            data = msg[0].decode()
-            self.logger.info('received: %s' % data)
-            result = self.process_data(data)
-            self.sock_data.send(result)
-        self.stream_data.on_recv(handler)
-
-        self.ioloop.start()
-        
-        # Restore SIGINT signal handler before exiting:
-        signal.signal(signal.SIGINT, orig_handler)
         self.logger.info('done')
         
     def process_data(self, data):
@@ -170,7 +171,13 @@ class ModuleBroker(object):
         self.ioloop = IOLoop.instance()
         self.stream = ZMQStream(self.sock_data, self.ioloop)
         def handler(msg):
-            try:
+
+            # Stop the event loop when an interrupt occurs:
+            def on_interrupt(signum, frame):
+                self.stream.flush()
+                self.ioloop.stop()                
+            with OnKeyboardInterrupt(on_interrupt):
+                
                 # Need to cast the message contents to non-Unicode
                 # strings for some reason:
                 addr = str(msg[0].decode())
@@ -189,9 +196,6 @@ class ModuleBroker(object):
                     # Reset variables:
                     handler.ack_list = self.id_to_mod_dict.keys()
                     handler.in_data = []        
-            except KeyboardInterrupt:
-                self.stream.flush()
-                self.ioloop.stop()
                             
         handler.ack_list = self.id_to_mod_dict.keys()
         handler.in_data = []
