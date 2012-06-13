@@ -20,8 +20,11 @@ log_format = lambda s: "%-15s" % s
 
 class Module(mp.Process):
     """
-    Module to run in a process.
+    Processing module.
 
+    This class repeatedly executes a work method until it receives a
+    termination signal.
+    
     Parameters
     ----------
     id : int
@@ -35,7 +38,9 @@ class Module(mp.Process):
     -------
     run()
         Body of process.
-    process_data(data)
+    ctrl_recv_handler(msg)
+        Handle messages received on control interface.
+    run_step(data)
         Processes the specified data and returns a result for
         transmission to other modules.
 
@@ -45,6 +50,10 @@ class Module(mp.Process):
         self.id = kwargs.pop('id')
         self.port_data = kwargs.pop('port_data')
         self.port_ctrl = kwargs.pop('port_ctrl')
+
+        if self.port_data == self.port_ctrl:
+            raise ValueError('data and control ports must differ')
+        
         self.logger = logging.getLogger('module %-2s' % self.id)
 
         mp.Process.__init__(self, *args, **kwargs)
@@ -67,7 +76,10 @@ class Module(mp.Process):
             self.ioloop.stop()
             
     def run(self):
-
+        """
+        Body of process.
+        """
+        
         # Don't allow interrupts to prevent the handler from
         # completely executing each time it is called:                             
         with NoKeyboardInterrupt():
@@ -92,7 +104,7 @@ class Module(mp.Process):
             # Run the processing step and the data transmission:
             np.random.seed()
             def step():
-                result = self.process_data(step.data)
+                result = self.run_step(step.data)
                 self.sock_data.send(result)
                 self.logger.info(log_format('sent:')+result)
                 data = self.sock_data.recv()
@@ -110,7 +122,7 @@ class Module(mp.Process):
                 
         self.logger.info('done')
 
-    def process_data(self, data):
+    def run_step(self, *args, **kwargs):
         """
         This method should be implemented to do something with its
         arguments and produce output.
@@ -135,7 +147,7 @@ class ModuleBroker(object):
         Create an instance of the specified module class and connect
         it to the broker.
     run()
-        Body of broker.
+        Body of process.
     route(in_data)
         Route data entries.
 
@@ -147,6 +159,9 @@ class ModuleBroker(object):
         self.port_data = port_data
         self.port_ctrl = port_ctrl
 
+        if self.port_data == self.port_ctrl:
+            raise ValueError('data and control ports must differ')
+        
         # Set up a router socket to communicate with the started
         # processes:
         self.ctx = zmq.Context()
@@ -197,7 +212,7 @@ class ModuleBroker(object):
 
     def run(self):
         """
-        Body of broker.
+        Body of process.
         """
 
         self.ioloop = IOLoop.instance()
