@@ -49,6 +49,23 @@ class Module(mp.Process):
 
         mp.Process.__init__(self, *args, **kwargs)
 
+    def ctrl_recv_handler(self, msg):
+        """
+        Control interface handler for received data.
+
+        Notes
+        -----
+        Assumes that self.ioloop and self.stream_ctrl exist.
+
+        """
+
+        data = msg[0]
+        if data == 'quit':
+            self.logger.info('quit received')
+            self.stream_ctrl.flush()
+            self.pc.stop()
+            self.ioloop.stop()
+            
     def run(self):
 
         # Don't allow interrupts to prevent the handler from
@@ -81,23 +98,16 @@ class Module(mp.Process):
                 data = self.sock_data.recv()
                 data = pickle.loads(data)
                 self.logger.info(log_format('received:')+str(data))
-            step.data = ''
-            pc = PeriodicCallback(step, 1, self.ioloop)
+            step.data = '' # Initialize first data to process
+            self.pc = PeriodicCallback(step, 1, self.ioloop)
 
-            # Handle quit signals:
-            def handler(msg):
-                data = msg[0]
-                if data == 'quit':
-                    self.logger.info('quit received')
-                    self.stream_ctrl.flush()
-                    pc.stop()
-                    self.ioloop.stop()
-            self.stream_ctrl.on_recv(handler)
+            # Set up control stream event handler:
+            self.stream_ctrl.on_recv(self.ctrl_recv_handler)
 
             # Start the processing:
-            pc.start()
+            self.pc.start()
             self.ioloop.start()
-
+                
         self.logger.info('done')
 
     def process_data(self, data):
@@ -126,7 +136,7 @@ class ModuleBroker(object):
         it to the broker.
     run()
         Body of broker.
-    process_data(in_data)
+    route(in_data)
         Route data entries.
 
     """
@@ -207,7 +217,7 @@ class ModuleBroker(object):
 
                 if len(handler.recv_list) == 0:
                     self.logger.info('all data received')
-                    out_data = self.process_data(handler.in_data)
+                    out_data = self.route(handler.in_data)
 
                     # Serialize each output entry's data list before transmission:
                     for entry in out_data:
@@ -240,7 +250,7 @@ class ModuleBroker(object):
             self.sock_ctrl.send_multipart(entry)
         self.logger.info('done')
 
-    def process_data(self, in_data):
+    def route(self, in_data):
         """
         Route data entries.
         
