@@ -41,7 +41,7 @@ class Module(mp.Process):
         self.logger = logging.getLogger('module %s' % self.id)
 
         mp.Process.__init__(self, *args, **kwargs)
-        
+
     def run(self):
 
         # Don't allow interrupts to prevent the handler from
@@ -70,9 +70,9 @@ class Module(mp.Process):
                 self.sock.send(result)
             self.stream.on_recv(handler)
             self.ioloop.start()
-        
+
         self.logger.info('done')
-        
+
     def process_data(self, data):
         """
         This method should be implemented to do something with its
@@ -81,7 +81,7 @@ class Module(mp.Process):
 
         return ''
     
-class ModuleBroker(object):
+class Broker(object):
     """
     Broker for communicating between modules.
 
@@ -201,7 +201,7 @@ class ModuleBroker(object):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(name)s %(levelname)s %(message)s')
-    b = ModuleBroker()
+    b = Broker()
     N = 60
     for i in xrange(N):
         b.create(Module)

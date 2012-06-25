@@ -98,7 +98,7 @@ class Module(mp.Process):
 
         return ''
     
-class ModuleBroker(object):
+class Broker(object):
     """
     Broker for communicating between modules.
 
@@ -224,7 +224,7 @@ class ModuleBroker(object):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(name)s %(levelname)s %(message)s')
-    b = ModuleBroker()
+    b = Broker()
     N = 60
     for i in xrange(N):
         b.create(Module)
