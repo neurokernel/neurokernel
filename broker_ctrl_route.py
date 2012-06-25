@@ -6,12 +6,12 @@ read from all modules before data is routed between modules.
 Uses a separate port for control of modules.
 """
 
-import logging, time
+import logging, threading, time
 import multiprocessing as mp
 import cPickle as pickle
 import numpy as np
 import zmq
-from zmq.eventloop.ioloop import IOLoop, PeriodicCallback
+from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
 from int_ctx import NoKeyboardInterrupt, OnKeyboardInterrupt
@@ -47,15 +47,16 @@ class Module(mp.Process):
     """
 
     def __init__(self, *args, **kwargs):
-        self.id = kwargs.pop('id')
         self.port_data = kwargs.pop('port_data')
         self.port_ctrl = kwargs.pop('port_ctrl')
-
         if self.port_data == self.port_ctrl:
             raise ValueError('data and control ports must differ')
+        self.id = kwargs.pop('id')
+
+        # Used to determine when the main loop of the process is running:
+        self.running = False
         
         self.logger = logging.getLogger('module %-2s' % self.id)
-
         mp.Process.__init__(self, *args, **kwargs)
 
     def ctrl_recv_handler(self, msg):
@@ -64,17 +65,17 @@ class Module(mp.Process):
 
         Notes
         -----
-        Assumes that self.ioloop and self.stream_ctrl exist.
+        Assumes that self.ioloop and self.stream exist.
 
         """
 
         data = msg[0]
         if data == 'quit':
             self.logger.info('quit received')
-            self.stream_ctrl.flush()
-            self.pc.stop()
+            self.stream.flush()
             self.ioloop.stop()
-            
+            self.running = False
+
     def run(self):
         """
         Body of process.
@@ -82,6 +83,7 @@ class Module(mp.Process):
         
         # Don't allow interrupts to prevent the handler from
         # completely executing each time it is called:                             
+        self.running = True
         with NoKeyboardInterrupt():
 
             # Use a blocking port for the data interface to ensure that
@@ -97,29 +99,23 @@ class Module(mp.Process):
             self.sock_ctrl.setsockopt(zmq.IDENTITY, str(self.id))
             self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
 
-            # Set up event loop:
+            # Set up control stream event loop:
             self.ioloop = IOLoop.instance()
-            self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
-
+            self.stream = ZMQStream(self.sock_ctrl, self.ioloop)
+            self.stream.on_recv(self.ctrl_recv_handler)
+            threading.Thread(target=self.ioloop.start).start()
+            
             # Run the processing step and the data transmission:
             np.random.seed()
-            def step():
-                result = self.run_step(step.data)
+            data = ''
+            while self.running:
+                result = self.run_step(data)
                 self.sock_data.send(result)
                 self.logger.info(log_format('sent:')+result)
                 data = self.sock_data.recv()
                 data = pickle.loads(data)
                 self.logger.info(log_format('received:')+str(data))
-            step.data = '' # Initialize first data to process
-            self.pc = PeriodicCallback(step, 1, self.ioloop)
-
-            # Set up control stream event handler:
-            self.stream_ctrl.on_recv(self.ctrl_recv_handler)
-
-            # Start the processing:
-            self.pc.start()
-            self.ioloop.start()
-                
+            
         self.logger.info('done')
 
     def run_step(self, *args, **kwargs):
@@ -239,7 +235,8 @@ class ModuleBroker(object):
                         self.logger.info(log_format('sent to %s:' % entry[0])+str(entry[2]))
                         self.sock_data.send_multipart([entry[0],
                                                        entry[1], pickle.dumps(entry[2])])
-
+                    self.logger.info('all data sent')
+                    
                     # Reset list of modules from which data was
                     # received and list of received data:
                     handler.in_data = []                                        
@@ -250,19 +247,20 @@ class ModuleBroker(object):
         self.stream.on_recv(handler)
         def on_interrupt(signum, frame):
 
-            # Need to wait for a little while for modules to stop:
-            time.sleep(1)
-            self.stream.flush()
-            self.ioloop.stop()
+            # Tell the modules to terminate before shutting off the
+            # broker's event loop so that all requests are properly
+            # replied to:
+            for i in self.id_to_mod_dict.keys():
+                entry = (str(i), 'quit')
+                self.logger.info(log_format('sent to %s:' % entry[0])+entry[1])
+                self.sock_ctrl.send_multipart(entry)
 
+            # Turn off broker event loop:
+            self.stream.flush()
+            self.ioloop.stop()          
         with OnKeyboardInterrupt(on_interrupt):
             self.ioloop.start()
 
-        # Tell the modules to terminate:
-        for i in self.id_to_mod_dict.keys():
-            entry = (str(i), 'quit')
-            self.logger.info(log_format('sent to %s:' % entry[0])+entry[1])
-            self.sock_ctrl.send_multipart(entry)
         self.logger.info('done')
 
     def route(self, in_data):
