@@ -3,6 +3,7 @@ import pycuda.driver as cuda
 from neurokernel.tools import parray
 from multiprocessing import Process
 import numpy as np
+import logging
 
 class Module (Process):
     """
@@ -35,7 +36,7 @@ class Module (Process):
     See Also
     --------
     Manager.Manager
-    
+
     """
 
     def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
@@ -58,7 +59,7 @@ class Module (Process):
     def init_gpu(self):
         """
         Code to run after CUDA device initialization
-        
+
         Since a CUDA device is initialized in the run() method (i.e.,
         when the process is forked) rather than the constructor,
         initialization code that should be run before the module
@@ -83,7 +84,7 @@ class Module (Process):
         out_spike_list : list of pycuda.gpuarray.GPUArray
             Indices of spiking output neurons that produce a spike at
            the current simulation step.
-           
+
         """
 
         raise NotImplementedError('You have to provide this method.')
@@ -102,7 +103,7 @@ class Module (Process):
     def run(self):
         """
         Body of process.
-        
+
         """
 
         # Initialize CUDA context:
