@@ -184,7 +184,7 @@ class Slope(Parameter):
     def __init__(self, values):
         self.__values = values
 
-class Thredshold(Parameter):
+class Threshold(Parameter):
     def __init__(self, values):
         self.__values = values
 
