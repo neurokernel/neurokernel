@@ -1,3 +1,12 @@
+"""This is the Module.py class. This class comprises a brain processing unit,
+which means that this class can be from a LPU to an entire sensory system.
+
+Known issues
+------------
+    - This class do not support dynamic modifications yet, which means that it
+    is not possible change the mapping between two modules in run-time.
+
+"""
 import atexit
 import pycuda.driver as cuda
 from neurokernel.tools import parray
@@ -10,51 +19,75 @@ class Module (Process):
     A module comprises one or more local processing units and it is the
     interface between those LPU and the manager.
 
-    Parameters
+    Attributes
     ----------
     manager : neurokernel.Manager
         Module manager that manages this module instance.
     dt : numpy.double
-        Time resolution.
-    num_in_non : int
-        Number of non-spiking neuron's states (membrane voltages)
+        Time resolution of the simulation.
+    inputs : array_like
+        List with the number of neurons per type states (membrane voltages)
         of external non-spiking neurons presynaptic to the module at
         the current time.
-    num_in_spike : int
-        Number of non-spiking neuron's indices of external spiking
-        neurons presynaptic to the module that emitted a spike at the
-        current time.
-    num_proj_non : int
+    outputs : array_like
         Number of non-spiking neuron's states (membrane voltages) of
         non-spiking projec- tion neurons at current time.
-    num_proj_spike : int
-        Number of non-spiking neuron's indices of spiking projection
-        neurons that emitted a spike at the current time.
+    in_conn : array_like
+        Comprises a list with all connectivity modules for incoming connections.
     device : int
         GPU device used by the module instance.
 
     See Also
     --------
-    Manager.Manager
+    Manager.Manager : Class that manages Modules and Connectivities.
 
     """
 
-    def __init__(self, manager, dt, num_in_non, num_in_spike, num_proj_non,
-                 num_proj_spike, device):
+    def __init__(self, manager, dt, num_proj, device):
+        """
+        A module comprises one or more local processing units and it is the
+        interface between those LPU and the manager.
+
+        Parameters
+        ----------
+        manager : neurokernel.Manager
+            Module manager that manages this module instance.
+        dt : numpy.double
+            Time resolution.
+        num_proj : array_like
+            Number of non-spiking neuron's states (membrane voltages) of
+            non-spiking projection neurons at current time.
+        device : int
+            GPU device used by the module instance.
+
+        Examples
+        --------
+        In this example it's created  a module with two types of projection
+        neurons: 6 neurons type1 and 3 neurons type2 as output.
+        >>> ...
+        >>> mod1 = Module(manager, 1e-5, [6, 3], 0)
+        >>> print mod1.outputs
+        [array([[ 0.,  0.,  0.,  0.,  0.,  0.]]), array([[ 0.,  0.,  0.]])]
+        >>> ...
+
+        See Also
+        --------
+        neurokernel.Manager : Class that manages Modules and Connectivities.
+
+        """
+
         Process.__init__(self)
 
         self.manager = manager
-        self.running = True
+        self.running = True #temp
         self.dt = dt
         self.device = device
 
-        self.num_in_non = num_in_non
-        self.num_in_spike = num_in_spike
+        self.outputs = [np.zeros([1, x], dtype = np.float64) for x in num_proj]
 
-        self.proj_non = []
-        self.proj_spike = []
-
-        self.connectivities = []
+        # Connectivity
+        self.in_conn = []
+        self.out = []
 
     def init_gpu(self):
         """
@@ -68,22 +101,23 @@ class Module (Process):
 
         pass
 
-    def run_step(self, in_non_list, in_spike_list, out_non_list, out_spike_list):
+    def run_step(self):
         """
         Run one step of the module simulation.
 
         Parameters
         ----------
-        in_non_list : list of pycuda.gpuarray.GPUArray
-            States of external non-spiking input neurons.
-        in_spike_list : list of pycuda.gpuarray.GPUArray
-            Indices of external spiking neurons that produced a
-            spike at the previous simulation step.
-        out_non_list : list of pycuda.gpuarray.GPUArray
-            States of non-spiking output neurons.
-        out_spike_list : list of pycuda.gpuarray.GPUArray
-            Indices of spiking output neurons that produce a spike at
-           the current simulation step.
+        in_list : list of pycuda.gpuarray.GPUArray
+            States of external input neurons divided by type. Each element of
+            this list is a vector with neuron states of one type.
+        out_list : list of pycuda.gpuarray.GPUArray
+            States of output neurons divided by type. Each element of this list
+            is a vector with neuron states of one type.
+
+        Raises
+        ------
+        NotImplementedError
+            You cannot run this method on the base class.
 
         """
 
@@ -131,9 +165,8 @@ class Module (Process):
         out = np.empty((1 / dt, 4608), np.double)
 
         for i in range(int(1 / dt)):
-            self.run_step(int(I_ext.gpudata) + \
-                                        I_ext.dtype.itemsize * \
-                                        I_ext.ld * i, None, out[i, :], None)
+            temp = int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i
+            self.run_step([temp], [out[i, :]])
 
 #        while(self.running):
 #            self.__run_step(self.in_non_list, self.in_spike_list, proj_non,

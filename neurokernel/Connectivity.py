@@ -1,6 +1,11 @@
-"""This is the Connectivity.py module. This module comprises the connectivity
+"""This is the Connectivity.py class. This class comprises the connectivity
 between neurons (spiking and non-spiking) of two neurokernel modules and the
 parameters associated to the synapses.
+
+Known issues
+------------
+    - This class do not support dynamic modifications yet, which means that it
+    is not possible change the mapping between two modules in run-time.
 
 """
 import numpy as np
@@ -34,21 +39,19 @@ class Connectivity:
         need to have a shape like (num_receivers, 40) to map the connections.
     param_per_type : array_like
         Parameter per type comprises the additional information needed to
-        compute the inputs from other modules. The structure is based on the
-        Composite pattern in [1]. E.g.: If a neuron (n1) in module 1 is
+        compute the inputs from other modules. If a neuron (n1) in module 1 is
         connected to a type T neuron (nT2) in module 2, it's necessary
-        additional information in order to compute the contribution of n1 on
-        nT2.
+        additional information in order to compute the contribution of
+        n1 on nT2.
 
-    References
-    ----------
-    .. [1] ErichGamma, RichardHelm, RalphJohnson, and JohnVlissides, Design
-       Patterns: Elements of Reusable Object-Oriented Software, 1994
+    See also
+    --------
+    class Parameter
 
     """
 
     def __init__(self, map, param_per_type):
-        r"""Connectivity class contructor.
+        r"""Connectivity class constructor.
 
         Parameters
         ----------
@@ -66,8 +69,9 @@ class Connectivity:
             For each type of destination neuron, it is necessary to specify a
             set of parameters associated to it, e.g.:
             >>> ...
-            >>> type1 = ParametersComposition(Weight(.2, .3), Slope(.6, .3))
-            >>> type2 = ParametersComposition(Weight(.8,), Slope(.7))
+            >>>
+            >>> type1 = Parameters(Weight(.2, .3), Slope(.6, .3))
+            >>> type2 = Parameters(Weight(.8,), Slope(.7))
             >>> conn = Connectivity(map, [type1, type2])
 
         Raises
@@ -85,11 +89,16 @@ class Connectivity:
         neurokernel.Manager : Class that manages Modules and Connectivities.
 
         """
-        if map.dtype <> bool:
+        if type(map) <> np.ndarray and map.dtype <> bool:
             raise IOError, "You must provide a mapping as a numpy.darray with \
                             booleans"
         if map.ndim <> 2:
             raise IOError, "You must provide a 2D numpy.darray"
+
+        if type(param_per_type) <> np.ndarray and \
+            param_per_type.dtype <> Parameters:
+            raise IOError, "Parameters must be provided  by type as shown in \
+                            documentation."
 
         if len(map) <> sum([len(x) for x in param_per_type]):
             raise IOError, "the sum of the length of all types are different \
@@ -103,6 +112,7 @@ class Connectivity:
         # where True or False mean if it is necessary to transmit or not the
         # state of determined neuron
         map_support = self.map.sum(axis = 0).astype(np.bool)
+        # The mask is a vector with the indexes of neurons that transmit data.
         self.output_mask = np.compress(map_support, map_support * \
                                        range(1, len(map_support) + 1)) - 1
         self.compressed_map = np.compress(map_support, self.map, axis = 1)
@@ -111,135 +121,14 @@ class Connectivity:
         r"""Connects the projection neurons of the source module to the input
         neurons of the destination module. In order to do that, this method
         saves a mask in the source module memory to be applied on the output
-        vector and a compressed map in the destination module memory
-
-        Parameters
-        ----------
-        proj_module : neurokernel.Module
-            Source Module.
-        input_module : neurokernel.Module
-            Destination Module
-
-        Raises
-        ------
-        BadException
-            Because you shouldn't have done that.
-
-        Notes
-        -----
-        Notes about the implementation algorithm (if needed).
-
-        This can have multiple paragraphs.
-
-        You may include some math:
-
-        .. math:: X(e^{j\omega } ) = x(n)e^{ - j\omega n}
-
-        And even use a greek symbol like :math:`omega` inline.
-
-        Examples
-        --------
-        These are written in doctest format, and should illustrate how to
-        use the function.
-
-        >>> a=[1,2,3]
-        >>> print [x + 3 for x in a]
-        [4, 5, 6]
-        >>> print "a\n\nb"
-        a
-        b
+        vector and provide itself to the destination module.
 
         """
         # put the mask inside the source
+        proj_module.in_conn.append(self)
+        input_module.output.append()
+
         # put the compressed matrix inside the destination
-        return 0
-
-    def disconnect(self):
-        r"""A one-line summary that does not use variable names or the
-        function name.
-
-        Several sentences providing an extended description. Refer to
-        variables using back-ticks, e.g. `var`.
-
-        Parameters
-        ----------
-        var1 : array_like
-            Array_like means all those objects -- lists, nested lists, etc. --
-            that can be converted to an array.  We can also refer to
-            variables like `var1`.
-        var2 : int
-            The type above can either refer to an actual Python type
-            (e.g. ``int``), or describe the type of the variable in more
-            detail, e.g. ``(N,) ndarray`` or ``array_like``.
-        Long_variable_name : {'hi', 'ho'}, optional
-            Choices in brackets, default first when optional.
-
-        Returns
-        -------
-        describe : type
-            Explanation
-        output : type
-            Explanation
-        tuple : type
-            Explanation
-        items : type
-            even more explaining
-
-        Other Parameters
-        ----------------
-        only_seldom_used_keywords : type
-            Explanation
-        common_parameters_listed_above : type
-            Explanation
-
-        Raises
-        ------
-        BadException
-            Because you shouldn't have done that.
-
-        See Also
-        --------
-        otherfunc : relationship (optional)
-        newfunc : Relationship (optional), which could be fairly long, in which
-                  case the line wraps here.
-        thirdfunc, fourthfunc, fifthfunc
-
-        Notes
-        -----
-        Notes about the implementation algorithm (if needed).
-
-        This can have multiple paragraphs.
-
-        You may include some math:
-
-        .. math:: X(e^{j\omega } ) = x(n)e^{ - j\omega n}
-
-        And even use a greek symbol like :math:`omega` inline.
-
-        References
-        ----------
-        Cite the relevant literature, e.g. [1]_.  You may also cite these
-        references in the notes section above.
-
-        .. [1] O. McNoleg, "The integration of GIS, remote sensing,
-           expert systems and adaptive co-kriging for environmental habitat
-           modelling of the Highland Haggis using object-oriented, fuzzy-logic
-           and neural-network techniques," Computers & Geosciences, vol. 22,
-           pp. 585-588, 1996.
-
-        Examples
-        --------
-        These are written in doctest format, and should illustrate how to
-        use the function.
-
-        >>> a=[1,2,3]
-        >>> print [x + 3 for x in a]
-        [4, 5, 6]
-        >>> print "a\n\nb"
-        a
-        b
-
-        """
         return 0
 
     # Gets the output signal in the form (num_inputs, 1) and
@@ -249,9 +138,17 @@ class Connectivity:
 class Parameter:
     """
     Interface representing each element of the composition of parameters.
+    The structure is based on the Composite pattern in [1].
+
+    References
+    ----------
+    .. [1] ErichGamma, RichardHelm, RalphJohnson, and JohnVlissides, Design
+       Patterns: Elements of Reusable Object-Oriented Software, 1994
 
     """
-    self.__values = []
+
+    def __init__(self):
+        self.__values = []
 
     def __len__(self):
         return self.__values.len()
@@ -259,10 +156,7 @@ class Parameter:
     def __getitem__(self, index):
         return self.__values[index]
 
-class ParametersComposition(Parameter):
-
-    self.__elements = []
-
+class Parameters(Parameter):
     def __init__(self, elements):
         self.__elements = elements
 
