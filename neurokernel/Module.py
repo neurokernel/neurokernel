@@ -31,7 +31,7 @@ class Module (Process):
         the current time.
     outputs : array_like
         Number of non-spiking neuron's states (membrane voltages) of
-        non-spiking projec- tion neurons at current time.
+        non-spiking projection neurons at current time.
     in_conn : array_like
         Comprises a list with all connectivity modules for incoming connections.
     device : int
@@ -43,7 +43,7 @@ class Module (Process):
 
     """
 
-    def __init__(self, manager, dt, num_proj, device):
+    def __init__(self, manager, dt, num_gpot_proj, num_spk_proj, device):
         """
         A module comprises one or more local processing units and it is the
         interface between those LPU and the manager.
@@ -54,21 +54,25 @@ class Module (Process):
             Module manager that manages this module instance.
         dt : numpy.double
             Time resolution.
-        num_proj : array_like
-            Number of non-spiking neuron's states (membrane voltages) of
-            non-spiking projection neurons at current time.
+        num_gpot_proj : int
+            Number of graded-potential neuron's states (membrane voltages) that
+            will send information to other Modules.
+        num_spk_proj : int
+            Number of spiking neuron's that will send information to other
+            Modules.
         device : int
             GPU device used by the module instance.
 
         Examples
         --------
         In this example it's created  a module with two types of projection
-        neurons: 6 neurons type1 and 3 neurons type2 as output.
+        neurons: 4 graded-potential neurons and 3 spiking neurons as output.
         >>> ...
-        >>> mod1 = Module(manager, 1e-5, [6, 3], 0)
-        >>> print mod1.outputs
-        [array([[ 0.,  0.,  0.,  0.,  0.,  0.]]), array([[ 0.,  0.,  0.]])]
-        >>> ...
+        >>> m1 = Module(manager, 1e-5, 4, 5, device)
+        >>> print m1.gpot_proj
+        [[ 0.  0.  0.  0.]]
+        >>> print m1.spk_proj
+        [[0 0 0 0 0]]
 
         See Also
         --------
@@ -83,11 +87,17 @@ class Module (Process):
         self.dt = dt
         self.device = device
 
-        self.outputs = [np.zeros([1, x], dtype = np.float64) for x in num_proj]
+        # Module outputs
+        # Graded-potential outputs
+        self.gpot_proj = np.zeros([1, num_gpot_proj], dtype = np.float64)
+        # Spiking outputs
+        self.spk_proj = np.zeros([1, num_spk_proj], dtype = np.int32)
+        # Number of spikes emitted - this number is important, because the
+        # output vector is pre-allocated.
+        self.num_spikes = 0
 
         # Connectivity
         self.in_conn = []
-        self.out = []
 
     def init_gpu(self):
         """
