@@ -1,6 +1,5 @@
 import sys
 import random as rd
-
 import numpy as np
 import scipy as sp
 import numpy.random as np_rd
@@ -9,7 +8,6 @@ import pycuda.gpuarray as garray
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 from pycuda.tools import dtype_to_ctype
-
 from neurokernel.tools import parray
 from neurokernel.Module import Module
 from neurokernel.Connectivity import Connectivity
@@ -96,15 +94,14 @@ class MockSystem(Module):
                                    self.dt, self.num_dendrites, V, n, V_1, V_2,
                                    V_3, V_4, Tphi, offset,
                                    self.num_in_non / self.num_neurons)
-        self.synapses = VectorSynapse(self.num_synapses, pre_neuron, post_neuron,
-                                      thres, slope, power, saturation, delay,
-                                      reverse, self.dt)
+        self.synapses = VectorSynapse(self.num_synapses, pre_neuron,
+                                      post_neuron, thres, slope, power,
+                                      saturation, delay, reverse, self.dt)
 
-    def run_step(self, in_non_list = None, in_spike_list = None,
-                 proj_non = None, proj_spike = None):
+    def run_step(self, in_list = None, proj_list = None):
 
         self.neurons.I_pre.fill(0)
-        self.neurons.update_I_pre_input(in_non_list)
+        self.neurons.update_I_pre_input(in_list[0])
 
         self.neurons.read_synapse(self.synapses.conductance,
                                   self.synapses.V_rev)
@@ -113,7 +110,7 @@ class MockSystem(Module):
 
         self.synapses.compute_synapse(self.buffer)
 
-        cuda.memcpy_dtoh(proj_non, self.neurons.V.gpudata)
+        cuda.memcpy_dtoh(proj_list[0], self.neurons.V.gpudata)
         self.buffer.step()
 
 class CircularArray:
@@ -358,9 +355,9 @@ def main(argv):
 
     system = MockSystem(manager, num_neurons, avr_synapses, dt, num_in_non,
                  num_in_spike, num_proj_non, num_proj_spike, device)
-    system.connectivities.append(Connectivity(np.random.randint(2,
-                            size = (5, system.num_neurons)).astype(np.bool),
-                                              system))
+#    system.connectivities.append(Connectivity(np.random.randint(2,
+#                            size = (5, system.num_neurons)).astype(np.bool),
+#                                              system))
 
     system.init_gpu()
 
@@ -369,15 +366,16 @@ def main(argv):
 
     start.record()
     for i in range(int(1 / system.dt)):
-        system.run_step(int(I_ext.gpudata) + I_ext.dtype.itemsize * \
-                        I_ext.ld * i, None, out[i, :], None)
-        a = system.connectivities[0].get_output()
-        pdb.set_trace()
+        temp = int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i
+        system.run_step([temp], [out[i, :]])
+#        a = system.connectivities[0].get_output()
+#        pdb.set_trace()
 
     end.record()
     end.synchronize()
     secs = start.time_till(end) * 1e-3
     print "Time: %fs" % secs
+    print out
 
 if __name__ == '__main__':
 
