@@ -1,113 +1,71 @@
-import pandas
+import numpy as np
+import la
 
-class DynamicTable(object):
-    """
-    Dynamically sized table.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self._data = pandas.DataFrame(*args, **kwargs)
-
-    def __getitem__(self, key):
-        """
-        Retrieve a value from the table.
-
-        Note
-        ----
-        The first index in the key specifies the column.
-        """
-
-        if len(key) != 2:
-            raise KeyError('invalid key')
-
-        col, row = key
-        return self._data.__getitem__(col).__getitem__(row)
-
-    def __setitem__(self, key, value):
-        """
-        Set the specified entry in the table.
-
-        Notes
-        -----
-        The first index in the key specifies the column.
-
-        If the specified row or column identifiers do not exist, the
-        table is expanded to include rows or columns with those
-        identifiers.
-
-        """
-
-        if len(key) != 2:
-            raise KeyError('invalid key')
-        col, row = key
-        if row not in self.data.index:
-            new_row = pandas.DataFrame(index=[row],                                       
-                                       columns=self._data.columns)
-            self._data = pandas.concat([self._data, new_row])
-        if col not in self._data.columns:
-            new_col = pandas.DataFrame(index=self._data.index,              
-                                       columns=[col])
-            self._data = pandas.concat([self._data, new_col], axis=1)
-        self._data[col][row] = value
-
-    @property
-    def table(self):
-        """
-        Return a view of the current table.
-        """
-
-        return self._data
-
-    def __repr__(self):
-        return self._data.__repr__()
-
-class RoutingTable(DynamicTable):
+class RoutingTable(object):
     """
     Routing table.
-    """
 
-    def __init__(self):
-        DynamicTable.__init__(self)
+    Parameters
+    ----------
+    t : la.larry
+       Labeled array to use when initializing table.
+
+    Notes
+    -----
+    The initial array must be 2D and possess the same list labels for
+    both of its dimensions.
+
+    """
+    def __init__(self, t=None):
+        if t is None:
+            self._data = None
+        else:
+            try:
+                type(t) == la.larry
+                t.label[0] == t.label
+            except:
+                raise ValueError('invalid initial array')
+            else:
+                self._data = t.copy()
 
     def __setitem__(self, key, value):
-        """
-        Set the specified entry in the table.
 
-        Notes
-        -----
-        The first index in the key specifies the column.
-
-        If the specified row or column identifiers do not exist, the
-        table is expanded to include rows or columns with those
-        identifiers.
-
-        """
-
+        # Setting slices of the table not supported:
         if len(key) != 2:
             raise KeyError('invalid key')
-        col, row = key
+        row, col = key
+        if not self._data:
+            label = list(set(key))
+            self._data = la.larry(np.zeros(2*(len(label),), type(value)),
+                                  [label, label])
+        else:
 
-        # Since the routing table must describe routes between all
-        # recognized entities, adding a hitherto unrecognized row or
-        # column identifier must cause that identifier to be added to
-        # both the list of rows and columns:
-        Nc = len(self._data.columns)
-        Nr = len(self._data.index)
-        for k in (col, row):
-            if k not in self._data.index:
-                new_row = pandas.DataFrame(index=[k],
-                                           columns=self._data.columns)
-                self._data = pandas.concat([self._data, new_row])
-            if k not in self._data.columns:
-                new_col = pandas.DataFrame(index=self._data.index,                      
-                                           columns=[k])
-                self._data = pandas.concat([self._data, new_col], axis=1)
-        self._data[col][row] = value
+            # If either the row or column identifier isn't in the
+            # current list of labels, add it:
+            for k in key:
 
-    @property
-    def ids(self):
-        """
-        Identifiers of rows and columns in the routing table.
-        """
+                # Create new row:
+                if k not in self._data.label[0]:
+                    self._data = self._data.merge(la.larry([[0]*len(self._data.label[1])],
+                                                           [[k], self._data.label[1]]))
 
-        return self._data.index.tolist()
+                # Create new column:
+                if k not in self._data.label[1]:
+                    self._data = self._data.merge(la.larry([[0]]*len(self._data.label[0]),
+                                                           [self._data.label[0], [k]]))
+        self._data.set([row, col], int(value))
+
+    def __getitem__(self, key):
+        if len(key) != 2:
+            raise KeyError('invalid key')
+        row, col = key
+        return self._data.lix[[row], [col]]
+
+    def __repr__(self):
+        if self._data is None:
+            return 'empty'
+        else:
+            t = 'ids:   ' + repr(self._data.label[0]) + '\n' + \
+              self._data.getx().__repr__()
+            return t
+        
