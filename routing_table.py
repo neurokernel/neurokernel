@@ -13,11 +13,12 @@ class RoutingTable(object):
     Notes
     -----
     Inserting rows or columns of values is not currently supported.
-    
+
     The initial array must be 2D and possess the same list labels for
     both of its dimensions.
 
     """
+
     def __init__(self, t=None):
         if t is None:
             self._data = None
@@ -71,11 +72,24 @@ class RoutingTable(object):
             key = [key]
         return self._data.lix[key]
 
+    @property
+    def ids(self):
+        """
+        IDs currently in routing table.
+        """
+
+        return self._data.label[0]
+
     def __repr__(self):
         if self._data is None:
             return 'empty'
         else:
-            t = 'ids:   ' + repr(self._data.label[0]) + '\n' + \
+            t = 'ids:   ' + repr(self.ids) + '\n' + \
               self._data.getx().__repr__()
             return t
-
+    
+if __name__ == '__main__':
+    t = RoutingTable()
+    t['a', 'b'] = 1
+    t['b', 'c'] = 1
+    print t
