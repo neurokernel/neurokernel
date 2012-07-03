@@ -78,7 +78,10 @@ class RoutingTable(object):
         IDs currently in routing table.
         """
 
-        return self._data.label[0]
+        if self._data is None:
+            return []
+        else:
+            return self._data.label[0]
 
     def __repr__(self):
         if self._data is None:
@@ -87,7 +90,7 @@ class RoutingTable(object):
             t = 'ids:   ' + repr(self.ids) + '\n' + \
               self._data.getx().__repr__()
             return t
-    
+
 if __name__ == '__main__':
     t = RoutingTable()
     t['a', 'b'] = 1
