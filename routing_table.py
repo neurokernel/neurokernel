@@ -12,6 +12,8 @@ class RoutingTable(object):
 
     Notes
     -----
+    Inserting rows or columns of values is not currently supported.
+    
     The initial array must be 2D and possess the same list labels for
     both of its dimensions.
 
@@ -29,8 +31,8 @@ class RoutingTable(object):
                 self._data = t.copy()
 
     def __setitem__(self, key, value):
-
-        # Setting slices of the table not supported:
+        if type(key) == slice:
+            raise ValueError('assignment by slice not supported')
         if len(key) != 2:
             raise KeyError('invalid key')
         row, col = key
@@ -56,10 +58,18 @@ class RoutingTable(object):
         self._data.set([row, col], int(value))
 
     def __getitem__(self, key):
-        if len(key) != 2:
-            raise KeyError('invalid key')
-        row, col = key
-        return self._data.lix[[row], [col]]
+
+        # Index values referring to labels must be wrapped with lists:
+        reformat_slice = lambda s: slice(s.start if s.start is None else [s.start],
+                                         s.stop if s.stop is None else [s.stop],
+                                         s.step)
+        if type(key) == tuple:
+            key = tuple([reformat_slice(k) if type(k) == slice else [k] for k in key])
+        elif type(key) == slice:
+            key = reformat_slice(key)
+        else:
+            key = [key]
+        return self._data.lix[key]
 
     def __repr__(self):
         if self._data is None:
@@ -68,4 +78,4 @@ class RoutingTable(object):
             t = 'ids:   ' + repr(self._data.label[0]) + '\n' + \
               self._data.getx().__repr__()
             return t
-        
+
