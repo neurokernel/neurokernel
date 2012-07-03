@@ -33,7 +33,8 @@ class Module (Process):
         Number of non-spiking neuron's states (membrane voltages) of
         non-spiking projection neurons at current time.
     in_conn : array_like
-        Comprises a list with all connectivity modules for incoming connections.
+        Comprises a list with all connectivity modules for incoming
+        connections.
     device : int
         GPU device used by the module instance.
 

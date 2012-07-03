@@ -12,46 +12,25 @@
 #define g_K 2.0
 #define g_L 0.5
 
+#define V_1 03
+#define V_2 0.15
+#define V_3 0.0
+#define V_4 0.3
+#define Tphi 0.025
 
-__device__ __constant__ %(type)s V_1[NTYPE];
-__device__ __constant__ %(type)s V_2[NTYPE];
-__device__ __constant__ %(type)s V_3[NTYPE];
-__device__ __constant__ %(type)s V_4[NTYPE];
-__device__ __constant__ %(type)s Tphi[NTYPE];
-__device__ __constant__ int neuron_start[NTYPE];
-__device__ __constant__ %(type)s offset[NTYPE];
-
-__device__ int search_for_type(int cart_id)
+__device__ %(type)s compute_n(%(type)s V, %(type)s n)
 {
-    int low = 0, high = NTYPE, mid;
-    while(low < high)
-    {
-        mid = ((low+high)>>1);
-        if(cart_id >= neuron_start[mid])
-        {
-            low = mid + 1;
-        }
-        else
-        {
-            high = mid;
-        }
-    }
-    return low-1;
-}
-
-__device__ %(type)s compute_n(%(type)s V, %(type)s n, int type)
-{
-    %(type)s n_inf = 0.5 * (1 + tanh((V - V_3[type]) / V_4[type]));
-    %(type)s dn = Tphi[type] * cosh(( V - V_3[type]) / (V_4[type]*2)) *
+    %(type)s n_inf = 0.5 * (1 + tanh((V - V_3) / V_4));
+    %(type)s dn = Tphi * cosh(( V - V_3) / (V_4*2)) *
         (n_inf - n);
     return dn;
 }
 
-__device__ %(type)s compute_V(%(type)s V, %(type)s n, %(type)s I, int type)
+__device__ %(type)s compute_V(%(type)s V, %(type)s n, %(type)s I)
 {
-    %(type)s m_inf = 0.5 * (1+tanh((V - V_1[type])/V_2[type]));
+    %(type)s m_inf = 0.5 * (1+tanh((V - V_1)/V_2));
     %(type)s dV = (I - g_L * (V - V_L) - g_K * n * (V - V_K) - g_Ca *
-        m_inf * (V - V_Ca) + offset[type]);
+        m_inf * (V - V_Ca));
     return dV;
 }
 
@@ -60,8 +39,6 @@ __global__ void hhn_euler_multiple(%(type)s* g_V, %(type)s* g_n, %(type)s* V_buf
 {
     int bid = blockIdx.x;
     int cart_id = bid * NNEU + threadIdx.x;
-    
-    int type = search_for_type(cart_id);
 
     %(type)s I, V, n;
 
@@ -78,9 +55,9 @@ __global__ void hhn_euler_multiple(%(type)s* g_V, %(type)s* g_n, %(type)s* V_buf
     
     for(int i = 0; i < nsteps; ++i)
     {
-        dn = compute_n(V, n, type);
+        dn = compute_n(V, n);
         
-        dV = compute_V(V, n, I, type);
+        dV = compute_V(V, n, I);
         
         V += dV * dt;
         n += dn * dt;

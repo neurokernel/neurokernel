@@ -18,25 +18,16 @@ class MockSystem(Module):
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, manager, num_neurons_per_type, avr_synapses_per_neuron,
-                 dt, num_in_non, num_in_spike, num_proj_non, num_proj_spike,
-                 device):
+    def __init__(self, manager, num_neurons, avr_synapses_per_neuron,
+                 dt, num_gpot_proj, num_spk_proj, device, num_inputs):
 
         np.random.seed(0)
 
-        Module.__init__(self, manager, dt, num_in_non, num_in_spike,
-                        num_proj_non, num_proj_spike, device)
+        Module.__init__(self, manager, dt, num_gpot_proj, num_spk_proj, device)
 
-        self.num_neurons = num_neurons_per_type * 15
+        self.num_neurons = num_neurons
         self.num_synapses = int(avr_synapses_per_neuron * self.num_neurons)
-
-        # It corresponds to different neuron types and these types mean
-        # a different set of parameters. In this example, there is 15 types of
-        # neurons.  
-        start_idx = np.asarray([self.num_neurons / 15 * i for i in range(15)],
-                               dtype = np.int32)
-        self.start_idx = start_idx
-        self.num_types = start_idx.size
+        self.num_inputs = num_inputs
 
     def init_gpu(self):
 
@@ -63,18 +54,6 @@ class MockSystem(Module):
         power = np.ones([self.num_synapses], dtype = np.float64)
         reverse = np.asarray([rd.gauss(-.4, .1) for x in \
                             np.zeros([self.num_synapses])], dtype = np.float64)
-        V_1 = np.asarray([rd.gauss(.13, .03) for x in \
-                          np.zeros([self.num_types])], dtype = np.float64)
-        V_2 = np.asarray([rd.gauss(.15, .001) for x in \
-                          np.zeros([self.num_types])], dtype = np.float64)
-        V_3 = np.asarray([rd.gauss(-.25, .1) for x in \
-                          np.zeros([self.num_types])], dtype = np.float64)
-        V_4 = np.asarray([rd.gauss(.15, .05) for x in \
-                          np.zeros([self.num_types])], dtype = np.float64)
-        Tphi = np.asarray([rd.gauss(.2, .01) for x in \
-                           np.zeros([self.num_types])], dtype = np.float64)
-        offset = np.array([ 0. , 0. , 0. , 0. , 0. , 0. , 0.2, 0.2, 0.2, 0.2,
-                           0.2, 0.2, 0.2, 0.2, 0. ], dtype = np.float64)
 
         # Parameters of alpha function. Shape: (num_synapses,)
         delay = np.ones([self.num_synapses], dtype = np.float64)
@@ -89,11 +68,9 @@ class MockSystem(Module):
 
         self.buffer = CircularArray(self.num_neurons, self.delay_steps, V)
 
-        self.neurons = MorrisLecar(self.num_neurons, self.num_types,
-                                   self.num_neurons / 15, self.start_idx,
-                                   self.dt, self.num_dendrites, V, n, V_1, V_2,
-                                   V_3, V_4, Tphi, offset,
-                                   self.num_in_non / self.num_neurons)
+        self.neurons = MorrisLecar(self.num_neurons,
+                                   self.dt, self.num_dendrites, V, n,
+                                   self.num_inputs)
         self.synapses = VectorSynapse(self.num_synapses, pre_neuron,
                                       post_neuron, thres, slope, power,
                                       saturation, delay, reverse, self.dt)
@@ -135,9 +112,8 @@ class CircularArray:
             self.current = 0
 
 class MorrisLecar:
-    def __init__(self, num_neurons, num_types, num_cart, neuron_start, dt,
-                 num_dendrite, V, n, V1, V2, V3, V4, Tphi, offset,
-                 non_input_start):
+    def __init__(self, num_neurons, dt, num_dendrite, V, n,
+                 num_inputs):
         """
         Set Morris Lecar neurons in the network.
 
@@ -147,8 +123,6 @@ class MorrisLecar:
             Number of neurons to be added.
         """
         self.dtype = np.double
-        self.num_cart = num_cart
-        self.num_types = num_types
         self.num_neurons = num_neurons
         self.dt = dt
         self.steps = max(int(round(dt / 1e-5)), 1)
@@ -157,6 +131,8 @@ class MorrisLecar:
 
         self.V = garray.to_gpu(V)
         self.n = garray.to_gpu(n)
+        self.num_types = 15
+        self.num_cart = 768
 
         self.I_pre = garray.zeros(self.num_neurons, np.double)
 
@@ -168,14 +144,14 @@ class MorrisLecar:
                                                 np.cumsum(num_dendrite,
                                                           dtype = np.int32))))
         self.num_dendrite = garray.to_gpu(num_dendrite)
-        self.num_input = int(neuron_start[non_input_start])
+        self.num_input = num_inputs
 
-        self.update = self.get_euler_kernel(neuron_start, V1, V2, V3, V4,
-                                            Tphi, offset)
+        self.update = self.get_euler_kernel()
         self.get_input = self.get_input_func()
 
     def update_I_pre_input(self, I_ext):
-        cuda.memcpy_dtod(int(self.I_pre.gpudata), I_ext, self.num_input * self.I_pre.dtype.itemsize)
+        cuda.memcpy_dtod(int(self.I_pre.gpudata), I_ext,
+                         self.num_input * self.I_pre.dtype.itemsize)
 
     def read_synapse(self, conductance, V_rev, st = None):
         self.get_input.prepared_async_call(self.grid_get_input,
@@ -195,7 +171,7 @@ class MorrisLecar:
                                         self.num_neurons, self.I_pre.gpudata,
                                         self.ddt * 1000, self.steps)
 
-    def get_euler_kernel(self, neuron_start, V1, V2, V3, V4, Tphi, offset):
+    def get_euler_kernel(self):
         template = open('neurokernel/MockSystem/cuda_code/euler_kernel.cu', 'r')
 
         dtype = self.dtype
@@ -208,59 +184,8 @@ class MorrisLecar:
                            options = ["--ptxas-options=-v"])
         func = mod.get_function("hhn_euler_multiple")
 
-        V1_addr, V1_nbytes = mod.get_global("V_1")
-        V2_addr, V2_nbytes = mod.get_global("V_2")
-        V3_addr, V3_nbytes = mod.get_global("V_3")
-        V4_addr, V4_nbytes = mod.get_global("V_4")
-        Tphi_addr, Tphi_nbytes = mod.get_global("Tphi")
-        neuron_start_addr, neuron_start_nbytes = mod.get_global("neuron_start")
-        offset_addr, offset_nbytes = mod.get_global("offset")
-
-        cuda.memcpy_htod(V1_addr, V1)
-        cuda.memcpy_htod(V2_addr, V2)
-        cuda.memcpy_htod(V3_addr, V3)
-        cuda.memcpy_htod(V4_addr, V4)
-        cuda.memcpy_htod(Tphi_addr, Tphi)
-        cuda.memcpy_htod(neuron_start_addr, neuron_start)
-        cuda.memcpy_htod(offset_addr, offset)
-
         func.prepare([np.intp, np.intp, np.intp, np.int32, np.intp, scalartype,
                       np.int32])
-
-        return func
-
-    def get_euler_kernel1(self, neuron_start, V1, V2, V3, V4, Tphi, offset):
-        template = open('neurokernel/MockSystem/cuda_code/euler_kernel1.cu', 'r')
-
-        dtype = self.dtype
-        scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
-        mod = SourceModule(template.read() % {"type": dtype_to_ctype(dtype),
-                                              "ntype": self.num_types},
-                           options = ["--ptxas-options=-v"])
-        func = mod.get_function("hhn_euler_multiple")
-
-        V1_addr, V1_nbytes = mod.get_global("V_1")
-        V2_addr, V2_nbytes = mod.get_global("V_2")
-        V3_addr, V3_nbytes = mod.get_global("V_3")
-        V4_addr, V4_nbytes = mod.get_global("V_4")
-        Tphi_addr, Tphi_nbytes = mod.get_global("Tphi")
-        neuron_start_addr, neuron_start_nbytes = mod.get_global("neuron_start")
-        offset_addr, offset_nbytes = mod.get_global("offset")
-
-
-        cuda.memcpy_htod(V1_addr, V1)
-        cuda.memcpy_htod(V2_addr, V2)
-        cuda.memcpy_htod(V3_addr, V3)
-        cuda.memcpy_htod(V4_addr, V4)
-        cuda.memcpy_htod(Tphi_addr, Tphi)
-        cuda.memcpy_htod(neuron_start_addr, neuron_start)
-        cuda.memcpy_htod(offset_addr, offset)
-
-        func.prepare([np.intp, np.intp, np.intp, np.int32, np.intp, scalartype,
-                      np.int32])
-
-        self.update_block = (64, 2, 1)
-        self.update_grid = ((self.num_neurons - 1) / 64 + 1, 1)
 
         return func
 
@@ -316,7 +241,8 @@ class VectorSynapse:
                                                     self.mem_tmp.gpudata)
 
     def get_update_terminal_synapse_func(self):
-        template = open('neurokernel/MockSystem/cuda_code/terminal_synapse.cu', 'r')
+        template = open('neurokernel/MockSystem/cuda_code/terminal_synapse.cu',
+                        'r')
 
         mod = SourceModule(template.read() % {"n_synapse": self.num_synapse},
                            options = ["--ptxas-options=-v"])
@@ -343,8 +269,7 @@ def main(argv):
         num_proj_spike = int(sys.argv[7][:-1])
         device = int(sys.argv[8])
     except IOError:
-        print "Wrong number of parameters. Exemple: 768, 6, 1e-4, \
-               4608, 0, 4608, 0, 1"
+        print "Wrong #parameters. Exemple: 768, 10, 1e-4, 200, 0, 100, 0, 1"
 
     cuda.init()
     ctx = cuda.Device(device).make_context()
@@ -353,29 +278,24 @@ def main(argv):
     start = cuda.Event()
     end = cuda.Event()
 
-    system = MockSystem(manager, num_neurons, avr_synapses, dt, num_in_non,
-                 num_in_spike, num_proj_non, num_proj_spike, device)
-#    system.connectivities.append(Connectivity(np.random.randint(2,
-#                            size = (5, system.num_neurons)).astype(np.bool),
-#                                              system))
+    system = MockSystem(manager, num_neurons, avr_synapses, dt,
+                        num_proj_non, num_proj_spike, device, num_in_spike)
 
     system.init_gpu()
 
-    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.num_in_non]))
+    # External current
+    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.num_inputs]))
     out = np.empty((1 / system.dt, num_proj_non), np.double)
 
     start.record()
     for i in range(int(1 / system.dt)):
         temp = int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i
         system.run_step([temp], [out[i, :]])
-#        a = system.connectivities[0].get_output()
-#        pdb.set_trace()
 
     end.record()
     end.synchronize()
     secs = start.time_till(end) * 1e-3
     print "Time: %fs" % secs
-    print out
 
 if __name__ == '__main__':
 
