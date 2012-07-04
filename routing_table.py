@@ -76,7 +76,7 @@ class RoutingTable(object):
         return RoutingTable(self._data)
 
     copy = __copy__
-    
+
     @property
     def shape(self):
         """
@@ -96,6 +96,23 @@ class RoutingTable(object):
         else:
             return self._data.label[0]
 
+    def row_ids(self, col_id):
+        """
+        Row IDs connected to a column ID.
+        """
+
+        return [self[:, col_id].label[0][i] for i, e in \
+                enumerate(self[:, col_id]) if e != 0]
+
+    def col_ids(self, row_id):
+        """
+        Column IDs connected to a row ID.
+        """
+
+        return [self[row_id, :].label[0][i] for i, e in \
+                enumerate(self[row_id, :]) if e != 0]
+        
+    
     def __repr__(self):
         if self._data is None:
             return 'empty'
