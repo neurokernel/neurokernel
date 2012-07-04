@@ -6,7 +6,7 @@ read from all modules before data is routed between modules.
 Uses a separate port for control of modules.
 """
 
-import logging, threading, time
+import copy, logging, threading, time
 import multiprocessing as mp
 import cPickle as pickle
 import numpy as np
@@ -14,9 +14,15 @@ import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
+import bidict
+
+from routing_table import RoutingTable
 from int_ctx import NoKeyboardInterrupt, OnKeyboardInterrupt
 
 log_format = lambda s: "%-15s" % s
+
+PORT_DATA = 5000
+PORT_CTRL = 5001
 
 class Module(mp.Process):
     """
@@ -24,11 +30,13 @@ class Module(mp.Process):
 
     This class repeatedly executes a work method until it receives a
     termination signal.
-    
+
     Parameters
     ----------
-    id : int
-        Module ID.
+    net: str
+        Network connectivity. May be `unconnected` for no connection,
+        `in` for incoming data, `out` for outgoing data, or
+        `full` for both incoming and outgoing data.
     port_data : int
         Port to use when communicating with broker.
     port_ctrl : int
@@ -44,22 +52,58 @@ class Module(mp.Process):
         Processes the specified data and returns a result for
         transmission to other modules.
 
+    Notes
+    -----
+    If the ports specified upon instantiation are None, the module
+    instance ignores the network entirely.
+
     """
 
-    def __init__(self, *args, **kwargs):
-        self.port_data = kwargs.pop('port_data')
-        self.port_ctrl = kwargs.pop('port_ctrl')
+    # Define properties to perform validation when connectivity status
+    # is set:
+    _net = 'unconnected'
+    @property
+    def net(self):
+        """
+        Network connectivity.
+        """
+        return self._net
+    @net.setter
+    def net(self, value):
+        if value not in ['unconnected', 'in', 'out', 'full']:
+            raise ValueError('invalid network connectivity value')
+        self.logger.info('net status changed: %s -> %s' % (self._net, value))
+        self._net = value
+
+    def __init__(self, net='unconnected',
+                 port_data=PORT_DATA, port_ctrl=PORT_CTRL):
+
+        # Use the object instance's Python ID (i.e., memory address)
+        # as its UID:
+        # NOTE: since object instance IDs are only unique for
+        # instantiated objects, generated unique identifiers should
+        # eventually used if the dynamic creation and destruction of
+        # modules must eventually be supported:
+        self.id = str(id(self))
+
+        self.logger = logging.getLogger('module %s' % self.id)
+
+        self.net = net
+        self.port_data = port_data
+        self.port_ctrl = port_ctrl
         if self.port_data == self.port_ctrl:
             raise ValueError('data and control ports must differ')
-        self.id = kwargs.pop('id')
 
-        # Used to determine when the main loop of the process is running:
+        # Flag indicating when the module instance is running:
         self.running = False
-        
-        self.logger = logging.getLogger('module %-2s' % self.id)
-        mp.Process.__init__(self, *args, **kwargs)
 
-    def ctrl_recv_handler(self, msg):
+        # Attributes used for input and output:
+        self.in_data = None
+        self.out_data = None
+
+        super(Module, self).__init__()
+
+    def _ctrl_handler(self, msg):
         """
         Control interface handler for received data.
 
@@ -76,57 +120,107 @@ class Module(mp.Process):
             self.ioloop.stop()
             self.running = False
 
+    def init_net(self):
+        """
+        Initialize the network connection.
+        """
+
+        if self.net == 'unconnected':
+            self.logger.info('not initializing network connection')
+        else:
+
+            # Don't allow interrupts to prevent the handler from
+            # completely executing each time it is called:
+            with NoKeyboardInterrupt():
+                self.logger.info('initializing network connection')
+                self.ctx = zmq.Context()
+
+                # Use a nonblocking port for the control interface:
+                self.sock_ctrl = self.ctx.socket(zmq.DEALER)
+                self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
+                self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
+
+                ### XXX replacing with nonblocking port:
+                # Use a blocking port for the data interface to ensure that
+                # each step of the simulation waits for transmission of data
+                # to complete:
+                self.sock_data = self.ctx.socket(zmq.DEALER)
+                self.sock_data.setsockopt(zmq.IDENTITY, self.id)
+                self.sock_data.connect("tcp://localhost:%i" % self.port_data)
+
+                # Set up control stream event handler:
+                self.ioloop = IOLoop.instance()
+                self.stream = ZMQStream(self.sock_ctrl, self.ioloop)
+                self.stream.on_recv(self._ctrl_handler)
+
+                # Start the event loop:
+                threading.Thread(target=self.ioloop.start).start()
+
+    def _sync(self):
+        """
+        Send output data and receive input data.
+
+        Notes
+        -----
+        Assumes that the attributes used for input and output already
+        exist.
+
+        Data is serialized before being sent and unserialized when
+        received.
+
+        """
+
+        if self.net == 'unconnected':
+            self.logger.info('not synchronizing with network')
+        else:
+            self.logger.info('synchronizing with network')
+            if self.net in ['out', 'full']:
+                self.sock_data.send(pickle.dumps(self.out_data))
+                self.logger.info(log_format('sent:')+self.out_data)
+            if self.net in ['in', 'full']:
+                self.in_data = pickle.loads(self.sock_data.recv())
+                self.logger.info(log_format('received:')+str(self.in_data))
+
+    def run_step(self):
+        """
+        This method should be implemented to do something interesting.
+
+        Notes
+        -----
+        Assumes that the attributes used for input and output already
+        exist.
+
+        """
+
+        self.logger.info('running execution step')
+        self.out_data = str(np.random.randint(0, 10))
+
     def run(self):
         """
         Body of process.
         """
-        
-        # Don't allow interrupts to prevent the handler from
-        # completely executing each time it is called:                             
+
+        # Set up the network connection:
+        self.init_net()
+
+        # Don't allow keyboard interruption of process:
         self.running = True
         with NoKeyboardInterrupt():
 
-            # Use a blocking port for the data interface to ensure that
-            # each step of the simulation waits for transmission of data
-            # to complete:
-            self.ctx = zmq.Context()
-            self.sock_data = self.ctx.socket(zmq.REQ)
-            self.sock_data.setsockopt(zmq.IDENTITY, str(self.id))
-            self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-
-            # Use a nonblocking port for the control interface:
-            self.sock_ctrl = self.ctx.socket(zmq.DEALER)
-            self.sock_ctrl.setsockopt(zmq.IDENTITY, str(self.id))
-            self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
-
-            # Set up control stream event loop:
-            self.ioloop = IOLoop.instance()
-            self.stream = ZMQStream(self.sock_ctrl, self.ioloop)
-            self.stream.on_recv(self.ctrl_recv_handler)
-            threading.Thread(target=self.ioloop.start).start()
-            
-            # Run the processing step and the data transmission:
+            # XXX remove the following line:
             np.random.seed()
-            data = ''
             while self.running:
-                result = self.run_step(data)
-                self.sock_data.send(result)
-                self.logger.info(log_format('sent:')+result)
-                data = self.sock_data.recv()
-                data = pickle.loads(data)
-                self.logger.info(log_format('received:')+str(data))
-            
+
+                time.sleep(1)
+                # Run the processing step:
+                self.run_step()
+
+                # Synchronize:
+                self._sync()
+
         self.logger.info('done')
 
-    def run_step(self, *args, **kwargs):
-        """
-        This method should be implemented to do something with its
-        arguments and produce output.
-        """
-
-        return str(np.random.randint(0, 10))
-
-class ModuleBroker(object):
+class Broker(mp.Process):
     """
     Broker for communicating between modules.
 
@@ -136,178 +230,379 @@ class ModuleBroker(object):
         Port to use for communication with modules.
     port_ctrl : int
         Port used to control modules.
+    routing_table : RoutingTable
+        Table describing connections between modules.
 
     Methods
     -------
-    create(module_class)
-        Create an instance of the specified module class and connect
-        it to the broker.
     run()
         Body of process.
-    route(in_data)
+    route()
         Route data entries.
+    sync()
+        Synchronize with network.
 
     """
 
-    def __init__(self, port_data=5000, port_ctrl=5001):
+    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
+                 routing_table=None):
 
-        self.logger = logging.getLogger('broker   ')
+        # Use the object instance's Python ID (i.e., memory address)
+        # as its UID:
+        self.id = str(id(self))
+
+        self.logger = logging.getLogger('broker %s' % self.id)
+
         self.port_data = port_data
         self.port_ctrl = port_ctrl
-
         if self.port_data == self.port_ctrl:
             raise ValueError('data and control ports must differ')
-        
-        # Set up a router socket to communicate with the started
-        # processes:
-        self.ctx = zmq.Context()
-        self.sock_data = self.ctx.socket(zmq.ROUTER)
-        self.sock_data.bind("tcp://*:%i" % self.port_data)
 
-        self.sock_ctrl = self.ctx.socket(zmq.ROUTER)
-        self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
+        # Flag indicating when the broker instance is running:
+        self.running = False
 
-        # Dictionary for mapping module IDs to module instances:
-        self.id_to_mod_dict = {}
+        # Intermodule connectivity:
+        self.routing_table = routing_table
 
-        # Dictionary for mapping module instances to module IDs:
-        self.mod_to_id_dict = {}
+        # List of module identifiers (assumes that the routing table's
+        # row and column identifiers are identical):
+        self.mod_ids = routing_table.ids
 
-        # Intermodule connectivity matrix:
-        self.route_table = np.empty((), int)
+        super(Broker, self).__init__()
 
-    @property
-    def N(self):
+    def _ctrl_handler(self, msg):
         """
-        Number of module instances.
-        """
+        Control interface handler for received data.
 
-        return len(self.id_to_mod_dict)
+        Notes
+        -----
+        Assumes that self.ioloop, self.stream, and self.stream.ctrl
+        exist.
 
-    def create(self, module_class):
-        """
-        Create instance of module to the network managed by the broker.
         """
 
-        if not issubclass(module_class, Module):
-            raise ValueError('subclass of Module class must be specified')
-        m = module_class(id=self.N, port_data=self.port_data, port_ctrl=self.port_ctrl)
-        m.start()
-        self.id_to_mod_dict[str(self.N)] = m
-        self.mod_to_id_dict[m] = str(self.N)
-
-    def set_route_table(self, table):
-        """
-        Set intermodular connectivity matrix.
-        """
-
-        s = np.shape(table)
-        if len(s) != 2 or len(np.unique(s)) != 1 or s[0] != self.N:
-            raise ValueError('invalid routing table')
-        self.route_table = np.copy(table)
+        data = msg[0]
+        if data == 'quit':
+            self.logger.info('quit received')
+            self.stream.flush()
+            self.stream_ctrl.flush()
+            self.ioloop.stop()
+            self.running = False
 
     def run(self):
         """
         Body of process.
         """
 
+        # Find the modules in the routing table that expect input
+        # (some might only produce data and therefore not require any
+        # input from the network):
+        ids = self.routing_table.ids
+        recv_list = [ids[i] for i, e in \
+                     enumerate([sum(self.routing_table[:, k]) for k in ids]) if e != 0]
+
+        self.logger.info('initializing network connection')
+        self.ctx = zmq.Context()
+       
+        # Use a nonblocking port for the control interface:
+        self.sock_ctrl = self.ctx.socket(zmq.DEALER)
+        self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
+        self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
+
+        # Use a nonblocking port for the data interface:
+        self.sock_data = self.ctx.socket(zmq.ROUTER)
+        self.sock_data.bind("tcp://*:%i" % self.port_data)
+
+        # Set up data stream event handler:
         self.ioloop = IOLoop.instance()
         self.stream = ZMQStream(self.sock_data, self.ioloop)
         def handler(msg):
 
             # Don't allow interrupts to prevent the handler from
-            # completely executing each time it is called:                                         
+            # completely executing each time it is called:
             with NoKeyboardInterrupt():
-                self.logger.info(log_format('recv from %s:' % msg[0])+str(msg[2]))
+                self.logger.info(log_format('recv from %s: ' % msg[0])+str(msg[1]))
+                self.logger.info('recv_list before: '+str(handler.recv_list))
 
-                # Don't process anything until data is received from
-                # all of the modules:
+                # Wait for data to be received from all of the
+                # modules expecting input from other modules:
                 if msg[0] in handler.recv_list:
-                    handler.in_data.append(msg)
+                    handler.in_data[msg[0]] = msg[1]
                     handler.recv_list.remove(msg[0])
-
+                    self.logger.info('recv_list after: '+str(handler.recv_list))
                 if len(handler.recv_list) == 0:
                     self.logger.info('all data received')
                     out_data = self.route(handler.in_data)
 
                     # Serialize each output entry's data list before transmission:
-                    for entry in out_data:
-                        self.logger.info(log_format('sent to %s:' % entry[0])+str(entry[2]))
-                        self.sock_data.send_multipart([entry[0],
-                                                       entry[1], pickle.dumps(entry[2])])
+                    for dest_id in out_data.keys():
+                        self.logger.info(log_format('sent to %s: ' % dest_id)+str(out_data[dest_id]))
+                        self.sock_data.send_multipart([dest_id, pickle.dumps(out_data[dest_id])])
                     self.logger.info('all data sent')
-                    
+
                     # Reset list of modules from which data was
-                    # received and list of received data:
-                    handler.in_data = []                                        
-                    handler.recv_list = self.id_to_mod_dict.keys()
+                    # received and dict of received data:
+                    handler.in_data = {}
+                    handler.recv_list = copy.copy(recv_list)
 
-        handler.in_data = []
-        handler.recv_list = self.id_to_mod_dict.keys()                
+        handler.in_data = {}
+        handler.recv_list = copy.copy(recv_list)
         self.stream.on_recv(handler)
-        def on_interrupt(signum, frame):
 
-            # Tell the modules to terminate before shutting off the
-            # broker's event loop so that all requests are properly
-            # replied to:
-            for i in self.id_to_mod_dict.keys():
-                entry = (str(i), 'quit')
-                self.logger.info(log_format('sent to %s:' % entry[0])+entry[1])
-                self.sock_ctrl.send_multipart(entry)
+        # Set up control stream event handler:
+        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
+        self.stream_ctrl.on_recv(self._ctrl_handler)
 
-            # Turn off broker event loop:
-            self.stream.flush()
-            self.ioloop.stop()          
-        with OnKeyboardInterrupt(on_interrupt):
-            self.ioloop.start()
-
+        # Start the event loop:
+        #threading.Thread(target=self.ioloop.start).start()
+        self.ioloop.start()
         self.logger.info('done')
-
+        
     def route(self, in_data):
         """
         Route data entries.
-        
+
         Figure out how to route data entries in the specified
         list. Each entry is a tuple containing the ID of the source
         module and the data itself.
 
         Parameters
         ----------
-        in_data : list of tuples
-            Input data to route. Each tuple in this list contains (source address, '',
-            data).
+        in_data : dict
+            Input data to route. Maps source ID (key) to data (value).
 
         Returns
         -------
         out_data : list of tuples
-            Routed data to transmit. Each tuple in this list contains (destination address, '',
-            [data list]). 
-            
+            Routed data to transmit. Maps destination ID (key) to list
+            of data (value).
+
         Notes
         -----
         The routing table is assumed to map source modules (row
-        indices) to destination modules (column indices) if the table entry
+        IDs) to destination modules (column IDs) if the table entry
         at (row, col) is nonzero.
 
         """
 
         # Create a destination entry for each destination module:
-        out_data = [(str(i), '', []) for i in xrange(self.route_table.shape[1])]
+        out_data = {i:[] for i in self.routing_table.ids}
 
         # Append the data in each source entry to the appropriate
         # destination entry's data list:
-        for entry in in_data:
-            src, _, data = entry
-            for dest in np.nonzero(self.route_table[src, :])[0]:
-                out_data[dest][2].append(data)
+        for src in in_data.keys():
+
+            # Find the IDs of destination modules to which the source
+            # module is connected:
+            dest_ids = [self.routing_table[src, :].label[0][i] for i, e in \
+                        enumerate(self.routing_table[src, :]) if e != 0]
+            for dest in dest_ids:
+                out_data[dest].append(in_data[src])
         return out_data
 
+class Connectivity(object):
+    """
+    Intermodule connectivity class.
+
+    """
+
+    def __init__(self):
+        
+        # Use the object instance's Python ID (i.e., memory address)
+        # as its UID:
+        self.id = str(id(self))
+        
+class Manager(object):
+    """
+    Module manager.
+
+    Parameters
+    ----------
+    port_data : int
+        Port to use for communication with modules.
+    port_ctrl : int
+        Port used to control modules.
+
+    """
+
+    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
+
+        # Use the object instance's Python ID (i.e., memory address)
+        # as its UID:
+        self.id = str(id(self))
+        
+        self.logger = logging.getLogger('manager')
+        self.port_data = port_data
+        self.port_ctrl = port_ctrl
+
+        # Set up a router socket to communicate with other topology components:
+        self.ctx = zmq.Context()
+        self.sock_ctrl = self.ctx.socket(zmq.ROUTER)
+        self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
+
+        # Data structures for storing broker, module, and connectivity instances:
+        self.broks = bidict.bidict()
+        self.mods = bidict.bidict()
+        self.conns = bidict.bidict()
+
+        # Set up a dynamic table to contain the routing table:
+        self.routing_table = RoutingTable()
+
+    def connect(self, m_src, m_dest, conn):
+        """
+        Connect two module instances with a connectivity object instance.
+
+        Parameters
+        ----------
+        m_src : Module
+           Source module instance.
+        m_dest : Module
+           Destination module instance.
+        conn : Connectivity
+           Connectivity object instance.
+
+        """
+
+        if not isinstance(m_src, Module) or not isinstance(m_dest, Module) or \
+            not isinstance(conn, Connectivity):
+            raise ValueError('invalid types')
+
+        # Add the module and connection instances to the internal
+        # dictionaries of instances if they are not already there:
+        if m_src not in self.mods:
+            self.add_mod(m_src)
+        if m_dest not in self.mods:
+            self.add_mod(m_dest)
+        if conn not in self.conns:
+            self.add_conn(conn)
+
+        # Add the connection to the routing table:
+        self.routing_table[m_dest.id, m_src.id] = 1
+
+        # Update the routing table of the broker instances:
+        for b in self.broks.values():
+            b.routing_table[m_dest.id, m_src.id] = 1
+
+        # Update the network connectivity of the source and
+        # destination module instances if necessary:
+        if m_src.net == 'unconnected':
+            m_src.net = 'out'
+        if m_src.net == 'in':
+            m_src.net = 'full'
+        if m_dest.net == 'unconnected':
+            m_dest.net = 'in'
+        if m_dest.net == 'out':
+            m_dest = 'full'
+
+    @property
+    def N_brok(self):
+        """
+        Number of brokers.
+        """
+        return len(self.broks)
+
+    @property
+    def N_mod(self):
+        """
+        Number of modules.
+        """
+        return len(self.mods)
+
+    @property
+    def N_conn(self):
+        """
+        Number of connectivity objects.
+        """
+
+        return len(self.conns)
+
+    def add_brok(self, b=None):
+        """
+        Add or create a broker instance to the emulation.
+        """
+
+        # TEMPORARY: only allow one broker:
+        if self.N_brok == 1:
+            raise RuntimeError('only one broker allowed')
+
+        if not isinstance(b, Broker):
+            b = Broker(port_data=self.port_data,
+                       port_ctrl=self.port_ctrl, routing_table=self.routing_table)
+        self.broks[b.id] = b
+        self.logger.info('added broker %s' % b.id)
+        return b
+
+    def add_mod(self, m=None):
+        """
+        Add or create a module instance to the emulation.
+        """
+
+        if not isinstance(m, Module):
+            m = Module(port_data=self.port_data, port_ctrl=self.port_ctrl)
+        self.mods[m.id] = m
+        self.logger.info('added module %s' % m.id)
+        return m
+
+    def add_conn(self, c=None):
+        """
+        Add or create a connectivity instance to the emulation.
+        """
+
+        if not isinstance(c, Connectivity):
+            c = Connectivity()
+        self.conns[c.id] = c
+        self.logger.info('added connectivity %s' % c.id)
+        return c
+
+    def start(self):
+        """
+        Start execution of all processes.
+        """
+
+        # Send quit signal when keyboard interrupts are caught:
+        def on_interrupt(signum, frame):
+
+            # Tell the modules to terminate:
+            for i in self.mods.keys():
+                entry = (i, 'quit')
+                self.logger.info(log_format('sent to module %s:' % entry[0])+entry[1])
+                self.sock_ctrl.send_multipart(entry)
+
+            # Tell the brokers to terminate:
+            for i in self.broks.keys():
+                entry = (i, 'quit')
+                self.logger.info(log_format('sent to broker %s:' % entry[0])+entry[1])
+                self.sock_ctrl.send_multipart(entry)
+
+        with OnKeyboardInterrupt(on_interrupt):
+            for b in self.broks.values():
+                b.start()
+            for m in self.mods.values():
+                m.start()
+
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(name)s %(levelname)s %(message)s')
-    b = ModuleBroker()
-    N = 50
-    for i in xrange(N):
-        b.create(Module)
-    b.set_route_table(np.random.randint(0, 2, (b.N, b.N)))
-    b.run()
+
+    # Log to screen and to a file:
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
+    
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    handler = logging.FileHandler('exec.log')
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # Set up and start emulation:
+    man = Manager()
+    man.add_brok()
+    m1 = man.add_mod()
+    m2 = man.add_mod()
+    conn = man.add_conn()
+    man.connect(m1, m2, conn)
+    b = man.broks[man.broks.keys()[0]]
+    man.start()
