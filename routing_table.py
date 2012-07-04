@@ -72,6 +72,19 @@ class RoutingTable(object):
             key = [key]
         return self._data.lix[key]
 
+    def __copy__(self):
+        return RoutingTable(self._data)
+
+    copy = __copy__
+    
+    @property
+    def shape(self):
+        """
+        Shape of table.
+        """
+
+        return self._data.shape
+
     @property
     def ids(self):
         """
@@ -96,3 +109,4 @@ if __name__ == '__main__':
     t['a', 'b'] = 1
     t['b', 'c'] = 1
     print t
+
