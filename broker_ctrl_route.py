@@ -35,6 +35,7 @@ class Module(mp.Process):
     ----------
     net: str
         Network connectivity. May be `unconnected` for no connection,
+        `ctrl` for incoming control data only,
         `in` for incoming data, `out` for outgoing data, or
         `full` for both incoming and outgoing data.
     port_data : int
@@ -70,7 +71,7 @@ class Module(mp.Process):
         return self._net
     @net.setter
     def net(self, value):
-        if value not in ['unconnected', 'in', 'out', 'full']:
+        if value not in ['unconnected', 'ctrl', 'in', 'out', 'full']:
             raise ValueError('invalid network connectivity value')
         self.logger.info('net status changed: %s -> %s' % (self._net, value))
         self._net = value
@@ -97,7 +98,7 @@ class Module(mp.Process):
         # Flag indicating when the module instance is running:
         self.running = False
 
-        # Attributes used for input and output:
+        # Attributes used for storing network input and output:
         self.in_data = None
         self.out_data = None
 
@@ -153,7 +154,8 @@ class Module(mp.Process):
                 self.stream = ZMQStream(self.sock_ctrl, self.ioloop)
                 self.stream.on_recv(self._ctrl_handler)
 
-                # Start the event loop:
+                # Start the event loop in a separate thread so as to
+                # not block execution:
                 threading.Thread(target=self.ioloop.start).start()
 
     def _sync(self):
@@ -176,10 +178,10 @@ class Module(mp.Process):
             self.logger.info('synchronizing with network')
             if self.net in ['out', 'full']:
                 self.sock_data.send(pickle.dumps(self.out_data))
-                self.logger.info(log_format('sent:')+self.out_data)
+                self.logger.info(log_format('sent: ')+self.out_data)
             if self.net in ['in', 'full']:
                 self.in_data = pickle.loads(self.sock_data.recv())
-                self.logger.info(log_format('received:')+str(self.in_data))
+                self.logger.info(log_format('recv: ')+str(self.in_data))
 
     def run_step(self):
         """
@@ -194,6 +196,7 @@ class Module(mp.Process):
 
         self.logger.info('running execution step')
         self.out_data = str(np.random.randint(0, 10))
+        time.sleep(1)
 
     def run(self):
         """
@@ -211,7 +214,6 @@ class Module(mp.Process):
             np.random.seed()
             while self.running:
 
-                time.sleep(1)
                 # Run the processing step:
                 self.run_step()
 
@@ -303,7 +305,7 @@ class Broker(mp.Process):
 
         self.logger.info('initializing network connection')
         self.ctx = zmq.Context()
-       
+
         # Use a nonblocking port for the control interface:
         self.sock_ctrl = self.ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
@@ -322,14 +324,12 @@ class Broker(mp.Process):
             # completely executing each time it is called:
             with NoKeyboardInterrupt():
                 self.logger.info(log_format('recv from %s: ' % msg[0])+str(msg[1]))
-                self.logger.info('recv_list before: '+str(handler.recv_list))
 
                 # Wait for data to be received from all of the
                 # modules expecting input from other modules:
                 if msg[0] in handler.recv_list:
                     handler.in_data[msg[0]] = msg[1]
                     handler.recv_list.remove(msg[0])
-                    self.logger.info('recv_list after: '+str(handler.recv_list))
                 if len(handler.recv_list) == 0:
                     self.logger.info('all data received')
                     out_data = self.route(handler.in_data)
@@ -354,10 +354,11 @@ class Broker(mp.Process):
         self.stream_ctrl.on_recv(self._ctrl_handler)
 
         # Start the event loop:
-        #threading.Thread(target=self.ioloop.start).start()
         self.ioloop.start()
+
+        # This is reached when the event loop is shut down:
         self.logger.info('done')
-        
+
     def route(self, in_data):
         """
         Route data entries.
@@ -407,11 +408,11 @@ class Connectivity(object):
     """
 
     def __init__(self):
-        
+
         # Use the object instance's Python ID (i.e., memory address)
         # as its UID:
         self.id = str(id(self))
-        
+
 class Manager(object):
     """
     Module manager.
@@ -430,8 +431,8 @@ class Manager(object):
         # Use the object instance's Python ID (i.e., memory address)
         # as its UID:
         self.id = str(id(self))
-        
-        self.logger = logging.getLogger('manager')
+
+        self.logger = logging.getLogger('manager %s' % self.id)
         self.port_data = port_data
         self.port_ctrl = port_ctrl
 
@@ -559,26 +560,27 @@ class Manager(object):
         Start execution of all processes.
         """
 
-        # Send quit signal when keyboard interrupts are caught:
-        def on_interrupt(signum, frame):
-
-            # Tell the modules to terminate:
-            for i in self.mods.keys():
-                entry = (i, 'quit')
-                self.logger.info(log_format('sent to module %s:' % entry[0])+entry[1])
-                self.sock_ctrl.send_multipart(entry)
-
-            # Tell the brokers to terminate:
-            for i in self.broks.keys():
-                entry = (i, 'quit')
-                self.logger.info(log_format('sent to broker %s:' % entry[0])+entry[1])
-                self.sock_ctrl.send_multipart(entry)
-
-        with OnKeyboardInterrupt(on_interrupt):
+        with NoKeyboardInterrupt():
             for b in self.broks.values():
                 b.start()
             for m in self.mods.values():
                 m.start()
+
+    def stop(self):
+        """
+        Stop execution of all processes.
+        """
+
+        # Tell all modules to terminate:
+        for i in self.mods.keys():
+            self.logger.info(log_format('sent to module %s: quit' % i))
+            self.sock_ctrl.send_multipart([i, 'quit'])
+
+        time.sleep(1)
+        # Tell the brokers to terminate:
+        for i in self.broks.keys():
+            self.logger.info(log_format('sent to broker %s: quit' % i))
+            self.sock_ctrl.send_multipart([i, 'quit'])
 
 if __name__ == '__main__':
 
@@ -586,7 +588,7 @@ if __name__ == '__main__':
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
-    
+
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
@@ -601,8 +603,15 @@ if __name__ == '__main__':
     man = Manager()
     man.add_brok()
     m1 = man.add_mod()
+    #m1 = man.add_mod(Module(net='ctrl'))
+    #m1.start()
     m2 = man.add_mod()
     conn = man.add_conn()
     man.connect(m1, m2, conn)
-    b = man.broks[man.broks.keys()[0]]
+    #b = man.broks[man.broks.keys()[0]]
     man.start()
+    #m= Module(net='ctrl')
+    #m.start()
+
+    time.sleep(5)
+    man.stop()
