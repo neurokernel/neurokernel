@@ -103,8 +103,9 @@ class CircularArray:
 
         #initializing V buffer
         for i in range(delay_steps):
-            cuda.memcpy_dtod(int(self.buffer.gpudata) + self.buffer.ld * i,
-                             d_rest.gpudata, d_rest.nbytes)
+            cuda.memcpy_dtod(int(self.buffer.gpudata) + self.buffer.ld * i * \
+                             self.buffer.dtype.itemsize, d_rest.gpudata,
+                             d_rest.nbytes)
 
     def step(self):
         self.current += 1
