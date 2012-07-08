@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 
 """
-Broker for routing between modules run in separate processes; data is
-read from all modules before data is routed between modules.
-Uses a separate port for control of modules.
+Classes for broker-based network of modules controlled by a manager.
+
+Notes
+-----
+All major object instances are assigned UIDs using
+Python's builtin id() function. Since these object instance IDs are
+only unique for instantiated objects, generated unique identifiers
+should eventually used if the dynamic creation and destruction of
+modules must eventually be supported.
+
 """
 
 import copy, logging, threading, time
@@ -13,16 +20,24 @@ import numpy as np
 import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
-
 import bidict
 
 from routing_table import RoutingTable
 from int_ctx import NoKeyboardInterrupt, OnKeyboardInterrupt
 
-log_format = lambda s: "%-15s" % s
-
 PORT_DATA = 5000
 PORT_CTRL = 5001
+
+def is_poll_in(sock, poller, timeout=100):
+    """
+    Check whether a poller detects incoming data on a specified
+    socket.
+    """
+    socks = dict(poller.poll(timeout))
+    if sock in socks and socks[sock] == zmq.POLLIN:
+        return True
+    else:
+        return False
 
 class Module(mp.Process):
     """
@@ -81,10 +96,6 @@ class Module(mp.Process):
 
         # Use the object instance's Python ID (i.e., memory address)
         # as its UID:
-        # NOTE: since object instance IDs are only unique for
-        # instantiated objects, generated unique identifiers should
-        # eventually used if the dynamic creation and destruction of
-        # modules must eventually be supported:
         self.id = str(id(self))
 
         self.logger = logging.getLogger('module %s' % self.id)
@@ -98,9 +109,15 @@ class Module(mp.Process):
         # Flag indicating when the module instance is running:
         self.running = False
 
-        # Attributes used for storing network input and output:
-        self.in_data = None
-        self.out_data = None
+        # Lists used for storing incoming and outgoing data; each
+        # entry is a tuple whose first entry is the source or destination
+        # module ID and whose second entry is the data:
+        self.in_data = []
+        self.out_data = []
+
+        # Lists of incoming and outgoing module IDs:
+        self.in_ids = []
+        self.out_ids = []
 
         super(Module, self).__init__()
 
@@ -116,7 +133,7 @@ class Module(mp.Process):
 
         data = msg[0]
         if data == 'quit':
-            self.logger.info('quit received')
+            self.logger.info('recv: quit')
             self.stream.flush()
             self.ioloop.stop()
             self.running = False
@@ -141,10 +158,7 @@ class Module(mp.Process):
                 self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_ctrl.connect("tcp://localhost:%i" % self.port_ctrl)
 
-                ### XXX replacing with nonblocking port:
-                # Use a blocking port for the data interface to ensure that
-                # each step of the simulation waits for transmission of data
-                # to complete:
+                # Use a nonblocking port for the data interface:
                 self.sock_data = self.ctx.socket(zmq.DEALER)
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
@@ -170,18 +184,60 @@ class Module(mp.Process):
         Data is serialized before being sent and unserialized when
         received.
 
+        Returns
+        -------
+        done : bool
+            Set to True when it is time to quit.
+            
         """
 
+        done = False
         if self.net == 'unconnected':
             self.logger.info('not synchronizing with network')
         else:
             self.logger.info('synchronizing with network')
+
             if self.net in ['out', 'full']:
-                self.sock_data.send(pickle.dumps(self.out_data))
-                self.logger.info(log_format('sent: ')+self.out_data)
+
+                ## should check to make sure that out_data contains
+                ## entries for all IDs in self.out_ids
+                for out_id, data in self.out_data:
+                    self.sock_data.send_multipart([out_id, pickle.dumps(data)])
+                    self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+                self.logger.info('sent data to all output IDs')
+                if self.net == 'out' and not self.running:
+                    for i in xrange(50):
+                        self.send_null()
+                    return True
             if self.net in ['in', 'full']:
-                self.in_data = pickle.loads(self.sock_data.recv())
-                self.logger.info(log_format('recv: ')+str(self.in_data))
+                recv_ids = copy.copy(self.in_ids)
+                self.in_data = []
+                while recv_ids:
+                    if not self.running:
+                        self.logger.info('setting timeout')
+                        self.sock_data.setsockopt(zmq.RCVTIMEO, 0)
+                    try:
+                        in_id, data = self.sock_data.recv_multipart()
+                    except zmq.ZMQError:
+                        self.logger.info('timeout forced')
+                        done = True
+                        return done
+                    data = pickle.loads(data)
+                    self.logger.info('recv from %s: %s ' % (in_id, str(data)))
+                    recv_ids.remove(in_id)
+                    self.in_data.append((in_id, data))
+                    self.logger.info('recv data from all input IDs')
+        return done                 
+
+    def send_null(self):
+        if self.net in ['out', 'full']:
+            self.logger.info('sending null data')
+            for out_id in self.out_ids:
+                self.sock_data.send_multipart([out_id, pickle.dumps('')])
+                self.logger.info('sent to   %s: NULL' % out_id)
+                self.logger.info('sent data to all output IDs')
+        else:
+            self.logger.info('not sending null data')
 
     def run_step(self):
         """
@@ -195,13 +251,20 @@ class Module(mp.Process):
         """
 
         self.logger.info('running execution step')
-        self.out_data = str(np.random.randint(0, 10))
-        time.sleep(1)
+
+        # Create some random data:
+        if self.net in ['out', 'full']:
+            self.out_data = []
+            for i in self.out_ids:
+                self.out_data.append((i, str(np.random.rand())))
+
 
     def run(self):
         """
         Body of process.
         """
+
+        np.random.seed()
 
         # Set up the network connection:
         self.init_net()
@@ -209,16 +272,14 @@ class Module(mp.Process):
         # Don't allow keyboard interruption of process:
         self.running = True
         with NoKeyboardInterrupt():
-
-            # XXX remove the following line:
-            np.random.seed()
-            while self.running:
+            while True:
 
                 # Run the processing step:
                 self.run_step()
 
                 # Synchronize:
-                self._sync()
+                if self._sync():
+                    break
 
         self.logger.info('done')
 
@@ -232,15 +293,11 @@ class Broker(mp.Process):
         Port to use for communication with modules.
     port_ctrl : int
         Port used to control modules.
-    routing_table : RoutingTable
-        Table describing connections between modules.
 
     Methods
     -------
     run()
         Body of process.
-    route()
-        Route data entries.
     sync()
         Synchronize with network.
 
@@ -263,13 +320,6 @@ class Broker(mp.Process):
         # Flag indicating when the broker instance is running:
         self.running = False
 
-        # Intermodule connectivity:
-        self.routing_table = routing_table
-
-        # List of module identifiers (assumes that the routing table's
-        # row and column identifiers are identical):
-        self.mod_ids = routing_table.ids
-
         super(Broker, self).__init__()
 
     def _ctrl_handler(self, msg):
@@ -285,7 +335,7 @@ class Broker(mp.Process):
 
         data = msg[0]
         if data == 'quit':
-            self.logger.info('quit received')
+            self.logger.info('recv: quit')
             self.stream.flush()
             self.stream_ctrl.flush()
             self.ioloop.stop()
@@ -295,13 +345,6 @@ class Broker(mp.Process):
         """
         Body of process.
         """
-
-        # Find the modules in the routing table that expect input
-        # (some might only produce data and therefore not require any
-        # input from the network):
-        ids = self.routing_table.ids
-        recv_list = [ids[i] for i, e in \
-                     enumerate([sum(self.routing_table[:, k]) for k in ids]) if e != 0]
 
         self.logger.info('initializing network connection')
         self.ctx = zmq.Context()
@@ -323,30 +366,16 @@ class Broker(mp.Process):
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
             with NoKeyboardInterrupt():
-                self.logger.info(log_format('recv from %s: ' % msg[0])+str(msg[1]))
 
-                # Wait for data to be received from all of the
-                # modules expecting input from other modules:
-                if msg[0] in handler.recv_list:
-                    handler.in_data[msg[0]] = msg[1]
-                    handler.recv_list.remove(msg[0])
-                if len(handler.recv_list) == 0:
-                    self.logger.info('all data received')
-                    out_data = self.route(handler.in_data)
+                # The first entry of the message is the originating ID
+                # (prepended by zmq); the second is the destination ID:
+                data = pickle.loads(msg[2])
+                #self.logger.info('recv from %s: %s' % (msg[0], data))
+                #self.logger.info('sent to   %s: %s' % (msg[1], data))
 
-                    # Serialize each output entry's data list before transmission:
-                    for dest_id in out_data.keys():
-                        self.logger.info(log_format('sent to %s: ' % dest_id)+str(out_data[dest_id]))
-                        self.sock_data.send_multipart([dest_id, pickle.dumps(out_data[dest_id])])
-                    self.logger.info('all data sent')
-
-                    # Reset list of modules from which data was
-                    # received and dict of received data:
-                    handler.in_data = {}
-                    handler.recv_list = copy.copy(recv_list)
-
-        handler.in_data = {}
-        handler.recv_list = copy.copy(recv_list)
+                # Route to the destination ID and send the source ID
+                # along with the data:
+                self.sock_data.send_multipart([msg[1], msg[0], msg[2]])
         self.stream.on_recv(handler)
 
         # Set up control stream event handler:
@@ -358,48 +387,6 @@ class Broker(mp.Process):
 
         # This is reached when the event loop is shut down:
         self.logger.info('done')
-
-    def route(self, in_data):
-        """
-        Route data entries.
-
-        Figure out how to route data entries in the specified
-        list. Each entry is a tuple containing the ID of the source
-        module and the data itself.
-
-        Parameters
-        ----------
-        in_data : dict
-            Input data to route. Maps source ID (key) to data (value).
-
-        Returns
-        -------
-        out_data : list of tuples
-            Routed data to transmit. Maps destination ID (key) to list
-            of data (value).
-
-        Notes
-        -----
-        The routing table is assumed to map source modules (row
-        IDs) to destination modules (column IDs) if the table entry
-        at (row, col) is nonzero.
-
-        """
-
-        # Create a destination entry for each destination module:
-        out_data = {i:[] for i in self.routing_table.ids}
-
-        # Append the data in each source entry to the appropriate
-        # destination entry's data list:
-        for src in in_data.keys():
-
-            # Find the IDs of destination modules to which the source
-            # module is connected:
-            dest_ids = [self.routing_table[src, :].label[0][i] for i, e in \
-                        enumerate(self.routing_table[src, :]) if e != 0]
-            for dest in dest_ids:
-                out_data[dest].append(in_data[src])
-        return out_data
 
 class Connectivity(object):
     """
@@ -432,7 +419,7 @@ class Manager(object):
         # as its UID:
         self.id = str(id(self))
 
-        self.logger = logging.getLogger('manager %s' % self.id)
+        self.logger = logging.getLogger('manage %s' % self.id)
         self.port_data = port_data
         self.port_ctrl = port_ctrl
 
@@ -478,11 +465,7 @@ class Manager(object):
             self.add_conn(conn)
 
         # Add the connection to the routing table:
-        self.routing_table[m_dest.id, m_src.id] = 1
-
-        # Update the routing table of the broker instances:
-        for b in self.broks.values():
-            b.routing_table[m_dest.id, m_src.id] = 1
+        self.routing_table[m_src.id, m_dest.id] = 1
 
         # Update the network connectivity of the source and
         # destination module instances if necessary:
@@ -493,7 +476,13 @@ class Manager(object):
         if m_dest.net == 'unconnected':
             m_dest.net = 'in'
         if m_dest.net == 'out':
-            m_dest = 'full'
+            m_dest.net = 'full'
+
+        # Update each module's lists of incoming and outgoing modules:
+        m_src.in_ids = self.routing_table.row_ids(m_src.id)
+        m_src.out_ids = self.routing_table.col_ids(m_src.id)
+        m_dest.in_ids = self.routing_table.row_ids(m_dest.id)
+        m_dest.out_ids = self.routing_table.col_ids(m_dest.id)
 
     @property
     def N_brok(self):
@@ -573,14 +562,17 @@ class Manager(object):
 
         # Tell all modules to terminate:
         for i in self.mods.keys():
-            self.logger.info(log_format('sent to module %s: quit' % i))
+            self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
 
         time.sleep(1)
         # Tell the brokers to terminate:
+        ## Module processes should return a signal to the broker indicating
+        ## when they are about to successfully terminate
         for i in self.broks.keys():
-            self.logger.info(log_format('sent to broker %s: quit' % i))
+            self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
+
 
 if __name__ == '__main__':
 
@@ -594,7 +586,7 @@ if __name__ == '__main__':
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-    handler = logging.FileHandler('exec.log')
+    handler = logging.FileHandler('exec.log', 'w')
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -603,15 +595,20 @@ if __name__ == '__main__':
     man = Manager()
     man.add_brok()
     m1 = man.add_mod()
-    #m1 = man.add_mod(Module(net='ctrl'))
-    #m1.start()
     m2 = man.add_mod()
+    m3 = man.add_mod()
+    m4 = man.add_mod()
     conn = man.add_conn()
     man.connect(m1, m2, conn)
+    man.connect(m2, m1, conn)
+    #man.connect(m2, m3, conn)    
+    man.connect(m3, m4, conn)
+    man.connect(m4, m3, conn)
+    man.connect(m4, m1, conn)
     #b = man.broks[man.broks.keys()[0]]
     man.start()
     #m= Module(net='ctrl')
     #m.start()
 
-    time.sleep(5)
+    time.sleep(1)
     man.stop()
