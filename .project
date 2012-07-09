@@ -3,6 +3,7 @@
 	<name>neurokernel</name>
 	<comment></comment>
 	<projects>
+		<project>PyCUDA Fake</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

@@ -49,10 +49,10 @@ class Connectivity(object):
             This array represents the connections between neurons in different
             modules and has the following format:
 
-                  out1  out2  out3  out4
-            in1 |  x  |  x  |     |  x
-            in2 |  x  |     |     |
-            in3 |     |  x  |     |  x
+                   in1   in2   in3   in4
+            out1 |  x  |  x  |     |  x
+            out2 |  x  |     |     |
+            out3 |     |  x  |     |  x
 
             where 'x' means connected and blank means not connected.
         kwparam : dict
