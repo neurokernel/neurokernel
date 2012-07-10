@@ -56,27 +56,30 @@ class ControlledProcess(mp.Process):
         # Signal to use when quitting:
         self.quit_sig = quit_sig
         super(ControlledProcess, self).__init__(*args, **kwargs)
-
+        
     def _ctrl_handler(self, msg):
         """
-        Handle messages received by control port.
+        Control port handler.
         """
         
-        self.logger.info('recv: %s' % str(msg))
+        #self.logger.info('recv: %s' % str(msg))
         if msg[0] == 'quit':
-            self.stream_ctrl.flush()
-            self.ioloop_ctrl.stop()
-            self.logger.info('issuing signal %s' % self.quit_sig)
+            #self.sock_ctrl.send('ack')
+            #self.stream_ctrl.flush()
+            #self.ioloop_ctrl.stop()
+            #self.logger.info('issuing signal %s' % self.quit_sig)
             os.kill(os.getpid(), self.quit_sig)
         
     def _init_ctrl_handler(self):
         """
         Initialize control port handler.
         """
-        
-        self.ctx = zmq.Context()
+
+        # Set the linger period to 0 to prevent hanging on unsent
+        # messages when shutting down:
         self.sock_ctrl = self.ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
+        self.sock_ctrl.setsockopt(zmq.LINGER, 0)
         self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
 
         self.ioloop_ctrl = IOLoop.instance()
@@ -84,9 +87,21 @@ class ControlledProcess(mp.Process):
         self.stream_ctrl.on_recv(self._ctrl_handler)
         th.Thread(target=self.ioloop_ctrl.start).start()
 
+    def _init_net(self):
+        """
+        Initialize network connection.
+        """
+        
+        self.ctx = zmq.Context()
+        self._init_ctrl_handler()
+                
     def run(self):
+        """
+        Body of process.
+        """
+        
         with TryExceptionOnSignal(self.quit_sig):
-            self._init_ctrl_handler()
+            self._init_net()
             while True:
                 print 'idling'
                 # Calling the logging module may cause problems! See
