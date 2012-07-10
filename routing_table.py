@@ -96,6 +96,14 @@ class RoutingTable(object):
         else:
             return self._data.label[0]
 
+    @property
+    def coords(self):
+        """
+        List of coordinate tuples of all nonzero table entries.
+        """
+
+        return [tuple(x[0:2]) for x in d.totuples() if x[2]]
+
     def row_ids(self, col_id):
         """
         Row IDs connected to a column ID.
@@ -111,7 +119,7 @@ class RoutingTable(object):
 
         return [self._data.label[0][i] for i, e in \
                 enumerate(np.sum(self._data.x, 1, np.bool)) if e]
-                
+
     def col_ids(self, row_id):
         """
         Column IDs connected to a row ID.
