@@ -13,10 +13,12 @@ modules must eventually be supported.
 
 """
 
-import copy, logging, os, signal, threading, time
+import copy, os, signal, sys, threading, time
 import multiprocessing as mp
 import cPickle as pickle
 from contextlib import contextmanager
+
+import twiggy
 
 import numpy as np
 import zmq
@@ -98,7 +100,7 @@ class Module(ControlledProcess):
                                      signal.SIGUSR1)
         
         # Logging:
-        self.logger = logging.getLogger('module %s' % self.id)
+        self.logger = twiggy.log.name('module %s' % self.id)
 
         # Network connection type:
         self.net = net
@@ -265,7 +267,7 @@ class Broker(ControlledProcess):
         super(Broker, self).__init__(port_ctrl, signal.SIGUSR1)
 
         # Logging:
-        self.logger = logging.getLogger('broker %s' % self.id)
+        self.logger = twiggy.log.name('broker %s' % self.id)
 
         # Data port:
         if port_data == port_ctrl:
@@ -281,7 +283,8 @@ class Broker(ControlledProcess):
         if msg[0] == 'quit':
             self.stream_ctrl.flush()
             self.stream_data.flush()
-            self.ioloop.stop()
+            self.ioloop_ctrl.stop()
+            self.ioloop_data.stop()
             os.kill(os.getpid(), self.quit_sig)
             
     def _data_handler(self, msg):
@@ -369,7 +372,7 @@ class Manager(object):
         # as its UID:
         self.id = str(id(self))
 
-        self.logger = logging.getLogger('manage %s' % self.id)
+        self.logger = twiggy.log.name('manage %s' % self.id)
         self.port_data = port_data
         self.port_ctrl = port_ctrl
 
@@ -548,21 +551,29 @@ class Manager(object):
 
 if __name__ == '__main__':
 
+    screen_output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
+                                                stream=sys.stdout)
+    file_output = twiggy.outputs.FileOutput('exec.log',
+                                            twiggy.formats.line_format,
+                                            'w')
+    twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output),
+                       ('file', twiggy.levels.DEBUG, None, file_output))
+    logger = twiggy.log.name('main           ')
     # Log to screen and to a file:
-    logger = logging.getLogger()
-    logger.name = 'main           '
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
+    # logger = logging.getLogger()
+    # logger.name = 'main           '
+    # logger.setLevel(logging.DEBUG)
+    # formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
 
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    # handler = logging.StreamHandler()
+    # handler.setLevel(logging.DEBUG)
+    # handler.setFormatter(formatter)
+    # logger.addHandler(handler)
 
-    handler = logging.FileHandler('exec.log', 'w')
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    # handler = logging.FileHandler('exec.log', 'w')
+    # handler.setLevel(logging.DEBUG)
+    # handler.setFormatter(formatter)
+    # logger.addHandler(handler)
 
     # Set up and start emulation:
     man = Manager()

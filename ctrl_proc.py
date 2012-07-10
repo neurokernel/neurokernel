@@ -2,12 +2,23 @@
 
 """
 Controlled Process subclass.
+
+Notes
+-----
+This module uses twiggy for logging because calling the logging module
+from code that is controlled by a signal handler may cause problems
+[1].
+
+.. [1] http://stackoverflow.com/questions/4601674/signal-handlers-and-logging-in-python
+
 """
 
-import logging, os, signal, time
+import os, signal, sys, time
 import multiprocessing as mp
 import threading as th
 from contextlib import contextmanager
+
+import twiggy
 
 import zmq
 from zmq.eventloop.ioloop import IOLoop
@@ -48,7 +59,7 @@ class ControlledProcess(mp.Process):
         self.id = str(id(self))
 
         # Logging:
-        self.logger = logging.getLogger(self.id)        
+        self.logger = twiggy.log.name(self.id)        
 
         # Control port:
         self.port_ctrl = port_ctrl
@@ -62,14 +73,12 @@ class ControlledProcess(mp.Process):
         Control port handler.
         """
         
-        #self.logger.info('recv: %s' % str(msg))
+        self.logger.info('recv: %s' % str(msg))
         if msg[0] == 'quit':
-            #self.sock_ctrl.send('ack')
-            #self.stream_ctrl.flush()
-            #self.ioloop_ctrl.stop()
-            #self.logger.info('issuing signal %s' % self.quit_sig)
+            self.stream_ctrl.flush()
+            self.logger.info('issuing signal %s' % self.quit_sig)
             os.kill(os.getpid(), self.quit_sig)
-        
+            
     def _init_ctrl_handler(self):
         """
         Initialize control port handler.
@@ -103,16 +112,15 @@ class ControlledProcess(mp.Process):
         with TryExceptionOnSignal(self.quit_sig):
             self._init_net()
             while True:
-                print 'idling'
-                # Calling the logging module may cause problems! See
-                # http://stackoverflow.com/questions/4601674/signal-handlers-and-logging-in-python
-                #self.logger.info('idling')
+                self.logger.info('idling')
         self.logger.info('exiting')
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(name)s %(levelname)s %(message)s')
-
+    output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
+                                         stream=sys.stdout)
+    twiggy.emitters['*'] = twiggy.filters.Emitter(twiggy.levels.DEBUG,
+                                                  True, output)
+    
     PORT_CTRL = 6001
     ctx = zmq.Context()
     sock = ctx.socket(zmq.ROUTER)
