@@ -117,7 +117,7 @@ class RoutingTable(object):
         Column IDs connected to a row ID.
         """
 
-        return [self[row_id, :].label[1][i] for i, e in \
+        return [self[row_id, :].label[0][i] for i, e in \
                 enumerate(self[row_id, :]) if e != 0]
 
     def all_col_ids(self):
@@ -125,7 +125,7 @@ class RoutingTable(object):
         All column IDs connected to row IDs.
         """
 
-        return [self._data.label[1][i] for i, e in \
+        return [self._data.label[0][i] for i, e in \
                 enumerate(np.sum(self._data.x, 0, np.bool)) if e]
 
     def __repr__(self):
