@@ -89,9 +89,12 @@ class ControlledProcess(mp.Process):
         if msg[0] == 'quit':
             try:
                 self.stream_ctrl.flush()
+                self.stream_ctrl.stop_on_recv()
+                self.ioloop_ctrl.stop()
             except IOError:
                 self.logger.info('streams already closed')
-            self.stream_ctrl.stop_on_recv()
+            except:
+                self.logger.info('other error occurred')
             self.logger.info('issuing signal %s' % self.quit_sig)
             os.kill(os.getpid(), self.quit_sig)
 

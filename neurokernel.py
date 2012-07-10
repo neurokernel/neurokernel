@@ -28,7 +28,7 @@ import bidict
 
 from routing_table import RoutingTable
 from int_ctx import NoKeyboardInterrupt, OnKeyboardInterrupt
-from ctrl_proc import ControlledProcess, ExceptionOnSignal, TryExceptionOnSignal
+from ctrl_proc import ControlledProcess, ExceptionOnSignal, TryExceptionOnSignal, LINGER_TIME
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
@@ -43,7 +43,7 @@ def is_poll_in(sock, poller, timeout=100):
         return True
     else:
         return False
-    
+
 class Module(ControlledProcess):
     """
     Processing module.
@@ -97,8 +97,8 @@ class Module(ControlledProcess):
     def __init__(self, net='unconnected',
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL):
         super(Module, self).__init__(port_ctrl,
-                                     signal.SIGUSR1)
-        
+                                     signal.SIGTERM)
+
         # Logging:
         self.logger = twiggy.log.name('module %s' % self.id)
 
@@ -109,7 +109,7 @@ class Module(ControlledProcess):
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
-                
+
         # Flag indicating when the module instance is running:
         self.running = False
 
@@ -129,14 +129,13 @@ class Module(ControlledProcess):
         """
 
         if self.net == 'unconnected':
-            pass
-            #self.logger.info('not initializing network connection')
+            self.logger.info('not initializing network connection')
         else:
 
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
             with NoKeyboardInterrupt():
-                #self.logger.info('initializing network connection')
+                self.logger.info('initializing network connection')
 
                 # Initialize control port handler:
                 super(Module, self)._init_net()
@@ -146,7 +145,7 @@ class Module(ControlledProcess):
                 # messages when shutting down:
                 self.sock_data = self.ctx.socket(zmq.DEALER)
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
-                self.sock_data.setsockopt(zmq.LINGER, 0)
+                self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
 
     def _sync(self):
@@ -158,47 +157,38 @@ class Module(ControlledProcess):
         Assumes that the attributes used for input and output already
         exist.
 
+        Each message is a tuple containing a module ID and data; for
+        outbound messages, the ID is that of the destination module.
+        for inbound messages, the ID is that of the source module.
         Data is serialized before being sent and unserialized when
         received.
 
         """
 
         if self.net in ['unconnected', 'ctrl']:
-            #self.logger.info('not synchronizing with network')
+            self.logger.info('not synchronizing with network')
             if self.net == 'ctrl' and not self.running:
                 return
         else:
-            #self.logger.info('synchronizing with network')
+            self.logger.info('synchronizing with network')
 
             if self.net in ['out', 'full']:
                 ## should check to make sure that out_data contains
                 ## entries for all IDs in self.out_ids
                 for out_id, data in self.out_data:
-                    self.sock_data.send_multipart([out_id,
-                                                   pickle.dumps(data)])
-                    #self.logger.info('sent to   %s: %s' % (out_id, str(data)))
-                #self.logger.info('sent data to all output IDs')
+                    self.sock_data.send(pickle.dumps((out_id, data)))
+                    self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+                self.logger.info('sent data to all output IDs')
 
             if self.net in ['in', 'full']:
                 recv_ids = copy.copy(self.in_ids)
                 self.in_data = []
                 while recv_ids:
-                    in_id, data = self.sock_data.recv_multipart()
-                    data = pickle.loads(data)
-                    #self.logger.info('recv from %s: %s ' % (in_id,str(data)))
+                    in_id, data = pickle.loads(self.sock_data.recv())
+                    self.logger.info('recv from %s: %s ' % (in_id, str(data)))
                     recv_ids.remove(in_id)
                     self.in_data.append((in_id, data))
-                #self.logger.info('recv data from all input IDs')
-                
-    def send_null(self):
-        if self.net in ['out', 'full']:
-            self.logger.info('sending null data')
-            for out_id in self.out_ids:
-                self.sock_data.send_multipart([out_id, pickle.dumps('')])
-                self.logger.info('sent to   %s: NULL' % out_id)
-                self.logger.info('sent data to all output IDs')
-        else:
-            self.logger.info('not sending null data')
+                self.logger.info('recv data from all input IDs')
 
     def run_step(self):
         """
@@ -211,7 +201,7 @@ class Module(ControlledProcess):
 
         """
 
-        # self.logger.info('running execution step')
+        self.logger.info('running execution step')
 
         # Create some random data:
         if self.net in ['out', 'full']:
@@ -223,25 +213,25 @@ class Module(ControlledProcess):
         """
         Body of process.
         """
-        
-        with TryExceptionOnSignal(self.quit_sig):
-            self._init_net()
-            
-            np.random.seed()
-            
-            self.running = True
+
+        with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
+
             # Don't allow keyboard interruption of process:
-            # with NoKeyboardInterrupt():
-            while True:
-                
-                # Run the processing step:
-                self.run_step()
+            with NoKeyboardInterrupt():
 
-                # Synchronize:
-                self._sync()
+                self._init_net()
+                np.random.seed()
+                self.running = True
+                while True:
 
-        self.logger.info('exiting')
-        
+                    # Run the processing step:
+                    self.run_step()
+
+                    # Synchronize:
+                    self._sync()
+
+            self.logger.info('exiting')
+
 class Broker(ControlledProcess):
     """
     Broker for communicating between modules.
@@ -264,7 +254,7 @@ class Broker(ControlledProcess):
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
                  routing_table=None):
-        super(Broker, self).__init__(port_ctrl, signal.SIGUSR1)
+        super(Broker, self).__init__(port_ctrl, signal.SIGTERM)
 
         # Logging:
         self.logger = twiggy.log.name('broker %s' % self.id)
@@ -279,66 +269,79 @@ class Broker(ControlledProcess):
         Control port handler.
         """
 
-        #self.logger.info('recv: '+str(msg))
+        self.logger.info('recv: '+str(msg))
         if msg[0] == 'quit':
-            self.stream_ctrl.flush()
-            self.stream_data.flush()
-            self.ioloop_ctrl.stop()
-            self.ioloop_data.stop()
+            try:
+                self.stream_ctrl.flush()
+                self.stream_data.flush()
+                self.stream_ctrl.stop_on_recv()
+                self.stream_data.stop_on_recv()
+                self.ioloop_data.stop()
+            except IOError:
+                self.logger.info('streams already closed')
+            except:
+                self.logger.info('other error occurred')
+            self.logger.info('issuing signal %s' % self.quit_sig)
             os.kill(os.getpid(), self.quit_sig)
-            
+
     def _data_handler(self, msg):
         """
         Data port handler.
         """
 
-        # Don't allow interrupts to prevent the handler from
-        # completely executing each time it is called:
-        with NoKeyboardInterrupt():
+        if len(msg) != 2:
+            self.logger.info('skipping malformed message: %s' % str(msg))
+        else:
 
             # The first entry of the message is the originating ID
             # (prepended by zmq); the second is the destination ID:
-            data = pickle.loads(msg[2])
-            #self.logger.info('recv from %s: %s' % (msg[0], data))
-            #self.logger.info('sent to   %s: %s' % (msg[1], data))
-            
+            in_id = msg[0]
+            data_pic = msg[1]
+
+            out_id, data = pickle.loads(data_pic)
+            self.logger.info('recv from %s: %s' % (in_id, data))
+            self.logger.info('sent to   %s: %s' % (out_id, data))
+
             # Route to the destination ID and send the source ID
             # along with the data:
-            self.sock_data.send_multipart([msg[1], msg[0], msg[2]])
+            self.sock_data.send_multipart([msg[1], pickle.dumps((in_id, data))])
 
     def _init_data_handler(self):
         """
         Initialize data port handler.
         """
-        
-        # Set the linger period to 0 to prevent hanging on unsent
+
+        # Set the linger period to prevent hanging on unsent
         # messages when shutting down:
+        self.logger.info('starting data handler')
         self.sock_data = self.ctx.socket(zmq.ROUTER)
-        self.sock_data.setsockopt(zmq.LINGER, 0)
+        self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_data.bind("tcp://*:%i" % self.port_data)
-        
+
         self.ioloop_data = IOLoop.instance()
         self.stream_data = ZMQStream(self.sock_data, self.ioloop_data)
         self.stream_data.on_recv(self._data_handler)
-        th.Thread(target=self.ioloop_data.start).start()
-        
+
+        # Start data handler loop in main thread:
+        self.ioloop_data.start()
+
     def _init_net(self):
         """
         Initialize the network connection.
         """
 
-        with NoKeyboardInterrupt():
+        super(Broker, self)._init_net()
+        self._init_data_handler()
 
-            super(Broker, self)._init_net()
-            self._init_data_handler()
-            
     def run(self):
         """
         Body of process.
         """
 
-        with TryExceptionOnSignal(self.quit_sig):
+        with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
             self._init_net()
+            while True:
+                pass
         self.logger.info('exiting')
 
 class Connectivity(object):
@@ -381,7 +384,7 @@ class Manager(object):
         # unsent messages when shutting down:
         self.ctx = zmq.Context()
         self.sock_ctrl = self.ctx.socket(zmq.ROUTER)
-        self.sock_ctrl.setsockopt(zmq.LINGER, 0)
+        self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
 
         # Data structures for storing broker, module, and connectivity instances:
@@ -539,7 +542,7 @@ class Manager(object):
             #          recv_ids.remove(j)
             #          self.mods[j].join(1)
         self.logger.info('all modules stopped')
-        
+
         # Tell the brokers to terminate:
         ## Module processes should return a signal to the broker indicating
         ## when they are about to successfully terminate
@@ -594,9 +597,10 @@ if __name__ == '__main__':
     man.connect(m3, m4, conn)
     man.connect(m4, m3, conn)
     man.connect(m4, m1, conn)
-
-    man.start()
-    time.sleep(1)
-    man.stop()
+    man.connect(m1, m4, conn)
     
+    man.start()
+    time.sleep(4)
+    man.stop()
+
     logger.info('all done')
