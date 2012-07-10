@@ -102,7 +102,10 @@ class RoutingTable(object):
         List of coordinate tuples of all nonzero table entries.
         """
 
-        return [tuple(x[0:2]) for x in self._data.totuples() if x[2]]
+        if self._data is None:
+            return []
+        else:
+            return [tuple(x[0:2]) for x in self._data.totuples() if x[2]]
 
     def row_ids(self, col_id):
         """
