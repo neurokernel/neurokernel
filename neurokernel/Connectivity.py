@@ -1,51 +1,46 @@
-"""This is the Connectivity.py class. This class comprises the connectivity
-between neurons (spiking and non-spiking) of two neurokernel modules and the
-parameters associated to the synapses.
+"""
+Intermodule synaptic connectivity.
 
-Known issues
-------------
-    - This class do not support dynamic modifications yet, which means that it
-    is not possible change the mapping between two modules in run-time.
+Notes
+-----
+Dynamic modification of synapses parameters not currently supported.
 
 """
+
 import numpy as np
 
 class Connectivity(object):
-    """This module comprises the connectivity between neurons (spiking and
-    non-spiking) of two neurokernel modules and the parameters associated to
-    the synapses.
+    """
+    Synaptic connectivity between modules.
+
+    Describes the synaptic connections and associated parameters
+    between neurons the neurons in two Neurokernel modules.
 
     Attributes
     ----------
-    map : array_like
-        This array represents the connections between neurons in different
-        modules and has the following format:
+    conn : array_like of bool
+        Synaptic connectivity. Has the following format:
 
-              out1  out2  out3  out4
+              out1  out2  out3  out4            
         in1 |  x  |  x  |     |  x
         in2 |  x  |     |     |
         in3 |     |  x  |     |  x
 
-        where 'x' means connected and blank means not connected.
-    mask : array_like
-        This mask contains the indices of neurons that will have their states
-        transmitted to the other LPU and will be stored at the same GPU of
-        the sender module.
-    kwparam : dict
-        This variable comprises the additional information needed to
-        compute the inputs from other modules. If a neuron (n1) in module 1 is
-        connected to a neuron (n2) in module 2, it's necessary
-        additional information in order to compute the contribution of
-        n1 on n2. The information needed is associated to the type of synapse.
+        where 'x' is a connection denoted by a nonzero value.
+    params : dict
+        Parameters associated with synapses. Each key in the
+        dictionary is a parameter name; the associated matrix contains
+        the parameter values.
 
     """
 
-    def __init__(self, map, kwparam):
-        r"""Connectivity class constructor.
+    def __init__(self, conn, **params):
+        """
+        Connectivity class constructor.
 
         Parameters
         ----------
-        map : array_like
+        conn : array_like
             This array represents the connections between neurons in different
             modules and has the following format:
 
@@ -55,88 +50,87 @@ class Connectivity(object):
             out3 |     |  x  |     |  x
 
             where 'x' means connected and blank means not connected.
-        kwparam : dict
-            Parameters associated to each synapse. See the example below.
+        params : dict
+            Synaptic parameters. See the example below.
 
         Examples
         --------
-        In this example it's created a connection between two already
-        instantiated modules, m1 and m2.
         >>> import numpy as np
         >>> ...
-        >>> map = np.asarray([[0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
-                              [1, 0, 0, 0, 1, 0, 0, 1, 0, 0],
-                              [0, 0, 0, 0, 1, 0, 1, 0, 0, 0],
-                              [1, 0, 0, 0, 1, 0, 1, 1, 0, 0],
-                              [0, 0, 1, 0, 1, 0, 1, 1, 0, 0]], dtype = np.bool)
-        >>> weights = np.random.rand(5,10) * map
-        >>> slope = np.random.rand(5,10) * map
-        >>> saturation = np.random.rand(5,10) * map
-        >>> con = Connectivity(map, {'weights' : weights, 'slope' : slope,
-                                     'saturation' : saturation})
-        >>> print con.map
+        >>> conn = np.asarray([[0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
+                               [1, 0, 0, 0, 1, 0, 0, 1, 0, 0],
+                               [0, 0, 0, 0, 1, 0, 1, 0, 0, 0],
+                               [1, 0, 0, 0, 1, 0, 1, 1, 0, 0],
+                               [0, 0, 1, 0, 1, 0, 1, 1, 0, 0]], dtype = np.bool)
+        >>> weights = np.random.rand(5,10)*conn
+        >>> slope = np.random.rand(5,10)*conn
+        >>> saturation = np.random.rand(5,10)*conn
+        >>> c = Connectivity(map, weights=weights, slope=slope,
+                                     saturation=saturation)
+        >>> print c.conn
         [[False False  True False  True False  True  True False False]
          [ True False False False  True False False  True False False]
          [False False False False  True False  True False False False]
          [ True False False False  True False  True  True False False]
          [False False  True False  True False  True  True False False]]
 
-        Raises
-        ------
-        IOError
-            When you do not provide a numpy.darray with booleans or when you
-            provide an array with ndim <> 2.
-
-            Also when the sum of the length of all types are different of the
-            number of rows in map.
+        Notes
+        -----
+        All parameter matrices must have the same dimensions and may
+        only specify non-zero entries for active synapses.
 
         See Also
         --------
-        neurokernel.Module : Class connected by the connectivity module.
-        neurokernel.Manager : Class that manages Modules and Connectivities.
+        neurokernel.Module : Class connected by the Connectivity class
+        neurokernel.Manager : Class that manages Module and Connectivity class instances.
 
         """
-        if type(map) <> np.ndarray and map.dtype <> bool:
-            raise IOError, "You must provide a mapping as a numpy.darray with \
-                            booleans"
-        if map.ndim <> 2:
-            raise IOError, "You must provide a 2D numpy.darray"
 
-        if type(kwparam) <> dict:
-            raise IOError, "Parameters must be as a dictionary."
+        if np.ndim(conn) != 2:
+            raise ValueError('connectivity matrix must be 2D')
+        self._conn = np.array(conn, dtype=bool, copy=True)
+        
+        param_shapes = set([self._conn.shape]+[np.shape(p) for p in params.values()])
+        if len(param_shapes) > 1:
+            raise ValueError('all parameter matrices must have the same shape')
 
-        temp_validation = set([v.shape for v in kwparam.values()])
-        if len(temp_validation) <> 1 or temp_validation.pop() <> map.shape:
-            raise IOError, "Parameters of one type must have the same length."
+        # Nonzero values in the various parameter matrices may not
+        # appear at coordinates that do not correspond to active synapses:
+        for p in params.values():
+            if np.any((np.asarray(self._conn, int)-np.asarray(p>0, int))<0):
+                raise ValueError('parameter may only be specified for active synapses')
 
-        if kwparam.values()[0].shape <> map.shape:
-            raise IOError, "The sum of the number of spiking and \
-            graded-potential parameters must be equal to the number of rows \
-            in mapping matrix."
+        # Save parameters:
+        self._params = params.copy()
 
-        # Connectivity matrix
-        self.map = map.copy()
+        # Find the source neurons that have output connections:
+        self._out_mask = np.any(self.conn, axis=0)
 
-        # Parameters
-        self.kwparam = kwparam.copy()
+    def __getitem__(self, p):
+        return self._params[p]
 
-        # Mask
-        self.mask = self.__process_map(map)
+    @property
+    def conn(self):
+        """
+        Active synapses.
+        """
+        
+        return self._conn
 
-    def __process_map(self, map):
-        # support vector in the form:
-        # | True | False | False | True | True
-        # where True or False mean if it is necessary to transmit or not the
-        # state of determined neuron
-        map_support = self.map.sum(axis = 0).astype(np.bool)
-        # The mask is a vector with the indexes of neurons that transmit data.
-        output_mask = np.compress(map_support, map_support * \
-                                       range(1, len(map_support) + 1)) - 1
-        # The compressed matrices will be stored at the same GPU of the
-        # receiver module and represent the connectivity between the neurons
-        # that are indeed connected. E.g.: if one module has 100 projection
-        # neurons, but just 40 neurons are connected to a module, the matrices
-        # need to have a shape like (num_receivers, 40) to map the connections.
-        # compressed_map = np.compress(map_support, self.map, axis = 1)
+    @property
+    def out_indices(self):
+        """
+        Return indices of source neurons with output connections.
+        """
+        
+        return np.arange(self._conn.shape[1])[self._out_mask]
 
-        return output_mask #, compressed_map
+    @property
+    def compressed(self):
+        """
+        Return connectivity matrix with connectionless columns discarded.
+        """
+
+        # Discard the columns with no output connections:
+        return np.compress(self._out_mask, self._conn, axis=1)
+
