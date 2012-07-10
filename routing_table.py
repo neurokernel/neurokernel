@@ -104,15 +104,30 @@ class RoutingTable(object):
         return [self[:, col_id].label[0][i] for i, e in \
                 enumerate(self[:, col_id]) if e != 0]
 
+    def all_row_ids(self):
+        """
+        All row IDs connected to column IDs.
+        """
+
+        return [self._data.label[0][i] for i, e in \
+                enumerate(np.sum(self._data.x, 1, np.bool)) if e]
+                
     def col_ids(self, row_id):
         """
         Column IDs connected to a row ID.
         """
 
-        return [self[row_id, :].label[0][i] for i, e in \
+        return [self[row_id, :].label[1][i] for i, e in \
                 enumerate(self[row_id, :]) if e != 0]
-        
-    
+
+    def all_col_ids(self):
+        """
+        All column IDs connected to row IDs.
+        """
+
+        return [self._data.label[1][i] for i, e in \
+                enumerate(np.sum(self._data.x, 0, np.bool)) if e]
+
     def __repr__(self):
         if self._data is None:
             return 'empty'
