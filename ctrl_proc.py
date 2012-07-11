@@ -75,25 +75,39 @@ class ControlledProcess(mp.Process):
 
         # Set the linger period to prevent hanging on unsent messages
         # when shutting down:
-        self.logger.info('starting ctrl handler')
+        self.logger.info('initializing ctrl handler')
         self.sock_ctrl = self.ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
 
-        self.ioloop_ctrl = IOLoop.instance()
-        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop_ctrl)
+        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
         self.stream_ctrl.on_recv(self._ctrl_handler)
-        th.Thread(target=self.ioloop_ctrl.start).start()
 
-    def _init_net(self):
+    def _init_net(self, event_thread=True):
         """
         Initialize network connection.
+
+        Parameters
+        ----------
+        event_thread : bool
+            If True, start the control event loop in a new thread.
+
         """
 
+        # Set up zmq context and event loop:
         self.ctx = zmq.Context()
+        self.ioloop = IOLoop.instance()
+
+        # Set up event loop handlers:
         self._init_ctrl_handler()
 
+        # Start event loop:
+        if event_thread:
+            th.Thread(target=self.ioloop.start).start()
+        else:
+            self.ioloop.start()
+            
     def run(self):
         """
         Body of process.

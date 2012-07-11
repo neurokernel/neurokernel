@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+
+"""
+Routing table class.
+"""
+
 import numpy as np
 import la
 

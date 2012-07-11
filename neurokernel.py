@@ -125,9 +125,28 @@ class Module(ControlledProcess):
         self.in_ids = []
         self.out_ids = []
 
+    def _ctrl_handler(self, msg):
+        """
+        Control port handler.
+        """
+
+        self.logger.info('recv: %s' % str(msg))
+        if msg[0] == 'quit':
+            try:
+                self.stream_ctrl.flush()
+                self.stream_ctrl.stop_on_recv()
+                self.ioloop_ctrl.stop()
+            except IOError:
+                self.logger.info('streams already closed')
+            except:
+                self.logger.info('other error occurred')
+            self.logger.info('issuing signal %s' % self.quit_sig)
+            self.sock_ctrl.send('ack')
+            os.kill(os.getpid(), self.quit_sig)
+
     def _init_net(self):
         """
-        Initialize the network connection.
+        Initialize network connection.
         """
 
         if self.net == 'unconnected':
@@ -143,7 +162,7 @@ class Module(ControlledProcess):
                 super(Module, self)._init_net()
 
                 # Use a nonblocking port for the data interface; set
-                # the linger period to 0 to prevent hanging on unsent
+                # the linger period to prevent hanging on unsent
                 # messages when shutting down:
                 self.sock_data = self.ctx.socket(zmq.DEALER)
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
@@ -266,8 +285,6 @@ class Broker(ControlledProcess):
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
 
-        #self.running = False
-
         # Routing table:
         self.routing_table = routing_table
 
@@ -292,9 +309,9 @@ class Broker(ControlledProcess):
                 self.logger.info('streams already closed')
             except:
                 self.logger.info('other error occurred')
+            self.sock_ctrl.send('ack')
             #self.logger.info('issuing signal %s' % self.quit_sig)
             #os.kill(os.getpid(), self.quit_sig)
-            #self.running = False
 
     def _data_handler(self, msg):
         """
@@ -341,7 +358,7 @@ class Broker(ControlledProcess):
 
         # Set the linger period to prevent hanging on unsent messages
         # when shutting down:
-        self.logger.info('starting ctrl handler')
+        self.logger.info('initializing ctrl handler')
         self.sock_ctrl = self.ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
@@ -357,7 +374,7 @@ class Broker(ControlledProcess):
 
         # Set the linger period to prevent hanging on unsent
         # messages when shutting down:
-        self.logger.info('starting data handler')
+        self.logger.info('initializing data handler')
         self.sock_data = self.ctx.socket(zmq.ROUTER)
         self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_data.bind("tcp://*:%i" % self.port_data)
@@ -370,6 +387,8 @@ class Broker(ControlledProcess):
         Initialize the network connection.
         """
 
+        # Since the broker must behave like a reactor, the event loop
+        # is started in the main thread:
         self.ctx = zmq.Context()
         self.ioloop = IOLoop.instance()
         self._init_ctrl_handler()
@@ -384,9 +403,6 @@ class Broker(ControlledProcess):
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
             self.recv_coords_list = self.routing_table.coords
             self._init_net()
-            #            self.running = True
-            # while True:
-            #     pass
         self.logger.info('exiting')
 
 class Connectivity(object):
@@ -562,33 +578,25 @@ class Manager(object):
         Stop execution of all processes.
         """
 
-        # Tell all modules to terminate:
-        # self.logger.info('stopping all processes')
-        # for i in self.mods.keys():
-        #     self.logger.info('sent to   %s: quit' % i)
-        #     self.sock_ctrl.send_multipart([i, 'quit'])
         self.logger.info('stopping all processes')
         poller = zmq.Poller()
         poller.register(self.sock_ctrl, zmq.POLLIN)
         recv_ids = self.mods.keys()
         while recv_ids:
-            #self.logger.info('modules to stop: %s' % str(recv_ids))
+
+            # Send quit messages and wait for acknowledgments:
             i = recv_ids[0]
             self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
-            recv_ids.remove(i)
-            self.mods[i].join(1)
-            # if is_poll_in(self.sock_ctrl, poller):
-            #      j, data = self.sock_ctrl.recv_multipart()
-            #      self.logger.info('recv fr   %s: ack' % j)
-            #      if j in recv_ids:
-            #          recv_ids.remove(j)
-            #          self.mods[j].join(1)
+            if is_poll_in(self.sock_ctrl, poller):
+                 j, data = self.sock_ctrl.recv_multipart()
+                 self.logger.info('recv fr   %s: ack' % j)
+                 if j in recv_ids:
+                     recv_ids.remove(j)
+                     self.mods[j].join(1)
         self.logger.info('all modules stopped')
 
-        # Tell the brokers to terminate:
-        ## Module processes should return a signal to the broker indicating
-        ## when they are about to successfully terminate
+        # After all modules have been stopped, shut down the broker:
         for i in self.broks.keys():
             self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
