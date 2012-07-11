@@ -27,8 +27,9 @@ from zmq.eventloop.zmqstream import ZMQStream
 import bidict
 
 from routing_table import RoutingTable
-from int_ctx import NoKeyboardInterrupt, OnKeyboardInterrupt
-from ctrl_proc import ControlledProcess, ExceptionOnSignal, TryExceptionOnSignal, LINGER_TIME
+from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+     ExceptionOnSignal, TryExceptionOnSignal
+from ctrl_proc import ControlledProcess, LINGER_TIME
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
@@ -97,7 +98,7 @@ class Module(ControlledProcess):
     def __init__(self, net='unconnected',
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL):
         super(Module, self).__init__(port_ctrl,
-                                     signal.SIGTERM)
+                                     signal.SIGUSR1)
 
         # Logging:
         self.logger = twiggy.log.name('module %s' % self.id)
@@ -134,7 +135,7 @@ class Module(ControlledProcess):
 
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
-            with NoKeyboardInterrupt():
+            with IgnoreKeyboardInterrupt():
                 self.logger.info('initializing network connection')
 
                 # Initialize control port handler:
@@ -217,7 +218,7 @@ class Module(ControlledProcess):
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
 
             # Don't allow keyboard interruption of process:
-            with NoKeyboardInterrupt():
+            with IgnoreKeyboardInterrupt():
 
                 self._init_net()
                 np.random.seed()
@@ -254,7 +255,7 @@ class Broker(ControlledProcess):
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
                  routing_table=None):
-        super(Broker, self).__init__(port_ctrl, signal.SIGTERM)
+        super(Broker, self).__init__(port_ctrl, signal.SIGUSR1)
 
         # Logging:
         self.logger = twiggy.log.name('broker %s' % self.id)
@@ -263,6 +264,15 @@ class Broker(ControlledProcess):
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
+
+        #self.running = False
+
+        # Routing table:
+        self.routing_table = routing_table
+
+        # Buffers used to accumulate data to route:
+        self.data_to_route = []
+        self.recv_coords_list = routing_table.coords
 
     def _ctrl_handler(self, msg):
         """
@@ -276,13 +286,14 @@ class Broker(ControlledProcess):
                 self.stream_data.flush()
                 self.stream_ctrl.stop_on_recv()
                 self.stream_data.stop_on_recv()
-                self.ioloop_data.stop()
+                self.ioloop.stop()
             except IOError:
                 self.logger.info('streams already closed')
             except:
                 self.logger.info('other error occurred')
-            self.logger.info('issuing signal %s' % self.quit_sig)
-            os.kill(os.getpid(), self.quit_sig)
+            #self.logger.info('issuing signal %s' % self.quit_sig)
+            #os.kill(os.getpid(), self.quit_sig)
+            #self.running = False
 
     def _data_handler(self, msg):
         """
@@ -296,15 +307,47 @@ class Broker(ControlledProcess):
             # The first entry of the message is the originating ID
             # (prepended by zmq); the second is the destination ID:
             in_id = msg[0]
-            data_pic = msg[1]
-
-            out_id, data = pickle.loads(data_pic)
+            out_id, data = pickle.loads(msg[1])
             self.logger.info('recv from %s: %s' % (in_id, data))
-            self.logger.info('sent to   %s: %s' % (out_id, data))
+            self.logger.info('recv coords list len: '+ str(len(self.recv_coords_list)))
+            if (in_id, out_id) in self.recv_coords_list:
+                self.data_to_route.append((in_id, out_id, data))
+                self.recv_coords_list.remove((in_id, out_id))
 
-            # Route to the destination ID and send the source ID
-            # along with the data:
-            self.sock_data.send_multipart([msg[1], pickle.dumps((in_id, data))])
+            # When data with source/destination IDs corresponding to
+            # every entry in the routing table has been received,
+            # deliver the data:
+            if not self.recv_coords_list:
+                self.logger.info('recv from all modules')
+                for in_id, out_id, data in self.data_to_route:
+                    self.logger.info('sent to   %s: %s' % (out_id, data))
+
+                    # Route to the destination ID and send the source ID
+                    # along with the data:
+                    self.sock_data.send_multipart([out_id,
+                                                   pickle.dumps((in_id, data))])
+
+                # Reset the incoming data buffer and list of connection
+                # coordinates:
+                self.data_to_route = []
+                self.recv_coords_list = self.routing_table.coords
+                self.logger.info('----------------------')
+
+    def _init_ctrl_handler(self):
+        """
+        Initialize control port handler.
+        """
+
+        # Set the linger period to prevent hanging on unsent messages
+        # when shutting down:
+        self.logger.info('starting ctrl handler')
+        self.sock_ctrl = self.ctx.socket(zmq.DEALER)
+        self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
+        self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
+        self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
+
+        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
+        self.stream_ctrl.on_recv(self._ctrl_handler)
 
     def _init_data_handler(self):
         """
@@ -318,20 +361,19 @@ class Broker(ControlledProcess):
         self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_data.bind("tcp://*:%i" % self.port_data)
 
-        self.ioloop_data = IOLoop.instance()
-        self.stream_data = ZMQStream(self.sock_data, self.ioloop_data)
+        self.stream_data = ZMQStream(self.sock_data, self.ioloop)
         self.stream_data.on_recv(self._data_handler)
-
-        # Start data handler loop in main thread:
-        self.ioloop_data.start()
 
     def _init_net(self):
         """
         Initialize the network connection.
         """
 
-        super(Broker, self)._init_net()
+        self.ctx = zmq.Context()
+        self.ioloop = IOLoop.instance()
+        self._init_ctrl_handler()
         self._init_data_handler()
+        self.ioloop.start()
 
     def run(self):
         """
@@ -339,9 +381,11 @@ class Broker(ControlledProcess):
         """
 
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
+            self.recv_coords_list = self.routing_table.coords
             self._init_net()
-            while True:
-                pass
+            #            self.running = True
+            # while True:
+            #     pass
         self.logger.info('exiting')
 
 class Connectivity(object):
@@ -508,11 +552,11 @@ class Manager(object):
         Start execution of all processes.
         """
 
-        with NoKeyboardInterrupt():
+        with IgnoreKeyboardInterrupt():
             for b in self.broks.values():
                 b.start()
             for m in self.mods.values():
-                m.start()
+                m.start();
 
     def stop(self):
         """
@@ -598,9 +642,8 @@ if __name__ == '__main__':
     man.connect(m4, m3, conn)
     man.connect(m4, m1, conn)
     man.connect(m1, m4, conn)
-    
-    man.start()
-    time.sleep(4)
-    man.stop()
 
+    man.start()
+    time.sleep(5)
+    man.stop()
     logger.info('all done')

@@ -16,7 +16,6 @@ from code that is controlled by a signal handler may cause problems
 import os, signal, sys, time
 import multiprocessing as mp
 import threading as th
-from contextlib import contextmanager
 
 import twiggy
 
@@ -24,40 +23,11 @@ import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
+from ctx_managers import TryExceptionOnSignal
+
 # Use a finite linger time to prevent sockets from either hanging or
 # being uncleanly terminated when shutdown:
 LINGER_TIME = 2
-
-@contextmanager
-def ExceptionOnSignal(s=signal.SIGUSR1, e=Exception, i=None):
-    """
-    Raise a specific exception when the specified signal is detected.
-    """
-
-    def handler(signum, frame):
-        if i is not None:
-            raise e('signal %i detected in %s' % (s, i))
-        else:
-            raise e('signal %i detected' % s)
-    signal.signal(s, handler)
-    yield
-
-@contextmanager
-def TryExceptionOnSignal(s=signal.SIGUSR1, e=Exception, i=None):
-    """
-    Check for exception raised in response to specific signal.
-    """
-
-    with ExceptionOnSignal(s, e, i):
-        try:
-            yield
-        except e:
-            pass
-
-@contextmanager
-def NoExceptionOnSignal(s=signal.SIGUSR1):
-    signal.signal(s, signal.SIG_IGN)
-    yield
 
 class ControlledProcess(mp.Process):
     """
