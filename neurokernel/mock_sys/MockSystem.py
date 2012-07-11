@@ -93,7 +93,7 @@ class MockSystem(Module):
         cuda.memcpy_dtoh(proj_list[0], self.neurons.V.gpudata)
         self.buffer.step()
 
-class CircularArray:
+class CircularArray(object):
     """
     GP neurons.
 
@@ -119,7 +119,7 @@ class CircularArray:
         if self.current >= self.delay_steps:
             self.current = 0
 
-class MorrisLecar:
+class MorrisLecar(object):
     """
     GP neurons.
 
@@ -213,7 +213,7 @@ class MorrisLecar:
 
         return func
 
-class VectorSynapse:
+class VectorSynapse(object):
     """
     GP neurons.
 
@@ -272,7 +272,7 @@ class VectorSynapse:
 
         return func
 
-class AlphaSyn:
+class AlphaSyn(object):
     def __init__(self, neu_list, neu_coef, gmax, tau, sign = 1):
         self.neu_list = neu_list
         self.neu_coef = neu_coef
@@ -286,7 +286,7 @@ class AlphaSyn:
 
     g = property(_get_g)
 
-class IAFNeu:
+class IAFNeu(object):
     def __init__(self, V0, Vr, Vt, tau, R, syn_list):
         self.V = V0
         self.Vr = Vr
@@ -299,7 +299,7 @@ class IAFNeu:
         self.I = 0
         self.spk = False
 
-class IAFNet:
+class IAFNet(object):
     def __init__(self, num_neurons, num_syn):
         self.neu_list = []
         self.neu_name = {}
