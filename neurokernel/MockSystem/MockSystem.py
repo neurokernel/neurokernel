@@ -11,6 +11,8 @@ from pycuda.tools import dtype_to_ctype
 from neurokernel.tools import parray
 from neurokernel.Module import Module
 from neurokernel.Connectivity import Connectivity
+from time import gmtime, strftime
+from collections import namedtuple as Pulse
 import pdb
 
 class MockSystem(Module):
@@ -91,6 +93,10 @@ class MockSystem(Module):
         self.buffer.step()
 
 class CircularArray:
+    """
+    GP neurons.
+
+    """
     def __init__(self, num_neurons, delay_steps, rest):
         self.dtype = np.double
         self.num_neurons = num_neurons
@@ -113,6 +119,10 @@ class CircularArray:
             self.current = 0
 
 class MorrisLecar:
+    """
+    GP neurons.
+
+    """
     def __init__(self, num_neurons, dt, num_dendrite, V, n,
                  num_inputs):
         """
@@ -203,6 +213,10 @@ class MorrisLecar:
         return func
 
 class VectorSynapse:
+    """
+    GP neurons.
+
+    """
     def __init__(self, num_synapse, pre_neuron, post_neuron, syn_thres,
                  syn_slope, syn_power, syn_saturation, syn_delay, V_rev, dt):
 
@@ -257,6 +271,250 @@ class VectorSynapse:
 
         return func
 
+class AlphaSyn:
+    def __init__(self, neu_list, neu_coef, gmax, tau, sign = 1):
+        self.neu_list = neu_list
+        self.neu_coef = neu_coef
+        self.taur = 1.0 / tau
+        self.gmax = gmax
+        self.gvec = np.array([0., 0., 0.]) #[g(t) g'(t) g"(t)] 
+        self.sign = sign # -1:inhibitory; 1:excitatory
+
+    def _get_g(self):
+        return self.gvec[0] * self.gmax
+
+    g = property(_get_g)
+
+class IAFNeu:
+    def __init__(self, V0, Vr, Vt, tau, R, syn_list):
+        self.V = V0
+        self.Vr = Vr
+        self.Vt = Vt
+
+        self.tau = tau
+        self.R = R
+
+        self.syn_list = list(syn_list)
+        self.I = 0
+        self.spk = False
+
+class IAFNet:
+    def __init__(self, num_neurons, num_syn):
+        self.neu_list = []
+        self.neu_name = {}
+        self.syn_list = []
+        self.syn_name = {}
+        self.dt = 1e-5
+        self.dur = 1.0
+
+        self.spk_list = []
+        self.neu_num = num_neurons
+        self.syn_num = num_syn
+
+        self.readNeuron()
+        self.readSynapse()
+
+    def readNeuron(self):
+        for i in xrange(self.neu_num):
+            self.neu_name[ str(i) ] = len(self.neu_name)
+            self.neu_list.append(IAFNeu(-0.05, -0.07, -0.035, 0.4, 0.9, []))
+
+    def neuAppendSyn(self, post_neu, syn_idx = -1):
+        if syn_idx == -1: syn_idx = len(self.syn_list)
+        self.neu_list[ self.neu_name[post_neu] ].syn_list.append(syn_idx)
+
+    def readSynapse(self):
+        x = rand_bin_matrix((self.neu_num, self.neu_num), self.syn_num)
+        c = [a for a in itertools.product(range(x.shape[0]),
+                                          range(x.shape[1])) if x[a[0], a[1]]]
+        for i in xrange(self.syn_num):
+            pre_neu, post_neu = c[i]
+
+            name = str(pre_neu) + '-' + str(post_neu)
+            self.syn_name[ name ] = len(self.syn_name)
+            self.neuAppendSyn(str(post_neu))
+            self.syn_list.append(AlphaSyn([self.neu_name[str(pre_neu)]],
+                                          [random.gauss(435, 80)],
+                                          float(np.random.randint(1, 3)) / 2,
+                                          random.gauss(.057, .004),
+                                          np.random.randint(0, 2) - 1))
+
+    def readPreSyn(self, f, presyn_num):
+        pdb.set_trace()
+        for i in xrange(presyn_num):
+            lineInFile = myreadline(f)
+            ln_neu, pre_neu, post_neu, coef = lineInFile.split()
+            pdb.set_trace()
+            syn_name = pre_neu + '-' + post_neu
+            if self.neu_name.has_key(ln_neu) == False:
+                raise IOError('No such Local Neuron: ' + ln_neu)
+            if self.syn_name.has_key(syn_name) == False:
+                raise IOError('No such Synapse: ' + syn_name)
+            syn_idx = self.syn_name[ syn_name ]
+            self.syn_list[syn_idx].neu_list.append(self.neu_name[ ln_neu ])
+            pdb.set_trace()
+            self.syn_list[syn_idx].neu_coef.append(float(coef))
+
+    def readOneLineCurrent(self, line):
+        name, pline = line.split(None, 1)
+        if self.neu_name.has_key(name) == False:
+            raise IOError("In: " + line + "\nNo such Neuron: " + name)
+        while True:
+            seg = pline.split(None, 3)
+            if len(seg) < 3:
+                raise IOError("In: " + line + "\n"\
+                         "Pulse contains beginning, end, and value: " + pline)
+            if self.curr_list.has_key(name) == False:
+                self.curr_list[name] = []
+            tmp = Pulse(float(seg[0]), float(seg[1]), float(seg[2]))
+            if tmp.start >= tmp.end:
+                raise IOError("In: " + line + "\n"\
+                         "Pulse Beginning should be less than Pulse End: " \
+                         + repr(tmp))
+            self.curr_list[name].append(tmp)
+            if len(seg) == 3: break
+            pline = seg[3]
+
+    def readCurrentFromFile(self, filename):
+        f = open(filename, 'r')
+        self.curr_list = {}
+        while True:
+            s = myreadline(f)
+            if s == '': break
+            self.readOneLineCurrent(s)
+
+    def genCurrent(self, I_ext = np.zeros((0, 0))):
+        self.curr_list = {}
+        self.neu_I_ext_map = -1 * np.ones(self.neu_num, dtype = np.int32)
+        if I_ext.size > 0:
+            self.I_ext = I_ext.astype(np.float64)
+            self.neu_cur_map[:I_ext.shape[0]] = range(I_ext.shape[0])
+            return
+        # Find number of neuron who has external current
+        max_pulse_end = 0
+        neu_w_curr = []
+        for name, pulse_list in self.curr_list.items():
+            neu_w_curr.append(self.neu_name[ name ])
+            for pulse in pulse_list:
+                if max_pulse_end < pulse.end:
+                    max_pulse_end = pulse.end
+        neu_w_curr.sort()
+        self.I_ext = np.zeros((int(max_pulse_end / self.dt), len(neu_w_curr)))
+        # 
+        for name, pulse_list in self.curr_list.items():
+            neu_idx = self.neu_name[ name ]
+            cur_idx = neu_w_curr.index(neu_idx)
+            self.neu_I_ext_map[ neu_idx ] = cur_idx
+            for pulse in pulse_list:
+                self.I_ext[int(pulse.start / self.dt):\
+                           int(pulse.end / self.dt), cur_idx] = pulse.value
+        t = np.arange(int(max_pulse_end / self.dt)) * self.dt
+
+    def basic_prepare(self, dt = 0., dur = 0., I_ext = np.zeros((0, 0))):
+        if self.neu_num == 0:
+            raise IOError("Can't run simulation without any neuron...")
+        self.dt = self.dt if dt == 0. else dt
+        self.dur = self.dur if dur == 0. else dur
+        if self.dt <= 0.:
+            raise IOError("dt should be declared or greater than zero.")
+        if self.dur <= 0.:
+            raise IOError("Duration should be declared or greater than zero.")
+        self.Nt = int(self.dur / self.dt)
+        self.spk_list = np.zeros((self.Nt, self.neu_num), np.int32)
+        self.genCurrent(I_ext)
+
+    def list_notempty(self, arr):
+        # Return dummy array if the input is empty. The empty array will 
+        # cause exception when one tries to use driver.In()
+        return arr if arr.size > 0 else np.zeros(1)
+
+    def gpu_prepare(self, dt = 0., dur = 0., I_ext = np.empty((0, 0))):
+        self.basic_prepare(dt, dur, I_ext)
+        # Merge Neuron data
+        gpu_neu_list = np.zeros(self.neu_num, dtype = ('f8,f8,f8,f8,f8,i4,i4'))
+        offset, agg_syn = 0, []
+        for i in xrange(self.neu_num):
+            n = self.neu_list[i]
+            gpu_neu_list[i] = (n.V, n.Vr, n.Vt, n.tau,
+                                n.R, len(n.syn_list), offset)
+            offset += len(n.syn_list)
+            agg_syn.extend(n.syn_list)
+        gpu_neu_syn_list = self.list_notempty(np.array(agg_syn,
+                                                       dtype = np.int32))
+
+        # Merge Synapse data
+        gpu_syn_list = self.list_notempty(np.zeros(self.syn_num, dtype =
+                                           ('f8,f8,f8,f8,f8,f8,f8,i4,i4')))
+        offset, agg_neu, agg_coe = 0, [], []
+        for i in xrange(self.syn_num):
+            s = self.syn_list[i]
+            gpu_syn_list[i] = (s.g, np.float64(0.0), np.float64(0.0),
+                               np.float64(0.0), s.gmax, s.taur,
+                               s.sign, len(s.neu_list), offset)
+            offset += len(s.neu_list)
+            agg_neu.extend(s.neu_list)
+            agg_coe.extend(s.neu_coef)
+        gpu_syn_neu_list = self.list_notempty(np.array(zip(agg_neu, agg_coe),
+                                                       dtype = ('i8,f8')))
+
+        # Determine Bloack and Grid size
+        num = max(self.neu_num, self.syn_num)
+        if num % MAX_THREAD == 0:
+            gridx = (num / MAX_THREAD)
+        else:
+            gridx = 1 + num / MAX_THREAD
+        return gridx, gpu_neu_list, gpu_neu_syn_list, gpu_syn_list, \
+               gpu_syn_neu_list
+
+    def gpu_run(self, dt = 0., dur = 0., I_ext = np.empty((0, 0))):
+        gridx, neu_list, neu_syn_list, syn_list, syn_neu_list = \
+            self.gpu_prepare(dt, dur)
+        cuda_gpu_run(np.int32(self.Nt), np.double(self.dt),
+                      np.int32(self.neu_num),
+                      drv.In(neu_list), drv.In(neu_syn_list),
+                      np.int32(self.syn_num),
+                      drv.In(syn_list), drv.In(syn_neu_list),
+                      drv.Out(self.spk_list),
+                      drv.In(self.neu_I_ext_map.astype(np.int32)),
+                      np.int32(self.I_ext.shape[1]),
+                      np.int32(self.I_ext.shape[0]),
+                      drv.In(self.list_notempty(
+                                            self.I_ext.astype(np.float64))),
+                      block = (MAX_THREAD, 1, 1), grid = (gridx, 1))
+
+    def gpu_step_prepare(self):
+        self.gridx, neu_list, neu_syn_list, syn_list, \
+            syn_neu_list = self.gpu_prepare()
+        self.gpu_neu_list = gpuarray.to_gpu(neu_list)
+        self.gpu_syn_list = gpuarray.to_gpu(syn_list)
+        self.gpu_neu_syn_list = gpuarray.to_gpu(neu_syn_list)
+        self.gpu_syn_neu_list = gpuarray.to_gpu(syn_neu_list)
+        self.gpu_neu_I_ext_map = gpuarray.to_gpu(self.neu_I_ext_map)
+        self.gpu_spk_list = gpuarray.to_gpu(np.zeros(self.neu_num,
+                                                     dtype = np.int32))
+        self.gpu_I_list = gpuarray.to_gpu(np.zeros(self.neu_num,
+                                                   dtype = np.float64))
+
+    def run_step(self):
+        # The data from Interface will be concantenated to 
+        cuda_gpu_run_dt(np.double(self.dt),
+                         np.int32(self.neu_num), #number of neurons
+                         np.int32(self.syn_num), #number of synapses
+                         self.gpu_neu_list, #array of neuron status 
+                         self.gpu_neu_syn_list,
+                         self.gpu_syn_list, #array of synapse status
+                         self.gpu_syn_neu_list, #array of pre-synaptic inhibitory neuron
+                         self.gpu_neu_I_ext_map,
+                         self.gpu_I_list, #array of external current
+                         self.gpu_spk_list, #output spikes
+                         block = (MAX_THREAD, 1, 1), grid = (self.gridx, 1))
+
+    def run(self):
+        self.gpu_step_prepare()
+        for i in xrange(self.Nt):
+            self.run_step()
+            self.spk_list[i, :] = self.gpu_spk_list.get()
+
 def main(argv):
 
     manager = None
@@ -302,5 +560,23 @@ if __name__ == '__main__':
 
     # number of neurons per type that will be multiplied by 15
     # average number of synapses per neuron 
-    # parameters = 768, 6, 1e-4, 4608, 0, 4608, 0, 1
+    # parameters = 1000, 20, 1e-4, 200, 150, 100, 50, 1
     main(sys.argv[1:])
+
+
+
+
+
+#if __name__ == '__main__':
+#    start = drv.Event()
+#    end = drv.Event()
+#    start.record()
+#    olfnet = IAFNet(70, 100)
+##    olfnet.gpu_run(1e-5, 5)
+#    olfnet.gpu_step_prepare()
+#    for i in range(int(1 / 1e-5)):
+#        olfnet.run_step()
+#        olfnet.gpu_spk_list.get()
+#    end.record()
+#    secs = start.time_till(end) * 1e-3
+#    print "Time: %fs" % secs
