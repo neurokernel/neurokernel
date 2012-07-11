@@ -20,12 +20,13 @@ class MockSystem(Module):
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, manager, num_neurons, avr_synapses_per_neuron,
+    def __init__(self, num_neurons, avr_synapses_per_neuron,
                  dt, num_gpot_proj, num_spk_proj, device, num_inputs):
 
         np.random.seed(0)
 
-        Module.__init__(self, manager, dt, num_gpot_proj, num_spk_proj, device)
+        super(MockSystem, self).__init__(dt, num_gpot_proj,
+                                         num_spk_proj, device)
 
         self.num_neurons = num_neurons
         self.num_synapses = int(avr_synapses_per_neuron * self.num_neurons)
@@ -517,7 +518,6 @@ class IAFNet:
 
 def main(argv):
 
-    manager = None
     try:
         num_neurons = int(sys.argv[1][:-1])
         avr_synapses = np.double(sys.argv[2][:-1])
@@ -537,7 +537,7 @@ def main(argv):
     start = cuda.Event()
     end = cuda.Event()
 
-    system = MockSystem(manager, num_neurons, avr_synapses, dt,
+    system = MockSystem(num_neurons, avr_synapses, dt,
                         num_proj_non, num_proj_spike, device, num_in_spike)
 
     system.init_gpu()
