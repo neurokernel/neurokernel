@@ -183,7 +183,7 @@ class MorrisLecar:
                                         self.ddt * 1000, self.steps)
 
     def get_euler_kernel(self):
-        template = open('neurokernel/MockSystem/cuda_code/euler_kernel.cu', 'r')
+        template = open('neurokernel/mock_sys/cuda_code/euler_kernel.cu', 'r')
 
         dtype = self.dtype
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
@@ -201,7 +201,7 @@ class MorrisLecar:
         return func
 
     def get_input_func(self):
-        template = open('neurokernel/MockSystem/cuda_code/input_func.cu', 'r')
+        template = open('neurokernel/mock_sys/cuda_code/input_func.cu', 'r')
 
         mod = SourceModule(template.read() % {"num_neurons": self.num_neurons},
                            options = ["--ptxas-options=-v"])
@@ -256,7 +256,7 @@ class VectorSynapse:
                                                     self.mem_tmp.gpudata)
 
     def get_update_terminal_synapse_func(self):
-        template = open('neurokernel/MockSystem/cuda_code/terminal_synapse.cu',
+        template = open('neurokernel/mock_sys/cuda_code/terminal_synapse.cu',
                         'r')
 
         mod = SourceModule(template.read() % {"n_synapse": self.num_synapse},
