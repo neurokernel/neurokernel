@@ -26,6 +26,7 @@ from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 import bidict
 
+from nk_uuid import uuid
 from routing_table import RoutingTable
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
@@ -396,9 +397,8 @@ class Connectivity(object):
 
     def __init__(self):
 
-        # Use the object instance's Python ID (i.e., memory address)
-        # as its UID:
-        self.id = str(id(self))
+        # Unique object ID:
+        self.id = uuid()
 
 class Manager(object):
     """
@@ -415,9 +415,8 @@ class Manager(object):
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
 
-        # Use the object instance's Python ID (i.e., memory address)
-        # as its UID:
-        self.id = str(id(self))
+        # Unique object ID:
+        self.id = uuid()
 
         self.logger = twiggy.log.name('manage %s' % self.id)
         self.port_data = port_data
@@ -573,7 +572,7 @@ class Manager(object):
         poller.register(self.sock_ctrl, zmq.POLLIN)
         recv_ids = self.mods.keys()
         while recv_ids:
-            self.logger.info('modules to stop: %s' % str(recv_ids))
+            #self.logger.info('modules to stop: %s' % str(recv_ids))
             i = recv_ids[0]
             self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
@@ -598,6 +597,7 @@ class Manager(object):
 
 if __name__ == '__main__':
 
+    # Set up logging:
     screen_output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
                                                 stream=sys.stdout)
     file_output = twiggy.outputs.FileOutput('exec.log',
@@ -605,22 +605,7 @@ if __name__ == '__main__':
                                             'w')
     twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output),
                        ('file', twiggy.levels.DEBUG, None, file_output))
-    logger = twiggy.log.name('main           ')
-    # Log to screen and to a file:
-    # logger = logging.getLogger()
-    # logger.name = 'main           '
-    # logger.setLevel(logging.DEBUG)
-    # formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
-
-    # handler = logging.StreamHandler()
-    # handler.setLevel(logging.DEBUG)
-    # handler.setFormatter(formatter)
-    # logger.addHandler(handler)
-
-    # handler = logging.FileHandler('exec.log', 'w')
-    # handler.setLevel(logging.DEBUG)
-    # handler.setFormatter(formatter)
-    # logger.addHandler(handler)
+    logger = twiggy.log.name(('{name:%s}' % 12).format(name='main'))
 
     # Set up and start emulation:
     man = Manager()
@@ -629,19 +614,22 @@ if __name__ == '__main__':
     #m2 = man.add_mod(Module(net='ctrl'))
     #m3 = man.add_mod(Module(net='ctrl'))
     #m4 = man.add_mod(Module(net='ctrl'))
-    m1 = man.add_mod()
-    m2 = man.add_mod()
-    m3 = man.add_mod()
-    m4 = man.add_mod()
+    m_list = [man.add_mod() for i in xrange(3)]
+    # m1 = man.add_mod()
+    # m2 = man.add_mod()
+    # m3 = man.add_mod()
+    # m4 = man.add_mod()
     conn = man.add_conn()
-    man.connect(m1, m2, conn)
-    man.connect(m2, m1, conn)
-    man.connect(m2, m3, conn)
-    man.connect(m3, m2, conn)
-    man.connect(m3, m4, conn)
-    man.connect(m4, m3, conn)
-    man.connect(m4, m1, conn)
-    man.connect(m1, m4, conn)
+    # man.connect(m1, m2, conn)
+    # man.connect(m2, m1, conn)
+    # man.connect(m2, m3, conn)
+    # man.connect(m3, m2, conn)
+    # man.connect(m3, m4, conn)
+    # man.connect(m4, m3, conn)
+    # man.connect(m4, m1, conn)
+    # man.connect(m1, m4, conn)
+    for m1, m2 in zip(m_list, [m_list[-1]]+m_list[:-1]):
+        man.connect(m1, m2, conn)
 
     man.start()
     time.sleep(5)

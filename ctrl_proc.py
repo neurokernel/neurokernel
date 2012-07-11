@@ -24,6 +24,7 @@ from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
 from ctx_managers import TryExceptionOnSignal
+from nk_uuid import uuid
 
 # Use a finite linger time to prevent sockets from either hanging or
 # being uncleanly terminated when shutdown:
@@ -36,9 +37,8 @@ class ControlledProcess(mp.Process):
 
     def __init__(self, port_ctrl, quit_sig, *args, **kwargs):
 
-        # Use the object instance's Python ID (i.e., memory address)
-        # as its UID:
-        self.id = str(id(self))
+        # Unique object identifier:
+        self.id = uuid()
 
         # Logging:
         self.logger = twiggy.log.name(self.id)
