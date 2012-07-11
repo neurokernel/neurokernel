@@ -26,7 +26,7 @@ from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 import bidict
 
-from nk_uuid import uuid
+from nk_uid import uid
 from routing_table import RoutingTable
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
@@ -414,7 +414,7 @@ class Connectivity(object):
     def __init__(self):
 
         # Unique object ID:
-        self.id = uuid()
+        self.id = uid()
 
 class Manager(object):
     """
@@ -432,7 +432,7 @@ class Manager(object):
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
 
         # Unique object ID:
-        self.id = uuid()
+        self.id = uid()
 
         self.logger = twiggy.log.name('manage %s' % self.id)
         self.port_data = port_data
