@@ -25,8 +25,7 @@ class MockSystem(Module):
 
         np.random.seed(0)
 
-        super(MockSystem, self).__init__(dt, num_gpot_proj,
-                                         num_spk_proj, device)
+        super(MockSystem, self).__init__(device)
 
         self.num_neurons = num_neurons
         self.num_synapses = int(avr_synapses_per_neuron * self.num_neurons)

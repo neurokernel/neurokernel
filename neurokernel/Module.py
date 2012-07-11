@@ -1,7 +1,9 @@
-import atexit, logger, signal
+import atexit, signal
 import numpy as np
 import multiprocessing as mp
 import pycuda.driver as cuda
+
+import twiggy
 
 from neurokernel.tools import parray
 from neurokernel.tools.comm_utils import is_poll_in
@@ -27,22 +29,12 @@ class Module(mp.Process):
     
     """
 
-    def __init__(self, dt, *args, **kwargs):
+    def __init__(self, N_neurons, avr_synapses_per_neuron, dt,
+                 N_gpot_proj, N_spike_proj, device, N, inputs):
 
-        # Module identifier for zmq communication:
-        self.id = kwargs.pop('id')
+        super(Module, self).__init__()
 
-        # Port to use when connecting with the manager:
-        self.port = kwargs.pop('port')
-
-        self.logger = logging.getLogger('initializing module %s' % self.id)        
-        Process.__init__(self)
-
-        self.dt = dt
         self.device = device
-
-        self.proj_non = []
-        self.proj_spike = []
 
         # List of connection objects:
         self.conn_list = []
@@ -82,7 +74,7 @@ class Module(mp.Process):
         ctx = cuda.Device(self.device).make_context()
         atexit.register(ctx.pop)
         
-    def run_step(self, in_gpot_list, in_spike_list, out_gpot_gpu, out_gpot_gpu):
+    def run_step(self, in_gpot_list, in_spike_list, out_gpot_gpu, out_spike_gpu):
         """
         Run one step of the module simulation.
 
@@ -182,6 +174,7 @@ class Module(mp.Process):
 
         # Main simulation loop:
         while True:
+            pass
 
             # Propagate data between modules:
 

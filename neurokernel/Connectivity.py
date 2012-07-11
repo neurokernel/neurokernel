@@ -89,7 +89,7 @@ class Connectivity(object):
         if np.ndim(conn) != 2:
             raise ValueError('connectivity matrix must be 2D')
         self._conn = np.array(conn, dtype=bool, copy=True)
-        
+
         param_shapes = set([self._conn.shape]+[np.shape(p) for p in params.values()])
         if len(param_shapes) > 1:
             raise ValueError('all parameter matrices must have the same shape')
@@ -114,7 +114,7 @@ class Connectivity(object):
         """
         Active synapses.
         """
-        
+
         return self._conn
 
     @property
@@ -122,7 +122,7 @@ class Connectivity(object):
         """
         Return indices of source neurons with output connections.
         """
-        
+
         return np.arange(self._conn.shape[1])[self._out_mask]
 
     @property

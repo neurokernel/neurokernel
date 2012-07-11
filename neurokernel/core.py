@@ -46,7 +46,7 @@ def is_poll_in(sock, poller, timeout=100):
     else:
         return False
 
-class Module(ControlledProcess):
+class BaseModule(ControlledProcess):
     """
     Processing module.
 
@@ -98,7 +98,7 @@ class Module(ControlledProcess):
 
     def __init__(self, net='unconnected',
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL):
-        super(Module, self).__init__(port_ctrl,
+        super(BaseModule, self).__init__(port_ctrl,
                                      signal.SIGUSR1)
 
         # Logging:
@@ -159,7 +159,7 @@ class Module(ControlledProcess):
                 self.logger.info('initializing network connection')
 
                 # Initialize control port handler:
-                super(Module, self)._init_net()
+                super(BaseModule, self)._init_net()
 
                 # Use a nonblocking port for the data interface; set
                 # the linger period to prevent hanging on unsent
@@ -405,7 +405,7 @@ class Broker(ControlledProcess):
             self._init_net()
         self.logger.info('exiting')
 
-class Connectivity(object):
+class BaseConnectivity(object):
     """
     Intermodule connectivity class.
 
@@ -460,17 +460,17 @@ class Manager(object):
 
         Parameters
         ----------
-        m_src : Module
+        m_src : BaseModule
            Source module instance.
-        m_dest : Module
+        m_dest : BaseModule
            Destination module instance.
-        conn : Connectivity
+        conn : BaseConnectivity
            Connectivity object instance.
 
         """
 
-        if not isinstance(m_src, Module) or not isinstance(m_dest, Module) or \
-            not isinstance(conn, Connectivity):
+        if not isinstance(m_src, BaseModule) or not isinstance(m_dest, BaseModule) or \
+            not isinstance(conn, BaseConnectivity):
             raise ValueError('invalid types')
 
         # Add the module and connection instances to the internal
@@ -545,8 +545,8 @@ class Manager(object):
         Add or create a module instance to the emulation.
         """
 
-        if not isinstance(m, Module):
-            m = Module(port_data=self.port_data, port_ctrl=self.port_ctrl)
+        if not isinstance(m, BaseModule):
+            m = BaseModule(port_data=self.port_data, port_ctrl=self.port_ctrl)
         self.mods[m.id] = m
         self.logger.info('added module %s' % m.id)
         return m
@@ -556,8 +556,8 @@ class Manager(object):
         Add or create a connectivity instance to the emulation.
         """
 
-        if not isinstance(c, Connectivity):
-            c = Connectivity()
+        if not isinstance(c, BaseConnectivity):
+            c = BaseConnectivity()
         self.conns[c.id] = c
         self.logger.info('added connectivity %s' % c.id)
         return c
@@ -618,10 +618,10 @@ if __name__ == '__main__':
     # Set up and start emulation:
     man = Manager()
     man.add_brok()
-    #m1 = man.add_mod(Module(net='ctrl'))
-    #m2 = man.add_mod(Module(net='ctrl'))
-    #m3 = man.add_mod(Module(net='ctrl'))
-    #m4 = man.add_mod(Module(net='ctrl'))
+    #m1 = man.add_mod(BaseModule(net='ctrl'))
+    #m2 = man.add_mod(BaseModule(net='ctrl'))
+    #m3 = man.add_mod(BaseModule(net='ctrl'))
+    #m4 = man.add_mod(BaseModule(net='ctrl'))
     m_list = [man.add_mod() for i in xrange(3)]
     # m1 = man.add_mod()
     # m2 = man.add_mod()
