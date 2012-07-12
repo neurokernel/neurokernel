@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys
 import random as rd
 import numpy as np
@@ -527,7 +529,7 @@ def main(argv):
         num_proj_spike = int(sys.argv[7][:-1])
         device = int(sys.argv[8])
     except IOError:
-        print "Wrong #parameters. Exemple: 768, 10, 1e-4, 200, 0, 100, 0, 1"
+        print "Wrong number of parameters; example: 768, 10, 1e-4, 200, 0, 100, 0, 1"
 
     cuda.init()
     ctx = cuda.Device(device).make_context()
