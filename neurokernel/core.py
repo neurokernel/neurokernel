@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Classes for broker-based network of modules controlled by a manager.
+Core Neurokernel classes.
 
 Notes
 -----
@@ -13,13 +13,16 @@ modules must eventually be supported.
 
 """
 
-import copy, os, signal, sys, threading, time
+import copy
+import os
+import signal
+import sys
+import threading
+import time
 import multiprocessing as mp
 import cPickle as pickle
 from contextlib import contextmanager
-
 import twiggy
-
 import numpy as np
 import zmq
 from zmq.eventloop.ioloop import IOLoop
@@ -98,8 +101,7 @@ class BaseModule(ControlledProcess):
 
     def __init__(self, net='unconnected',
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL):
-        super(BaseModule, self).__init__(port_ctrl,
-                                     signal.SIGUSR1)
+        super(BaseModule, self).__init__(port_ctrl, signal.SIGUSR1)
 
         # Logging:
         self.logger = twiggy.log.name('module %s' % self.id)
