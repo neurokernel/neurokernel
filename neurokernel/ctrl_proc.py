@@ -76,7 +76,7 @@ class ControlledProcess(mp.Process):
         # Set the linger period to prevent hanging on unsent messages
         # when shutting down:
         self.logger.info('initializing ctrl handler')
-        self.sock_ctrl = self.ctx.socket(zmq.DEALER)
+        self.sock_ctrl = self.zmq_ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
@@ -96,7 +96,7 @@ class ControlledProcess(mp.Process):
         """
 
         # Set up zmq context and event loop:
-        self.ctx = zmq.Context()
+        self.zmq_ctx = zmq.Context()
         self.ioloop = IOLoop.instance()
 
         # Set up event loop handlers:
@@ -126,8 +126,8 @@ if __name__ == '__main__':
                                                   True, output)
 
     PORT_CTRL = 6001
-    ctx = zmq.Context()
-    sock = ctx.socket(zmq.ROUTER)
+    zmq_ctx = zmq.Context()
+    sock = zmq_ctx.socket(zmq.ROUTER)
     sock.bind('tcp://*:%i' % PORT_CTRL)
 
     p = ControlledProcess(PORT_CTRL, signal.SIGUSR1)

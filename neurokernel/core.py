@@ -35,19 +35,9 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 from ctrl_proc import ControlledProcess, LINGER_TIME
 
+from neurokernel.tools.comm_utils import is_poll_in
 PORT_DATA = 5000
 PORT_CTRL = 5001
-
-def is_poll_in(sock, poller, timeout=100):
-    """
-    Check whether a poller detects incoming data on a specified
-    socket.
-    """
-    socks = dict(poller.poll(timeout))
-    if sock in socks and socks[sock] == zmq.POLLIN:
-        return True
-    else:
-        return False
 
 class BaseModule(ControlledProcess):
     """
@@ -166,7 +156,7 @@ class BaseModule(ControlledProcess):
                 # Use a nonblocking port for the data interface; set
                 # the linger period to prevent hanging on unsent
                 # messages when shutting down:
-                self.sock_data = self.ctx.socket(zmq.DEALER)
+                self.sock_data = self.zmq_ctx.socket(zmq.DEALER)
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
@@ -361,7 +351,7 @@ class Broker(ControlledProcess):
         # Set the linger period to prevent hanging on unsent messages
         # when shutting down:
         self.logger.info('initializing ctrl handler')
-        self.sock_ctrl = self.ctx.socket(zmq.DEALER)
+        self.sock_ctrl = self.zmq_ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
@@ -377,7 +367,7 @@ class Broker(ControlledProcess):
         # Set the linger period to prevent hanging on unsent
         # messages when shutting down:
         self.logger.info('initializing data handler')
-        self.sock_data = self.ctx.socket(zmq.ROUTER)
+        self.sock_data = self.zmq_ctx.socket(zmq.ROUTER)
         self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_data.bind("tcp://*:%i" % self.port_data)
 
@@ -391,7 +381,7 @@ class Broker(ControlledProcess):
 
         # Since the broker must behave like a reactor, the event loop
         # is started in the main thread:
-        self.ctx = zmq.Context()
+        self.zmq_ctx = zmq.Context()
         self.ioloop = IOLoop.instance()
         self._init_ctrl_handler()
         self._init_data_handler()
@@ -443,8 +433,8 @@ class Manager(object):
         # Set up a router socket to communicate with other topology
         # components; linger period is set to 0 to prevent hanging on
         # unsent messages when shutting down:
-        self.ctx = zmq.Context()
-        self.sock_ctrl = self.ctx.socket(zmq.ROUTER)
+        self.zmq_ctx = zmq.Context()
+        self.sock_ctrl = self.zmq_ctx.socket(zmq.ROUTER)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
 
