@@ -1,15 +1,21 @@
-"""
-Intermodule synaptic connectivity.
-
-Notes
------
-Dynamic modification of synapses parameters not currently supported.
+#!/usr/bin/env python
 
 """
+Core Neurokernel classes that use the GPU.
 
+
+"""
+
+import atexit
 import numpy as np
+import twiggy
+import pycuda.driver as drv
+import pycuda.gpuarray as gpuarray
+import bidict
 
-class Connectivity(object):
+import core
+
+class Connectivity(core.BaseConnectivity):
     """
     Synaptic connectivity between modules.
 
@@ -21,7 +27,7 @@ class Connectivity(object):
     conn : array_like of bool
         Synaptic connectivity. Has the following format:
 
-              out1  out2  out3  out4            
+              out1  out2  out3  out4
         in1 |  x  |  x  |     |  x
         in2 |  x  |     |     |
         in3 |     |  x  |     |  x
@@ -31,6 +37,10 @@ class Connectivity(object):
         Parameters associated with synapses. Each key in the
         dictionary is a parameter name; the associated matrix contains
         the parameter values.
+
+    Notes
+    -----
+    Dynamic modification of synapse parameters not currently supported.
 
     """
 
@@ -53,6 +63,18 @@ class Connectivity(object):
         params : dict
             Synaptic parameters. See the example below.
 
+        Attributes
+        ----------
+        compressed : 2D numpy.ndarray of bool
+        conn : 2D numpy.ndarray of bool
+            Connectivity matrix.
+        out_ind : numpy.ndarray of int
+            Indices of source neurons with output connections.
+        param_names : list of str
+            List of parameter names; each matrix of parameters
+            identified by `name` in an object instance `X` can be 
+            accessed as `X['name']`
+        
         Examples
         --------
         >>> import numpy as np
@@ -81,11 +103,13 @@ class Connectivity(object):
 
         See Also
         --------
-        neurokernel.Module : Class connected by the Connectivity class
-        neurokernel.Manager : Class that manages Module and Connectivity class instances.
+        Module : Class connected by the Connectivity class
+        Manager : Class that manages Module and Connectivity class instances.
 
         """
 
+        super(Connectivity, self).__init__()
+        
         if np.ndim(conn) != 2:
             raise ValueError('connectivity matrix must be 2D')
         self._conn = np.array(conn, dtype=bool, copy=True)
@@ -110,6 +134,13 @@ class Connectivity(object):
         return self._params[p]
 
     @property
+    def param_names(self):
+        """
+        Parameter names.
+        """
+        return self._params.keys()
+    
+    @property
     def conn(self):
         """
         Active synapses.
@@ -118,7 +149,7 @@ class Connectivity(object):
         return self._conn
 
     @property
-    def out_indices(self):
+    def out_ind(self):
         """
         Return indices of source neurons with output connections.
         """
@@ -134,3 +165,76 @@ class Connectivity(object):
         # Discard the columns with no output connections:
         return np.compress(self._out_mask, self._conn, axis=1)
 
+class Module(core.BaseModule):
+    """
+    GPU-based processing module.
+
+    This class repeatedly executes a work method until it receives 
+    a quit message via its control port.
+    """
+    
+    def __init__(self, net='unconnected', port_data=core.PORT_DATA,
+                 port_ctrl=core.PORT_CTRL, device=0):        
+        self.device = device
+        super(Module, self).__init__(net, port_data, port_ctrl)
+
+        # Dictionaries that maps destination module IDs to arrays
+        # containing lists of 
+        self.out_gpot_inds = bidict.bidict()
+        self.out_spike_inds = bidict.bidict()
+        
+    def _init_gpu(self):
+        """
+        Initialize GPU device.
+
+        Notes
+        -----
+        Must be called from within the `run()` method, not from within
+        `__init__()`.
+
+        """
+        drv.init()
+        self.gpu_ctx = drv.Device(self.device).make_context()
+        atexit.register(ctx.pop)
+
+    def _extract_out_data(self, out_gpot_list, out_spike_list):
+        """
+        Extract specified output neuron data to ship to destination modules.
+        """
+
+        if len(out_gpot_list) != len(out_spike_list):
+            raise ValueError('number of graded potential and spiking '
+                             'neuron arrays must be equivalent')
+        for out_gpot, out_spike in zip(out_gpot_list, out_spike_list):
+            
+    def run(self):
+        with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
+
+            # Don't allow keyboard interruption of process:
+            self.logger.info('starting')
+            with IgnoreKeyboardInterrupt():
+
+                self._init_net()
+                self._init_gpu()
+                self.running = True
+                while True:
+
+                    # Run the processing step:
+                    self.run_step()
+
+                    # Synchronize:
+                    self._sync()
+
+            self.logger.info('exiting')
+        
+
+class Manager(core.BaseManager):
+
+    def connect(self, m_src, m_dest, conn):
+        super(Manager, self).__init__(m_src, m_dest, conn)
+
+        # Provide an array listing to the source module that lists
+        # which of its output neurons project to the destination
+        # module:
+
+        

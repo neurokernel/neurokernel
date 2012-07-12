@@ -44,7 +44,7 @@ class BaseModule(ControlledProcess):
     Processing module.
 
     This class repeatedly executes a work method until it receives a
-    termination signal.
+    quit message via its control port.
 
     Parameters
     ----------
@@ -230,6 +230,7 @@ class BaseModule(ControlledProcess):
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
 
             # Don't allow keyboard interruption of process:
+            self.logger.info('starting')
             with IgnoreKeyboardInterrupt():
 
                 self._init_net()
@@ -308,14 +309,18 @@ class Broker(ControlledProcess):
     def _data_handler(self, msg):
         """
         Data port handler.
+
+        Notes
+        -----
+        Assumes that each message contains a source module ID
+        (provided by zmq) and a pickled tuple; the tuple contains
+        the destination module ID and the data to be transmitted.
+        
         """
 
         if len(msg) != 2:
             self.logger.info('skipping malformed message: %s' % str(msg))
         else:
-
-            # The first entry of the message is the originating ID
-            # (prepended by zmq); the second is the destination ID:
             in_id = msg[0]
             out_id, data = pickle.loads(msg[1])
             self.logger.info('recv from %s: %s' % (in_id, data))
@@ -408,7 +413,7 @@ class BaseConnectivity(object):
         # Unique object ID:
         self.id = uid()
 
-class Manager(object):
+class BaseManager(object):
     """
     Module manager.
 
@@ -608,7 +613,7 @@ if __name__ == '__main__':
     logger = twiggy.log.name(('{name:%s}' % 12).format(name='main'))
 
     # Set up and start emulation:
-    man = Manager()
+    man = BaseManager()
     man.add_brok()
     #m1 = man.add_mod(BaseModule(net='ctrl'))
     #m2 = man.add_mod(BaseModule(net='ctrl'))
@@ -632,6 +637,6 @@ if __name__ == '__main__':
         man.connect(m1, m2, conn)
 
     man.start()
-    time.sleep(5)
+    time.sleep(1)
     man.stop()
     logger.info('all done')
