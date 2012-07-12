@@ -6,7 +6,7 @@ def is_poll_in(sock, poller, timeout=100):
     """
 
     socks = dict(poller.poll(timeout))
-    if s in socks and socks[s] == zmq.POLLIN:
+    if sock in socks and socks[sock] == zmq.POLLIN:
         return True
     else:
         return False
