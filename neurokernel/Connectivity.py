@@ -21,7 +21,7 @@ class Connectivity(object):
     conn : array_like of bool
         Synaptic connectivity. Has the following format:
 
-              out1  out2  out3  out4            
+              out1  out2  out3  out4
         in1 |  x  |  x  |     |  x
         in2 |  x  |     |     |
         in3 |     |  x  |     |  x
@@ -82,29 +82,33 @@ class Connectivity(object):
         See Also
         --------
         neurokernel.Module : Class connected by the Connectivity class
-        neurokernel.Manager : Class that manages Module and Connectivity class instances.
+        neurokernel.Manager : Class that manages Module and Connectivity
+                              class instances.
 
         """
 
         if np.ndim(conn) != 2:
             raise ValueError('connectivity matrix must be 2D')
-        self._conn = np.array(conn, dtype=bool, copy=True)
-        
-        param_shapes = set([self._conn.shape]+[np.shape(p) for p in params.values()])
+        self._conn = np.array(conn, dtype = bool, copy = True)
+
+        param_shapes = set([self._conn.shape] + [np.shape(p) for p in
+                                               params.values()])
         if len(param_shapes) > 1:
             raise ValueError('all parameter matrices must have the same shape')
 
         # Nonzero values in the various parameter matrices may not
         # appear at coordinates that do not correspond to active synapses:
         for p in params.values():
-            if np.any((np.asarray(self._conn, int)-np.asarray(p>0, int))<0):
-                raise ValueError('parameter may only be specified for active synapses')
+            if np.any((np.asarray(self._conn, int) - \
+                       np.asarray(p > 0, int)) < 0):
+                raise ValueError('parameter may only be specified for active \
+                                 synapses')
 
         # Save parameters:
         self._params = params.copy()
 
         # Find the source neurons that have output connections:
-        self._out_mask = np.any(self.conn, axis=0)
+        self._out_mask = np.any(self.conn, axis = 0)
 
     def __getitem__(self, p):
         return self._params[p]
@@ -114,7 +118,7 @@ class Connectivity(object):
         """
         Active synapses.
         """
-        
+
         return self._conn
 
     @property
@@ -122,7 +126,7 @@ class Connectivity(object):
         """
         Return indices of source neurons with output connections.
         """
-        
+
         return np.arange(self._conn.shape[1])[self._out_mask]
 
     @property
@@ -132,5 +136,5 @@ class Connectivity(object):
         """
 
         # Discard the columns with no output connections:
-        return np.compress(self._out_mask, self._conn, axis=1)
+        return np.compress(self._out_mask, self._conn, axis = 1)
 

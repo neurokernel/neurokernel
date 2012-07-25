@@ -20,15 +20,42 @@ class MockSystem(Module):
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, manager, num_neurons, avr_synapses_per_neuron,
+    def __init__(self, manager, num_spk, num_gpot, num_synapses,
                  dt, num_gpot_proj, num_spk_proj, device, num_inputs):
+        """
+        Synaptic connectivity between modules.
+
+        Attributes
+        ----------
+        manager : neurokernel.Manager
+            Synaptic connectivity.
+        num_spk : int
+            Number of spiking neurons.
+        num_gpot : int
+            Number of graded-potential neurons.
+        num_synapses : int
+            Number of synapses for spiking and graded-potential neurons: Half
+            each.
+        dt : double
+            Duration of each simulation's step.
+        num_gpot_proj : int
+            Number of output graded-potential neurons.
+        num_spk_proj : int
+            Number of output spiking neurons.
+        device : int
+            GPU device number.
+        num_inputs : int
+            Number of module's inputs.
+
+        """
 
         np.random.seed(0)
 
         Module.__init__(self, manager, dt, num_gpot_proj, num_spk_proj, device)
 
-        self.num_neurons = num_neurons
-        self.num_synapses = int(avr_synapses_per_neuron * self.num_neurons)
+        self.num_gpot = num_gpot
+        self.num_spk = num_spk
+        self.num_synapses = num_synapses
         self.num_inputs = num_inputs
 
     def init_gpu(self):
@@ -37,60 +64,64 @@ class MockSystem(Module):
         # necessary notice that the process is over the synapses instead of
         # neurons. So, in fact there is no neurons, but connection between
         # neurons. Number of dendrites per neuron. A dendrite is a neuron's
-        pre_neuron = np_rd.random_integers(0, self.num_neurons,
-                                size = (self.num_synapses,)).astype(np.int32)
+        gpot_synapses = self.num_synapses / 2
 
-        post_neuron = np.sort(np_rd.random_integers(0, self.num_neurons,
-                                size = (self.num_synapses,)).astype(np.int32))
+        pre_neuron = np_rd.random_integers(0, self.num_gpot,
+                                size = (gpot_synapses,)).astype(np.int32)
+
+        post_neuron = np.sort(np_rd.random_integers(0, self.num_gpot,
+                                size = (gpot_synapses,)).astype(np.int32))
 
         self.num_dendrites = sp.bincount(post_neuron)
 
         # Parameters of the model: threshold, slope, saturation, Vs and phy.
         # Shape: (num_synapses,)
         thres = np.asarray([rd.gauss(-.5, .01) for x in \
-                            np.zeros([self.num_synapses])], dtype = np.float64)
+                            np.zeros([gpot_synapses])], dtype = np.float64)
         slope = np.asarray([rd.gauss(-.5, .1) for x in \
-                            np.zeros([self.num_synapses])], dtype = np.float64)
+                            np.zeros([gpot_synapses])], dtype = np.float64)
         saturation = np.asarray([rd.gauss(.1, .01) for x in \
-                            np.zeros([self.num_synapses])], dtype = np.float64)
-        power = np.ones([self.num_synapses], dtype = np.float64)
+                            np.zeros([gpot_synapses])], dtype = np.float64)
+        power = np.ones([gpot_synapses], dtype = np.float64)
         reverse = np.asarray([rd.gauss(-.4, .1) for x in \
-                            np.zeros([self.num_synapses])], dtype = np.float64)
+                            np.zeros([gpot_synapses])], dtype = np.float64)
 
         # Parameters of alpha function. Shape: (num_synapses,)
-        delay = np.ones([self.num_synapses], dtype = np.float64)
+        delay = np.ones([gpot_synapses], dtype = np.float64)
 
-        # Initial condition at resting potential. Shape of both: (num_neurons,)
+        # Initial condition at resting potential. Shape: (num_gpot,)
         V = np.asarray([rd.gauss(-.51, .01) for x in \
-                        np.zeros([self.num_neurons])], dtype = np.float64)
+                        np.zeros([self.num_gpot])], dtype = np.float64)
         n = np.asarray([rd.gauss(.3, .05) for x in \
-                        np.zeros([self.num_neurons])], dtype = np.float64)
+                        np.zeros([self.num_gpot])], dtype = np.float64)
 
         self.delay_steps = int(round(max(delay) * 1e-3 / self.dt))
 
-        self.buffer = CircularArray(self.num_neurons, self.delay_steps, V)
+        self.buffer = CircularArray(self.num_gpot, self.delay_steps, V)
 
-        self.neurons = MorrisLecar(self.num_neurons,
+        self.neurons = MorrisLecar(self.num_gpot,
                                    self.dt, self.num_dendrites, V, n,
                                    self.num_inputs)
-        self.synapses = VectorSynapse(self.num_synapses, pre_neuron,
+        self.synapses = VectorSynapse(gpot_synapses, pre_neuron,
                                       post_neuron, thres, slope, power,
                                       saturation, delay, reverse, self.dt)
+
+        # Spiking neurons
+        self.spk_net = IAFNet(self.num_spk, self.num_synapses / 2)
+        self.spk_net.gpu_step_prepare()
 
     def run_step(self, in_list = None, proj_list = None):
 
         self.neurons.I_pre.fill(0)
         self.neurons.update_I_pre_input(in_list[0])
-
         self.neurons.read_synapse(self.synapses.conductance,
                                   self.synapses.V_rev)
-
         self.neurons.eval(self.buffer)
-
         self.synapses.compute_synapse(self.buffer)
-
         cuda.memcpy_dtoh(proj_list[0], self.neurons.V.gpudata)
         self.buffer.step()
+        self.spk_net.run_step()
+#        self.spk_net..gpu_spk_list.get()
 
 class CircularArray:
     """
@@ -558,14 +589,9 @@ def main(argv):
 
 if __name__ == '__main__':
 
-    # number of neurons per type that will be multiplied by 15
     # average number of synapses per neuron 
     # parameters = 1000, 20, 1e-4, 200, 150, 100, 50, 1
     main(sys.argv[1:])
-
-
-
-
 
 #if __name__ == '__main__':
 #    start = drv.Event()
