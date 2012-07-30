@@ -6,7 +6,7 @@ num_types = [np.typeDict[t] for t in \
              np.typecodes['AllInteger']+np.typecodes['AllFloat']]
 
 # Numbers of bytes occupied by each numerical type:
-num_nbytes = {np.dtype(t):t(1).nbytes for t in num_types}
+num_nbytes = dict((np.dtype(t), t(1).nbytes) for t in num_types)
 
 def set_realloc(x_gpu, data):
     """
