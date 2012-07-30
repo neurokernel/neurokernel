@@ -1,26 +1,24 @@
 import sys
 import random as rd
-import numpy as np
 import scipy as sp
 import numpy.random as np_rd
-import atexit
-import pycuda.gpuarray as garray
-import pycuda.driver as cuda
-from pycuda.compiler import SourceModule
-from pycuda.tools import dtype_to_ctype
-from neurokernel.tools import parray
-from neurokernel.Module import Module
-from neurokernel.Connectivity import Connectivity
 from time import gmtime, strftime
 from collections import namedtuple as Pulse
 import pdb
+
+import pycuda.gpuarray as garray
+from pycuda.compiler import SourceModule
+from pycuda.tools import dtype_to_ctype
+
+from neurokernel.tools import parray
+from neurokernel.Module import Module
 
 class MockSystem(Module):
     """
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, manager, num_spk, num_gpot, num_synapses,
+    def __init__(self, num_spk, num_gpot, num_synapses,
                  dt, num_gpot_proj, num_spk_proj, device, num_inputs):
         """
         Synaptic connectivity between modules.
@@ -51,7 +49,7 @@ class MockSystem(Module):
 
         np.random.seed(0)
 
-        Module.__init__(self, manager, dt, num_gpot_proj, num_spk_proj, device)
+        Module.__init__(self, dt, num_inputs, num_gpot, num_spk, device)
 
         self.num_gpot = num_gpot
         self.num_spk = num_spk
@@ -534,7 +532,8 @@ class IAFNet:
                          self.gpu_neu_list, #array of neuron status 
                          self.gpu_neu_syn_list,
                          self.gpu_syn_list, #array of synapse status
-                         self.gpu_syn_neu_list, #array of pre-synaptic inhibitory neuron
+                         self.gpu_syn_neu_list, #array of pre-synaptic
+                                                #inhibitory neuron
                          self.gpu_neu_I_ext_map,
                          self.gpu_I_list, #array of external current
                          self.gpu_spk_list, #output spikes
@@ -550,16 +549,16 @@ def main(argv):
 
     manager = None
     try:
-        num_neurons = int(sys.argv[1][:-1])
-        avr_synapses = np.double(sys.argv[2][:-1])
-        dt = np.double(sys.argv[3][:-1])
-        num_in_non = int(sys.argv[4][:-1])
-        num_in_spike = int(sys.argv[5][:-1])
-        num_proj_non = int(sys.argv[6][:-1])
-        num_proj_spike = int(sys.argv[7][:-1])
-        device = int(sys.argv[8])
+        num_spk = int(sys.argv[1])
+        num_gpot = int(sys.argv[2])
+        num_synapses = int(sys.argv[3])
+        dt = np.double(sys.argv[4])
+        num_gpot_proj = int(sys.argv[5])
+        num_spk_proj = int(sys.argv[6])
+        device = int(sys.argv[7])
+        num_inputs = int(sys.argv[8])
     except IOError:
-        print "Wrong #parameters. Exemple: 768, 10, 1e-4, 200, 0, 100, 0, 1"
+        print "Wrong #parameters. Exemple: 1000 1000 10000 1e-4 20 10 1 100"
 
     cuda.init()
     ctx = cuda.Device(device).make_context()
@@ -588,9 +587,6 @@ def main(argv):
     print "Time: %fs" % secs
 
 if __name__ == '__main__':
-
-    # average number of synapses per neuron 
-    # parameters = 1000, 20, 1e-4, 200, 150, 100, 50, 1
     main(sys.argv[1:])
 
 #if __name__ == '__main__':
