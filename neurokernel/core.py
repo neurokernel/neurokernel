@@ -315,7 +315,7 @@ class Broker(ControlledProcess):
         Assumes that each message contains a source module ID
         (provided by zmq) and a pickled tuple; the tuple contains
         the destination module ID and the data to be transmitted.
-        
+
         """
 
         if len(msg) != 2:
@@ -587,7 +587,7 @@ class BaseManager(object):
             self.sock_ctrl.send_multipart([i, 'quit'])
             if is_poll_in(self.sock_ctrl, poller):
                  j, data = self.sock_ctrl.recv_multipart()
-                 self.logger.info('recv fr   %s: ack' % j)
+                 self.logger.info('recv from %s: ack' % j)
                  if j in recv_ids:
                      recv_ids.remove(j)
                      self.mods[j].join(1)
@@ -610,6 +610,8 @@ if __name__ == '__main__':
                                             'w')
     twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output),
                        ('file', twiggy.levels.DEBUG, None, file_output))
+    # twiggy.addEmitters(
+    #                    ('file', twiggy.levels.DEBUG, None, file_output))
     logger = twiggy.log.name(('{name:%s}' % 12).format(name='main'))
 
     # Set up and start emulation:
@@ -619,22 +621,26 @@ if __name__ == '__main__':
     #m2 = man.add_mod(BaseModule(net='ctrl'))
     #m3 = man.add_mod(BaseModule(net='ctrl'))
     #m4 = man.add_mod(BaseModule(net='ctrl'))
-    m_list = [man.add_mod() for i in xrange(3)]
-    # m1 = man.add_mod()
-    # m2 = man.add_mod()
-    # m3 = man.add_mod()
-    # m4 = man.add_mod()
     conn = man.add_conn()
-    # man.connect(m1, m2, conn)
-    # man.connect(m2, m1, conn)
-    # man.connect(m2, m3, conn)
-    # man.connect(m3, m2, conn)
-    # man.connect(m3, m4, conn)
-    # man.connect(m4, m3, conn)
-    # man.connect(m4, m1, conn)
-    # man.connect(m1, m4, conn)
-    for m1, m2 in zip(m_list, [m_list[-1]]+m_list[:-1]):
-        man.connect(m1, m2, conn)
+    # m_list = [man.add_mod() for i in xrange(10)]
+    # for m1, m2 in zip(m_list, [m_list[-1]]+m_list[:-1]):
+    #     man.connect(m1, m2, conn)
+
+    m1 = man.add_mod()
+    m2 = man.add_mod()
+    m3 = man.add_mod()
+    m4 = man.add_mod()
+
+    man.connect(m1, m2, conn)
+    man.connect(m2, m1, conn)
+    man.connect(m2, m3, conn)
+    man.connect(m3, m2, conn)
+    man.connect(m3, m4, conn)
+    man.connect(m4, m3, conn)
+    man.connect(m4, m1, conn)
+    man.connect(m1, m4, conn)
+    man.connect(m2, m4, conn)
+    man.connect(m4, m2, conn)
 
     man.start()
     time.sleep(1)

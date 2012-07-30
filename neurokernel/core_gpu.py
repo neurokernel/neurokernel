@@ -72,9 +72,9 @@ class Connectivity(core.BaseConnectivity):
             Indices of source neurons with output connections.
         param_names : list of str
             List of parameter names; each matrix of parameters
-            identified by `name` in an object instance `X` can be 
+            identified by `name` in an object instance `X` can be
             accessed as `X['name']`
-        
+
         Examples
         --------
         >>> import numpy as np
@@ -109,7 +109,7 @@ class Connectivity(core.BaseConnectivity):
         """
 
         super(Connectivity, self).__init__()
-        
+
         if np.ndim(conn) != 2:
             raise ValueError('connectivity matrix must be 2D')
         self._conn = np.array(conn, dtype=bool, copy=True)
@@ -139,7 +139,7 @@ class Connectivity(core.BaseConnectivity):
         Parameter names.
         """
         return self._params.keys()
-    
+
     @property
     def conn(self):
         """
@@ -169,20 +169,20 @@ class Module(core.BaseModule):
     """
     GPU-based processing module.
 
-    This class repeatedly executes a work method until it receives 
+    This class repeatedly executes a work method until it receives
     a quit message via its control port.
     """
-    
+
     def __init__(self, net='unconnected', port_data=core.PORT_DATA,
-                 port_ctrl=core.PORT_CTRL, device=0):        
+                 port_ctrl=core.PORT_CTRL, device=0):
         self.device = device
         super(Module, self).__init__(net, port_data, port_ctrl)
 
         # Dictionaries that maps destination module IDs to arrays
-        # containing lists of 
+        # containing lists of
         self.out_gpot_inds = bidict.bidict()
         self.out_spike_inds = bidict.bidict()
-        
+
     def _init_gpu(self):
         """
         Initialize GPU device.
@@ -206,7 +206,8 @@ class Module(core.BaseModule):
             raise ValueError('number of graded potential and spiking '
                              'neuron arrays must be equivalent')
         for out_gpot, out_spike in zip(out_gpot_list, out_spike_list):
-            
+            pass
+        
     def run(self):
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
 
@@ -226,7 +227,7 @@ class Module(core.BaseModule):
                     self._sync()
 
             self.logger.info('exiting')
-        
+
 
 class Manager(core.BaseManager):
 
@@ -236,5 +237,3 @@ class Manager(core.BaseManager):
         # Provide an array listing to the source module that lists
         # which of its output neurons project to the destination
         # module:
-
-        
