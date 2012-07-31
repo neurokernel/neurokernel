@@ -5,21 +5,25 @@ import numpy.random as np_rd
 from time import gmtime, strftime
 from collections import namedtuple as Pulse
 import pdb
+import itertools
 
 import pycuda.gpuarray as garray
 from pycuda.compiler import SourceModule
 from pycuda.tools import dtype_to_ctype
+import pycuda.driver as cuda
+import atexit
 
 from neurokernel.tools import parray
 from neurokernel.Module import Module
+from neurokernel.tools.misc_utils import rand_bin_matrix
 
 class MockSystem(Module):
     """
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, num_spk, num_gpot, num_synapses,
-                 dt, num_gpot_proj, num_spk_proj, device, num_inputs):
+    def __init__(self, N_spk, N_gpot, N_synapses,
+                 dt, N_gpot_proj, N_spk_proj, device, N_inputs):
         """
         Synaptic connectivity between modules.
 
@@ -47,14 +51,13 @@ class MockSystem(Module):
 
         """
 
-        np.random.seed(0)
+        np_rd.seed(0)
 
-        Module.__init__(self, dt, num_inputs, num_gpot, num_spk, device)
+        Module.__init__(self, dt, N_inputs, N_gpot_proj, N_spk_proj, device)
 
-        self.num_gpot = num_gpot
-        self.num_spk = num_spk
-        self.num_synapses = num_synapses
-        self.num_inputs = num_inputs
+        self.num_gpot = N_gpot
+        self.num_spk = N_spk
+        self.num_synapses = N_synapses
 
     def init_gpu(self):
 
@@ -99,7 +102,7 @@ class MockSystem(Module):
 
         self.neurons = MorrisLecar(self.num_gpot,
                                    self.dt, self.num_dendrites, V, n,
-                                   self.num_inputs)
+                                   self.N_inputs)
         self.synapses = VectorSynapse(gpot_synapses, pre_neuron,
                                       post_neuron, thres, slope, power,
                                       saturation, delay, reverse, self.dt)
@@ -212,7 +215,7 @@ class MorrisLecar:
                                         self.ddt * 1000, self.steps)
 
     def get_euler_kernel(self):
-        template = open('neurokernel/MockSystem/cuda_code/euler_kernel.cu', 'r')
+        template = open('neurokernel/mock_sys/cuda_code/euler_kernel.cu', 'r')
 
         dtype = self.dtype
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
@@ -230,7 +233,7 @@ class MorrisLecar:
         return func
 
     def get_input_func(self):
-        template = open('neurokernel/MockSystem/cuda_code/input_func.cu', 'r')
+        template = open('neurokernel/mock_sys/cuda_code/input_func.cu', 'r')
 
         mod = SourceModule(template.read() % {"num_neurons": self.num_neurons},
                            options = ["--ptxas-options=-v"])
@@ -285,7 +288,7 @@ class VectorSynapse:
                                                     self.mem_tmp.gpudata)
 
     def get_update_terminal_synapse_func(self):
-        template = open('neurokernel/MockSystem/cuda_code/terminal_synapse.cu',
+        template = open('neurokernel/mock_sys/cuda_code/terminal_synapse.cu',
                         'r')
 
         mod = SourceModule(template.read() % {"n_synapse": self.num_synapse},
@@ -314,6 +317,7 @@ class AlphaSyn:
 
     g = property(_get_g)
 
+MAX_THREAD = 512
 class IAFNeu:
     def __init__(self, V0, Vr, Vt, tau, R, syn_list):
         self.V = V0
@@ -363,10 +367,10 @@ class IAFNet:
             self.syn_name[ name ] = len(self.syn_name)
             self.neuAppendSyn(str(post_neu))
             self.syn_list.append(AlphaSyn([self.neu_name[str(pre_neu)]],
-                                          [random.gauss(435, 80)],
-                                          float(np.random.randint(1, 3)) / 2,
-                                          random.gauss(.057, .004),
-                                          np.random.randint(0, 2) - 1))
+                                          [rd.gauss(435, 80)],
+                                          float(np_rd.randint(1, 3)) / 2,
+                                          rd.gauss(.057, .004),
+                                          np_rd.randint(0, 2) - 1))
 
     def readPreSyn(self, f, presyn_num):
         pdb.set_trace()
@@ -514,14 +518,14 @@ class IAFNet:
     def gpu_step_prepare(self):
         self.gridx, neu_list, neu_syn_list, syn_list, \
             syn_neu_list = self.gpu_prepare()
-        self.gpu_neu_list = gpuarray.to_gpu(neu_list)
-        self.gpu_syn_list = gpuarray.to_gpu(syn_list)
-        self.gpu_neu_syn_list = gpuarray.to_gpu(neu_syn_list)
-        self.gpu_syn_neu_list = gpuarray.to_gpu(syn_neu_list)
-        self.gpu_neu_I_ext_map = gpuarray.to_gpu(self.neu_I_ext_map)
-        self.gpu_spk_list = gpuarray.to_gpu(np.zeros(self.neu_num,
+        self.gpu_neu_list = garray.to_gpu(neu_list)
+        self.gpu_syn_list = garray.to_gpu(syn_list)
+        self.gpu_neu_syn_list = garray.to_gpu(neu_syn_list)
+        self.gpu_syn_neu_list = garray.to_gpu(syn_neu_list)
+        self.gpu_neu_I_ext_map = garray.to_gpu(self.neu_I_ext_map)
+        self.gpu_spk_list = garray.to_gpu(np.zeros(self.neu_num,
                                                      dtype = np.int32))
-        self.gpu_I_list = gpuarray.to_gpu(np.zeros(self.neu_num,
+        self.gpu_I_list = garray.to_gpu(np.zeros(self.neu_num,
                                                    dtype = np.float64))
 
     def run_step(self):
@@ -546,8 +550,6 @@ class IAFNet:
             self.spk_list[i, :] = self.gpu_spk_list.get()
 
 def main(argv):
-
-    manager = None
     try:
         num_spk = int(sys.argv[1])
         num_gpot = int(sys.argv[2])
@@ -567,8 +569,8 @@ def main(argv):
     start = cuda.Event()
     end = cuda.Event()
 
-    system = MockSystem(manager, num_neurons, avr_synapses, dt,
-                        num_proj_non, num_proj_spike, device, num_in_spike)
+    system = MockSystem(num_spk, num_gpot, num_synapses, dt, num_gpot_proj,
+                        num_spk_proj, device, num_inputs)
 
     system.init_gpu()
 

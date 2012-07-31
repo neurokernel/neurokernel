@@ -29,11 +29,15 @@ class Module(mp.Process):
 
     """
 
-    def __init__(self, dt, inputs, N_gpot_proj, N_spike_proj, device):
+    def __init__(self, dt, N_inputs, N_gpot_proj, N_spk_proj, device):
 
         super(Module, self).__init__()
 
         self.device = device
+        self.dt = dt
+        self.N_inputs = N_inputs
+        self.N_gpot_proj = N_gpot_proj
+        self.N_spike_proj = N_spk_proj
 
         # List of connection objects:
         self.conn_list = []
