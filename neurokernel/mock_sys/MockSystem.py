@@ -108,8 +108,8 @@ class MockSystem(Module):
                                       saturation, delay, reverse, self.dt)
 
         # Spiking neurons
-        self.spk_net = IAFNet(self.num_spk, self.num_synapses / 2)
-        self.spk_net.gpu_step_prepare()
+#        self.spk_net = IAFNet(self.num_spk, self.num_synapses / 2)
+#        self.spk_net.gpu_step_prepare()
 
     def run_step(self, in_list = None, proj_list = None):
 
@@ -318,6 +318,8 @@ class AlphaSyn:
     g = property(_get_g)
 
 MAX_THREAD = 512
+cuda_source = open('neurokernel/mock_sys/cuda_code/olf_gpu.cu', 'r')
+cuda_func = SourceModule(cuda_source.read(), options = ["--ptxas-options=-v"])
 class IAFNeu:
     def __init__(self, V0, Vr, Vt, tau, R, syn_list):
         self.V = V0
@@ -528,6 +530,7 @@ class IAFNet:
         self.gpu_I_list = garray.to_gpu(np.zeros(self.neu_num,
                                                    dtype = np.float64))
 
+    cuda_gpu_run_dt = cuda_func.get_function("gpu_run_dt")
     def run_step(self):
         # The data from Interface will be concantenated to 
         cuda_gpu_run_dt(np.double(self.dt),
@@ -575,8 +578,8 @@ def main(argv):
     system.init_gpu()
 
     # External current
-    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.num_inputs]))
-    out = np.empty((1 / system.dt, num_proj_non), np.double)
+    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.N_inputs]))
+    out = np.empty((1 / system.dt, num_gpot_proj), np.double)
 
     start.record()
     for i in range(int(1 / system.dt)):
