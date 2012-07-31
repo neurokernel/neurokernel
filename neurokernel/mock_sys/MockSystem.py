@@ -61,68 +61,71 @@ class MockSystem(Module):
 
     def init_gpu(self):
 
-        # In order to understand pre_neuron, post_neuron and dendrites it's
-        # necessary notice that the process is over the synapses instead of
-        # neurons. So, in fact there is no neurons, but connection between
-        # neurons. Number of dendrites per neuron. A dendrite is a neuron's
-        gpot_synapses = self.num_synapses / 2
+        # If there is graded-potential neurons to be processed
+        if (self.num_gpot > 0):
+            # In order to understand pre_neuron, post_neuron and dendrites
+            # it's necessary notice that the process is over the synapses
+            # instead of neurons. So, in fact there is no neurons, but
+            # connection between neurons. Number of dendrites per neuron.
+            # A dendrite is a neuron's
+            gpot_synapses = self.num_synapses / 2
 
-        pre_neuron = np_rd.random_integers(0, self.num_gpot,
-                                size = (gpot_synapses,)).astype(np.int32)
+            pre_neuron = np_rd.random_integers(0, self.num_gpot,
+                                    size = (gpot_synapses,)).astype(np.int32)
 
-        post_neuron = np.sort(np_rd.random_integers(0, self.num_gpot,
-                                size = (gpot_synapses,)).astype(np.int32))
+            post_neuron = np.sort(np_rd.random_integers(0, self.num_gpot,
+                                    size = (gpot_synapses,)).astype(np.int32))
 
-        self.num_dendrites = sp.bincount(post_neuron)
+            self.num_dendrites = sp.bincount(post_neuron)
 
-        # Parameters of the model: threshold, slope, saturation, Vs and phy.
-        # Shape: (num_synapses,)
-        thres = np.asarray([rd.gauss(-.5, .01) for x in \
-                            np.zeros([gpot_synapses])], dtype = np.float64)
-        slope = np.asarray([rd.gauss(-.5, .1) for x in \
-                            np.zeros([gpot_synapses])], dtype = np.float64)
-        saturation = np.asarray([rd.gauss(.1, .01) for x in \
-                            np.zeros([gpot_synapses])], dtype = np.float64)
-        power = np.ones([gpot_synapses], dtype = np.float64)
-        reverse = np.asarray([rd.gauss(-.4, .1) for x in \
-                            np.zeros([gpot_synapses])], dtype = np.float64)
+            # Parameters of the model: threshold, slope, saturation, Vs
+            # and phy.
+            # Shape: (num_synapses,)
+            thres = np.asarray([rd.gauss(-.5, .01) for x in \
+                                np.zeros([gpot_synapses])], dtype = np.float64)
+            slope = np.asarray([rd.gauss(-.5, .1) for x in \
+                                np.zeros([gpot_synapses])], dtype = np.float64)
+            saturation = np.asarray([rd.gauss(.1, .01) for x in \
+                                np.zeros([gpot_synapses])], dtype = np.float64)
+            power = np.ones([gpot_synapses], dtype = np.float64)
+            reverse = np.asarray([rd.gauss(-.4, .1) for x in \
+                                np.zeros([gpot_synapses])], dtype = np.float64)
 
-        # Parameters of alpha function. Shape: (num_synapses,)
-        delay = np.ones([gpot_synapses], dtype = np.float64)
+            # Parameters of alpha function. Shape: (num_synapses,)
+            delay = np.ones([gpot_synapses], dtype = np.float64)
 
-        # Initial condition at resting potential. Shape: (num_gpot,)
-        V = np.asarray([rd.gauss(-.51, .01) for x in \
-                        np.zeros([self.num_gpot])], dtype = np.float64)
-        n = np.asarray([rd.gauss(.3, .05) for x in \
-                        np.zeros([self.num_gpot])], dtype = np.float64)
+            # Initial condition at resting potential. Shape: (num_gpot,)
+            V = np.asarray([rd.gauss(-.51, .01) for x in \
+                            np.zeros([self.num_gpot])], dtype = np.float64)
+            n = np.asarray([rd.gauss(.3, .05) for x in \
+                            np.zeros([self.num_gpot])], dtype = np.float64)
 
-        self.delay_steps = int(round(max(delay) * 1e-3 / self.dt))
+            self.delay_steps = int(round(max(delay) * 1e-3 / self.dt))
 
-        self.buffer = CircularArray(self.num_gpot, self.delay_steps, V)
+            self.buffer = CircularArray(self.num_gpot, self.delay_steps, V)
 
-        self.neurons = MorrisLecar(self.num_gpot,
-                                   self.dt, self.num_dendrites, V, n,
-                                   self.N_inputs)
-        self.synapses = VectorSynapse(gpot_synapses, pre_neuron,
-                                      post_neuron, thres, slope, power,
-                                      saturation, delay, reverse, self.dt)
-
-        # Spiking neurons
-#        self.spk_net = IAFNet(self.num_spk, self.num_synapses / 2)
-#        self.spk_net.gpu_step_prepare()
+            self.gpot_neu = MorrisLecar(self.num_gpot,
+                                       self.dt, self.num_dendrites, V, n,
+                                       self.N_inputs)
+            self.gpot_syn = VectorSynapse(gpot_synapses, pre_neuron,
+                                          post_neuron, thres, slope, power,
+                                          saturation, delay, reverse, self.dt)
+        if (self.num_spk > 0):
+            self.olfnet = IAFNet(70, 100)
+            self.olfnet.gpu_step_prepare()
 
     def run_step(self, in_list = None, proj_list = None):
 
-        self.neurons.I_pre.fill(0)
-        self.neurons.update_I_pre_input(in_list[0])
-        self.neurons.read_synapse(self.synapses.conductance,
-                                  self.synapses.V_rev)
-        self.neurons.eval(self.buffer)
-        self.synapses.compute_synapse(self.buffer)
-        cuda.memcpy_dtoh(proj_list[0], self.neurons.V.gpudata)
+        self.gpot_neu.I_pre.fill(0)
+        self.gpot_neu.update_I_pre_input(in_list[0])
+        self.gpot_neu.read_synapse(self.gpot_syn.conductance,
+                                  self.gpot_syn.V_rev)
+        self.gpot_neu.eval(self.buffer)
+        self.gpot_syn.compute_synapse(self.buffer)
+        cuda.memcpy_dtoh(proj_list[0], self.gpot_neu.V.gpudata)
         self.buffer.step()
-        self.spk_net.run_step()
-#        self.spk_net..gpu_spk_list.get()
+#        self.spk_net.run_step()
+#        self.spk_net.gpu_spk_list.get()
 
 class CircularArray:
     """
@@ -317,9 +320,6 @@ class AlphaSyn:
 
     g = property(_get_g)
 
-MAX_THREAD = 512
-cuda_source = open('neurokernel/mock_sys/cuda_code/olf_gpu.cu', 'r')
-cuda_func = SourceModule(cuda_source.read(), options = ["--ptxas-options=-v"])
 class IAFNeu:
     def __init__(self, V0, Vr, Vt, tau, R, syn_list):
         self.V = V0
@@ -345,6 +345,8 @@ class IAFNet:
         self.spk_list = []
         self.neu_num = num_neurons
         self.syn_num = num_syn
+
+        self.max_thread = 512
 
         self.readNeuron()
         self.readSynapse()
@@ -494,10 +496,10 @@ class IAFNet:
 
         # Determine Bloack and Grid size
         num = max(self.neu_num, self.syn_num)
-        if num % MAX_THREAD == 0:
-            gridx = (num / MAX_THREAD)
+        if num % self.max_thread == 0:
+            gridx = (num / self.max_thread)
         else:
-            gridx = 1 + num / MAX_THREAD
+            gridx = 1 + num / self.max_thread
         return gridx, gpu_neu_list, gpu_neu_syn_list, gpu_syn_list, \
                gpu_syn_neu_list
 
@@ -515,7 +517,7 @@ class IAFNet:
                       np.int32(self.I_ext.shape[0]),
                       drv.In(self.list_notempty(
                                             self.I_ext.astype(np.float64))),
-                      block = (MAX_THREAD, 1, 1), grid = (gridx, 1))
+                      block = (self.max_thread, 1, 1), grid = (gridx, 1))
 
     def gpu_step_prepare(self):
         self.gridx, neu_list, neu_syn_list, syn_list, \
@@ -530,9 +532,12 @@ class IAFNet:
         self.gpu_I_list = garray.to_gpu(np.zeros(self.neu_num,
                                                    dtype = np.float64))
 
-    cuda_gpu_run_dt = cuda_func.get_function("gpu_run_dt")
     def run_step(self):
-        # The data from Interface will be concantenated to 
+        # The data from Interface will be concantenated to
+        cuda_source = open('neurokernel/mock_sys/cuda_code/olf_gpu.cu', 'r')
+        cuda_func = SourceModule(cuda_source.read(),
+                                 options = ["--ptxas-options=-v"])
+        cuda_gpu_run_dt = cuda_func.get_function("gpu_run_dt")
         cuda_gpu_run_dt(np.double(self.dt),
                          np.int32(self.neu_num), #number of neurons
                          np.int32(self.syn_num), #number of synapses
@@ -544,7 +549,7 @@ class IAFNet:
                          self.gpu_neu_I_ext_map,
                          self.gpu_I_list, #array of external current
                          self.gpu_spk_list, #output spikes
-                         block = (MAX_THREAD, 1, 1), grid = (self.gridx, 1))
+                         block = (self.max_thread, 1, 1), grid = (self.gridx, 1))
 
     def run(self):
         self.gpu_step_prepare()
@@ -599,7 +604,6 @@ if __name__ == '__main__':
 #    end = drv.Event()
 #    start.record()
 #    olfnet = IAFNet(70, 100)
-##    olfnet.gpu_run(1e-5, 5)
 #    olfnet.gpu_step_prepare()
 #    for i in range(int(1 / 1e-5)):
 #        olfnet.run_step()
