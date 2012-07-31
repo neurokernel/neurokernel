@@ -124,8 +124,8 @@ class MockSystem(Module):
         self.gpot_syn.compute_synapse(self.buffer)
         cuda.memcpy_dtoh(proj_list[0], self.gpot_neu.V.gpudata)
         self.buffer.step()
-#        self.spk_net.run_step()
-#        self.spk_net.gpu_spk_list.get()
+        self.olfnet.run_step()
+        self.olfnet.gpu_spk_list.get()
 
 class CircularArray:
     """
@@ -598,16 +598,3 @@ def main(argv):
 
 if __name__ == '__main__':
     main(sys.argv[1:])
-
-#if __name__ == '__main__':
-#    start = drv.Event()
-#    end = drv.Event()
-#    start.record()
-#    olfnet = IAFNet(70, 100)
-#    olfnet.gpu_step_prepare()
-#    for i in range(int(1 / 1e-5)):
-#        olfnet.run_step()
-#        olfnet.gpu_spk_list.get()
-#    end.record()
-#    secs = start.time_till(end) * 1e-3
-#    print "Time: %fs" % secs
