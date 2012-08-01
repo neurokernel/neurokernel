@@ -131,8 +131,7 @@ class MockSystem(Module):
         self.buffer.step()
 
         # provide you input data
-        self.gpu_I_list = garray.to_gpu(np.zeros(spk_iputs,
-                                                 dtype = np.float64))
+#        self.gpu_I_list = garray.to_gpu(np.zeros(inputs, dtype = np.float64))
         self.spk_net.run_step()
         spk_proj = np.nonzero(self.spk_net.gpu_spk_list.get())[0]
 
@@ -590,7 +589,6 @@ def main(argv):
 
     # External current
     I_ext = parray.to_gpu(np.ones([1 / system.dt, system.N_inputs]))
-    pdb.set_trace()
     gpot_out = np.empty((1 / system.dt, num_gpot_proj), np.double)
     spk_out = None
 
