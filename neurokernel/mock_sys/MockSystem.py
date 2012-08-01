@@ -1,6 +1,7 @@
 import sys
 import random as rd
 import scipy as sp
+import numpy as np
 import numpy.random as np_rd
 from time import gmtime, strftime
 from collections import namedtuple as Pulse
@@ -111,21 +112,29 @@ class MockSystem(Module):
                                           post_neuron, thres, slope, power,
                                           saturation, delay, reverse, self.dt)
         if (self.num_spk > 0):
-            self.olfnet = IAFNet(70, 100)
-            self.olfnet.gpu_step_prepare()
+            self.spk_net = IAFNet(self.num_spk, self.num_synapses / 2)
+            self.spk_net.neu_I_ext_map = np.zeros(self.num_spk) - 1
+            self.spk_net.neu_I_ext_map[:self.N_inputs] = np.arange(
+                                                                self.N_inputs)
+            rd.shuffle(self.spk_net.neu_I_ext_map)
+            self.spk_net.gpu_step_prepare()
 
-    def run_step(self, in_list = None, proj_list = None):
+    def run_step(self, inputs, gpot_proj, spk_proj):
 
         self.gpot_neu.I_pre.fill(0)
-        self.gpot_neu.update_I_pre_input(in_list[0])
+        self.gpot_neu.update_I_pre_input(inputs[0])
         self.gpot_neu.read_synapse(self.gpot_syn.conductance,
                                   self.gpot_syn.V_rev)
         self.gpot_neu.eval(self.buffer)
         self.gpot_syn.compute_synapse(self.buffer)
-        cuda.memcpy_dtoh(proj_list[0], self.gpot_neu.V.gpudata)
+        cuda.memcpy_dtoh(gpot_proj[0], self.gpot_neu.V.gpudata)
         self.buffer.step()
-        self.olfnet.run_step()
-        self.olfnet.gpu_spk_list.get()
+
+        # provide you input data
+        self.gpu_I_list = garray.to_gpu(np.zeros(spk_iputs,
+                                                 dtype = np.float64))
+        self.spk_net.run_step()
+        spk_proj = np.nonzero(self.spk_net.gpu_spk_list.get())[0]
 
 class CircularArray:
     """
@@ -377,11 +386,9 @@ class IAFNet:
                                           np_rd.randint(0, 2) - 1))
 
     def readPreSyn(self, f, presyn_num):
-        pdb.set_trace()
         for i in xrange(presyn_num):
             lineInFile = myreadline(f)
             ln_neu, pre_neu, post_neu, coef = lineInFile.split()
-            pdb.set_trace()
             syn_name = pre_neu + '-' + post_neu
             if self.neu_name.has_key(ln_neu) == False:
                 raise IOError('No such Local Neuron: ' + ln_neu)
@@ -389,7 +396,6 @@ class IAFNet:
                 raise IOError('No such Synapse: ' + syn_name)
             syn_idx = self.syn_name[ syn_name ]
             self.syn_list[syn_idx].neu_list.append(self.neu_name[ ln_neu ])
-            pdb.set_trace()
             self.syn_list[syn_idx].neu_coef.append(float(coef))
 
     def readOneLineCurrent(self, line):
@@ -422,7 +428,6 @@ class IAFNet:
 
     def genCurrent(self, I_ext = np.zeros((0, 0))):
         self.curr_list = {}
-        self.neu_I_ext_map = -1 * np.ones(self.neu_num, dtype = np.int32)
         if I_ext.size > 0:
             self.I_ext = I_ext.astype(np.float64)
             self.neu_cur_map[:I_ext.shape[0]] = range(I_ext.shape[0])
@@ -526,11 +531,12 @@ class IAFNet:
         self.gpu_syn_list = garray.to_gpu(syn_list)
         self.gpu_neu_syn_list = garray.to_gpu(neu_syn_list)
         self.gpu_syn_neu_list = garray.to_gpu(syn_neu_list)
+        # Mapping inputs (gpu_I_list) to neurons, where -1 means no connection.
         self.gpu_neu_I_ext_map = garray.to_gpu(self.neu_I_ext_map)
         self.gpu_spk_list = garray.to_gpu(np.zeros(self.neu_num,
-                                                     dtype = np.int32))
+                                                   dtype = np.int32))
         self.gpu_I_list = garray.to_gpu(np.zeros(self.neu_num,
-                                                   dtype = np.float64))
+                                                 dtype = np.float64))
 
     def run_step(self):
         # The data from Interface will be concantenated to
@@ -568,7 +574,7 @@ def main(argv):
         device = int(sys.argv[7])
         num_inputs = int(sys.argv[8])
     except IOError:
-        print "Wrong #parameters. Exemple: 1000 1000 10000 1e-4 20 10 1 100"
+        print "Wrong #parameters. Exemple: 800 900 10000 1e-4 20 10 1 100"
 
     cuda.init()
     ctx = cuda.Device(device).make_context()
@@ -584,12 +590,14 @@ def main(argv):
 
     # External current
     I_ext = parray.to_gpu(np.ones([1 / system.dt, system.N_inputs]))
-    out = np.empty((1 / system.dt, num_gpot_proj), np.double)
+    pdb.set_trace()
+    gpot_out = np.empty((1 / system.dt, num_gpot_proj), np.double)
+    spk_out = None
 
     start.record()
     for i in range(int(1 / system.dt)):
         temp = int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i
-        system.run_step([temp], [out[i, :]])
+        system.run_step([temp], [gpot_out[i, :]], spk_out)
 
     end.record()
     end.synchronize()
