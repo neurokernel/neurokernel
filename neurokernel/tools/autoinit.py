@@ -38,7 +38,7 @@ class MultiGPUManager(object):
         if max(gpus) > N-1:
             raise ValueError('nonexistent GPU specified')
 
-        self.curr_gpu = None
+        self._curr_gpu = None
         self.dev_dict = {}
         self.ctx_dict = {}
         for gpu in gpus:
@@ -50,35 +50,44 @@ class MultiGPUManager(object):
                 ctx.pop()
                 tools.clear_context_caches()
             atexit.register(cleanup)
-        self.curr_gpu = gpu
+        self._curr_gpu = gpu
 
-    def switch(self, gpu):
+    @property
+    def curr_gpu(self):
+        """
+        Return GPU associated with currently active context.
+        """
+
+        return self._curr_gpu
+
+    def switch_gpu(self, gpu):
         """
         Switch to the context associated with the specified GPU.
         """
 
         if not self.ctx_dict.has_key(gpu):
             raise ValueError('nonexistent GPU specified')
-        
+
         if gpu != self.curr_gpu:
-            self.ctx_dict[self.curr_gpu].pop()
+            self.ctx_dict[self._curr_gpu].pop()
             self.ctx_dict[gpu].push()
-            self.curr_gpu = gpu
+            self._curr_gpu = gpu
 
 drv.init()
 global gpu_ctx_manager
 gpu_ctx_manager = MultiGPUManager()
-switch = gpu_ctx_manager.switch
+curr_gpu = gpu_ctx_manager.curr_gpu
+switch_gpu = gpu_ctx_manager.switch_gpu
 
 if __name__ == '__main__':
     import numpy as np
     man = MultiGPUManager()
     x_gpu = gpuarray.to_gpu(np.array([1, 2, 3]))
-    man.switch(0)
+    man.switch_gpu(0)
     y_gpu = gpuarray.to_gpu(np.array([4, 5, 6]))
-    man.switch(1)
+    man.switch_gpu(1)
     print x_gpu
-    man.switch(0)
+    man.switch_gpu(0)
     print y_gpu
 
     # This will cause an error:
