@@ -58,3 +58,4 @@ def set_realloc(x_gpu, data):
         
     # Update the GPU memory:
     x_gpu.set(data)
+
