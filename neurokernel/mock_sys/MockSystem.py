@@ -23,22 +23,22 @@ class MockSystem(Module):
     Neural network class. This code, by now, is provided by the user. In this
     example, this code is the lamina version implemented by Nikul and Yiyin.
     """
-    def __init__(self, N_spk, N_gpot, N_synapses,
-                 dt, N_gpot_proj, N_spk_proj, device, N_inputs):
+
+    def __init__(self, num_spk, num_gpot, num_synapses,
+                 dt, num_gpot_proj, num_spk_proj, device, num_inputs):
         """
         Synaptic connectivity between modules.
 
-        Attributes
+        Parameters
         ----------
-        manager : neurokernel.Manager
-            Synaptic connectivity.
         num_spk : int
             Number of spiking neurons.
         num_gpot : int
             Number of graded-potential neurons.
         num_synapses : int
-            Number of synapses for spiking and graded-potential neurons: Half
-            each.
+            Number of synapses for spiking and graded-potential
+            neurons; half are used for spiking neurons, and half are
+            used for graded potential neurons.
         dt : double
             Duration of each simulation's step.
         num_gpot_proj : int
@@ -54,11 +54,12 @@ class MockSystem(Module):
 
         np_rd.seed(0)
 
-        Module.__init__(self, dt, N_inputs, N_gpot_proj, N_spk_proj, device)
+        Module.__init__(self, dt, num_inputs, num_gpot_proj, num_spk_proj, device)
 
-        self.num_gpot = N_gpot
-        self.num_spk = N_spk
-        self.num_synapses = N_synapses
+        self.num_gpot = num_gpot
+        self.num_spk = num_spk
+        self.num_synapses = num_synapses
+        self.num_inputs = num_inputs
 
     def init_gpu(self):
 
@@ -107,15 +108,15 @@ class MockSystem(Module):
 
             self.gpot_neu = MorrisLecar(self.num_gpot,
                                        self.dt, self.num_dendrites, V, n,
-                                       self.N_inputs)
+                                       self.num_inputs)
             self.gpot_syn = VectorSynapse(gpot_synapses, pre_neuron,
                                           post_neuron, thres, slope, power,
                                           saturation, delay, reverse, self.dt)
         if (self.num_spk > 0):
             self.spk_net = IAFNet(self.num_spk, self.num_synapses / 2)
             self.spk_net.neu_I_ext_map = np.zeros(self.num_spk) - 1
-            self.spk_net.neu_I_ext_map[:self.N_inputs] = np.arange(
-                                                                self.N_inputs)
+            self.spk_net.neu_I_ext_map[:self.num_inputs] = np.arange(
+                                                                self.num_inputs)
             rd.shuffle(self.spk_net.neu_I_ext_map)
             self.spk_net.gpu_step_prepare()
 
@@ -134,7 +135,8 @@ class MockSystem(Module):
 #        self.gpu_I_list = garray.to_gpu(np.zeros(inputs, dtype = np.float64))
         self.spk_net.run_step()
         spk_proj = np.nonzero(self.spk_net.gpu_spk_list.get())[0]
-
+        print spk_proj
+        
 class CircularArray:
     """
     GP neurons.
@@ -320,7 +322,7 @@ class AlphaSyn:
         self.neu_coef = neu_coef
         self.taur = 1.0 / tau
         self.gmax = gmax
-        self.gvec = np.array([0., 0., 0.]) #[g(t) g'(t) g"(t)] 
+        self.gvec = np.array([0., 0., 0.]) #[g(t) g'(t) g"(t)]
         self.sign = sign # -1:inhibitory; 1:excitatory
 
     def _get_g(self):
@@ -441,7 +443,7 @@ class IAFNet:
                     max_pulse_end = pulse.end
         neu_w_curr.sort()
         self.I_ext = np.zeros((int(max_pulse_end / self.dt), len(neu_w_curr)))
-        # 
+        #
         for name, pulse_list in self.curr_list.items():
             neu_idx = self.neu_name[ name ]
             cur_idx = neu_w_curr.index(neu_idx)
@@ -465,7 +467,7 @@ class IAFNet:
         self.genCurrent(I_ext)
 
     def list_notempty(self, arr):
-        # Return dummy array if the input is empty. The empty array will 
+        # Return dummy array if the input is empty. The empty array will
         # cause exception when one tries to use driver.In()
         return arr if arr.size > 0 else np.zeros(1)
 
@@ -546,7 +548,7 @@ class IAFNet:
         cuda_gpu_run_dt(np.double(self.dt),
                          np.int32(self.neu_num), #number of neurons
                          np.int32(self.syn_num), #number of synapses
-                         self.gpu_neu_list, #array of neuron status 
+                         self.gpu_neu_list, #array of neuron status
                          self.gpu_neu_syn_list,
                          self.gpu_syn_list, #array of synapse status
                          self.gpu_syn_neu_list, #array of pre-synaptic
@@ -588,13 +590,14 @@ def main(argv):
     system.init_gpu()
 
     # External current
-    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.N_inputs]))
+    I_ext = parray.to_gpu(np.ones([1 / system.dt, system.num_inputs]))
     gpot_out = np.empty((1 / system.dt, num_gpot_proj), np.double)
     spk_out = None
 
     start.record()
     for i in range(int(1 / system.dt)):
         temp = int(I_ext.gpudata) + I_ext.dtype.itemsize * I_ext.ld * i
+        print temp
         system.run_step([temp], [gpot_out[i, :]], spk_out)
 
     end.record()
