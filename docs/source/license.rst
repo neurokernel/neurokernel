@@ -1,1 +1,1 @@
-.. -*- rst -*
+../../LICENSE.rst

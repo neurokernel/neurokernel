@@ -56,7 +56,8 @@ class Connectivity(core.BaseConnectivity):
     param_names : list of str
         List of parameter names; each matrix of parameters
         identified by `name` in an object instance `X` can be
-        accessed as `X['name']`
+        accessed as `X[name]`; if a parameter is not defined 
+        for a particular synapse, it's value is set to None.
 
     Examples
     --------
@@ -322,6 +323,10 @@ class Module(core.BaseModule):
         for out_gpot, out_spike in zip(out_gpot_list, out_spike_list):
             pass
 
+    def run_step(self, in_gpot_dict, in_spike_count_dict, in_spike_dict, 
+                 out_gpot_gpu, out_spike_count, out_spike_gpu):
+        pass
+    
     def run(self):
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
 

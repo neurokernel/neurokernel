@@ -3,7 +3,7 @@
 License
 =======
 
-Copyright (c) 2012, 
+Copyright (c) 2012-2013, 
 Daniel S. Chevitarese, Lev Givon, Nikul H. Ukani, Chung-Heng Yeh, Yiyin Zhou
 All rights reserved.
 
