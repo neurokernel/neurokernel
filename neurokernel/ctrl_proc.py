@@ -23,8 +23,8 @@ import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
-from ctx_managers import TryExceptionOnSignal
-from nk_uid import uid
+from ctx_managers import TryExceptionOnSignal, IgnoreKeyboardInterrupt
+from uid import uid
 
 # Use a finite linger time to prevent sockets from either hanging or
 # being uncleanly terminated when shutdown:
@@ -49,7 +49,7 @@ class ControlledProcess(mp.Process):
         # Signal to use when quitting:
         self.quit_sig = quit_sig
         super(ControlledProcess, self).__init__(*args, **kwargs)
-
+        
     def _ctrl_handler(self, msg):
         """
         Control port handler.
@@ -63,8 +63,8 @@ class ControlledProcess(mp.Process):
                 self.ioloop_ctrl.stop()
             except IOError:
                 self.logger.info('streams already closed')
-            except:
-                self.logger.info('other error occurred')
+            except Exception as e:
+                self.logger.info('other error occurred: '+e.message)
             self.logger.info('issuing signal %s' % self.quit_sig)
             os.kill(os.getpid(), self.quit_sig)
 
@@ -81,7 +81,7 @@ class ControlledProcess(mp.Process):
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
 
-        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
+        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop_ctrl)
         self.stream_ctrl.on_recv(self._ctrl_handler)
 
     def _init_net(self, event_thread=True):
@@ -97,16 +97,16 @@ class ControlledProcess(mp.Process):
 
         # Set up zmq context and event loop:
         self.zmq_ctx = zmq.Context()
-        self.ioloop = IOLoop.instance()
+        self.ioloop_ctrl = IOLoop.instance()
 
         # Set up event loop handlers:
         self._init_ctrl_handler()
 
         # Start event loop:
         if event_thread:
-            th.Thread(target=self.ioloop.start).start()
+            th.Thread(target=self.ioloop_ctrl.start).start()
         else:
-            self.ioloop.start()
+            self.ioloop_ctrl.start()
             
     def run(self):
         """
@@ -117,7 +117,6 @@ class ControlledProcess(mp.Process):
             self._init_net()
             while True:
                 self.logger.info('idling')
-        self.logger.info('exiting')
 
 if __name__ == '__main__':
     output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
@@ -130,8 +129,12 @@ if __name__ == '__main__':
     sock = zmq_ctx.socket(zmq.ROUTER)
     sock.bind('tcp://*:%i' % PORT_CTRL)
 
-    p = ControlledProcess(PORT_CTRL, signal.SIGUSR1)
-    p.start()
-    time.sleep(3)
-    sock.send_multipart([p.id, 'quit'])
+    # Protect both the child and parent processes from being clobbered by
+    # Ctrl-C:
+    with IgnoreKeyboardInterrupt():
+        p = ControlledProcess(PORT_CTRL, signal.SIGUSR1)
+        p.start()
+
+        time.sleep(3)
+        sock.send_multipart([p.id, 'quit'])   
 

@@ -29,7 +29,7 @@ from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 import bidict
 
-from nk_uid import uid
+from uid import uid
 from routing_table import RoutingTable
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
