@@ -13,29 +13,29 @@ modules must eventually be supported.
 
 """
 
+from contextlib import contextmanager
 import copy
+import cPickle as pickle
+import multiprocessing as mp
 import os
 import signal
 import sys
 import threading
 import time
-import multiprocessing as mp
-import cPickle as pickle
-from contextlib import contextmanager
-import twiggy
+
+import bidict
 import numpy as np
+import twiggy
 import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
-import bidict
 
-from uid import uid
-from routing_table import RoutingTable
+from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from ctrl_proc import ControlledProcess, LINGER_TIME
-
 from neurokernel.tools.comm_utils import is_poll_in
+from routing_table import RoutingTable
+from uid import uid
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
@@ -87,6 +87,9 @@ class BaseModule(ControlledProcess):
     If the ports specified upon instantiation are None, the module
     instance ignores the network entirely.
 
+    Children of the BaseModule class should also contain attributes containing
+    the connectivity objects.
+
     """
 
     # Define properties to perform validation when connectivity status
@@ -134,6 +137,10 @@ class BaseModule(ControlledProcess):
         self.in_ids = []
         self.out_ids = []
 
+        # Children of the BaseModule class should also contain a dictionary (or
+        # multiple dictionaries) of connectivity objects describing incoming
+        # connections to the module instance.
+        
     def _ctrl_handler(self, msg):
         """
         Control port handler.
@@ -151,11 +158,13 @@ class BaseModule(ControlledProcess):
                 self.logger.info('other error occurred')
             self.logger.info('issuing signal %s' % self.quit_sig)
             self.sock_ctrl.send('ack')
+            self.logger.info('sent to manager: ack')
             os.kill(os.getpid(), self.quit_sig)
-        elif msg[0] == 'conn':
-            self.logger.info('conn payload: '+str(pickle.loads(msg[1])))
-            self.sock_ctrl.send('ack')
-            self.logger.info('sent ack') 
+        # One can define additional messages to be recognized by the control handler:
+        # elif msg[0] == 'conn':
+        #     self.logger.info('conn payload: '+str(pickle.loads(msg[1])))
+        #     self.sock_ctrl.send('ack')
+        #     self.logger.info('sent ack') 
         else:
             self.sock_ctrl.send('ack')
             self.logger.info('sent ack')            
@@ -184,7 +193,8 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-
+                self.logger.info('network connection initialized')
+                
     def _sync(self):
         """
         Send output data and receive input data.
@@ -209,7 +219,7 @@ class BaseModule(ControlledProcess):
         else:
             self.logger.info('synchronizing with network')
 
-            # Send outbound data:
+            # Send all outbound data:
             if self.net in ['out', 'full']:
                 ## should check to make sure that out_data contains
                 ## entries for all IDs in self.out_ids
@@ -218,7 +228,7 @@ class BaseModule(ControlledProcess):
                     self.logger.info('sent to   %s: %s' % (out_id, str(data)))
                 self.logger.info('sent data to all output IDs')
 
-            # Receive inbound data from all source modules:
+            # Wait until inbound data is received from all source modules:
             if self.net in ['in', 'full']:
                 recv_ids = copy.copy(self.in_ids)
                 self.in_data = []
@@ -236,11 +246,6 @@ class BaseModule(ControlledProcess):
         This method should be implemented to do something interesting with its
         arguments. It should not interact with any other class attributes.
 
-        Notes
-        -----
-        Should populate `self.out_data` using the method arguments
-        and process `self.in_data`.
-
         """
 
         self.logger.info('running execution step')
@@ -257,8 +262,9 @@ class BaseModule(ControlledProcess):
             with IgnoreKeyboardInterrupt():
 
                 self._init_net()
-                np.random.seed()
                 self.running = True
+
+                np.random.seed()
                 while True:
 
                     # Run the processing step:
@@ -333,9 +339,10 @@ class Broker(ControlledProcess):
             except Exception as e:
                 self.logger.info('other error occurred: '+e.message)
             self.sock_ctrl.send('ack')
-            self.logger.info('sent ack')
-            #self.logger.info('issuing signal %s' % self.quit_sig)
-            #os.kill(os.getpid(), self.quit_sig)
+            self.logger.info('sent to  broker: ack')
+            # For some reason, the following lines cause problems:
+            # self.logger.info('issuing signal %s' % self.quit_sig)
+            # os.kill(os.getpid(), self.quit_sig)
             
     def _data_handler(self, msg):
         """
@@ -478,9 +485,9 @@ class BaseManager(object):
         self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
 
         # Data structures for storing broker, module, and connectivity instances:
-        self.broks = bidict.bidict()
-        self.mods = bidict.bidict()
-        self.conns = bidict.bidict()
+        self.brok_dict = bidict.bidict()
+        self.mod_dict = bidict.bidict()
+        self.conn_dict = bidict.bidict()
 
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
@@ -505,12 +512,12 @@ class BaseManager(object):
             raise ValueError('invalid types')
 
         # Add the module and connection instances to the internal
-        # dictionaries of instances if they are not already there:
-        if m_src not in self.mods:
+        # dictionaries of the manager instance if they are not already there:
+        if m_src.id not in self.mod_dict:
             self.add_mod(m_src)
-        if m_dest not in self.mods:
+        if m_dest.id not in self.mod_dict:
             self.add_mod(m_dest)
-        if conn not in self.conns:
+        if conn.id not in self.conn_dict:
             self.add_conn(conn)
 
         # Add the connection to the routing table:
@@ -538,14 +545,14 @@ class BaseManager(object):
         """
         Number of brokers.
         """
-        return len(self.broks)
+        return len(self.brok_dict)
 
     @property
     def N_mod(self):
         """
         Number of modules.
         """
-        return len(self.mods)
+        return len(self.mod_dict)
 
     @property
     def N_conn(self):
@@ -553,7 +560,7 @@ class BaseManager(object):
         Number of connectivity objects.
         """
 
-        return len(self.conns)
+        return len(self.conn_dict)
 
     def add_brok(self, b=None):
         """
@@ -567,7 +574,7 @@ class BaseManager(object):
         if not isinstance(b, Broker):
             b = Broker(port_data=self.port_data,
                        port_ctrl=self.port_ctrl, routing_table=self.routing_table)
-        self.broks[b.id] = b
+        self.brok_dict[b.id] = b
         self.logger.info('added broker %s' % b.id)
         return b
 
@@ -578,7 +585,7 @@ class BaseManager(object):
 
         if not isinstance(m, BaseModule):
             m = BaseModule(port_data=self.port_data, port_ctrl=self.port_ctrl)
-        self.mods[m.id] = m
+        self.mod_dict[m.id] = m
         self.logger.info('added module %s' % m.id)
         return m
 
@@ -589,7 +596,7 @@ class BaseManager(object):
 
         if not isinstance(c, BaseConnectivity):
             c = BaseConnectivity()
-        self.conns[c.id] = c
+        self.conn_dict[c.id] = c
         self.logger.info('added connectivity %s' % c.id)
         return c
 
@@ -599,9 +606,9 @@ class BaseManager(object):
         """
 
         with IgnoreKeyboardInterrupt():
-            for b in self.broks.values():
+            for b in self.brok_dict.values():
                 b.start()
-            for m in self.mods.values():
+            for m in self.mod_dict.values():
                 m.start();
 
     def send_ctrl_msg(self, i, *msg):
@@ -627,7 +634,7 @@ class BaseManager(object):
         self.logger.info('stopping all processes')
         poller = zmq.Poller()
         poller.register(self.sock_ctrl, zmq.POLLIN)
-        recv_ids = self.mods.keys()
+        recv_ids = self.mod_dict.keys()
         while recv_ids:
 
             # Send quit messages and wait for acknowledgments:
@@ -639,21 +646,16 @@ class BaseManager(object):
                  self.logger.info('recv from %s: ack' % j)
                  if j in recv_ids:
                      recv_ids.remove(j)
-                     self.mods[j].join(1)
+                     self.mod_dict[j].join(1)
         self.logger.info('all modules stopped')
 
         # After all modules have been stopped, shut down the broker:
-        for i in self.broks.keys():
+        for i in self.brok_dict.keys():
             self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
-            self.broks[i].join(1)
+            self.brok_dict[i].join(1)
         self.logger.info('all brokers stopped')
 
-    def __del__(self):
-
-        # Automatically stop all processes if the manager instance is garbage
-        # collected:
-        self.stop()
         
 def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     """
