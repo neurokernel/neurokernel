@@ -62,6 +62,7 @@ def OnKeyboardInterrupt(handler):
 
 if __name__ == '__main__':
 
+    # This example should quit when Ctrl-C is pressed:
     import time
     def handler(signum, frame):
         print 'caught'

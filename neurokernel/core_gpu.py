@@ -8,14 +8,18 @@ Core Neurokernel classes that use the GPU.
 
 import atexit
 import numpy as np
-import twiggy
+import time
+
 import pycuda.driver as drv
 import pycuda.gpuarray as gpuarray
+import twiggy
 import bidict
 
-import tools.autoinit
-from tools.autoinit import curr_gpu, switch_gpu
 import core
+from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+     ExceptionOnSignal, TryExceptionOnSignal
+#import tools.autoinit
+#from tools.autoinit import curr_gpu, switch_gpu
 
 class Connectivity(core.BaseConnectivity):
     """
@@ -198,7 +202,8 @@ class Module(core.BaseModule):
         self.in_spike_dict = {}
         self.in_spike_count_dict = {}
 
-        # Dictionaries that map
+        # Connectivity objects:
+        self.in_gpot_conn_dict = {}
         
     @property
     def out_gpot_ids(self):
@@ -229,8 +234,13 @@ class Module(core.BaseModule):
         """
 
         drv.init()
-        self.gpu_ctx = drv.Device(self.device).make_context()
-        atexit.register(ctx.pop)
+        try:
+            self.gpu_ctx = drv.Device(self.device).make_context()
+        except Exception as e:
+            self.logger.info('_init_gpu exception: ' + e.message)
+        else:
+            atexit.register(self.gpu_ctx.pop)
+            self.logger.info('GPU initialized')
 
     @property
     def N_in_gpot(self):
@@ -302,33 +312,84 @@ class Module(core.BaseModule):
 
         return self.N_out_gpot+self.N_out_spike
 
-    def _extract_out_data(self):
+    def _get_in_data(self, in_gpot_dict, in_spike_count_dict, in_spike_dict):
         """
-        Extract specified output neuron data to ship to destination modules.
+        Get input neuron data from incoming transmission buffer.
+
+        Input neuron data received from other modules is used to populate the
+        specified data structures.
+
+        Notes
+        -----
+        This currently only manipulates data from graded potential neurons.
+        
+        """
+        self.logger.info('reading input buffer')
+        
+        for entry in self.in_data:
+            in_gpot_dict[entry[0]] = entry[1]
+
+        # Clear input buffer of reading all of its contents:
+        self.in_data = []
+        
+    def _put_out_data(self, out_gpot, out_spike_count, out_spike):
+        """
+        Put specified output neuron data on outgoing transmission buffer.
+
+        Using the indices of the neurons in destination modules that receive
+        input from this instance, data is extracted from the module's neurons
+        and staged for output transmission.
+        
+        Notes
+        -----
+        This currently only manipulates data from graded potential neurons.
+        
         """
 
+        self.logger.info('populating output buffer')
+        
+        # Clear output buffer before populating it:
+        self.out_data = []
+        
         # Use indices of destination neurons to select which neuron
         # values or spikes need to be transmitted to each destination
         # module:        
-        for id in self.out_id_list:
+        for id in self.out_ids:
             try:
-                out_gpot_ind = self.out_gpot_idx_dict[id]
-                out_spike_ind = self.out_spike_idx_dict[id]
+                out_gpot_idx = self.out_gpot_idx_dict[id]
+                #out_spike_idx = self.out_spike_idx_dict[id]
             except:
                 pass
             else:
-                pass
-        if len(out_gpot_list) != len(out_spike_list):
-            raise ValueError('number of graded potential and spiking '
-                             'neuron arrays must be equivalent')
-        for out_gpot, out_spike in zip(out_gpot_list, out_spike_list):
-            pass
+                # Extract neuron data, wrap it in a tuple containing the
+                # destination module ID, and stage it for transmission:
+                self.out_data.append((id, np.asarray(out_gpot)[out_gpot_idx]))
 
     def run_step(self, in_gpot_dict, in_spike_count_dict, in_spike_dict, 
-                 out_gpot_gpu, out_spike_count, out_spike_gpu):
-        pass
+                 out_gpot, out_spike_count, out_spike):
+        """
+        Perform a single step of processing.
+
+        Parameters
+        ----------
+        in_gpot_dict : dict of array_like
+            Input graded potential neuron data; each key is a source module ID.
+        in_spike_count_dict : dict of int
+            Number of input neurons from each source module that have emitted a spike.
+        in_spike_dict : dict of array_like
+            Arrays of spiking neuron indices from each source module ID.
+        out_gpot : array_like
+            Graded potential neuron data to transmit to other modules.
+        out_spike_count : array_like
+            Number of neurons that have emitted a spike.
+        out_spike : array_like
+            Array of spiking neuron indices.
+            
+        """
+
+        self.logger.info('running execution step')
     
-    def run(self):
+    def run(self):        
         with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
 
             # Don't allow keyboard interruption of process:
@@ -338,34 +399,96 @@ class Module(core.BaseModule):
                 self._init_net()
                 self._init_gpu()
                 self.running = True
+
+                # Initialize data structures for passing data to and from the
+                # run_step method:
+                in_gpot_dict = {}
+                in_spike_count_dict = {}
+                in_spike_dict = {}
+                out_gpot = []
+                out_spike_count = [0]
+                out_spike = []                    
                 while True:
 
+                    # Get transmitted input data for processing:
+                    self._get_in_data(in_gpot_dict, in_spike_count_dict,
+                                      in_spike_dict)
+                    
                     # Run the processing step:
-                    self.run_step()
+                    self.run_step(in_gpot_dict, in_spike_count_dict,
+                                  in_spike_dict, 
+                                  out_gpot, out_spike_count, out_spike)
 
+                    # Stage generated output data for transmission to other
+                    # modules:
+                    self._put_out_data(out_gpot, out_spike_count, out_spike)
+                                        
                     # Synchronize:
                     self._sync()
 
             self.logger.info('exiting')
 
+class MyModule(Module):
+    """
+    Example module.
+    """
+    
+    def _init_gpu(self):
+        super(MyModule, self)._init_gpu()
+        self.gpot_data = np.zeros(3, np.float64)
+        self.spike_data = np.zeros(3, int)
+
+    @property 
+    def N_in_gpot(self):
+        return len(self.gpot_data)
+    
+    def run_step(self, in_gpot_dict, in_spike_count_dict,
+                 in_spike_dict, 
+                 out_gpot, out_spike_count, out_spike):
+        super(MyModule, self).run_step(in_gpot_dict, in_spike_count_dict,
+                                       in_spike_dict, 
+                                       out_gpot, out_spike_count, out_spike)
+        ## Remove this try/except eventually:
+        try:
+            out_gpot[:] = np.random.randint(0, 5, self.N_in_gpot)
+        except Exception as e:
+            self.logger.info('exception: '+e.message)
 
 class Manager(core.BaseManager):
+    """
+    Module manager.
 
-    def connect(self, m_src, m_dest, conn_spike):
+    Parameters
+    ----------
+    port_data : int
+        Port to use for communication with modules.
+    port_ctrl : int
+        Port used to control modules.
 
+    """
+
+    def connect(self, m_src, m_dest, conn):
+        """
+
+        Notes
+        -----
+        This currently only sets up connections for graded potential neurons.        
+        
+        """
+        
         # Check whether the numbers of source and destination neurons
         # supported by the connectivity object are compatible with the
         # module instances being connected:
-        if m_src.N_out != conn.N_in or m_dest.N_in != conn.N_out:
-            raise ValueError('modules and connectivity objects are incompatible')
+        # if m_src.N_out != conn.N_in or m_dest.N_in != conn.N_out:
+        #     raise ValueError('modules and connectivity objects are incompatible')
 
         # Provide an array listing to the source module that lists the
         # indices of those output neurons that project to the
         # destination module:
-        m_src.out_spike_idx_dict[m_dest.id] = conn.out_idx
+        m_src.out_gpot_idx_dict[m_dest.id] = conn.out_idx
 
         # Save the connectivity objects in the destination module:
-        m_dest.in_spike_conn_dict[m_src.id] = conn
+        m_dest.in_gpot_conn_dict[m_src.id] = conn
         
         # Switch to the appropriate context to allocate GPU arrays for
         # incoming neuron state and spike data:
@@ -378,7 +501,34 @@ class Manager(core.BaseManager):
         # m_dest.in_spike_count_dict[m_src.id] = 0
         # switch_to(last_gpu)
 
-        super(Manager, self).__init__(m_src, m_dest, conn)
+        super(Manager, self).connect(m_src, m_dest, conn)
 
 if __name__ == '__main__':
-    pass        
+    logger = core.setup_logger()
+
+    man = Manager()
+    man.add_brok()
+
+    c1to2 = Connectivity([[1, 0, 0],
+                          [0, 0, 0],
+                          [0, 0, 1]])
+    c2to3 = Connectivity([[1, 0, 1],
+                          [0, 1, 0],
+                          [0, 0, 0]])
+    c3to1 = Connectivity([[0, 0, 0],
+                          [0, 1, 0],
+                          [0, 0, 1]])
+    m1 = MyModule('unconnected', man.port_data, man.port_ctrl)
+    man.add_mod(m1)
+    m2 = MyModule('unconnected', man.port_data, man.port_ctrl)
+    man.add_mod(m2)
+    man.connect(m1, m2, c1to2)
+    m3 = MyModule('unconnected', man.port_data, man.port_ctrl)
+    man.add_mod(m3)
+    man.connect(m2, m3, c2to3)
+    man.connect(m3, m1, c3to1)
+    
+    man.start()
+    time.sleep(1)
+    man.stop()
+    logger.info('all done')
