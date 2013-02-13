@@ -22,7 +22,7 @@ class Connectivity(core.BaseConnectivity):
     Synaptic connectivity between modules.
 
     Describes the synaptic connections and associated parameters
-    between neurons the neurons in two Neurokernel modules.
+    between neurons in two Neurokernel modules.
 
     Parameters
     ----------
@@ -51,7 +51,7 @@ class Connectivity(core.BaseConnectivity):
         Connectivity matrix with connectionless columns removed.
     conn : 2D numpy.ndarray of bool
         Connectivity matrix.
-    out_ind : numpy.ndarray of int
+    out_idx : numpy.ndarray of int
         Indices of input neurons with output connections.
     param_names : list of str
         List of parameter names; each matrix of parameters
@@ -154,7 +154,7 @@ class Connectivity(core.BaseConnectivity):
         return self._conn.shape[0]
 
     @property
-    def out_ind(self):
+    def out_idx(self):
         """
         Return indices of source neurons with output connections.
         """
@@ -187,26 +187,26 @@ class Module(core.BaseModule):
         self.device = device
         super(Module, self).__init__(net, port_data, port_ctrl)
 
-        # Dictionaries that maps destination module IDs to arrays
-        # containing the IDs of the neurons in the destination module
-        # that receive input:
-        self.out_gpot_ind_dict = {}
-        self.out_spike_ind_dict = {}
+        # Dictionaries that map destination module IDs to arrays containing the
+        # IDs of the neurons in the destination module that receive input:
+        self.out_gpot_idx_dict = {}
+        self.out_spike_idx_dict = {}
 
-        # Dictionaries that map source module IDs to GPU arrays
-        # containing states of those modules' neurons that are
-        # transmitted to this module instance:
-        self.in_gpot_gpu_dict = {}
-        self.in_spike_gpu_dict = {}
+        # Dictionaries that map source module IDs to arrays containing states of
+        # those modules' neurons that are transmitted to this module instance:
+        self.in_gpot_dict = {}
+        self.in_spike_dict = {}
         self.in_spike_count_dict = {}
 
+        # Dictionaries that map
+        
     @property
     def out_gpot_ids(self):
         """
         IDs of destination modules containing graded-potential neurons.
         """
 
-        return self.out_gpot_ind_dict.keys()
+        return self.out_gpot_idx_dict.keys()
 
     @property
     def out_spike_ids(self):
@@ -214,7 +214,7 @@ class Module(core.BaseModule):
         IDs of destination modules containing spiking neurons.
         """
 
-        return self.out_spike_ind_dict.keys()
+        return self.out_spike_idx_dict.keys()
 
 
     def _init_gpu(self):
@@ -309,13 +309,14 @@ class Module(core.BaseModule):
 
         # Use indices of destination neurons to select which neuron
         # values or spikes need to be transmitted to each destination
-        # module:
+        # module:        
         for id in self.out_id_list:
             try:
-                gpot_ind = self.out_gpot_ind_dict[id]
-
-                # unfinished
+                out_gpot_ind = self.out_gpot_idx_dict[id]
+                out_spike_ind = self.out_spike_idx_dict[id]
             except:
+                pass
+            else:
                 pass
         if len(out_gpot_list) != len(out_spike_list):
             raise ValueError('number of graded potential and spiking '
@@ -350,7 +351,7 @@ class Module(core.BaseModule):
 
 class Manager(core.BaseManager):
 
-    def connect(self, m_src, m_dest, conn):
+    def connect(self, m_src, m_dest, conn_spike):
 
         # Check whether the numbers of source and destination neurons
         # supported by the connectivity object are compatible with the
@@ -361,17 +362,23 @@ class Manager(core.BaseManager):
         # Provide an array listing to the source module that lists the
         # indices of those output neurons that project to the
         # destination module:
-        m_src.out_spike_ind_dict[m_dest.id] = conn.out_ind
+        m_src.out_spike_idx_dict[m_dest.id] = conn.out_idx
 
+        # Save the connectivity objects in the destination module:
+        m_dest.in_spike_conn_dict[m_src.id] = conn
+        
         # Switch to the appropriate context to allocate GPU arrays for
         # incoming neuron state and spike data:
-        last_gpu = curr_gpu
-        switch_to(m_dest.gpu)
-        m_dest.in_gpot_gpu_dict[m_src.id] = \
-            gpuarray.zeros(m_src.N_out_gpot, np.double)
-        m_dest.in_spike_gpu_dict[m_src.id] = \
-            gpuarray.zeros(m_src.N_out_spike, np.int32)
-        m_dest.in_spike_count_dict[m_src.id] = 0
-        switch_to(last_gpu)
+        # last_gpu = curr_gpu
+        # switch_to(m_dest.gpu)
+        # m_dest.in_gpot_gpu_dict[m_src.id] = \
+        #     gpuarray.zeros(m_src.N_out_gpot, np.double)
+        # m_dest.in_spike_gpu_dict[m_src.id] = \
+        #     gpuarray.zeros(m_src.N_out_spike, np.int32)
+        # m_dest.in_spike_count_dict[m_src.id] = 0
+        # switch_to(last_gpu)
 
         super(Manager, self).__init__(m_src, m_dest, conn)
+
+if __name__ == '__main__':
+    pass        
