@@ -36,6 +36,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
 from ctrl_proc import ControlledProcess, LINGER_TIME
 
 from neurokernel.tools.comm_utils import is_poll_in
+
 PORT_DATA = 5000
 PORT_CTRL = 5001
 
@@ -128,7 +129,8 @@ class BaseModule(ControlledProcess):
         self.in_data = []
         self.out_data = []
 
-        # Lists of incoming and outgoing module IDs:
+        # Lists of incoming and outgoing module IDs; these should be populated
+        # when a module instance is connected to another instance:
         self.in_ids = []
         self.out_ids = []
 
@@ -150,7 +152,14 @@ class BaseModule(ControlledProcess):
             self.logger.info('issuing signal %s' % self.quit_sig)
             self.sock_ctrl.send('ack')
             os.kill(os.getpid(), self.quit_sig)
-
+        elif msg[0] == 'conn':
+            self.logger.info('conn payload: '+str(pickle.loads(msg[1])))
+            self.sock_ctrl.send('ack')
+            self.logger.info('sent ack') 
+        else:
+            self.sock_ctrl.send('ack')
+            self.logger.info('sent ack')            
+            
     def _init_net(self):
         """
         Initialize network connection.
@@ -179,7 +188,7 @@ class BaseModule(ControlledProcess):
     def _sync(self):
         """
         Send output data and receive input data.
-
+            
         Notes
         -----
         Assumes that the attributes used for input and output already
@@ -220,24 +229,21 @@ class BaseModule(ControlledProcess):
                     self.in_data.append((in_id, data))
                 self.logger.info('recv data from all input IDs')
 
-    def run_step(self):
+    def run_step(self, *args, **kwargs):
         """
-        This method should be implemented to do something interesting.
+        Perform a single step of computation.
+        
+        This method should be implemented to do something interesting with its
+        arguments. It should not interact with any other class attributes.
 
         Notes
         -----
-        Assumes that the attributes used for input and output already
-        exist.
+        Should populate `self.out_data` using the method arguments
+        and process `self.in_data`.
 
         """
 
         self.logger.info('running execution step')
-
-        # Create some random data:
-        if self.net in ['out', 'full']:
-            self.out_data = []
-            for i in self.out_ids:
-                self.out_data.append((i, str(np.random.rand())))
 
     def run(self):
         """
@@ -257,6 +263,13 @@ class BaseModule(ControlledProcess):
 
                     # Run the processing step:
                     self.run_step()
+
+                    # Move data created by run_step to self.out_data:
+                    # (this example populates the latter with random data):
+                    if self.net in ['out', 'full']:
+                        self.out_data = []
+                        for i in self.out_ids:
+                            self.out_data.append((i, str(np.random.rand())))
 
                     # Synchronize:
                     self._sync()
@@ -317,12 +330,13 @@ class Broker(ControlledProcess):
                 self.ioloop.stop()
             except IOError:
                 self.logger.info('streams already closed')
-            except:
-                self.logger.info('other error occurred')
+            except Exception as e:
+                self.logger.info('other error occurred: '+e.message)
             self.sock_ctrl.send('ack')
+            self.logger.info('sent ack')
             #self.logger.info('issuing signal %s' % self.quit_sig)
             #os.kill(os.getpid(), self.quit_sig)
-
+            
     def _data_handler(self, msg):
         """
         Data port handler.
@@ -590,6 +604,21 @@ class BaseManager(object):
             for m in self.mods.values():
                 m.start();
 
+    def send_ctrl_msg(self, i, *msg):
+        """
+        Send control message(s) to a module.
+        """
+
+        self.sock_ctrl.send_multipart([i]+msg)
+        self.logger.info('sent to   %s: %s' % (i, msg))
+        poller = zmq.Poller()
+        poller.register(self.sock_ctrl, zmq.POLLIN)
+        while True:
+            if is_poll_in(self.sock_ctrl, poller):
+                j, data = self.sock_ctrl.recv_multipart()
+                self.logger.info('recv from %s: ack' % j)
+                break
+                
     def stop(self):
         """
         Stop execution of all processes.
@@ -620,20 +649,61 @@ class BaseManager(object):
             self.broks[i].join(1)
         self.logger.info('all brokers stopped')
 
+    def __del__(self):
+
+        # Automatically stop all processes if the manager instance is garbage
+        # collected:
+        self.stop()
+        
+def setup_logger(file_name='neurokernel.log', screen=True, port=None):
+    """
+    Convenience function for setting up logging with twiggy.
+
+    Parameters
+    ----------
+    file_name : str
+        Log file.
+    screen : bool
+        If true, write logging output to stdout.
+    port : int
+        If set to a ZeroMQ port number, publish 
+        logging output to that port.
+        
+    Returns
+    -------
+    logger : twiggy.logger.Logger
+        Logger object.
+
+    Bug
+    ---
+    To use the ZeroMQ output class, it must be added as an emitter within each
+    process.
+    
+    """
+
+    if file_name:
+        file_output = \
+          twiggy.outputs.FileOutput(file_name, twiggy.formats.line_format, 'w')
+        twiggy.addEmitters(('file', twiggy.levels.DEBUG, None, file_output))
+
+    if screen:
+        screen_output = \
+          twiggy.outputs.StreamOutput(twiggy.formats.line_format,
+                                      stream=sys.stdout)
+        twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output))
+
+    if port:
+        port_output = ZMQOutput('tcp://*:%i' % port,
+                               twiggy.formats.line_format)
+        twiggy.addEmitters(('port', twiggy.levels.DEBUG, None, port_output))
+        
+    return twiggy.log.name(('{name:%s}' % 12).format(name='main'))
+    
 if __name__ == '__main__':
 
     # Set up logging:
-    screen_output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
-                                                stream=sys.stdout)
-    file_output = twiggy.outputs.FileOutput('exec.log',
-                                            twiggy.formats.line_format,
-                                            'w')
-    twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output),
-                       ('file', twiggy.levels.DEBUG, None, file_output))
-    # twiggy.addEmitters(
-    #                    ('file', twiggy.levels.DEBUG, None, file_output))
-    logger = twiggy.log.name(('{name:%s}' % 12).format(name='main'))
-
+    logger = setup_logger()
+    
     # Set up and start emulation:
     man = BaseManager()
     man.add_brok()
