@@ -17,15 +17,21 @@ class ZMQOutput(twiggy.outputs.Output):
     Output messages to a ZeroMQ PUB socket.
     """
     
-    def __init__(self, addr, 
+    def __init__(self, addr, mode,
                  format=None, close_atexit=True):
         self.addr = addr
+        self.mode = mode
         super(ZMQOutput, self).__init__(format, close_atexit)
         
     def _open(self):
         self.ctx = zmq.Context()
         self.sock = self.ctx.socket(zmq.PUB)
-        self.sock.bind('tcp://*:5000')
+        if self.mode == 'bind':
+            self.sock.bind(addr)
+        elif self.mode == 'connect':
+            self.sock.connect(addr)
+        else:
+            raise ValueError('invalid connection mode')
 
     def _close(self):
         self.sock.close()
