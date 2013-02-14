@@ -20,6 +20,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 #import tools.autoinit
 #from tools.autoinit import curr_gpu, switch_gpu
+from neurokernel.tools.misc_utils import rand_bin_matrix
 
 class Connectivity(core.BaseConnectivity):
     """
@@ -253,7 +254,7 @@ class Module(core.BaseModule):
 
         """
 
-        return 0
+        raise NotImplementedError('N_in_gpot must be implemented')
 
     @property
     def N_in_spike(self):
@@ -262,11 +263,11 @@ class Module(core.BaseModule):
 
         Notes
         -----
-        Should be overwritten to return the actual number of neurons.
+        Must be overwritten to return the actual number of neurons.
 
         """
 
-        return 0
+        raise NotImplementedError('N_in_spike must be implemented')
 
     @property
     def N_in(self):
@@ -284,11 +285,11 @@ class Module(core.BaseModule):
 
         Notes
         -----
-        Should be overwritten to return the actual number of neurons.
+        Must be overwritten to return the actual number of neurons.
 
         """
 
-        return 0
+        raise NotImplementedError('N_out_gpot must be implemented')
 
     @property
     def N_out_spike(self):
@@ -297,11 +298,11 @@ class Module(core.BaseModule):
 
         Notes
         -----
-        Should be overwritten to return the actual number of neurons.
+        Must be overwritten to return the actual number of neurons.
 
         """
 
-        return 0
+        raise NotImplementedError('N_out_spike must be implemented')
 
     @property
     def N_out(self):
@@ -428,32 +429,6 @@ class Module(core.BaseModule):
 
             self.logger.info('exiting')
 
-class MyModule(Module):
-    """
-    Example module.
-    """
-    
-    def _init_gpu(self):
-        super(MyModule, self)._init_gpu()
-        self.gpot_data = np.zeros(3, np.float64)
-        self.spike_data = np.zeros(3, int)
-
-    @property 
-    def N_in_gpot(self):
-        return len(self.gpot_data)
-    
-    def run_step(self, in_gpot_dict, in_spike_count_dict,
-                 in_spike_dict, 
-                 out_gpot, out_spike_count, out_spike):
-        super(MyModule, self).run_step(in_gpot_dict, in_spike_count_dict,
-                                       in_spike_dict, 
-                                       out_gpot, out_spike_count, out_spike)
-        ## Remove this try/except eventually:
-        try:
-            out_gpot[:] = np.random.randint(0, 5, self.N_in_gpot)
-        except Exception as e:
-            self.logger.info('exception: '+e.message)
-
 class Manager(core.BaseManager):
     """
     Module manager.
@@ -472,15 +447,15 @@ class Manager(core.BaseManager):
 
         Notes
         -----
-        This currently only sets up connections for graded potential neurons.        
+        This currently only sets up connections for graded potential neurons.     
         
         """
         
         # Check whether the numbers of source and destination neurons
         # supported by the connectivity object are compatible with the
         # module instances being connected:
-        # if m_src.N_out != conn.N_in or m_dest.N_in != conn.N_out:
-        #     raise ValueError('modules and connectivity objects are incompatible')
+        if m_src.N_out != conn.N_in or m_dest.N_in != conn.N_out:
+            raise ValueError('modules and connectivity objects are incompatible')
 
         # Provide an array listing to the source module that lists the
         # indices of those output neurons that project to the
@@ -503,32 +478,87 @@ class Manager(core.BaseManager):
 
         super(Manager, self).connect(m_src, m_dest, conn)
 
+class MyModule(Module):
+    """
+    Example module.
+    """
+
+    def __init__(self, N, net='unconnected', port_data=core.PORT_DATA,
+                 port_ctrl=core.PORT_CTRL, device=0):
+        super(MyModule, self).__init__(net, port_data, port_ctrl, device)
+        self.N = N
+
+        self.gpot_data = np.zeros(self.N, np.float64)
+        self.spike_data = np.zeros(self.N, int)
+        
+    @property 
+    def N_in_gpot(self):
+        return len(self.gpot_data)
+
+    @property
+    def N_in_spike(self):
+        return 0
+
+    @property 
+    def N_out_gpot(self):
+        return len(self.gpot_data)
+
+    @property
+    def N_out_spike(self):
+        return 0
+    
+    def run_step(self, in_gpot_dict, in_spike_count_dict,
+                 in_spike_dict, 
+                 out_gpot, out_spike_count, out_spike):
+        super(MyModule, self).run_step(in_gpot_dict, in_spike_count_dict,
+                                       in_spike_dict, 
+                                       out_gpot, out_spike_count, out_spike)
+        temp = np.random.randint(0, 5, self.N_in_gpot)
+        for i in in_gpot_dict.keys():
+            temp += np.random.randint(-1, 1, 1)*in_gpot_dict[i][0]            
+        out_gpot[:] = temp
+        #        out_gpot[:] = np.random.randint(0, 5, self.N_in_gpot)
+        
 if __name__ == '__main__':
     logger = core.setup_logger()
 
     man = Manager()
     man.add_brok()
 
-    c1to2 = Connectivity([[1, 0, 0],
-                          [0, 0, 0],
-                          [0, 0, 1]])
-    c2to3 = Connectivity([[1, 0, 1],
-                          [0, 1, 0],
-                          [0, 0, 0]])
-    c3to1 = Connectivity([[0, 0, 0],
-                          [0, 1, 0],
-                          [0, 0, 1]])
-    m1 = MyModule('unconnected', man.port_data, man.port_ctrl)
+    N = 5
+    m1 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
     man.add_mod(m1)
-    m2 = MyModule('unconnected', man.port_data, man.port_ctrl)
+    m2 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
     man.add_mod(m2)
-    man.connect(m1, m2, c1to2)
-    m3 = MyModule('unconnected', man.port_data, man.port_ctrl)
+    m3 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
     man.add_mod(m3)
+    m4 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
+    man.add_mod(m4)    
+
+    c1to2 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
+    c2to3 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int))
+    c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
+    c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 
+    c1to3 = Connectivity(rand_bin_matrix((N, N), N**2/2, int))    
+    # c1to2 = Connectivity([[1, 0, 0],
+    #                       [0, 0, 0],
+    #                       [0, 0, 1]])
+    # c2to3 = Connectivity([[1, 0, 1],
+    #                       [0, 1, 0],
+    #                       [0, 0, 0]])
+    # c3to1 = Connectivity([[0, 0, 0],
+    #                       [0, 1, 0],
+    #                       [0, 0, 1]])
+
+
+
+    man.connect(m1, m2, c1to2)
     man.connect(m2, m3, c2to3)
-    man.connect(m3, m1, c3to1)
+    man.connect(m1, m3, c1to3)
+    man.connect(m3, m4, c3to4)
+    man.connect(m4, m1, c4to1)
     
     man.start()
-    time.sleep(1)
+    time.sleep(3)
     man.stop()
     logger.info('all done')
