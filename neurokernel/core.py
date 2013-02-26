@@ -15,7 +15,6 @@ modules must eventually be supported.
 
 from contextlib import contextmanager
 import copy
-import cPickle as pickle
 import multiprocessing as mp
 import os
 import signal
@@ -29,6 +28,7 @@ import twiggy
 import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
+import msgpack_numpy as msgpack
 
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
@@ -162,13 +162,13 @@ class BaseModule(ControlledProcess):
             os.kill(os.getpid(), self.quit_sig)
         # One can define additional messages to be recognized by the control handler:
         # elif msg[0] == 'conn':
-        #     self.logger.info('conn payload: '+str(pickle.loads(msg[1])))
+        #     self.logger.info('conn payload: '+str(msgpack.unpackb(msg[1])))
         #     self.sock_ctrl.send('ack')
         #     self.logger.info('sent ack') 
         else:
             self.sock_ctrl.send('ack')
-            self.logger.info('sent ack')            
-            
+            self.logger.info('sent ack')
+
     def _init_net(self):
         """
         Initialize network connection.
@@ -224,7 +224,7 @@ class BaseModule(ControlledProcess):
                 ## should check to make sure that out_data contains
                 ## entries for all IDs in self.out_ids
                 for out_id, data in self.out_data:
-                    self.sock_data.send(pickle.dumps((out_id, data)))
+                    self.sock_data.send(msgpack.packb((out_id, data)))
                     self.logger.info('sent to   %s: %s' % (out_id, str(data)))
                 self.logger.info('sent data to all output IDs')
 
@@ -233,7 +233,7 @@ class BaseModule(ControlledProcess):
                 recv_ids = copy.copy(self.in_ids)
                 self.in_data = []
                 while recv_ids:
-                    in_id, data = pickle.loads(self.sock_data.recv())
+                    in_id, data = msgpack.unpackb(self.sock_data.recv())
                     self.logger.info('recv from %s: %s ' % (in_id, str(data)))
                     recv_ids.remove(in_id)
                     self.in_data.append((in_id, data))
@@ -242,7 +242,7 @@ class BaseModule(ControlledProcess):
     def run_step(self, *args, **kwargs):
         """
         Perform a single step of computation.
-        
+
         This method should be implemented to do something interesting with its
         arguments. It should not interact with any other class attributes.
 
@@ -343,7 +343,7 @@ class Broker(ControlledProcess):
             # For some reason, the following lines cause problems:
             # self.logger.info('issuing signal %s' % self.quit_sig)
             # os.kill(os.getpid(), self.quit_sig)
-            
+
     def _data_handler(self, msg):
         """
         Data port handler.
@@ -351,7 +351,7 @@ class Broker(ControlledProcess):
         Notes
         -----
         Assumes that each message contains a source module ID
-        (provided by zmq) and a pickled tuple; the tuple contains
+        (provided by zmq) and a serialized tuple; the tuple contains
         the destination module ID and the data to be transmitted.
 
         """
@@ -363,7 +363,7 @@ class Broker(ControlledProcess):
             # When a message arrives, remove its source ID from the
             # list of source modules from which data is expected:
             in_id = msg[0]
-            out_id, data = pickle.loads(msg[1])
+            out_id, data = msgpack.unpackb(msg[1])
             self.logger.info('recv from %s: %s' % (in_id, data))
             self.logger.info('recv coords list len: '+ str(len(self.recv_coords_list)))
             if (in_id, out_id) in self.recv_coords_list:
@@ -381,7 +381,7 @@ class Broker(ControlledProcess):
                     # Route to the destination ID and send the source ID
                     # along with the data:
                     self.sock_data.send_multipart([out_id,
-                                                   pickle.dumps((in_id, data))])
+                                                   msgpack.packb((in_id, data))])
 
                 # Reset the incoming data buffer and list of connection
                 # coordinates:
