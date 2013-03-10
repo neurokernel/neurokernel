@@ -4,6 +4,7 @@
 Synaptic connectivity class.
 """
 
+import collections
 import string
 
 import numpy as np
@@ -179,7 +180,97 @@ class Connectivity(object):
 
     def __setitem__(self, s, val):
         self.set(*s, val=val)
+
+class IntervalIndex(object):
+    """
+    Converts indices within intervals of a sequence to absolute indices.
+
+    Example
+    -------
+    >>> idx = IntervalIndex([0, 5, 10], ['a', 'b'])
+    >>> idx[3]
+    3
+    >>> idx[7]
+    7
+    >>> idx['b', 2]
+    7
+    >>> idx['a', 2:5]
+    slice(2, 5, None)
+    >>> idx['b', 2:5]
+    slice(7, 10, None)
+    
+    Parameters
+    ----------
+    bounds : list of int
+        Boundaries of intervals represented as a sequence. For example,
+        [0, 5, 10] represents the intervals (0, 5) and (5, 10) in the sequence
+        range(0, 10).
+    labels : list
+        Labels to associate with each of the intervals. len(labels) must be
+        one less than len(bounds).
         
+    """
+    
+    def __init__(self, bounds, labels):
+        if len(labels) != len(bounds)-1:
+            raise ValueError('incorrect number of labels')
+        self._intervals = collections.OrderedDict()
+        self._bounds = collections.OrderedDict()
+        self._full_interval = min(bounds), max(bounds)
+        for i in xrange(len(bounds)-1):
+            if bounds[i+1] <= bounds[i]:
+                raise ValueError('bounds sequence must be monotonic increasing')
+            self._intervals[labels[i]] = (0, bounds[i+1]-bounds[i])
+            self._bounds[labels[i]] = bounds[i]
+
+    def __repr__(self):
+        len_bound_min = str(max(map(lambda interval, bound: len(str(interval[0]+bound)),
+                                  self._intervals.values(),
+                                  self._bounds.values())))
+        len_bound_max = str(max(map(lambda interval, bound: len(str(interval[1]+bound)),
+                                  self._intervals.values(),
+                                  self._bounds.values())))
+        len_label = str(max(map(lambda x: len(str(x)), self._intervals.keys())))
+        result = ''
+        for label in self._intervals.keys():
+            interval = self._intervals[label]
+            bound = self._bounds[label]
+            result += ('%-'+len_label+'s: (%-'+len_bound_min+'i, %'+len_bound_max+'i)') % \
+              (str(label), interval[0]+bound, interval[1]+bound)
+            if label != self._intervals.keys()[-1]:
+                result += '\n'
+        return result
+        
+    def _validate(self, i, interval):
+        """
+        Validate an index or slice against a specified interval.
+        """
+
+        if type(i) == int:
+            if i < interval[0] or i >= interval[1]:
+                raise ValueError('invalid index')
+        elif type(i) == slice:
+            if i.start < interval[0] or i.stop > interval[1]:
+                raise ValueError('invalid slice')
+        else:
+            raise ValueError('invalid type')
+        
+    def __getitem__(self, i):
+                    
+        # If a tuple is specified, the first entry is assumed to be the interval label:
+        if type(i) == tuple:
+            label, idx = i
+            self._validate(idx, self._intervals[label])
+            if type(idx) == int:
+                return idx+self._bounds[label]
+            else:
+                return slice(idx.start+self._bounds[label],
+                             idx.stop+self._bounds[label],
+                             idx.step)
+        else:
+            self._validate(i, self._full_interval)
+            return i
+
+            
 if __name__ == '__main__':
     pass
-
