@@ -5,6 +5,7 @@ Synaptic connectivity class.
 """
 
 import collections
+import re
 import string
 
 import numpy as np
@@ -61,6 +62,22 @@ class Connectivity(object):
         
         return self.shape[1]
 
+    @property
+    def max_multapses(self):
+        """
+        Maximum number of multapses that can be stored per neuron pair.
+        """
+
+        result = 0
+        for dir in ['+', '-']:
+            count = 0
+            for key in self._keys_by_dir[dir]:
+                if re.match('.*\/%s\/conn' % re.escape(dir), key):
+                    count += 1
+            if count > result:
+                result = count
+        return result
+    
     @property
     def nbytes(self):
         """
