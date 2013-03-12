@@ -77,6 +77,23 @@ class Connectivity(object):
             if count > result:
                 result = count
         return result
+
+    @property
+    def src_connected_mask(self):
+        """
+        Mask of source neurons with connections to destination neurons.
+        """
+        
+        m_list = [self._data[k] for k in self._keys_by_dir['+']]
+        return np.any(np.sum(m_list).toarray(), axis=1)
+                      
+    @property
+    def src_connected_idx(self):
+        """
+        Indices of source neurons with connections to destination neurons.
+        """
+        
+        return np.arange(self.shape[1])[self.src_connected_mask]
     
     @property
     def nbytes(self):
@@ -165,6 +182,9 @@ class Connectivity(object):
         
         key = self._make_key(syn, dir, param)
         if not self._data.has_key(key):
+
+            # XX should ensure that inserting a new matrix for an existing param
+            # uses the same type as the existing matrices for that param XX
             self._data[key] = self._make_matrix(self.shape, type(val))
             self._keys_by_dir[dir].append(key)
         self._data[key][source, dest] = val
