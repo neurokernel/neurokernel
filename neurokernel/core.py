@@ -194,6 +194,31 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
                 self.logger.info('network connection initialized')
+
+    def _get_in_data(self):
+        """
+        Get input data from incoming transmission buffer.
+
+        Notes
+        -----
+        This method should retrieve input data transmitted to the module from
+        the input buffer to a data structure which can be used for processing.
+        """
+
+        self.logger.info('retrieving input')
+
+    def _put_out_data(self):
+        """
+        Put output data in outgoing transmission buffer.
+
+        Notes
+        -----
+        This method should put generated data that must be transmitted to other
+        modules into the output buffer.
+
+        """
+
+        self.logger.info('populating output buffer')        
                 
     def _sync(self):
         """
@@ -263,19 +288,16 @@ class BaseModule(ControlledProcess):
 
                 self._init_net()
                 self.running = True
-
-                np.random.seed()
                 while True:
+
+                    # Get input data:
+                    self._get_in_data()
 
                     # Run the processing step:
                     self.run_step()
 
-                    # Move data created by run_step to self.out_data:
-                    # (this example populates the latter with random data):
-                    if self.net in ['out', 'full']:
-                        self.out_data = []
-                        for i in self.out_ids:
-                            self.out_data.append((i, str(np.random.rand())))
+                    # Prepare the generated data for output:
+                    self._put_out_data()
 
                     # Synchronize:
                     self._sync()
@@ -625,7 +647,7 @@ class BaseManager(object):
                 j, data = self.sock_ctrl.recv_multipart()
                 self.logger.info('recv from %s: ack' % j)
                 break
-                
+
     def stop(self):
         """
         Stop execution of all processes.
@@ -656,7 +678,6 @@ class BaseManager(object):
             self.brok_dict[i].join(1)
         self.logger.info('all brokers stopped')
 
-        
 def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     """
     Convenience function for setting up logging with twiggy.
@@ -670,7 +691,7 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     port : int
         If set to a ZeroMQ port number, publish 
         logging output to that port.
-        
+
     Returns
     -------
     logger : twiggy.logger.Logger
@@ -680,7 +701,7 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     ---
     To use the ZeroMQ output class, it must be added as an emitter within each
     process.
-    
+
     """
 
     if file_name:
@@ -698,14 +719,28 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
         port_output = ZMQOutput('tcp://*:%i' % port,
                                twiggy.formats.line_format)
         twiggy.addEmitters(('port', twiggy.levels.DEBUG, None, port_output))
-        
+
     return twiggy.log.name(('{name:%s}' % 12).format(name='main'))
-    
+
 if __name__ == '__main__':
 
     # Set up logging:
     logger = setup_logger()
-    
+
+    class MyModule(BaseModule):
+        """
+        Example of derived module class.
+        """
+
+        def _put_out_data(self):
+            super(MyModule, self)._put_out_data()
+
+            if self.net in ['out', 'full']:
+                self.out_data = []
+                for i in self.out_ids:
+                    self.out_data.append((i, str(np.random.rand())))
+    np.random.seed(0)
+
     # Set up and start emulation:
     man = BaseManager()
     man.add_brok()
@@ -718,10 +753,10 @@ if __name__ == '__main__':
     # for m1, m2 in zip(m_list, [m_list[-1]]+m_list[:-1]):
     #     man.connect(m1, m2, conn)
 
-    m1 = man.add_mod()
-    m2 = man.add_mod()
-    m3 = man.add_mod()
-    m4 = man.add_mod()
+    m1 = man.add_mod(MyModule(net='full'))
+    m2 = man.add_mod(MyModule(net='full'))
+    m3 = man.add_mod(MyModule(net='full'))
+    m4 = man.add_mod(MyModule(net='full'))
 
     man.connect(m1, m2, conn)
     man.connect(m2, m1, conn)
