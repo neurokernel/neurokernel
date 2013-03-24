@@ -217,18 +217,23 @@ class Connectivity(object):
 
     def __setitem__(self, s, val):
         self.set(*s, val=val)
-
+    
 class IntervalIndex(object):
     """
-    Converts indices within intervals of a sequence to absolute indices.
+    Converts between indices within intervals of a sequence and absolute indices.
 
+    When an instance of this class is indexed by an integer without
+    specification of any label, the index is assumed to be absolute and
+    converted to a relative index. If a label is specified, the index is assumed
+    to be relative and is converted to an absolute index.
+    
     Example
     -------
     >>> idx = IntervalIndex([0, 5, 10], ['a', 'b'])
     >>> idx[3]
     3
     >>> idx[7]
-    7
+    2
     >>> idx['b', 2]
     7
     >>> idx['a', 2:5]
@@ -245,7 +250,12 @@ class IntervalIndex(object):
     labels : list
         Labels to associate with each of the intervals. len(labels) must be
         one less than len(bounds).
-        
+
+    Notes
+    -----
+    Conversion from absolute to relative indices is not efficient for sequences
+    of many intervals.
+    
     """
     
     def __init__(self, bounds, labels):
@@ -304,10 +314,17 @@ class IntervalIndex(object):
                 return slice(idx.start+self._bounds[label],
                              idx.stop+self._bounds[label],
                              idx.step)
+        elif type(i) == int:
+            for label in self._intervals.keys():
+                interval = self._intervals[label]
+                bound = self._bounds[label]
+                if i >= interval[0]+bound and i < interval[1]+bound:
+                    return i-(interval[0]+bound)
+        elif type(i) == slice:
+            raise NotImplementedError('conversion of absolute slices to relative '
+                                      'indices not yet supported')
         else:
-            self._validate(i, self._full_interval)
-            return i
-
+            raise ValueError('unrecognized type')
             
 if __name__ == '__main__':
     pass
