@@ -321,8 +321,15 @@ class IntervalIndex(object):
                 if i >= interval[0]+bound and i < interval[1]+bound:
                     return i-(interval[0]+bound)
         elif type(i) == slice:
-            raise NotImplementedError('conversion of absolute slices to relative '
-                                      'indices not yet supported')
+            for label in self._intervals.keys():
+                interval = self._intervals[label]
+                bound = self._bounds[label]
+                if i.start >= interval[0]+bound and i.stop <= interval[1]+bound:
+                    return slice(i.start-(interval[0]+bound),
+                                 i.stop-(interval[0]+bound),
+                                 i.step)            
+            raise NotImplementedError('unsupported conversion of absolute to '
+                                      'relative slices')
         else:
             raise ValueError('unrecognized type')
             
