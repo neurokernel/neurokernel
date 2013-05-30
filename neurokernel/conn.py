@@ -24,12 +24,30 @@ class Connectivity(object):
     - synapse number (when two neurons are connected by more than one neuron)
     - direction ('+' for source to destination, '-' for destination to source)
     - parameter name (the default is 'conn' for simple connectivity)
+
+    Examples
+    --------
+    The first connection between port 0 in one LPU with port 3 in some other LPU can
+    be accessed as c[0,3,0,'+'].
+
+    Notes
+    -----
+    Since connections between LPUs should necessarily not contain any recurrent
+    connections, it is more efficient to store the inter-LPU connections in two
+    separate matrices that respectively map to and from the ports in each LPU
+    rather than a large matrix whose dimensions comprise the total number of
+    ports in both LPUs.
     
     """
 
-    def __init__(self, shape):
-        self.shape = shape
+    def __init__(self, n1, n2):
 
+        # The number of ports in both of the LPUs must be nonzero:
+        assert n1 != 0
+        assert n2 != 0
+
+        self.shape = (n1, n2)
+        
         # All matrices are stored in this dict:
         self._data = {}
 
@@ -40,10 +58,10 @@ class Connectivity(object):
 
         # Create connectivity matrices for both directions:
         key = self._make_key(0, '+', 'conn')
-        self._data[key] = self._make_matrix(shape, int)
+        self._data[key] = self._make_matrix(self.shape, int)
         self._keys_by_dir['+'].append(key)        
         key = self._make_key(0, '-', 'conn')
-        self._data[key] = self._make_matrix(shape, int)
+        self._data[key] = self._make_matrix(self.shape, int)
         self._keys_by_dir['-'].append(key)
 
     @property
@@ -332,6 +350,42 @@ class IntervalIndex(object):
                                       'relative slices')
         else:
             raise ValueError('unrecognized type')
+
+class MixedConnectivity(Connectivity):
+    """
+    Inter-LPU connectivity with support for graded potential and spiking
+    neurons.
+
+    """
+    
+    def __init__(self, n1_gpot, n1_spike, n2_gpot, n2_spike):
+        self.n_gpot = [n1_gpot, n2_gpot]
+        self.n_spike = [n1_spike, n2_spike]
+        super(MixedConnectivity, self).__init__(n1_gpot+n1_spike, n2_gpot+n2_spike)
+
+        # Create index translators to enable use of separate sets of identifiers
+        # for graded potential and spiking neurons:
+        self.idx_translate = []
+        for i in xrange(2):
+            if self.n_gpot[i] == 0:
+                idx_translate = IntervalIndex([0, self.n_gpot[i]], ['spike'])
+            elif self.n_spike[i] == 0:
+                idx_translate = IntervalIndex([0, self.n_gpot[i]], ['gpot'])
+            else:
+                idx_translate = IntervalIndex([0, self.n_gpot[i], self.n_gpot[i]+self.n_spike[i]],
+                                                ['gpot', 'spike'])
+            self.idx_translate.append(idx_translate)
+
+    def __getitem__(self, s):
+
+        # If the first two elements of the tuple passed to __getitem__ are
+        # tuples such as ('spike', 3) or ('gpot', 5), translate them to absolute
+        # indices:
+        s = list(s)
+        for i in xrange(2):
+            if type(s[i]) == tuple:
+                s[i] = self.idx_translate[i][s[i]]
+        return self.get(*s)
             
 if __name__ == '__main__':
     pass
