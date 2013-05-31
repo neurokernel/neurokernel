@@ -16,13 +16,17 @@ import twiggy
 import bidict
 
 import core
+import conn
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 #import tools.autoinit
 #from tools.autoinit import curr_gpu, switch_gpu
 from neurokernel.tools.misc_utils import rand_bin_matrix
 
-class Connectivity(core.BaseConnectivity):
+# Rewrite to accept several dicts, each containing a connectivity matrix and 0 or more
+# parameter matrices; each dict should correspond to a different 
+
+class BadConnectivity(core.BaseConnectivity):
     """
     Synaptic connectivity between modules.
 
@@ -199,12 +203,18 @@ class Module(core.BaseModule):
 
         # Dictionaries that map source module IDs to arrays containing states of
         # those modules' neurons that are transmitted to this module instance:
-        self.in_gpot_dict = {}
-        self.in_spike_dict = {}
-        self.in_spike_count_dict = {}
+        self.in_gpot_idx_dict = {}
+        self.in_spike_idx_dict = {}
 
-        # Connectivity objects:
-        self.in_gpot_conn_dict = {}
+        # Objects describing input connectivity from other modules:
+        self.in_conn_dict = {}
+
+        # Interface index objects associated with the input connectivity objects:
+        self.in_int_idx_dict = {}
+
+        # Output masks describing which module neurons are connected to other
+        # neurons:
+        self.out_mask_dict = {}
         
     @property
     def out_gpot_ids(self):
@@ -313,34 +323,46 @@ class Module(core.BaseModule):
 
         return self.N_out_gpot+self.N_out_spike
 
-    def _get_in_data(self, in_gpot_dict, in_spike_count_dict, in_spike_dict):
+    def _get_in_data(self, in_gpot_dict, in_spike_dict):
         """
         Get input neuron data from incoming transmission buffer.
 
         Input neuron data received from other modules is used to populate the
         specified data structures.
 
-        Notes
-        -----
-        This currently only manipulates data from graded potential neurons.
-        
+        Parameters
+        ----------
+        in_gpot_dict : dict of numpy.array of float
+            Dictionary of graded potential neuron states from other modules.
+        in_spike_dict : dict of numpy.array of int
+            Dictionary of spiking neuron indices from other modules.
+                
         """
+        
         self.logger.info('reading input buffer')
         
         for entry in self.in_data:
             in_gpot_dict[entry[0]] = entry[1]
-
+            in_spike_dict[entry[0]] = entry[2]
+            
         # Clear input buffer of reading all of its contents:
         self.in_data = []
         
-    def _put_out_data(self, out_gpot, out_spike_count, out_spike):
+    def _put_out_data(self, out_gpot, out_spike):
         """
-        Put specified output neuron data on outgoing transmission buffer.
+        Put specified output neuron data in outgoing transmission buffer.
 
         Using the indices of the neurons in destination modules that receive
         input from this instance, data is extracted from the module's neurons
         and staged for output transmission.
-        
+
+        Parameters
+        ----------
+        out_gpot : numpy.ndarray of float
+            Output neuron states.
+        out_spike : numpy.ndarray of int
+            Indices of spiking neurons that emitted a spike.
+            
         Notes
         -----
         This currently only manipulates data from graded potential neurons.
@@ -358,33 +380,34 @@ class Module(core.BaseModule):
         for id in self.out_ids:
             try:
                 out_gpot_idx = self.out_gpot_idx_dict[id]
-                #out_spike_idx = self.out_spike_idx_dict[id]
+                out_spike_idx = self.out_spike_idx_dict[id]
             except:
                 pass
             else:
                 # Extract neuron data, wrap it in a tuple containing the
-                # destination module ID, and stage it for transmission:
-                self.out_data.append((id, np.asarray(out_gpot)[out_gpot_idx]))
+                # destination module ID, and stage it for transmission. Notice
+                # that since out_spike contains neuron indices, those indices
+                # that need to be transmitted can be obtained via a set
+                # operation:
+                self.out_data.append((id, np.asarray(out_gpot)[out_gpot_idx],
+                                      np.asarray(np.intersect1d(out_spike, out_spike_idx))))
 
-    def run_step(self, in_gpot_dict, in_spike_count_dict, in_spike_dict, 
-                 out_gpot, out_spike_count, out_spike):
+    def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
         """
         Perform a single step of processing.
 
         Parameters
         ----------
         in_gpot_dict : dict of array_like
-            Input graded potential neuron data; each key is a source module ID.
-        in_spike_count_dict : dict of int
-            Number of input neurons from each source module that have emitted a spike.
+            Arrays of input graded potential neuron data for the module to process;
+            each key is a source module ID.
         in_spike_dict : dict of array_like
-            Arrays of spiking neuron indices from each source module ID.
+            Arrays of input spiking neuron indices for the module to process;
+            each key is a source module ID.
         out_gpot : array_like
-            Graded potential neuron data to transmit to other modules.
-        out_spike_count : array_like
-            Number of neurons that have emitted a spike.
+            Array of graded potential neuron data to transmit to other modules.
         out_spike : array_like
-            Array of spiking neuron indices.
+            Array of output spiking neuron indices to transmit to other modules.
             
         """
 
@@ -404,25 +427,21 @@ class Module(core.BaseModule):
                 # Initialize data structures for passing data to and from the
                 # run_step method:
                 in_gpot_dict = {}
-                in_spike_count_dict = {}
                 in_spike_dict = {}
                 out_gpot = []
-                out_spike_count = [0]
                 out_spike = []                    
                 while True:
 
                     # Get transmitted input data for processing:
-                    self._get_in_data(in_gpot_dict, in_spike_count_dict,
-                                      in_spike_dict)
-                    
+                    self._get_in_data(in_gpot_dict, in_spike_dict)
+                                        
                     # Run the processing step:
-                    self.run_step(in_gpot_dict, in_spike_count_dict,
-                                  in_spike_dict, 
-                                  out_gpot, out_spike_count, out_spike)
+                    self.run_step(in_gpot_dict, in_spike_dict,     
+                                  out_gpot, out_spike)
 
                     # Stage generated output data for transmission to other
                     # modules:
-                    self._put_out_data(out_gpot, out_spike_count, out_spike)
+                    self._put_out_data(out_gpot, out_spike)
                                         
                     # Synchronize:
                     self._sync()
@@ -444,26 +463,38 @@ class Manager(core.BaseManager):
 
     def connect(self, m_src, m_dest, conn):
         """
+        Connect a source and destination module with a connectivity pattern.
 
+        Parameters
+        ----------
+        m_src : Module
+            Source module.
+        m_dest : Module
+            Destination module
+        conn : Connectivity
+            Connectivity object.
+        
         Notes
         -----
         This currently only sets up connections for graded potential neurons.     
         
         """
-        
+
         # Check whether the numbers of source and destination neurons
         # supported by the connectivity object are compatible with the
         # module instances being connected:
         if m_src.N_out != conn.N_in or m_dest.N_in != conn.N_out:
             raise ValueError('modules and connectivity objects are incompatible')
-
+        # XXX also need to check interval indices used to translate between
+        # absolute neuron IDs and graded potential/spiking neuron IDs
+        
         # Provide an array listing to the source module that lists the
         # indices of those output neurons that project to the
         # destination module:
-        m_src.out_gpot_idx_dict[m_dest.id] = conn.out_idx
+        m_src.out_mask_dict[m_dest.id] = conn.src_connected_mask
 
         # Save the connectivity objects in the destination module:
-        m_dest.in_gpot_conn_dict[m_src.id] = conn
+        m_dest.in_conn_dict[m_src.id] = conn
         
         # Switch to the appropriate context to allocate GPU arrays for
         # incoming neuron state and spike data:
