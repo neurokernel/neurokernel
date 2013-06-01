@@ -356,6 +356,9 @@ class MixedConnectivity(Connectivity):
     Inter-LPU connectivity with support for graded potential and spiking
     neurons.
 
+    Parameters
+    ----------
+    
     """
     
     def __init__(self, n1_gpot, n1_spike, n2_gpot, n2_spike):
@@ -376,16 +379,22 @@ class MixedConnectivity(Connectivity):
                                                 ['gpot', 'spike'])
             self.idx_translate.append(idx_translate)
 
-    def __getitem__(self, s):
+    def get(self, source_type, source, dest_type, dest, syn=0, dir='+', param='conn'):
+        """
+        Retrieve a value in the connectivity class instance.
+        """
 
-        # If the first two elements of the tuple passed to __getitem__ are
-        # tuples such as ('spike', 3) or ('gpot', 5), translate them to absolute
-        # indices:
-        s = list(s)
-        for i in xrange(2):
-            if type(s[i]) == tuple:
-                s[i] = self.idx_translate[i][s[i]]
-        return self.get(*s)
+        assert source_type in ['gpot', 'spike']
+        assert dest_type in ['gpot', 'spike']
+        s = self.idx_translate[0][source_type, source], \
+            self.idx_translate[1][dest_type, dest], \
+            syn, dir, param    
+        return super(MixedConnectivity, self).get(*s)
+
+    def __repr__(self):
+        return super(MixedConnectivity, self).__repr__()+\
+          '\nsrc idx\n'+self.idx_translate[0].__repr__()+\
+          '\n\ndest idx\n'+self.idx_translate[1].__repr__()
             
 if __name__ == '__main__':
     pass
