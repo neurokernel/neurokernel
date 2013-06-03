@@ -358,13 +358,22 @@ class MixedConnectivity(Connectivity):
 
     Parameters
     ----------
-    
+    src_gpot : int
+        Number of source graded potential neurons.
+    src_spike : int
+        Number of source spiking neurons.
+    dest_gpot : int
+        Number of destination graded potential neurons.
+    dest_spike : int
+        Number of destination spiking neurons.
+        
     """
     
-    def __init__(self, n1_gpot, n1_spike, n2_gpot, n2_spike):
-        self.n_gpot = [n1_gpot, n2_gpot]
-        self.n_spike = [n1_spike, n2_spike]
-        super(MixedConnectivity, self).__init__(n1_gpot+n1_spike, n2_gpot+n2_spike)
+    def __init__(self, src_gpot, src_spike, dest_gpot, dest_spike):
+        self.n_gpot = [src_gpot, dest_gpot]
+        self.n_spike = [src_spike, dest_spike]
+        super(MixedConnectivity, self).__init__(src_gpot+src_spike,
+                                                dest_gpot+dest_spike)
 
         # Create index translators to enable use of separate sets of identifiers
         # for graded potential and spiking neurons:
@@ -379,7 +388,8 @@ class MixedConnectivity(Connectivity):
                                                 ['gpot', 'spike'])
             self.idx_translate.append(idx_translate)
 
-    def get(self, source_type, source, dest_type, dest, syn=0, dir='+', param='conn'):
+    def get(self, source_type, source, dest_type, dest,
+            syn=0, dir='+', param='conn'):
         """
         Retrieve a value in the connectivity class instance.
         """
@@ -391,6 +401,15 @@ class MixedConnectivity(Connectivity):
             syn, dir, param    
         return super(MixedConnectivity, self).get(*s)
 
+    def set(self, source_type, source, dest_type, dest,
+            syn=0, dir='+', param='conn', val=1):
+        assert source_type in ['gpot', 'spike']
+        assert dest_type in ['gpot', 'spike']
+        s = self.idx_translate[0][source_type, source], \
+            self.idx_translate[1][dest_type, dest], \
+            syn, dir, param    
+        return super(MixedConnectivity, self).set(*s, val=val)
+    
     def __repr__(self):
         return super(MixedConnectivity, self).__repr__()+\
           '\nsrc idx\n'+self.idx_translate[0].__repr__()+\
