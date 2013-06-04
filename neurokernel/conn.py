@@ -258,7 +258,9 @@ class IntervalIndex(object):
     slice(2, 5, None)
     >>> idx['b', 2:5]
     slice(7, 10, None)
-    
+    >>> idx['b', :]
+    slice(5, 10, None)
+        
     Parameters
     ----------
     bounds : list of int
@@ -315,23 +317,35 @@ class IntervalIndex(object):
             if i < interval[0] or i >= interval[1]:
                 raise ValueError('invalid index')
         elif type(i) == slice:
-            if i.start < interval[0] or i.stop > interval[1]:
+            
+            # Slices such as :, 0:, etc. are deemed valid:
+            if (i.start < interval[0] and i.start is not None) or \
+              (i.stop > interval[1] and i.stop is not None):
                 raise ValueError('invalid slice')
         else:
             raise ValueError('invalid type')
         
     def __getitem__(self, i):
                     
-        # If a tuple is specified, the first entry is assumed to be the interval label:
+        # If a tuple is specified, the first entry is assumed to be the interval
+        # label:        
         if type(i) == tuple:
             label, idx = i
             self._validate(idx, self._intervals[label])
             if type(idx) == int:
                 return idx+self._bounds[label]
             else:
-                return slice(idx.start+self._bounds[label],
-                             idx.stop+self._bounds[label],
-                             idx.step)
+
+                # Handle cases where one of the slice bounds is None:
+                if idx.start is None:
+                    start = self._bounds[label]
+                else:
+                    start = idx.start+self._bounds[label]
+                if idx.stop is None:
+                    stop = self._bounds[label]+self._intervals[label][1]
+                else:
+                    stop = idx.stop+self._bounds[label]
+                return slice(start, stop, idx.step)                             
         elif type(i) == int:
             for label in self._intervals.keys():
                 interval = self._intervals[label]
