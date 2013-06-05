@@ -245,17 +245,18 @@ class BaseModule(ControlledProcess):
 
                 # Send all data in outbound buffer:
                 send_ids = copy.copy(self.out_ids)
-                while send_ids:
-                    for out_id, data in self.out_data:
-                        self.sock_data.send(msgpack.packb((out_id, data)))
-                        send_ids.remove(out_id)
-                        self.logger.info('sent to   %s: %s' % (out_id, str(data)))
-
+                for out_id, data in self.out_data:
+                    self.sock_data.send(msgpack.packb((out_id, data)))
+                    send_ids.remove(out_id)
+                    self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+                
                 # Send data tuples containing None to those modules for which no
                 # actual data was generated to satisfy the barrier condition:
                 for out_id in send_ids:
                     self.sock_data.send(msgpack.packb((out_id, None)))
                     self.logger.info('sent to   %s: %s' % (out_id, None))
+
+                # All output IDs should be sent data by this point:
                 self.logger.info('sent data to all output IDs')
 
             # Receive inbound data:
