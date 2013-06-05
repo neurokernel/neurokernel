@@ -33,7 +33,7 @@ import msgpack_numpy as msgpack
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from neurokernel.tools.comm_utils import is_poll_in
+from tools.comm_utils import is_poll_in
 from routing_table import RoutingTable
 from uid import uid
 
@@ -50,7 +50,7 @@ class BaseModule(ControlledProcess):
     Parameters
     ----------
     net: str
-        Network connectivity. May be `unconnected` for no connection,
+        Network connectivity. May be `none` for no connection,
         `ctrl` for incoming control data only,
         `in` for incoming data, `out` for outgoing data, or
         `full` for both incoming and outgoing data.
@@ -94,7 +94,7 @@ class BaseModule(ControlledProcess):
 
     # Define properties to perform validation when connectivity status
     # is set:
-    _net = 'unconnected'
+    _net = 'none'
     @property
     def net(self):
         """
@@ -103,12 +103,12 @@ class BaseModule(ControlledProcess):
         return self._net
     @net.setter
     def net(self, value):
-        if value not in ['unconnected', 'ctrl', 'in', 'out', 'full']:
+        if value not in ['none', 'ctrl', 'in', 'out', 'full']:
             raise ValueError('invalid network connectivity value')
         self.logger.info('net status changed: %s -> %s' % (self._net, value))
         self._net = value
 
-    def __init__(self, net='unconnected',
+    def __init__(self, net='none',
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL):
         super(BaseModule, self).__init__(port_ctrl, signal.SIGUSR1)
 
@@ -160,7 +160,8 @@ class BaseModule(ControlledProcess):
             self.sock_ctrl.send('ack')
             self.logger.info('sent to manager: ack')
             os.kill(os.getpid(), self.quit_sig)
-        # One can define additional messages to be recognized by the control handler:
+        # One can define additional messages to be recognized by the control
+        # handler:        
         # elif msg[0] == 'conn':
         #     self.logger.info('conn payload: '+str(msgpack.unpackb(msg[1])))
         #     self.sock_ctrl.send('ack')
@@ -174,7 +175,7 @@ class BaseModule(ControlledProcess):
         Initialize network connection.
         """
 
-        if self.net == 'unconnected':
+        if self.net == 'none':
             self.logger.info('not initializing network connection')
         else:
 
@@ -237,31 +238,45 @@ class BaseModule(ControlledProcess):
 
         """
 
-        if self.net in ['unconnected', 'ctrl']:
+        if self.net in ['none', 'ctrl']:
             self.logger.info('not synchronizing with network')
             if self.net == 'ctrl' and not self.running:
                 return
         else:
             self.logger.info('synchronizing with network')
 
-            # Send all outbound data:
+            # Send outbound data:
             if self.net in ['out', 'full']:
-                ## should check to make sure that out_data contains
-                ## entries for all IDs in self.out_ids
-                for out_id, data in self.out_data:
-                    self.sock_data.send(msgpack.packb((out_id, data)))
-                    self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+
+                # Send all data in outbound buffer:
+                send_ids = copy.copy(self.out_ids)
+                while send_ids:
+                    for out_id, data in self.out_data:
+                        self.sock_data.send(msgpack.packb((out_id, data)))
+                        send_ids.remove(out_id)
+                        self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+
+                # Send data tuples containing None to those modules for which no
+                # actual data was generated to satisfy the barrier condition:
+                for out_id in send_ids:
+                    self.sock_data.send(msgpack.packb((out_id, None)))
+                    self.logger.info('sent to   %s: %s' % (out_id, None))
                 self.logger.info('sent data to all output IDs')
 
-            # Wait until inbound data is received from all source modules:
+            # Receive inbound data:
             if self.net in ['in', 'full']:
+
+                # Wait until inbound data is received from all source modules:                
                 recv_ids = copy.copy(self.in_ids)
                 self.in_data = []
                 while recv_ids:
                     in_id, data = msgpack.unpackb(self.sock_data.recv())
                     self.logger.info('recv from %s: %s ' % (in_id, str(data)))
                     recv_ids.remove(in_id)
-                    self.in_data.append((in_id, data))
+
+                    # Ignore incoming data containing None:
+                    if data is not None:
+                        self.in_data.append((in_id, data))
                 self.logger.info('recv data from all input IDs')
 
     def run_step(self, *args, **kwargs):
@@ -308,6 +323,9 @@ class Broker(ControlledProcess):
     """
     Broker for communicating between modules.
 
+    Waits to receive data from all input modules before transmitting the
+    collected data to destination modules.
+   
     Parameters
     ----------
     port_data : int
@@ -469,6 +487,10 @@ class BaseConnectivity(object):
     """
     Intermodule connectivity class.
 
+    Notes
+    -----
+    This class
+    
     """
 
     def __init__(self):
@@ -514,7 +536,7 @@ class BaseManager(object):
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
 
-    def connect(self, m_src, m_dest, conn):
+    def connect(self, m_src, m_dest, conn, dir='both'):
         """
         Connect two module instances with a connectivity object instance.
 
@@ -526,10 +548,20 @@ class BaseManager(object):
            Destination module instance.
         conn : BaseConnectivity
            Connectivity object instance.
+        dir : str
+           Connectivity direction; must be 'right', 'left', or 'both'.
 
+        Notes
+        -----
+        A module's connectivity can only be increased; if it already is either
+        'in' or 'out', attempting to create a connection that would cause its
+        connectivity to become 'out' or 'in' if unconnected will cause it to be
+        set to 'full'. 
+        
         """
 
-        if not isinstance(m_src, BaseModule) or not isinstance(m_dest, BaseModule) or \
+        if not isinstance(m_src, BaseModule) or \
+            not isinstance(m_dest, BaseModule) or \
             not isinstance(conn, BaseConnectivity):
             raise ValueError('invalid types')
 
@@ -542,19 +574,37 @@ class BaseManager(object):
         if conn.id not in self.conn_dict:
             self.add_conn(conn)
 
-        # Add the connection to the routing table:
-        self.routing_table[m_src.id, m_dest.id] = 1
-
-        # Update the network connectivity of the source and
-        # destination module instances if necessary:
-        if m_src.net == 'unconnected':
-            m_src.net = 'out'
-        if m_src.net == 'in':
+        # Update the routing table and the network connectivity of the source
+        # and destination module instances:
+        if dir == 'right':
+            self.routing_table[m_src.id, m_dest.id] = 1
+            if m_src.net == 'none':
+                m_src.net = 'out'
+            elif m_src.net == 'in':
+                m_src.net = 'full'
+                
+            if m_dest.net == 'none':
+                m_dest.net = 'in'
+            elif m_dest.net == 'out':
+                m_dest.net = 'full'
+        elif dir == 'left':
+            self.routing_table[m_dest.id, m_src.id] = 1
+            if m_src.net == 'none':                
+                m_src.net = 'in'
+            elif m_src.net == 'out':
+                m_src.net = 'full'
+                
+            if m_dest.net == 'none':
+                m_dest.net = 'out'
+            elif m_dest.net == 'in':
+                m_dest.net = 'full'
+        elif dir == 'both':
+            self.routing_table[m_src.id, m_dest.id] = 1
+            self.routing_table[m_dest.id, m_src.id] = 1
             m_src.net = 'full'
-        if m_dest.net == 'unconnected':
-            m_dest.net = 'in'
-        if m_dest.net == 'out':
             m_dest.net = 'full'
+        else:
+            raise ValueError('unrecognized connectivity direction')
 
         # Update each module's lists of incoming and outgoing modules:
         m_src.in_ids = self.routing_table.row_ids(m_src.id)
@@ -727,6 +777,7 @@ if __name__ == '__main__':
     # Set up logging:
     logger = setup_logger()
 
+    # Create a custom module class:
     class MyModule(BaseModule):
         """
         Example of derived module class.
@@ -744,32 +795,22 @@ if __name__ == '__main__':
     # Set up and start emulation:
     man = BaseManager()
     man.add_brok()
-    #m1 = man.add_mod(BaseModule(net='ctrl'))
-    #m2 = man.add_mod(BaseModule(net='ctrl'))
-    #m3 = man.add_mod(BaseModule(net='ctrl'))
-    #m4 = man.add_mod(BaseModule(net='ctrl'))
-    conn = man.add_conn()
-    # m_list = [man.add_mod() for i in xrange(10)]
-    # for m1, m2 in zip(m_list, [m_list[-1]]+m_list[:-1]):
-    #     man.connect(m1, m2, conn)
 
     m1 = man.add_mod(MyModule(net='full'))
     m2 = man.add_mod(MyModule(net='full'))
     m3 = man.add_mod(MyModule(net='full'))
     m4 = man.add_mod(MyModule(net='full'))
 
+    conn = man.add_conn()
     man.connect(m1, m2, conn)
-    man.connect(m2, m1, conn)
     man.connect(m2, m3, conn)
-    man.connect(m3, m2, conn)
     man.connect(m3, m4, conn)
-    man.connect(m4, m3, conn)
     man.connect(m4, m1, conn)
     man.connect(m1, m4, conn)
     man.connect(m2, m4, conn)
     man.connect(m4, m2, conn)
 
     man.start()
-    time.sleep(1)
+    time.sleep(2)
     man.stop()
     logger.info('all done')
