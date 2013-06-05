@@ -123,9 +123,6 @@ class BaseModule(ControlledProcess):
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
 
-        # Flag indicating when the module instance is running:
-        self.running = False
-
         # Lists used for storing incoming and outgoing data; each
         # entry is a tuple whose first entry is the source or destination
         # module ID and whose second entry is the data:
@@ -240,8 +237,6 @@ class BaseModule(ControlledProcess):
 
         if self.net in ['none', 'ctrl']:
             self.logger.info('not synchronizing with network')
-            if self.net == 'ctrl' and not self.running:
-                return
         else:
             self.logger.info('synchronizing with network')
 
@@ -302,7 +297,6 @@ class BaseModule(ControlledProcess):
             with IgnoreKeyboardInterrupt():
 
                 self._init_net()
-                self.running = True
                 while True:
 
                     # Get input data:
