@@ -16,167 +16,207 @@ import twiggy
 import bidict
 
 import core
-import conn
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 #import tools.autoinit
 #from tools.autoinit import curr_gpu, switch_gpu
-from neurokernel.tools.misc_utils import rand_bin_matrix
+from tools.misc_utils import rand_bin_matrix
 
-# Rewrite to accept several dicts, each containing a connectivity matrix and 0 or more
-# parameter matrices; each dict should correspond to a different 
-
-class BadConnectivity(core.BaseConnectivity):
+class IntervalIndex(object):
     """
-    Synaptic connectivity between modules.
+    Converts between indices within intervals of a sequence and absolute indices.
 
-    Describes the synaptic connections and associated parameters
-    between neurons in two Neurokernel modules.
-
+    When an instance of this class is indexed by an integer without
+    specification of any label, the index is assumed to be absolute and
+    converted to a relative index. If a label is specified, the index is assumed
+    to be relative and is converted to an absolute index.
+    
+    Example
+    -------
+    >>> idx = IntervalIndex([0, 5, 10], ['a', 'b'])
+    >>> idx[3]
+    3
+    >>> idx[7]
+    2
+    >>> idx['b', 2]
+    7
+    >>> idx['a', 2:5]
+    slice(2, 5, None)
+    >>> idx['b', 2:5]
+    slice(7, 10, None)
+    >>> idx['b', :]
+    slice(5, 10, None)
+        
     Parameters
     ----------
-    conn : array_like
-        Synaptic connectivity. Has the following format:
-
-               in1   in2   in3   in4
-             +-----+-----+-----+-----
-        out1 |  x  |  x  |     |  x
-        out2 |  x  |     |     |
-        out3 |     |  x  |     |  x
-
-        where 'x' is a connection denoted by a nonzero value.
-    params : dict
-        Parameters associated with synapses. Each key in the
-        dictionary is a parameter name; the associated matrix contains
-        the parameter values.
-
-    Attributes
-    ----------
-    N_in : int
-        Number of supported input neurons.
-    N_out : int
-        Number of supported output neurons.
-    compressed : 2D numpy.ndarray of bool
-        Connectivity matrix with connectionless columns removed.
-    conn : 2D numpy.ndarray of bool
-        Connectivity matrix.
-    out_idx : numpy.ndarray of int
-        Indices of input neurons with output connections.
-    param_names : list of str
-        List of parameter names; each matrix of parameters
-        identified by `name` in an object instance `X` can be
-        accessed as `X[name]`; if a parameter is not defined 
-        for a particular synapse, it's value is set to None.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> conn = np.asarray([[0, 0, 1],
-                           [1, 0, 0],
-                           [0, 0, 1]])
-    >>> weights = np.random.rand(3, 3)*conn
-    >>> c = Connectivity(map, weights=weights)
-    connectivity:
-    [[0 0 1]
-     [1 0 0]
-     [0 0 1]]
-    weights:
-    [[ 0.          0.          0.05855326]
-     [ 0.80546794  0.          0.        ]
-     [ 0.          0.          0.16805278]]
+    bounds : list of int
+        Boundaries of intervals represented as a sequence. For example,
+        [0, 5, 10] represents the intervals (0, 5) and (5, 10) in the sequence
+        range(0, 10).
+    labels : list
+        Labels to associate with each of the intervals. len(labels) must be
+        one less than len(bounds).
 
     Notes
     -----
-    All parameter matrices must have the same dimensions and may
-    only specify non-zero entries for active synapses.
-
-    Dynamic modification of synapse parameters not currently supported.
-
-    See Also
-    --------
-    Module : Class connected by the Connectivity class
-    Manager : Class that manages Module and Connectivity class instances.
-
+    Conversion from absolute to relative indices is not efficient for sequences
+    of many intervals.
+    
     """
-
-    def __init__(self, conn, **params):
-        super(Connectivity, self).__init__()
-
-        if np.ndim(conn) != 2:
-            raise ValueError('connectivity matrix must be 2D')
-        self._conn = np.array(conn, dtype=bool, copy=True)
-
-        param_shapes = set([self._conn.shape]+[np.shape(p) for p in params.values()])
-        if len(param_shapes) > 1:
-            raise ValueError('all parameter matrices must have the same shape')
-
-        # Nonzero values in the various parameter matrices may not
-        # appear at coordinates that do not correspond to active synapses:
-        for p in params.values():
-            if np.any((np.asarray(self._conn, int)-np.asarray(p>0, int))<0):
-                raise ValueError('parameter may only be specified for active synapses')
-
-        # Save parameters:
-        self._params = params.copy()
-
-        # Find the input neurons that have output connections:
-        self._out_mask = np.any(self.conn, axis=0)
-
-    def __getitem__(self, p):
-        return self._params[p]
-
-    @property
-    def param_names(self):
-        """
-        Parameter names.
-        """
-        return self._params.keys()
-
-    @property
-    def conn(self):
-        """
-        Active synapses.
-        """
-
-        return self._conn
+    
+    def __init__(self, bounds, labels):
+        if len(labels) != len(bounds)-1:
+            raise ValueError('incorrect number of labels')
+        self._intervals = collections.OrderedDict()
+        self._bounds = collections.OrderedDict()
+        self._full_interval = min(bounds), max(bounds)
+        for i in xrange(len(bounds)-1):
+            if bounds[i+1] <= bounds[i]:
+                raise ValueError('bounds sequence must be monotonic increasing')
+            self._intervals[labels[i]] = (0, bounds[i+1]-bounds[i])
+            self._bounds[labels[i]] = bounds[i]
 
     def __repr__(self):
-        result =  'connectivity:\n'+str(self._conn.astype(int))
-        for k in self._params.keys():
-            result += '\n'+k+':\n'+str(self._params[k])
+        len_bound_min = str(max(map(lambda interval, bound: len(str(interval[0]+bound)),
+                                  self._intervals.values(),
+                                  self._bounds.values())))
+        len_bound_max = str(max(map(lambda interval, bound: len(str(interval[1]+bound)),
+                                  self._intervals.values(),
+                                  self._bounds.values())))
+        len_label = str(max(map(lambda x: len(str(x)), self._intervals.keys())))
+        result = ''
+        for label in self._intervals.keys():
+            interval = self._intervals[label]
+            bound = self._bounds[label]
+            result += ('%-'+len_label+'s: (%-'+len_bound_min+'i, %'+len_bound_max+'i)') % \
+              (str(label), interval[0]+bound, interval[1]+bound)
+            if label != self._intervals.keys()[-1]:
+                result += '\n'
         return result
-
-    @property
-    def N_in(self):
+        
+    def _validate(self, i, interval):
         """
-        Number of input neurons supported.
-        """
-
-        return self._conn.shape[1]
-
-    @property
-    def N_out(self):
-        """
-        Number of output neurons supported.
+        Validate an index or slice against a specified interval.
         """
 
-        return self._conn.shape[0]
+        if type(i) == int:
+            if i < interval[0] or i >= interval[1]:
+                raise ValueError('invalid index')
+        elif type(i) == slice:
+            
+            # Slices such as :, 0:, etc. are deemed valid:
+            if (i.start < interval[0] and i.start is not None) or \
+              (i.stop > interval[1] and i.stop is not None):
+                raise ValueError('invalid slice')
+        else:
+            raise ValueError('invalid type')
+        
+    def __getitem__(self, i):
+                    
+        # If a tuple is specified, the first entry is assumed to be the interval
+        # label:        
+        if type(i) == tuple:
+            label, idx = i
+            self._validate(idx, self._intervals[label])
+            if type(idx) == int:
+                return idx+self._bounds[label]
+            else:
 
-    @property
-    def out_idx(self):
+                # Handle cases where one of the slice bounds is None:
+                if idx.start is None:
+                    start = self._bounds[label]
+                else:
+                    start = idx.start+self._bounds[label]
+                if idx.stop is None:
+                    stop = self._bounds[label]+self._intervals[label][1]
+                else:
+                    stop = idx.stop+self._bounds[label]
+                return slice(start, stop, idx.step)                             
+        elif type(i) == int:
+            for label in self._intervals.keys():
+                interval = self._intervals[label]
+                bound = self._bounds[label]
+                if i >= interval[0]+bound and i < interval[1]+bound:
+                    return i-(interval[0]+bound)
+        elif type(i) == slice:
+            for label in self._intervals.keys():
+                interval = self._intervals[label]
+                bound = self._bounds[label]
+                if i.start >= interval[0]+bound and i.stop <= interval[1]+bound:
+                    return slice(i.start-(interval[0]+bound),
+                                 i.stop-(interval[0]+bound),
+                                 i.step)            
+            raise NotImplementedError('unsupported conversion of absolute to '
+                                      'relative slices')
+        else:
+            raise ValueError('unrecognized type')
+
+class Connectivity(core.BaseConnectivity):
+    """
+    Inter-LPU connectivity with support for graded potential and spiking
+    neurons.
+
+    Parameters
+    ----------
+    src_gpot : int
+        Number of source graded potential neurons.
+    src_spike : int
+        Number of source spiking neurons.
+    dest_gpot : int
+        Number of destination graded potential neurons.
+    dest_spike : int
+        Number of destination spiking neurons.
+        
+    """
+    
+    def __init__(self, src_gpot, src_spike, dest_gpot, dest_spike):
+        self.n_gpot = [src_gpot, dest_gpot]
+        self.n_spike = [src_spike, dest_spike]
+        super(MixedConnectivity, self).__init__(src_gpot+src_spike,
+                                                dest_gpot+dest_spike)
+
+        # Create index translators to enable use of separate sets of identifiers
+        # for graded potential and spiking neurons:
+        self.idx_translate = []
+        for i in xrange(2):
+            if self.n_gpot[i] == 0:
+                idx_translate = IntervalIndex([0, self.n_gpot[i]], ['spike'])
+            elif self.n_spike[i] == 0:
+                idx_translate = IntervalIndex([0, self.n_gpot[i]], ['gpot'])
+            else:
+                idx_translate = IntervalIndex([0, self.n_gpot[i], self.n_gpot[i]+self.n_spike[i]],
+                                                ['gpot', 'spike'])
+            self.idx_translate.append(idx_translate)
+
+    def get(self, source_type, source, dest_type, dest,
+            syn=0, dir='+', param='conn'):
         """
-        Return indices of source neurons with output connections.
+        Retrieve a value in the connectivity class instance.
         """
 
-        return np.arange(self._conn.shape[1])[self._out_mask]
+        assert source_type in ['gpot', 'spike']
+        assert dest_type in ['gpot', 'spike']
+        s = self.idx_translate[0][source_type, source], \
+            self.idx_translate[1][dest_type, dest], \
+            syn, dir, param    
+        return super(MixedConnectivity, self).get(*s)
 
-    @property
-    def compressed(self):
-        """
-        Return connectivity matrix with connectionless columns discarded.
-        """
+    def set(self, source_type, source, dest_type, dest,
+            syn=0, dir='+', param='conn', val=1):
+        assert source_type in ['gpot', 'spike']
+        assert dest_type in ['gpot', 'spike']
+        s = self.idx_translate[0][source_type, source], \
+            self.idx_translate[1][dest_type, dest], \
+            syn, dir, param    
+        return super(MixedConnectivity, self).set(*s, val=val)
+    
+    def __repr__(self):
+        return super(MixedConnectivity, self).__repr__()+\
+          '\nsrc idx\n'+self.idx_translate[0].__repr__()+\
+          '\n\ndest idx\n'+self.idx_translate[1].__repr__()
 
-        return np.compress(self._out_mask, self._conn, axis=1)
+# Rewrite to accept several dicts, each containing a connectivity matrix and 0
+# or more parameter matrices; each dict should correspond to a different
 
 class Module(core.BaseModule):
     """
@@ -208,9 +248,6 @@ class Module(core.BaseModule):
 
         # Objects describing input connectivity from other modules:
         self.in_conn_dict = {}
-
-        # Interface index objects associated with the input connectivity objects:
-        self.in_int_idx_dict = {}
 
         # Output masks describing which module neurons are connected to other
         # neurons:
@@ -353,8 +390,8 @@ class Module(core.BaseModule):
         Put specified output neuron data in outgoing transmission buffer.
 
         Using the indices of the neurons in destination modules that receive
-        input from this instance, data is extracted from the module's neurons
-        and staged for output transmission.
+        input from this instance, data extracted from the module's neurons
+        is staged for output transmission.
 
         Parameters
         ----------
@@ -363,10 +400,6 @@ class Module(core.BaseModule):
         out_spike : numpy.ndarray of int
             Indices of spiking neurons that emitted a spike.
             
-        Notes
-        -----
-        This currently only manipulates data from graded potential neurons.
-        
         """
 
         self.logger.info('populating output buffer')
@@ -408,7 +441,13 @@ class Module(core.BaseModule):
             Array of graded potential neuron data to transmit to other modules.
         out_spike : array_like
             Array of output spiking neuron indices to transmit to other modules.
-            
+
+        Notes
+        -----
+        The index of each array of graded potential neuron data is assumed to
+        correspond to the neuron's ID; the arrays of spiking neuron data contain
+        the indices of those neurons that have emitted a spike.
+        
         """
 
         self.logger.info('running execution step')
@@ -509,68 +548,73 @@ class Manager(core.BaseManager):
 
         super(Manager, self).connect(m_src, m_dest, conn)
 
-class MyModule(Module):
-    """
-    Example module.
-    """
-
-    def __init__(self, N, net='unconnected', port_data=core.PORT_DATA,
-                 port_ctrl=core.PORT_CTRL, device=0):
-        super(MyModule, self).__init__(net, port_data, port_ctrl, device)
-        self.N = N
-
-        self.gpot_data = np.zeros(self.N, np.float64)
-        self.spike_data = np.zeros(self.N, int)
-        
-    @property 
-    def N_in_gpot(self):
-        return len(self.gpot_data)
-
-    @property
-    def N_in_spike(self):
-        return 0
-
-    @property 
-    def N_out_gpot(self):
-        return len(self.gpot_data)
-
-    @property
-    def N_out_spike(self):
-        return 0
-    
-    def run_step(self, in_gpot_dict, in_spike_count_dict,
-                 in_spike_dict, 
-                 out_gpot, out_spike_count, out_spike):
-        super(MyModule, self).run_step(in_gpot_dict, in_spike_count_dict,
-                                       in_spike_dict, 
-                                       out_gpot, out_spike_count, out_spike)
-        temp = np.random.randint(0, 5, self.N_in_gpot)
-        for i in in_gpot_dict.keys():
-            temp += np.random.randint(-1, 1, 1)*in_gpot_dict[i][0]            
-        out_gpot[:] = temp
-        #        out_gpot[:] = np.random.randint(0, 5, self.N_in_gpot)
-        
 if __name__ == '__main__':
+
+    class MyModule(Module):
+        """
+        Example of derived module class.
+        """
+
+        def __init__(self, N_gpot, N_spike, net='unconnected',
+                     port_data=core.PORT_DATA,
+                     port_ctrl=core.PORT_CTRL, device=0):
+            super(MyModule, self).__init__(net, port_data, port_ctrl, device)
+            self.gpot_data = np.zeros(N_gpot, np.float64)
+            self.spike_data = np.zeros(N_spike, int)
+
+        @property 
+        def N_in_gpot(self):
+            return len(self.gpot_data)
+
+        @property
+        def N_in_spike(self):
+            return len(self.spike_data)
+
+        @property 
+        def N_out_gpot(self):
+            return len(self.gpot_data)
+
+        @property
+        def N_out_spike(self):
+            return len(self.spike_data)
+
+        def run_step(self, in_gpot_dict, in_spike_dict,                  
+                     out_gpot, out_spike):
+            super(MyModule, self).run_step(in_gpot_dict, in_spike_dict, 
+                                           out_gpot, out_spike)
+
+            # Perform some random transformations of the graded potential neuron
+            # data:        
+            temp = np.random.randint(0, 5, self.N_in_gpot)
+            for i in in_gpot_dict.keys():
+                temp += np.random.randint(-1, 1, 1)*in_gpot_dict[i][0]            
+            out_gpot[:] = temp
+
+            # Randomly select neurons to emit spikes:
+            out_spike[:] = \
+                sorted(set(np.random.randint(0, self.N_in_spike,
+                                             np.random.randint(0, self.N_in_spike))))
+
     logger = core.setup_logger()
 
     man = Manager()
     man.add_brok()
 
-    N = 5
-    m1 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
-    man.add_mod(m1)
-    m2 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
-    man.add_mod(m2)
-    m3 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
-    man.add_mod(m3)
-    m4 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
-    man.add_mod(m4)    
+    N_gpot = N_spike = 5
+    m1 = man.add_mod(MyModule(N_gpot, N_spike, 'unconnected',
+                              man.port_data, man.port_ctrl))
+    m2 = man.add_mod(MyModule(N_gpot, N_spike, 'unconnected',
+                              man.port_data, man.port_ctrl))
+    # m3 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
+    # man.add_mod(m3)
+    # m4 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
+    # man.add_mod(m4)    
 
     c1to2 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
     c2to3 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int))
-    c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
-    c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 
-    c1to3 = Connectivity(rand_bin_matrix((N, N), N**2/2, int))    
+    # c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
+    # c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 
+    # c1to3 = Connectivity(rand_bin_matrix((N, N), N**2/2, int))    
     # c1to2 = Connectivity([[1, 0, 0],
     #                       [0, 0, 0],
     #                       [0, 0, 1]])
@@ -583,11 +627,11 @@ if __name__ == '__main__':
 
 
 
-    man.connect(m1, m2, c1to2)
-    man.connect(m2, m3, c2to3)
-    man.connect(m1, m3, c1to3)
-    man.connect(m3, m4, c3to4)
-    man.connect(m4, m1, c4to1)
+    # man.connect(m1, m2, c1to2)
+    # man.connect(m2, m3, c2to3)
+    # man.connect(m1, m3, c1to3)
+    # man.connect(m3, m4, c3to4)
+    # man.connect(m4, m1, c4to1)
     
     man.start()
     time.sleep(3)
