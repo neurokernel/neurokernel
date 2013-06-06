@@ -10,6 +10,7 @@ import copy
 import multiprocessing as mp
 import os
 import signal
+import string
 import sys
 import threading
 import time
@@ -862,13 +863,13 @@ class BaseManager(object):
         self.logger.info('added module %s' % m.id)
         return m
 
-    def add_conn(self, c=None):
+    def add_conn(self, c):
         """
         Add or create a connectivity instance to the emulation.
         """
 
         if not isinstance(c, BaseConnectivity):
-            c = BaseConnectivity()
+            raise ValueError('invalid connectivity object')
         self.conn_dict[c.id] = c
         self.logger.info('added connectivity %s' % c.id)
         return c
@@ -1002,7 +1003,8 @@ if __name__ == '__main__':
     m3 = man.add_mod(MyModule(net='full'))
     m4 = man.add_mod(MyModule(net='full'))
 
-    conn = man.add_conn()
+    conn = BaseConnectivity(3, 3)
+    man.add_conn(conn)
     man.connect(m1, m2, conn)
     man.connect(m2, m3, conn)
     man.connect(m3, m4, conn)
