@@ -33,6 +33,18 @@ LINGER_TIME = 2
 class ControlledProcess(mp.Process):
     """
     Process subclass with control port.
+
+    Parameters
+    ----------
+    port_ctrl : int
+        Port for receiving control messages.
+    quit_sig : int
+        OS signal to use when quitting the proess.
+        
+    See Also
+    --------
+    multiprocessing.Process
+    
     """
 
     def __init__(self, port_ctrl, quit_sig, *args, **kwargs):
