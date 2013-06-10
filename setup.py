@@ -65,6 +65,7 @@ if __name__ == "__main__":
             'bidict',
             'la',
             'msgpack_numpy',
+            'networkx',
             'numpy',
             'pycuda >= 2012.1',
             'pyzmq',
