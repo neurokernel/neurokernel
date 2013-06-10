@@ -257,7 +257,7 @@ class BaseModule(ControlledProcess):
             # Receive inbound data:
             if self.net in ['in', 'full']:
 
-                # Wait until inbound data is received from all source modules:                
+                # Wait until inbound data is received from all source modules:  
                 recv_ids = copy.copy(self.in_ids)
                 self.in_data = []
                 while recv_ids:
@@ -486,6 +486,15 @@ class BaseConnectivity(object):
     - direction ('+' for source to destination, '-' for destination to source)
     - parameter name (the default is 'conn' for simple connectivity)
 
+    Parameters
+    ----------
+    N_src : int
+        Number of source neurons.
+    N_dest: int
+        Number of destination neurons.
+    N_mult: int
+        Maximum supported number of synapses between any two neurons.
+        
     Examples
     --------
     The first connection between port 0 in one LPU with port 3 in some other LPU can
@@ -501,16 +510,22 @@ class BaseConnectivity(object):
     
     """
 
-    def __init__(self, n1, n2):
+    def __init__(self, N_src, N_dest, N_mult=1):
 
         # Unique object ID:
         self.id = uid()
 
         # The number of ports in both of the LPUs must be nonzero:
-        assert n1 != 0
-        assert n2 != 0
+        assert N_src != 0
+        assert N_dest != 0
 
-        self.shape = (n1, n2)
+        # The maximum number of synapses between any two neurons must be
+        # nonzero:
+        assert N_mult != 0
+
+        self.N_src = N_src
+        self.N_dest = N_dest
+        self.N_mult = N_mult
         
         # All matrices are stored in this dict:
         self._data = {}
@@ -529,37 +544,9 @@ class BaseConnectivity(object):
         self._keys_by_dir['-'].append(key)
 
     @property
-    def N_src(self):
-        """
-        Number of source ports.
-        """
-        
-        return self.shape[0]
-
-    @property
-    def N_dest(self):
-        """
-        Number of destination ports.
-        """
-        
-        return self.shape[1]
-
-    @property
-    def max_multapses(self):
-        """
-        Maximum number of multapses that can be stored per neuron pair.
-        """
-
-        result = 0
-        for dir in ['+', '-']:
-            count = 0
-            for key in self._keys_by_dir[dir]:
-                if re.match('.*\/%s\/conn' % re.escape(dir), key):
-                    count += 1
-            if count > result:
-                result = count
-        return result
-
+    def shape(self):
+        return self.N_src, self.N_dest
+            
     @property
     def src_connected_mask(self):
         """
@@ -669,6 +656,11 @@ class BaseConnectivity(object):
             # uses the same type as the existing matrices for that param XX
             self._data[key] = self._make_matrix(self.shape, type(val))
             self._keys_by_dir[dir].append(key)
+
+            # Increment the maximum number of synapses between two neurons as needed:
+            if syn+1 > self.N_mult:
+                self.N_mult += 1
+                
         self._data[key][source, dest] = val
 
     def flip(self):
