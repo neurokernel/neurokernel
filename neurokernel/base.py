@@ -477,14 +477,18 @@ class BaseConnectivity(object):
     Intermodule connectivity.
 
     Stores the connectivity between two LPUs as a series of sparse matrices.
-    Every connection in an instance of the class has the following indices:
+    Every entry in an instance of the class has the following indices:
 
     - source port ID
     - destination port ID
     - synapse number (when two neurons are connected by more than one neuron)
     - direction ('+' for source to destination, '-' for destination to source)
     - parameter name (the default is 'conn' for simple connectivity)
-
+ 
+    Each connection may therefore have several parameters; parameters associated
+    with nonexistent connections (i.e., those whose 'conn' parameter is set to
+    0) should be ignored.
+    
     Parameters
     ----------
     N_src : int
@@ -497,8 +501,9 @@ class BaseConnectivity(object):
     Examples
     --------
     The first connection between port 0 in one LPU with port 3 in some other LPU can
-    be accessed as c[0,3,0,'+'].
-
+    be accessed as c[0,3,0,'+']. The 'weight' parameter associated with this
+    connection can be accessed as c[0,3,0,'+','weight']
+    
     Notes
     -----
     Since connections between LPUs should necessarily not contain any recurrent
