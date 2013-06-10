@@ -17,8 +17,6 @@ import bidict
 import base
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-#import tools.autoinit
-#from tools.autoinit import curr_gpu, switch_gpu
 from tools.misc import rand_bin_matrix
 
 class IntervalIndex(object):
@@ -157,35 +155,50 @@ class Connectivity(base.BaseConnectivity):
 
     Parameters
     ----------
-    src_gpot : int
+    N_src_gpot : int
         Number of source graded potential neurons.
-    src_spike : int
+    N_src_spike : int
         Number of source spiking neurons.
-    dest_gpot : int
+    N_dest_gpot : int
         Number of destination graded potential neurons.
-    dest_spike : int
+    N_dest_spike : int
         Number of destination spiking neurons.
         
     """
     
-    def __init__(self, src_gpot, src_spike, dest_gpot, dest_spike):
-        self.n_gpot = [src_gpot, dest_gpot]
-        self.n_spike = [src_spike, dest_spike]
-        super(Connectivity, self).__init__(src_gpot+src_spike,
-                                                dest_gpot+dest_spike)
+    def __init__(self, N_src_gpot, N_src_spike, N_dest_gpot, N_dest_spike):
+        self.N_src_gpot = N_src_gpot
+        self.N_src_spike = N_src_spike
+        self.N_dest_gpot = N_dest_gpot
+        self.N_dest_spike = N_dest_spike
+        super(Connectivity, self).__init__(N_src_gpot+N_src_spike,
+                                           N_dest_gpot+N_dest_spike)
 
         # Create index translators to enable use of separate sets of identifiers
         # for graded potential and spiking neurons:
-        self.idx_translate = []
-        for i in xrange(2):
-            if self.n_gpot[i] == 0:
-                idx_translate = IntervalIndex([0, self.n_gpot[i]], ['spike'])
-            elif self.n_spike[i] == 0:
-                idx_translate = IntervalIndex([0, self.n_gpot[i]], ['gpot'])
-            else:
-                idx_translate = IntervalIndex([0, self.n_gpot[i], self.n_gpot[i]+self.n_spike[i]],
-                                                ['gpot', 'spike'])
-            self.idx_translate.append(idx_translate)
+        self.idx_translate = {}
+        if self.N_src_gpot == 0:
+            self.idx_translate['src'] = \
+                IntervalIndex([0, self.N_src_spike], ['spike'])
+        elif self.N_src_spike == 0:
+            self.idx_translate['src'] = \
+                IntervalIndex([0, self.N_src_gpot], ['gpot'])
+        else:
+            self.idx_translate['src'] = \
+                IntervalIndex([0, self.N_src_gpot,
+                               self.N_src_gpot+self.N_src_spike],
+                              ['gpot', 'spike'])
+        if self.N_dest_gpot == 0:
+            self.idx_translate['dest'] = \
+                IntervalIndex([0, self.N_dest_spike], ['spike'])
+        elif self.N_dest_spike == 0:
+            self.idx_translate['dest'] = \
+                IntervalIndex([0, self.N_dest_gpot], ['gpot'])
+        else:
+            self.idx_translate['dest'] = \
+                IntervalIndex([0, self.N_dest_gpot,
+                               self.N_dest_gpot+self.N_dest_spike],
+                              ['gpot', 'spike'])
 
     def get(self, source_type, source, dest_type, dest,
             syn=0, dir='+', param='conn'):
@@ -204,18 +217,15 @@ class Connectivity(base.BaseConnectivity):
             syn=0, dir='+', param='conn', val=1):
         assert source_type in ['gpot', 'spike']
         assert dest_type in ['gpot', 'spike']
-        s = self.idx_translate[0][source_type, source], \
-            self.idx_translate[1][dest_type, dest], \
+        s = self.idx_translate['src'][source_type, source], \
+            self.idx_translate['dest'][dest_type, dest], \
             syn, dir, param    
         return super(Connectivity, self).set(*s, val=val)
     
     def __repr__(self):
         return super(Connectivity, self).__repr__()+\
-          '\nsrc idx\n'+self.idx_translate[0].__repr__()+\
-          '\n\ndest idx\n'+self.idx_translate[1].__repr__()
-
-# Rewrite to accept several dicts, each containing a connectivity matrix and 0
-# or more parameter matrices; each dict should correspond to a different
+          '\nsrc idx\n'+self.idx_translate['src'].__repr__()+\
+          '\n\ndest idx\n'+self.idx_translate['dest'].__repr__()
 
 class Module(base.BaseModule):
     """
@@ -226,7 +236,10 @@ class Module(base.BaseModule):
 
     Notes
     -----
-    When a module instance is connected to another module instance,
+    A module instance connected to other module instances contains a list of the
+    connectivity objects that describe incoming connects and a list of
+    masks that select for the neurons whose data must be transmitted to
+    destination modules.    
 
     """
 
@@ -235,39 +248,30 @@ class Module(base.BaseModule):
         self.device = device
         super(Module, self).__init__(net, port_data, port_ctrl)
 
-        # Dictionaries that map destination module IDs to arrays containing the
-        # IDs of the neurons in the destination module that receive input:
-        self.out_gpot_idx_dict = {}
-        self.out_spike_idx_dict = {}
-
-        # Dictionaries that map source module IDs to arrays containing states of
-        # those modules' neurons that are transmitted to this module instance:
-        self.in_gpot_idx_dict = {}
-        self.in_spike_idx_dict = {}
-
-        # Objects describing input connectivity from other modules:
+        # Objects describing input connectivity from other modules keyed by
+        # source object ID:
         self.in_conn_dict = {}
 
-        # Output masks describing which module neurons are connected to other
-        # neurons:
-        self.out_mask_dict = {}
-        
-    @property
-    def out_gpot_ids(self):
-        """
-        IDs of destination modules containing graded-potential neurons.
-        """
-
-        return self.out_gpot_idx_dict.keys()
+        # Output indices describing which module neurons are connected to other
+        # neurons keyed by destination object ID; each index is a dict
+        # arrays for graded potential and spiking neurons:        
+        self.out_idx_dict = {}
 
     @property
-    def out_spike_ids(self):
+    def in_ids(self):
         """
-        IDs of destination modules containing spiking neurons.
+        IDs of source modules.
         """
 
-        return self.out_spike_idx_dict.keys()
+        return self.in_conn_dict.keys()
+    
+    @property
+    def out_ids(self):
+        """
+        IDs of destination modules.
+        """
 
+        return self.out_idx_dict.keys()
 
     def _init_gpu(self):
         """
@@ -409,24 +413,17 @@ class Module(base.BaseModule):
         # Use indices of destination neurons to select which neuron
         # values or spikes need to be transmitted to each destination
         # module:
-        for id in self.out_gpot_idx_dict.keys():
-            pass
-        # XXX unfinished
-        
-        for id in self.out_ids:
-            try:
-                out_gpot_idx = self.out_gpot_idx_dict[id]
-                out_spike_idx = self.out_spike_idx_dict[id]
-            except:
-                pass
-            else:
-                # Extract neuron data, wrap it in a tuple containing the
-                # destination module ID, and stage it for transmission. Notice
-                # that since out_spike contains neuron indices, those indices
-                # that need to be transmitted can be obtained via a set
-                # operation:
-                self.out_data.append((id, np.asarray(out_gpot)[out_gpot_idx],
-                                      np.asarray(np.intersect1d(out_spike, out_spike_idx))))
+        for id in self.out_idx_dict.keys():
+            out_idx_gpot = self.out_idx_dict[id]['gpot']
+            out_idx_spike = self.out_idx_dict[id]['spike']
+
+            # Extract neuron data, wrap it in a tuple containing the
+            # destination module ID, and stage it for transmission. Notice
+            # that since out_spike contains neuron indices, those indices
+            # that need to be transmitted can be obtained via a set
+            # operation:            
+            self.out_data_append((id, np.asarray(out_gpot)[out_idx_gpot],
+                np.asarray(np.intersect1d(out_spike, out_spike_idx))))
 
     def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
         """
@@ -515,11 +512,7 @@ class Manager(base.BaseManager):
             Destination module
         conn : Connectivity
             Connectivity object.
-        
-        Notes
-        -----
-        This currently only sets up connections for graded potential neurons.     
-        
+
         """
 
         # Check whether the numbers of source and destination neurons
@@ -527,6 +520,12 @@ class Manager(base.BaseManager):
         # module instances being connected:
         if m_src.N_out != conn.N_in or m_dest.N_in != conn.N_out:
             raise ValueError('modules and connectivity objects are incompatible')
+
+        # Check whether the numbers of source and destination graded potential
+        # neurons and spiking neurons supported by the connectivity object
+        # are compatible
+        
+        
         # XXX also need to check interval indices used to translate between
         # absolute neuron IDs and graded potential/spiking neuron IDs
 
@@ -538,17 +537,6 @@ class Manager(base.BaseManager):
         # Save the connectivity objects in the destination module:
         m_dest.in_conn_dict[m_src.id] = conn
         
-        # Switch to the appropriate context to allocate GPU arrays for
-        # incoming neuron state and spike data:
-        # last_gpu = curr_gpu
-        # switch_to(m_dest.gpu)
-        # m_dest.in_gpot_gpu_dict[m_src.id] = \
-        #     gpuarray.zeros(m_src.N_out_gpot, np.double)
-        # m_dest.in_spike_gpu_dict[m_src.id] = \
-        #     gpuarray.zeros(m_src.N_out_spike, np.int32)
-        # m_dest.in_spike_count_dict[m_src.id] = 0
-        # switch_to(last_gpu)
-
         super(Manager, self).connect(m_src, m_dest, conn)
 
 if __name__ == '__main__':
@@ -603,18 +591,22 @@ if __name__ == '__main__':
     man = Manager()
     man.add_brok()
 
-    N_gpot = N_spike = 5
-    m1 = man.add_mod(MyModule(N_gpot, N_spike, 'unconnected',
+    N1_gpot = N2_spike = 2
+    N2_gpot = N2_spike = 4
+    m1 = man.add_mod(MyModule(N1_gpot, N1_spike, 'unconnected',
                               man.port_data, man.port_ctrl))
-    m2 = man.add_mod(MyModule(N_gpot, N_spike, 'unconnected',
+    m2 = man.add_mod(MyModule(N2_gpot, N2_spike, 'unconnected',
                               man.port_data, man.port_ctrl))
     # m3 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
     # man.add_mod(m3)
     # m4 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
     # man.add_mod(m4)    
 
-    c1to2 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
-    c2to3 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int))
+    c1to2 = Connectivity(N1_gpot, N1_spike, N2_gpot, N2_spike)
+    c1to2[:,:,0,'+'] = \
+        rand_bin_matrix((N1_gpot+N1_spike, N2_gpot+N2_spike),
+                        (N1_gpot+N1_spike)*(N2_gpot+N2_spike)/2, int)
+    
     # c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
     # c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 
     # c1to3 = Connectivity(rand_bin_matrix((N, N), N**2/2, int))    
