@@ -19,7 +19,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 #import tools.autoinit
 #from tools.autoinit import curr_gpu, switch_gpu
-from tools.misc_utils import rand_bin_matrix
+from tools.misc import rand_bin_matrix
 
 class IntervalIndex(object):
     """

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy as np
 
 def rand_bin_matrix(sh, N, dtype=np.double):
