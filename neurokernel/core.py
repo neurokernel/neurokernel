@@ -532,7 +532,7 @@ class Manager(base.BaseManager):
         # Provide an array listing to the source module that lists the
         # indices of those output neurons that project to the
         # destination module:
-        m_src.out_mask_dict[m_dest.id] = conn.src_connected_mask
+        m_src.out_idx_dict[m_dest.id] = conn.src_connected_idx
 
         # Save the connectivity objects in the destination module:
         m_dest.in_conn_dict[m_src.id] = conn
@@ -591,11 +591,11 @@ if __name__ == '__main__':
     man = Manager()
     man.add_brok()
 
-    N1_gpot = N2_spike = 2
+    N1_gpot = N1_spike = 2
     N2_gpot = N2_spike = 4
-    m1 = man.add_mod(MyModule(N1_gpot, N1_spike, 'unconnected',
+    m1 = man.add_mod(MyModule(N1_gpot, N1_spike, 'none',
                               man.port_data, man.port_ctrl))
-    m2 = man.add_mod(MyModule(N2_gpot, N2_spike, 'unconnected',
+    m2 = man.add_mod(MyModule(N2_gpot, N2_spike, 'none',
                               man.port_data, man.port_ctrl))
     # m3 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
     # man.add_mod(m3)
@@ -622,13 +622,13 @@ if __name__ == '__main__':
 
 
 
-    # man.connect(m1, m2, c1to2)
+    man.connect(m1, m2, c1to2)
     # man.connect(m2, m3, c2to3)
     # man.connect(m1, m3, c1to3)
     # man.connect(m3, m4, c3to4)
     # man.connect(m4, m1, c4to1)
     
     man.start()
-    time.sleep(3)
+    time.sleep(2)
     man.stop()
     logger.info('all done')
