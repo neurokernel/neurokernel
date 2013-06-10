@@ -4,7 +4,7 @@ import itertools
 import os
 import tempfile
 
-import conn
+import core
 import matplotlib.pyplot as plt
 import networkx as nx
 
@@ -51,6 +51,9 @@ def conn_to_bipartite(c):
     Convert a Connectivity object into a bipartite NetworkX multigraph.
     """
 
+    if not isinstance(c, core.BaseConnectivity):
+        raise ValueError('invalid connectivity object')
+    
     g = nx.MultiDiGraph()
     src_nodes = ['src_%i' % i for i in xrange(c.N_src)]
     dest_nodes = ['dest_%i' % i for i in xrange(c.N_dest)]
