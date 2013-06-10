@@ -5,17 +5,13 @@ Authors & Acknowledgements
 
 This software was written by 
 
-* Daniel S. Chevitarese
 * Lev Givon
-* Nikul H. Ukani
-* Chung-Heng Yeh
-* Yiyin Zhou
 
-under the supervision of Prof. Aurel A. Lazar [2]_. As of 2013, Lev Givon,
-Nikul H. Ukani, Chung-Heng Yeh, and Yiyin Zhou are Ph.D. candidates at the 
-Bionet Group [1]_ at Columbia University's Electrical Engineering 
-Department; Daniel S. Chevitarese is a Ph.D. candidate at
-Pontifical Catholic University in Rio de Janeiro (PUC-Rio).
+under the supervision of Prof. Aurel A. Lazar [1]_. As of 2013, Lev Givon [2]_ is a
+Ph.D. candidates at the Bionet Group [3]_ at Columbia University's Electrical
+Engineering Department.
 
-.. [1] http://bionet.ee.columbia.edu/
-.. [2] http://www.ee.columbia.edu/~aurel/
+.. [1] http://www.ee.columbia.edu/~aurel/
+.. [2] http://www.columbia.edu/~lev/
+.. [3] http://www.bionet.ee.columbia.edu/
+
