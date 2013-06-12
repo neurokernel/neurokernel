@@ -55,6 +55,9 @@ class BaseModule(ControlledProcess):
 
     Attributes
     ----------
+    conn_dict dict of BaseConnectivity
+       Connectivity objects connecting the module instance with
+       other module instances.
     in_ids : list of int
        List of source module IDs.
     out_ids : list of int
@@ -152,7 +155,9 @@ class BaseModule(ControlledProcess):
             object.
         
         """
-        
+
+        if not isinstance(conn, BaseConnectivity):
+            raise ValueError('invalid connectivity object')
         self.conn_dict[conn_type][id] = conn
         
     def _ctrl_handler(self, msg):
@@ -575,21 +580,24 @@ class BaseConnectivity(object):
         return self.N_src, self.N_dest
             
     @property
-    def src_connected_mask(self):
+    def src_mask(self):
         """
         Mask of source neurons with connections to destination neurons.
         """
-        
+
+        # XXX Performing a sum over the results of this list comprehension
+        # might not be necessary if multapses are assumed to always have an
+        # entry in the first connectivity matrix:
         m_list = [self._data[k] for k in self._keys_by_dir['+']]
         return np.any(np.sum(m_list).toarray(), axis=1)
                       
     @property
-    def src_connected_idx(self):
+    def src_idx(self):
         """
         Indices of source neurons with connections to destination neurons.
         """
         
-        return np.arange(self.shape[1])[self.src_connected_mask]
+        return np.arange(self.shape[1])[self.src_mask]
     
     @property
     def nbytes(self):
