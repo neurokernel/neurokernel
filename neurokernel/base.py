@@ -115,30 +115,45 @@ class BaseModule(ControlledProcess):
         self._in_data = []
         self._out_data = []
 
-        # Lists of incoming and outgoing module IDs; these should be populated
-        # when a module instance is connected to another instance:
-        self._in_ids = []
-        self._out_ids = []
-
-        # Children of the BaseModule class should also contain a dictionary
-        # of connectivity objects describing incoming
-        # connections to the module instance and a dictionary of index or mask
-        # arrays describing which neurons' outputs must be propagated to the
-        # module's destination modules.
-
+        # Objects describing connectivity between this module and other modules
+        # keyed by source object ID:
+        self.conn_dict = {}
+        self.conn_dict['in'] = {}
+        self.conn_dict['out'] = {}
+        
     @property
     def in_ids(self):
-        return self._in_ids
-    @in_ids.setter
-    def in_ids(self, data):
-        self._in_ids = data
+        """
+        IDs of source modules.
+        """
+
+        return self.conn_dict['in'].keys()
 
     @property
     def out_ids(self):
-        return self._out_ids
-    @out_ids.setter
-    def out_ids(self, data):
-        self._out_ids = data
+        """
+        IDs of destination modules.
+        """
+
+        return self.conn_dict['out'].keys()
+
+    def add_conn(self, conn, conn_type, id):
+        """
+        Add the specified connectivity object.
+
+        Parameters
+        ----------
+        conn : BaseConnectivity
+            Connectivity object.
+        conn_type : {'in', 'out'}
+            Connectivity type. 
+        id :
+            ID of module instance that is being connected via the specified
+            object.
+        
+        """
+        
+        self.conn_dict[conn_type][id] = conn
         
     def _ctrl_handler(self, msg):
         """
@@ -246,7 +261,7 @@ class BaseModule(ControlledProcess):
             if self.net in ['out', 'full']:
 
                 # Send all data in outbound buffer:
-                send_ids = copy.copy(self.out_ids)
+                send_ids = self.out_ids
                 for out_id, data in self._out_data:
                     self.sock_data.send(msgpack.packb((out_id, data)))
                     send_ids.remove(out_id)
@@ -265,7 +280,7 @@ class BaseModule(ControlledProcess):
             if self.net in ['in', 'full']:
 
                 # Wait until inbound data is received from all source modules:  
-                recv_ids = copy.copy(self.in_ids)
+                recv_ids = self.in_ids
                 self._in_data = []
                 while recv_ids:
                     in_id, data = msgpack.unpackb(self.sock_data.recv())
@@ -742,7 +757,7 @@ class BaseManager(object):
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
 
-    def connect(self, m_src, m_dest, conn, dir='both'):
+    def connect(self, m_src, m_dest, conn, dir='='):
         """
         Connect two module instances with a connectivity object instance.
 
@@ -754,9 +769,11 @@ class BaseManager(object):
            Destination module instance.
         conn : BaseConnectivity
            Connectivity object instance.
-        dir : str
-           Connectivity direction; must be 'right', 'left', or 'both'.
-
+        dir : {'+','-','='}
+           Connectivity direction; '+' denotes a connection from `m_src` to
+           `m_dest`; '-' denotes a connection from `m_dest` to `m_src`; '='
+           denotes connections in both directions.
+        
         Notes
         -----
         A module's connectivity can only be increased; if it already is either
@@ -782,8 +799,9 @@ class BaseManager(object):
 
         # Update the routing table and the network connectivity of the source
         # and destination module instances:
-        if dir == 'right':
+        if dir == '+':
             self.routing_table[m_src.id, m_dest.id] = 1
+            
             if m_src.net == 'none':
                 m_src.net = 'out'
             elif m_src.net == 'in':
@@ -793,8 +811,12 @@ class BaseManager(object):
                 m_dest.net = 'in'
             elif m_dest.net == 'out':
                 m_dest.net = 'full'
-        elif dir == 'left':
+
+            m_src.add_conn(conn, 'out', m_dest.id)
+            m_dest.add_conn(conn, 'in', m_src.id)            
+        elif dir == '-':
             self.routing_table[m_dest.id, m_src.id] = 1
+            
             if m_src.net == 'none':                
                 m_src.net = 'in'
             elif m_src.net == 'out':
@@ -804,19 +826,21 @@ class BaseManager(object):
                 m_dest.net = 'out'
             elif m_dest.net == 'in':
                 m_dest.net = 'full'
-        elif dir == 'both':
+
+            m_src.add_conn(conn, 'in', m_dest.id)
+            m_dest.add_conn(conn, 'out', m_src.id)            
+        elif dir == '=':
             self.routing_table[m_src.id, m_dest.id] = 1
             self.routing_table[m_dest.id, m_src.id] = 1
             m_src.net = 'full'
             m_dest.net = 'full'
+
+            m_src.add_conn(conn, 'out', m_dest.id)
+            m_dest.add_conn(conn, 'in', m_src.id)            
+            m_src.add_conn(conn, 'in', m_dest.id)
+            m_dest.add_conn(conn, 'out', m_src.id)                        
         else:
             raise ValueError('unrecognized connectivity direction')
-
-        # Update each module's lists of incoming and outgoing modules:
-        m_src.in_ids = self.routing_table.row_ids(m_src.id)
-        m_src.out_ids = self.routing_table.col_ids(m_src.id)
-        m_dest.in_ids = self.routing_table.row_ids(m_dest.id)
-        m_dest.out_ids = self.routing_table.col_ids(m_dest.id)
 
     @property
     def N_brok(self):
@@ -1010,7 +1034,8 @@ if __name__ == '__main__':
     conn = BaseConnectivity(3, 3)
     man.add_conn(conn)
     man.connect(m1, m2, conn)
-    man.connect(m2, m3, conn)
+    man.connect(m2, m1, conn)
+    man.connect(m4, m3, conn)
     man.connect(m3, m4, conn)
     man.connect(m4, m1, conn)
     man.connect(m1, m4, conn)
@@ -1018,6 +1043,6 @@ if __name__ == '__main__':
     man.connect(m4, m2, conn)
 
     man.start()
-    time.sleep(2)
+    time.sleep(4)
     man.stop()
     logger.info('all done')
