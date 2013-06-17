@@ -698,12 +698,14 @@ class BaseConnectivity(object):
                 
         self._data[key][source, dest] = val
 
-    def flip(self):
+    def transpose(self):
         """
         Returns an object instance with the source and destination LPUs flipped.
         """
 
-        c = Connectivity(self.shape[::-1])
+        c = BaseConnectivity(self.N_dest, self.N_dest)
+        c._keys_by_dir['+'] = []
+        c._keys_by_dir['-'] = []
         for old_key in self._data.keys():
 
             # Reverse the direction in the key:
@@ -717,10 +719,14 @@ class BaseConnectivity(object):
                 raise ValueError('invalid direction in key')    
             key_split[1] = new_dir
             new_key = '/'.join(key_split)
-            c._data[new_key] = self._data[old_key].T
+            c._data[new_key] = self._data[old_key].T           
             c._keys_by_dir[new_dir].append(new_key)
         return c
-        
+
+    @property
+    def T(self):
+        return self.transpose()
+    
     def __getitem__(self, s):        
         return self.get(*s)
 
@@ -1034,23 +1040,23 @@ if __name__ == '__main__':
     man = BaseManager()
     man.add_brok()
 
-    m1 = man.add_mod(MyModule(net='full'))
-    m2 = man.add_mod(MyModule(net='full'))
-    m3 = man.add_mod(MyModule(net='full'))
-    m4 = man.add_mod(MyModule(net='full'))
+    m1 = man.add_mod(MyModule(net='out'))
+    m2 = man.add_mod(MyModule(net='in'))
+    # m3 = man.add_mod(MyModule(net='full'))
+    # m4 = man.add_mod(MyModule(net='full'))
 
     conn = BaseConnectivity(3, 3)
     man.add_conn(conn)
     man.connect(m1, m2, conn)
-    man.connect(m2, m1, conn)
-    man.connect(m4, m3, conn)
-    man.connect(m3, m4, conn)
-    man.connect(m4, m1, conn)
-    man.connect(m1, m4, conn)
-    man.connect(m2, m4, conn)
-    man.connect(m4, m2, conn)
+    # man.connect(m2, m1, conn)
+    # man.connect(m4, m3, conn)
+    # man.connect(m3, m4, conn)
+    # man.connect(m4, m1, conn)
+    # man.connect(m1, m4, conn)
+    # man.connect(m2, m4, conn)
+    # man.connect(m4, m2, conn)
 
     man.start()
-    time.sleep(4)
+    time.sleep(1)
     man.stop()
     logger.info('all done')
