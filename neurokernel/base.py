@@ -525,7 +525,13 @@ class BaseConnectivity(object):
         Number of destination neurons.
     N_mult: int
         Maximum supported number of synapses between any two neurons.
-        
+
+    Methods
+    -------
+    transpose()
+        Returns a BaseConnectivity instance with the source and destination
+        flipped.
+    
     Examples
     --------
     The first connection between port 0 in one LPU with port 3 in some other LPU can
@@ -827,7 +833,7 @@ class BaseManager(object):
                 m_dest.net = 'full'
 
             m_src.add_conn(conn, 'out', m_dest.id)
-            m_dest.add_conn(conn, 'in', m_src.id)            
+            m_dest.add_conn(conn.T, 'in', m_src.id)            
         elif dir == '-':
             self.routing_table[m_dest.id, m_src.id] = 1
             
@@ -842,7 +848,7 @@ class BaseManager(object):
                 m_dest.net = 'full'
 
             m_src.add_conn(conn, 'in', m_dest.id)
-            m_dest.add_conn(conn, 'out', m_src.id)            
+            m_dest.add_conn(conn.T, 'out', m_src.id)            
         elif dir == '=':
             self.routing_table[m_src.id, m_dest.id] = 1
             self.routing_table[m_dest.id, m_src.id] = 1
@@ -850,9 +856,9 @@ class BaseManager(object):
             m_dest.net = 'full'
 
             m_src.add_conn(conn, 'out', m_dest.id)
-            m_dest.add_conn(conn, 'in', m_src.id)            
+            m_dest.add_conn(conn.T, 'in', m_src.id)            
             m_src.add_conn(conn, 'in', m_dest.id)
-            m_dest.add_conn(conn, 'out', m_src.id)                        
+            m_dest.add_conn(conn.T, 'out', m_src.id)                        
         else:
             raise ValueError('unrecognized connectivity direction')
 
