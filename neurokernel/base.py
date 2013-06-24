@@ -119,28 +119,36 @@ class BaseModule(ControlledProcess):
         self._out_data = []
 
         # Objects describing connectivity between this module and other modules
-        # keyed by source object ID:
-        self.conn_dict = {}
-        self.conn_dict['in'] = {}
-        self.conn_dict['out'] = {}
+        # keyed by the IDs of the other modules:
+        self._conn_dict = {}
         
+    @property
+    def all_ids(self):
+        """
+        IDs of modules to which the current module is connected.
+        """
+
+        return [c.other_mod(self.id) for c in self._conn_dict.values()]
+
     @property
     def in_ids(self):
         """
-        IDs of source modules.
+        IDs of modules that send data to this module.
         """
 
-        return self.conn_dict['in'].keys()
-
+        return [c.other_mod(self.id) for c in self._conn_dict.values() if \
+                c.is_connected(c.other_mod(self.id), self.id)]
+    
     @property
     def out_ids(self):
         """
-        IDs of destination modules.
+        IDs of modules that receive data from this module.
         """
+        
+        return [c.other_mod(self.id) for c in self._conn_dict.values() if \
+                c.is_connected(self.id, c.other_mod(self.id))]
 
-        return self.conn_dict['out'].keys()
-
-    def add_conn(self, conn, conn_type, id):
+    def add_conn(self, conn):
         """
         Add the specified connectivity object.
 
@@ -148,17 +156,19 @@ class BaseModule(ControlledProcess):
         ----------
         conn : BaseConnectivity
             Connectivity object.
-        conn_type : {'in', 'out'}
-            Connectivity type. 
-        id :
-            ID of module instance that is being connected via the specified
-            object.
-        
+
+        Notes
+        -----
+        The module's ID must be one of the two IDs specified in the
+        connnectivity object.
+         
         """
 
         if not isinstance(conn, BaseConnectivity):
             raise ValueError('invalid connectivity object')
-        self.conn_dict[conn_type][id] = conn
+        if self.id not in [conn.A_id, conn.B_id]:
+            raise ValueError('connectivity object must contain module ID')
+        self._conn_dict[conn_type][id] = conn
         
     def _ctrl_handler(self, msg):
         """
@@ -508,8 +518,8 @@ class BaseConnectivity(object):
     Every entry in an instance of the class has the following indices:
 
     - source module ID (must be defined upon class instantiation)
-    - destination module ID (must be defined upon class instantiation)
     - source port ID
+    - destination module ID (must be defined upon class instantiation)
     - destination port ID
     - connection number (when two ports are connected by more than one connection)
     - parameter name (the default is 'conn' for simple connectivity)
@@ -534,6 +544,11 @@ class BaseConnectivity(object):
 
     Methods
     -------
+    N(id)
+        Number of ports associated with the specified module.
+    connected_to(id)
+        Returns the ID of the module to which the object connects the specified
+        module.
     transpose()
         Returns a BaseConnectivity instance with the source and destination
         flipped.
@@ -604,6 +619,14 @@ class BaseConnectivity(object):
         self._data[key] = self._make_matrix((self.N_B, self.N_A), int)
         self._keys_by_dir[self._BtoA].append(key)
 
+    def _validate_mod_names(self, A_id, B_id):
+        """
+        Raise an exception if the specified module names are not recognized.
+        """
+        
+        if set((A_id, B_id)) != set((self.A_id, self.B_id)):
+            raise ValueError('invalid module ID')
+        
     def N(self, id):
         """
         Return number of ports associated with the specified module.
@@ -615,15 +638,32 @@ class BaseConnectivity(object):
             return self.N_B
         else:
             raise ValueError('invalid module ID')
-        
-    def _validate_mod_names(self, A_id, B_id):
+
+    def other_mod(self, id):
         """
-        Raise an exception if the specified module names are not recognized.
+        Given the specified module ID, return the ID to which the object
+        connects it.
         """
-        
-        if set((A_id, B_id)) != set((self.A_id, self.B_id)):
+
+        if id == self.A_id:
+            return self.B_id
+        elif id == self.B_id:
+            return self.A_id
+        else:
             raise ValueError('invalid module ID')
-        
+
+    def is_connected(self, src_id, dest_id):
+        """
+        Returns true if there is at least one connection from
+        the specified source module to the specified destination module.
+        """
+
+        self._validate_mod_names(src_id, dest_id)
+        for k in self._keys_by_dir['/'.join((src_id, dest_id))]:
+            if self._data[k].nnz:
+                return True
+        return False
+    
     def src_mask(self, src_id='', dest_id=''):
         """
         Mask of source neurons with connections to destination neurons.
