@@ -447,13 +447,14 @@ class Module(base.BaseModule):
         """
         
         self.logger.info('reading input buffer')
+        self.logger.info('input buffer: '+str(self._in_data))
         
-        for entry in self.in_data:
+        for entry in self._in_data:
             in_gpot_dict[entry[0]] = entry[1]
             in_spike_dict[entry[0]] = entry[2]
             
         # Clear input buffer of reading all of its contents:
-        self.in_data = []
+        self._in_data = []
         
     def _put_out_data(self, out_gpot, out_spike):
         """
@@ -473,9 +474,9 @@ class Module(base.BaseModule):
         """
 
         self.logger.info('populating output buffer')
-        
+
         # Clear output buffer before populating it:
-        self.out_data = []
+        self._out_data = []
         
         # Use indices of destination neurons to select which neuron
         # values or spikes need to be transmitted to each destination
@@ -483,15 +484,19 @@ class Module(base.BaseModule):
         for id in self.out_ids:
             out_idx_gpot = self.conn_dict['out'][id].src_idx_gpot
             out_idx_spike = self.conn_dict['out'][id].src_idx_spike
-
+            self.logger.info('out_idx_gpot '+str(out_idx_gpot))
+            self.logger.info('out_gpot '+str(out_gpot))            
+            self.logger.info('out_idx_spike '+str(out_idx_spike))
+            self.logger.info('out_spike '+str(out_spike))
             # Extract neuron data, wrap it in a tuple containing the
             # destination module ID, and stage it for transmission. Notice
             # that since out_spike contains neuron indices, those indices
             # that need to be transmitted can be obtained via a set
-            # operation:            
-            self.out_data_append((id, np.asarray(out_gpot)[out_idx_gpot],
-                np.asarray(np.intersect1d(out_spike, out_spike_idx))))
-
+            # operation:
+            self._out_data.append((id, np.asarray(out_gpot)[out_idx_gpot],
+                np.asarray(np.intersect1d(out_spike, out_idx_spike))))
+        self.logger.info('output buffer: '+str(self._out_data))
+        
     def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
         """
         Perform a single step of processing.
@@ -606,7 +611,7 @@ if __name__ == '__main__':
 
         def __init__(self, N_gpot, N_spike, net='unconnected',
                      port_data=base.PORT_DATA,
-                     port_ctrl=base.PORT_CTRL, device=0):
+                     port_ctrl=base.PORT_CTRL, device=None):
             super(MyModule, self).__init__(net, port_data, port_ctrl, device)
             self.gpot_data = np.zeros(N_gpot, np.float64)
             self.spike_data = np.zeros(N_spike, int)
@@ -643,7 +648,7 @@ if __name__ == '__main__':
             out_spike[:] = \
                 sorted(set(np.random.randint(0, self.N_in_spike,
                                              np.random.randint(0, self.N_in_spike))))
-
+            
     logger = base.setup_logger()
 
     man = Manager()
@@ -661,9 +666,12 @@ if __name__ == '__main__':
     # man.add_mod(m4)    
 
     c1to2 = Connectivity(N1_gpot, N1_spike, N2_gpot, N2_spike)
-    c1to2['all',:,'all',:,0,'+'] = \
-        rand_bin_matrix((N1_gpot+N1_spike, N2_gpot+N2_spike),
-                        (N1_gpot+N1_spike)*(N2_gpot+N2_spike)/2, int)
+    # c1to2['all',:,'all',:,0,'+'] = \
+    #     rand_bin_matrix((N1_gpot+N1_spike, N2_gpot+N2_spike),
+    #                     (N1_gpot+N1_spike)*(N2_gpot+N2_spike)/2, int)
+    c1to2['all',:,'all',:,0,'+'] = np.ones((N1_gpot+N1_spike,
+                                            N2_gpot+N2_spike), int)
+    print c1to2
     
     # c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
     # c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 

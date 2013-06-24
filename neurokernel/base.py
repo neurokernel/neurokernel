@@ -507,10 +507,11 @@ class BaseConnectivity(object):
     Stores the connectivity between two LPUs as a series of sparse matrices.
     Every entry in an instance of the class has the following indices:
 
+    - source module ID (must be defined upon class instantiation)
+    - destination module ID (must be defined upon class instantiation)
     - source port ID
     - destination port ID
-    - synapse number (when two neurons are connected by more than one neuron)
-    - direction ('+' for source to destination, '-' for destination to source)
+    - connection number (when two ports are connected by more than one connection)
     - parameter name (the default is 'conn' for simple connectivity)
  
     Each connection may therefore have several parameters; parameters associated
@@ -519,12 +520,17 @@ class BaseConnectivity(object):
     
     Parameters
     ----------
-    N_src : int
-        Number of source neurons.
-    N_dest: int
-        Number of destination neurons.
+    N_A : int
+        Number of ports to interface with on module A.
+    N_B: int
+        Number of ports to interface with on module B.
     N_mult: int
-        Maximum supported number of synapses between any two neurons.
+        Maximum supported number of connections between any two neurons
+        (default 1). Can be raised after instantiation.
+    A_id : str
+        First module ID (default 'A').
+    B_id : str
+        Second module ID (default 'B').
 
     Methods
     -------
@@ -534,9 +540,9 @@ class BaseConnectivity(object):
     
     Examples
     --------
-    The first connection between port 0 in one LPU with port 3 in some other LPU can
-    be accessed as c[0,3,0,'+']. The 'weight' parameter associated with this
-    connection can be accessed as c[0,3,0,'+','weight']
+    The first connection between port 0 in LPU A with port 3 in LPU B can
+    be accessed as c['A',0,'B',3,0]. The 'weight' parameter associated with this
+    connection can be accessed as c['A',0,'B',3,0,'weight']
     
     Notes
     -----
@@ -544,66 +550,109 @@ class BaseConnectivity(object):
     connections, it is more efficient to store the inter-LPU connections in two
     separate matrices that respectively map to and from the ports in each LPU
     rather than a large matrix whose dimensions comprise the total number of
-    ports in both LPUs.
+    ports in both LPUs. Matrices that describe connections between A and B
+    have dimensions (N_A, N_B), while matrices that describe connections between
+    B and A have dimensions (N_B, N_A).
     
     """
 
-    def __init__(self, N_src, N_dest, N_mult=1):
+    def __init__(self, N_A, N_B, N_mult=1, A_id='A', B_id='B'):
 
         # Unique object ID:
         self.id = uid()
 
         # The number of ports in both of the LPUs must be nonzero:
-        assert N_src != 0
-        assert N_dest != 0
+        assert N_A != 0
+        assert N_B != 0
 
         # The maximum number of synapses between any two neurons must be
         # nonzero:
         assert N_mult != 0
 
-        self.N_src = N_src
-        self.N_dest = N_dest
+        # The module IDs must be non-null and nonidentical:
+        assert A_id != B_id
+        assert len(A_id) != 0
+        assert len(B_id) != 0
+        
+        self.N_A = N_A
+        self.N_B = N_B
         self.N_mult = N_mult
+        self.A_id = A_id
+        self.B_id = B_id
+
+        # Strings indicating direction between modules connected by instances of
+        # the class:
+        self._AtoB = '/'.join((A_id, B_id))
+        self._BtoA = '/'.join((B_id, A_id))
         
         # All matrices are stored in this dict:
         self._data = {}
 
         # Keys corresponding to each connectivity direction are stored in the
         # following lists:
-        self._keys_by_dir = {'+': [],
-                             '-': []}
+        self._keys_by_dir = {self._AtoB: [],
+                             self._BtoA: []}
 
-        # Create connectivity matrices for both directions:
-        key = self._make_key(0, '+', 'conn')
-        self._data[key] = self._make_matrix(self.shape, int)
-        self._keys_by_dir['+'].append(key)        
-        key = self._make_key(0, '-', 'conn')
-        self._data[key] = self._make_matrix(self.shape, int)
-        self._keys_by_dir['-'].append(key)
+        # Create connectivity matrices for both directions; the key structure
+        # is source module/dest module/connection #/parameter name. Note that
+        # the matrices associated with A -> B have the dimensions (N_A, N_B)
+        # while those associated with B -> have the dimensions (N_B, N_A):
+        key = self._make_key(self._AtoB, 0, 'conn')
+        self._data[key] = self._make_matrix((self.N_A, self.N_B), int)
+        self._keys_by_dir[self._AtoB].append(key)        
+        key = self._make_key(self._BtoA, 0, 'conn')
+        self._data[key] = self._make_matrix((self.N_B, self.N_A), int)
+        self._keys_by_dir[self._BtoA].append(key)
 
-    @property
-    def shape(self):
-        return self.N_src, self.N_dest
-            
-    @property
-    def src_mask(self):
+    def N(self, id):
+        """
+        Return number of ports associated with the specified module.
+        """
+        
+        if id == self.A_id:
+            return self.N_A
+        elif id == self.B_id:
+            return self.N_B
+        else:
+            raise ValueError('invalid module ID')
+        
+    def _validate_mod_names(self, A_id, B_id):
+        """
+        Raise an exception if the specified module names are not recognized.
+        """
+        
+        if set((A_id, B_id)) != set((self.A_id, self.B_id)):
+            raise ValueError('invalid module ID')
+        
+    def src_mask(self, src_id='', dest_id=''):
         """
         Mask of source neurons with connections to destination neurons.
         """
 
+        if src_id == '' and dest_id == '':
+            dir = self._AtoB
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+            
         # XXX Performing a sum over the results of this list comprehension
         # might not be necessary if multapses are assumed to always have an
         # entry in the first connectivity matrix:
-        m_list = [self._data[k] for k in self._keys_by_dir['+']]
+        m_list = [self._data[k] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
                       
-    @property
-    def src_idx(self):
+    def src_idx(self, src_id='', dest_id=''):
         """
         Indices of source neurons with connections to destination neurons.
         """
-        
-        return np.arange(self.shape[1])[self.src_mask]
+
+        if src_id == '' and dest_id == '':
+            src_id = self.A_id
+            dest_id = self.B_id
+        else:
+            self._validate_mod_names(src_id, dest_id)
+
+        return np.arange(self.N(dest_id))[self.src_mask(src_id, dest_id)]
     
     @property
     def nbytes(self):
@@ -638,24 +687,24 @@ class BaseConnectivity(object):
             return sp0+'['+str(a_list[0])+'\n'+''.join(map(lambda s: sp1+str(s)+'\n', a_list[1:-1]))+sp1+str(a_list[-1])+']'
         
     def __repr__(self):
-        result = 'src -> dest\n'
+        result = '%s -> %s\n' % (self.A_id, self.B_id)
         result += '-----------\n'
-        for key in self._keys_by_dir['+']:
+        for key in self._keys_by_dir[self._AtoB]:
             result += key + '\n'
             result += self._format_bin_array(self._data[key]) + '\n'
-        result += '\ndest -> src\n'
+        result += '\n%s -> %s\n' % (self.B_id, self.A_id)
         result += '-----------\n'
-        for key in self._keys_by_dir['-']:
+        for key in self._keys_by_dir[self._BtoA]:
             result += key + '\n'
             result += self._format_bin_array(self._data[key]) + '\n'
         return result
         
-    def _make_key(self, syn, dir, param):
+    def _make_key(self, *args):
         """
         Create a unique key for a matrix of synapse properties.
         """
         
-        return string.join(map(str, [syn, dir, param]), '/')
+        return string.join(map(str, args), '/')
 
     def _make_matrix(self, shape, dtype=np.double):
         """
@@ -664,21 +713,25 @@ class BaseConnectivity(object):
         
         return sp.sparse.lil_matrix(shape, dtype=dtype)
             
-    def get(self, source, dest, syn=0, dir='+', param='conn'):
+    def get(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn'):
         """
         Retrieve a value in the connectivity class instance.
         """
 
-        assert type(syn) == int
-        assert dir in ['-', '+']
+        if src_id == '' and dest_id == '':
+            dir = self._AtoB
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+        assert type(conn) == int
         
-        result = self._data[self._make_key(syn, dir, param)][source, dest]
+        result = self._data[self._make_key(dir, conn, param)][src_idx, dest_idx]
         if not np.isscalar(result):
             return result.toarray()
         else:
             return result
 
-    def set(self, source, dest, syn=0, dir='+', param='conn', val=1):
+    def set(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn', val=1):
         """
         Set a value in the connectivity class instance.
 
@@ -687,44 +740,49 @@ class BaseConnectivity(object):
         Creates a new storage matrix when the one specified doesn't exist.        
         """
 
-        assert type(syn) == int
-        assert dir in ['-', '+']
+        if src_id == '' and dest_id == '':
+            dir = self._AtoB
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+        assert type(conn) == int
         
-        key = self._make_key(syn, dir, param)
+        key = self._make_key(dir, conn, param)
         if not self._data.has_key(key):
 
             # XX should ensure that inserting a new matrix for an existing param
             # uses the same type as the existing matrices for that param XX
-            self._data[key] = self._make_matrix(self.shape, type(val))
+            if dir == self._AtoB:
+                self._data[key] = \
+                    self._make_matrix((self.N_A, self.N_B), type(val))
+            else:
+                self._data[key] = \
+                    self._make_matrix((self.N_B, self.N_A), type(val))
             self._keys_by_dir[dir].append(key)
 
-            # Increment the maximum number of synapses between two neurons as needed:
-            if syn+1 > self.N_mult:
+            # Increment the maximum number of connections between two ports as
+            # needed:
+            if conn+1 > self.N_mult:
                 self.N_mult += 1
                 
-        self._data[key][source, dest] = val
+        self._data[key][src_idx, dest_idx] = val
 
     def transpose(self):
         """
         Returns an object instance with the source and destination LPUs flipped.
         """
 
-        c = BaseConnectivity(self.N_dest, self.N_dest)
-        c._keys_by_dir['+'] = []
-        c._keys_by_dir['-'] = []
+        c = BaseConnectivity(self.N_B, self.N_A, self.N_mult,
+                             A_id=self.B_id, B_id=self.A_id)
+        c._keys_by_dir[self._AtoB] = []
+        c._keys_by_dir[self._BtoA] = []
         for old_key in self._data.keys():
 
             # Reverse the direction in the key:
             key_split = old_key.split('/')
-            old_dir = key_split[1]
-            if old_dir == '+':
-                new_dir = '-'
-            elif old_dir == '-':
-                new_dir = '+'
-            else:
-                raise ValueError('invalid direction in key')    
-            key_split[1] = new_dir
-            new_key = '/'.join(key_split)
+            A_id, B_id = key_split[0:2]
+            new_dir = '/'.join((B_id, A_id))
+            new_key = '/'.join([new_dir]+key_split[2:])
             c._data[new_key] = self._data[old_key].T           
             c._keys_by_dir[new_dir].append(new_key)
         return c
