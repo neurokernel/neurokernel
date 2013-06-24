@@ -150,17 +150,19 @@ class IntervalIndex(object):
 
 class Connectivity(base.BaseConnectivity):
     """
-    Inter-LPU connectivity with support for graded potential and spiking
+    Intermodule connectivity with support for graded potential and spiking
     neurons.
 
     Stores the connectivity between two LPUs as a series of sparse matrices.
-    Every entry in an instance of the class has the following indices
+    Every entry in an instance of the class has the following indices:
 
+    - source module ID (must be defined upon class instantiation)
     - source neuron type ('gpot', 'spike', or 'all')
     - source neuron ID
+    - destination module ID (must be defined upon class instantiation)
     - destination neuron type ('gpot', 'spike', or 'all')
     - destination neuron ID
-    - direction ('+' for source to destination, '-' for destination to source)
+    - connection number (when two ports are connected by more than one connection)
     - parameter name (the default is 'conn' for simple connectivity)
  
     Each connection may therefore have several parameters; parameters associated
@@ -169,94 +171,146 @@ class Connectivity(base.BaseConnectivity):
     
     Parameters
     ----------
-    N_src_gpot : int
-        Number of source graded potential neurons.
-    N_src_spike : int
-        Number of source spiking neurons.
-    N_dest_gpot : int
-        Number of destination graded potential neurons.
-    N_dest_spike : int
-        Number of destination spiking neurons.
+    N_A_gpot : int
+        Number of graded potential neurons to interface with on module A.
+    N_A_spike : int
+        Number of spiking neurons to interface with on module A.
+    N_B_gpot : int
+        Number of graded potential neurons to interface with on module B.
+    N_B_spike : int
+        Number of destination spiking neurons to interface with on module A.
+    N_mult: int
+        Maximum supported number of connections between any two neurons
+        (default 1). Can be raised after instantiation.    
+    A_id : str
+        First module ID (default 'A').
+    B_id : str
+        Second module ID (default 'B').
 
     Examples
     --------
     The first connection between spiking neuron 0 in one LPU with graded
     potential 3 in some other LPU can be accessed as
-    c['spike',0,'gpot',3,0,'+']. The 'weight' parameter associated with this
-    connection can be accessed as c['spike',0,'gpot',3,0,'+','weight']
+    c['A','spike',0,'B','gpot',3,0]. The 'weight' parameter associated with this
+    connection can be accessed as c['A','spike',0,'B','gpot',3,0,'weight']
 
     """
     
-    def __init__(self, N_src_gpot, N_src_spike, N_dest_gpot, N_dest_spike):
-        self.N_src_gpot = N_src_gpot
-        self.N_src_spike = N_src_spike
-        self.N_dest_gpot = N_dest_gpot
-        self.N_dest_spike = N_dest_spike
-        super(Connectivity, self).__init__(N_src_gpot+N_src_spike,
-                                           N_dest_gpot+N_dest_spike)
-
+    def __init__(self, N_A_gpot, N_A_spike, N_B_gpot, N_B_spike,
+                 N_mult=1, A_id='A', B_id='B'):
+        self.N_A_gpot = N_A_gpot
+        self.N_A_spike = N_A_spike
+        self.N_B_gpot = N_B_gpot
+        self.N_B_spike = N_B_spike
+        super(Connectivity, self).__init__(N_A_gpot+N_A_spike,
+                                           N_B_gpot+N_B_spike, N_mult,
+                                           A_id, B_id)
+            
         # Create index translators to enable use of separate sets of identifiers
         # for graded potential and spiking neurons:
         self.idx_translate = {}
-        if self.N_src_gpot == 0:
-            self.idx_translate['src'] = \
-                IntervalIndex([0, self.N_src_spike], ['spike'])
-        elif self.N_src_spike == 0:
-            self.idx_translate['src'] = \
-                IntervalIndex([0, self.N_src_gpot], ['gpot'])
+        if self.N_A_gpot == 0:
+            self.idx_translate[A_id] = \
+                IntervalIndex([0, self.N_A_spike], ['spike'])
+        elif self.N_A_spike == 0:
+            self.idx_translate[A_id] = \
+                IntervalIndex([0, self.N_A_gpot], ['gpot'])
         else:
-            self.idx_translate['src'] = \
-                IntervalIndex([0, self.N_src_gpot,
-                               self.N_src_gpot+self.N_src_spike],
+            self.idx_translate[A_id] = \
+                IntervalIndex([0, self.N_A_gpot,
+                               self.N_A_gpot+self.N_A_spike],
                               ['gpot', 'spike'])
-        if self.N_dest_gpot == 0:
-            self.idx_translate['dest'] = \
-                IntervalIndex([0, self.N_dest_spike], ['spike'])
-        elif self.N_dest_spike == 0:
-            self.idx_translate['dest'] = \
-                IntervalIndex([0, self.N_dest_gpot], ['gpot'])
+        if self.N_B_gpot == 0:
+            self.idx_translate[B_id] = \
+                IntervalIndex([0, self.N_B_spike], ['spike'])
+        elif self.N_B_spike == 0:
+            self.idx_translate[B_id] = \
+                IntervalIndex([0, self.N_B_gpot], ['gpot'])
         else:
-            self.idx_translate['dest'] = \
-                IntervalIndex([0, self.N_dest_gpot,
-                               self.N_dest_gpot+self.N_dest_spike],
+            self.idx_translate[B_id] = \
+                IntervalIndex([0, self.N_B_gpot,
+                               self.N_B_gpot+self.N_B_spike],
                               ['gpot', 'spike'])
+    def N_spike(self, id):
+        """
+        Return number of spiking neurons associated with the specified module.
+        """
 
+        if id == self.A_id:
+            return self.N_A_spike
+        elif id == self.B_id:
+            return self.N_B_spike
+        else:
+            raise ValueError('invalid module ID')
+
+    def N_gpot(self, id):
+        """
+        Return number of graded potential neurons associated with the specified module.
+        """
+
+        if id == self.A_id:
+            return self.N_A_gpot
+        elif id == self.B_id:
+            return self.N_B_gpot
+        else:
+            raise ValueError('invalid module ID')
+        
     @property
     def src_mask_gpot(self):
         """
         Mask of source graded potential neurons with connections to destination neurons.
         """
 
-        m_list = [self._data[k][self.idx_translate['src']['gpot', :], :] for k in self._keys_by_dir['+']]
+        if src_id == '' and dest_id == '':
+            dir = self._AtoB
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+        m_list = [self._data[k][self.idx_translate[src_id]['gpot', :], :] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
-
-    @property
+        
     def src_idx_gpot(self):
         """
         Indices of source graded potential neurons with connections to destination neurons.
         """
 
-        return np.arange(self.N_src_gpot)[self.src_mask_gpot]
+        if src_id == '' and dest_id == '':
+            src_id = self.A_id
+            dest_id = self.B_id
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        
+        return np.arange(self.N_gpot(dest_id))[self.src_mask_gpot(src_id, dest_id)]
                          
-    @property
-    def src_mask_spike(self):
+    def src_mask_spike(self, src_id='', dest_id=''):
         """
         Mask of source spiking neurons with connections to destination neurons.
         """
 
-        m_list = [self._data[k][self.idx_translate['src']['spike', :], :] for k in self._keys_by_dir['+']]
+        if src_id == '' and dest_id == '':
+            dir = self._AtoB
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+        m_list = [self._data[k][self.idx_translate[src_id]['spike', :], :] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
 
-    @property
-    def src_idx_spike(self):
+    def src_idx_spike(self, src_id='', dest_id=''):
         """
         Indices of source spiking neurons with connections to destination neurons.
         """
 
-        return np.arange(self.N_src_spike)[self.src_mask_spike]
+        if src_id == '' and dest_id == '':
+            src_id = self.A_id
+            dest_id = self.B_id
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        
+        return np.arange(self.N_spike(dest_id))[self.src_mask_spike(src_id, dest_id)]
     
-    def get(self, src_type, src, dest_type, dest,
-            syn=0, dir='+', param='conn'):
+    def get(self, src_id, src_type, src_idx,
+            dest_id, dest_type, dest_idx,
+            conn=0, param='conn'):
         """
         Retrieve a value in the connectivity class instance.
         """
@@ -264,17 +318,18 @@ class Connectivity(base.BaseConnectivity):
         assert src_type in ['gpot', 'spike', 'all']
         assert dest_type in ['gpot', 'spike', 'all']
         if src_type == 'all':
-            t1 = self.idx_translate['src'][src]
+            src_idx_new = self.idx_translate[src_id][src_idx]
         else:
-            t1 = self.idx_translate['src'][src_type, src]
+            src_idx_new = self.idx_translate[src_id][src_type, src_idx]
         if dest_type == 'all':
-            t2 = self.idx_translate['dest'][dest]
+            dest_idx_new = self.idx_translate[dest_id][dest_idx]
         else:
-            t2 = self.idx_translate['dest'][dest_type, dest]                    
-        return super(Connectivity, self).get(t1, t2, syn, dir, param)
+            dest_idx_new = self.idx_translate[dest_id][dest_type, dest_idx]    
+        return super(Connectivity, self).get(src_id, src_idx_new,
+                                             dest_id, dest_idx_new, conn, param)
 
-    def set(self, src_type, src, dest_type, dest,
-            syn=0, dir='+', param='conn', val=1):
+    def set(self, src_id, src_type, src_idx, dest_id, dest_type, dest_idx,
+            conn=0, param='conn', val=1):
         """
         Set a value in the connectivity class instance.
         """
@@ -282,19 +337,21 @@ class Connectivity(base.BaseConnectivity):
         assert src_type in ['gpot', 'spike', 'all']
         assert dest_type in ['gpot', 'spike', 'all']
         if src_type == 'all':
-            t1 = src
+            src_idx_new = src_idx
         else:
-            t1 = self.idx_translate['src'][src_type, src]
+            src_idx_new = self.idx_translate[src_id][src_type, src_idx]
         if dest_type == 'all':
-            t2 = dest
+            dest_idx_new = dest_idx
         else:
-            t2 = self.idx_translate['dest'][dest_type, dest]
-        return super(Connectivity, self).set(t1, t2, syn, dir, param, val=val)
+            dest_idx_new = self.idx_translate[dest_id][dest_type, dest_idx]
+        return super(Connectivity, self).set(src_id, src_idx_new,
+                                             dest_id, dest_idx_new,
+                                             conn, param, val=val)
     
     def __repr__(self):
         return super(Connectivity, self).__repr__()+\
-          '\nsrc idx\n'+self.idx_translate['src'].__repr__()+\
-          '\n\ndest idx\n'+self.idx_translate['dest'].__repr__()
+          '\nA idx\n'+self.idx_translate[self.A_id].__repr__()+\
+          '\n\nB idx\n'+self.idx_translate[self.B_id].__repr__()
 
 class Module(base.BaseModule):
     """
