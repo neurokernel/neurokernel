@@ -584,6 +584,11 @@ class BaseConnectivity(object):
     B_id : str
         Second module ID (default 'B').
 
+    Attributes
+    ----------
+    nbytes : int
+        Approximate number of bytes occupied by object.
+    
     Methods
     -------
     N(id)
@@ -594,6 +599,12 @@ class BaseConnectivity(object):
     other_mod(id)
         Returns the ID of the other module connected by the object to
         the one specified as `id`.
+    src_idx(src_id, dest_id)
+        Indices of ports in module `src_id` with outgoing
+        connections to module `dest_id`.
+    src_mask(src_id, dest_id)
+        Mask of ports in module `src_id` with outgoing
+        connections to module `dest_id`.
     transpose()
         Returns a BaseConnectivity instance with the source and destination
         flipped.
@@ -700,7 +711,7 @@ class BaseConnectivity(object):
     def is_connected(self, src_id, dest_id):
         """
         Returns true if there is at least one connection from
-        the specified source module to the specified destination module.
+        the specified source module to the specified destination module.        
         """
 
         self._validate_mod_names(src_id, dest_id)
@@ -709,9 +720,9 @@ class BaseConnectivity(object):
                 return True
         return False
     
-    def src_mask(self, src_id='', dest_id=''):
+    def src_mask(self, src_id='', dest_id='', dest_ports=slice(None, None)):
         """
-        Mask of source neurons with connections to destination neurons.
+        Mask of source ports with connections to destination ports.
         """
 
         if src_id == '' and dest_id == '':
@@ -723,12 +734,12 @@ class BaseConnectivity(object):
         # XXX Performing a sum over the results of this list comprehension
         # might not be necessary if multapses are assumed to always have an
         # entry in the first connectivity matrix:
-        m_list = [self._data[k] for k in self._keys_by_dir[dir]]
+        m_list = [self._data[k][:,dest_ports] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
-                      
-    def src_idx(self, src_id='', dest_id=''):
+
+    def src_idx(self, src_id='', dest_id='', dest_ports=slice(None, None)):
         """
-        Indices of source neurons with connections to destination neurons.
+        Indices of source ports with connections to destination ports.
         """
 
         if src_id == '' and dest_id == '':
@@ -737,7 +748,39 @@ class BaseConnectivity(object):
         else:
             self._validate_mod_names(src_id, dest_id)
 
-        return np.arange(self.N(dest_id))[self.src_mask(src_id, dest_id)]
+        mask = self.src_mask(src_id, dest_id, dest_ports)
+        return np.arange(self.N(src_id))[mask]
+    
+    def dest_mask(self, src_id='', dest_id='', src_ports=slice(None, None)):
+        """
+        Mask of destination ports with connections to source ports.
+        """
+
+        if src_id == '' and dest_id == '':
+            dir = self._AtoB
+        else:
+            self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+            
+        # XXX Performing a sum over the results of this list comprehension
+        # might not be necessary if multapses are assumed to always have an
+        # entry in the first connectivity matrix:
+        m_list = [self._data[k][src_ports,:] for k in self._keys_by_dir[dir]]
+        return np.any(np.sum(m_list).toarray(), axis=0)
+
+    def dest_idx(self, src_id='', dest_id='', src_ports=slice(None, None)):
+        """
+        Indices of destination ports with connections to source ports.
+        """
+
+        if src_id == '' and dest_id == '':
+            src_id = self.A_id
+            dest_id = self.B_id
+        else:
+            self._validate_mod_names(src_id, dest_id)
+
+        mask = self.dest_mask(src_id, dest_id, src_ports)
+        return np.arange(self.N(dest_id))[mask]
     
     @property
     def nbytes(self):
@@ -936,7 +979,7 @@ class BaseManager(object):
         if not isinstance(m_A, BaseModule) or \
             not isinstance(m_B, BaseModule) or \
             not isinstance(conn, BaseConnectivity):
-            raise ValueError('invalid types')
+            raise ValueError('invalid type')
 
         if m_A.id not in [conn.A_id, conn.B_id] or \
             m_B.id not in [conn.A_id, conn.B_id]:
@@ -1133,7 +1176,13 @@ if __name__ == '__main__':
             super(MyModule, self).run_step(in_dict, out)
             
             out[:] = np.random.rand(3)
-   
+            
+        def run(self):
+
+            # Make each module instance generate different numbers:
+            np.random.seed(int(self.id))
+            super(MyModule, self).run()
+            
     # Set up logging:
     logger = setup_logger()
 
@@ -1151,10 +1200,13 @@ if __name__ == '__main__':
     conn = BaseConnectivity(3, 3, 1, m1.id, m2.id)
     conn[m1.id, :, m2.id, :] = [[1, 0, 0],
                                 [0, 1, 0],
-                                [0, 0, 1]]
-    
+                                [0, 0, 1]]    
+    conn[m2.id, :, m1.id, :] = [[1, 0, 0],
+                                [0, 1, 0],
+                                [0, 0, 1]]    
     man.add_conn(conn)
     man.connect(m1, m2, conn)
+    
     # man.connect(m2, m1, conn)
     # man.connect(m4, m3, conn)
     # man.connect(m3, m4, conn)
