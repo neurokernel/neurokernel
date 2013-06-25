@@ -256,7 +256,7 @@ class Connectivity(base.BaseConnectivity):
             raise ValueError('invalid module ID')
         
     @property
-    def src_mask_gpot(self):
+    def src_mask_gpot(self, src_id='', dest_id=''):
         """
         Mask of source graded potential neurons with connections to destination neurons.
         """
@@ -265,11 +265,11 @@ class Connectivity(base.BaseConnectivity):
             dir = self._AtoB
         else:
             self._validate_mod_names(src_id, dest_id)
-        dir = '/'.join((src_id, dest_id))
+            dir = '/'.join((src_id, dest_id))
         m_list = [self._data[k][self.idx_translate[src_id]['gpot', :], :] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
         
-    def src_idx_gpot(self):
+    def src_idx_gpot(self, src_id='', dest_id=''):
         """
         Indices of source graded potential neurons with connections to destination neurons.
         """
@@ -291,7 +291,7 @@ class Connectivity(base.BaseConnectivity):
             dir = self._AtoB
         else:
             self._validate_mod_names(src_id, dest_id)
-        dir = '/'.join((src_id, dest_id))
+            dir = '/'.join((src_id, dest_id))
         m_list = [self._data[k][self.idx_translate[src_id]['spike', :], :] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
 
@@ -360,6 +360,13 @@ class Module(base.BaseModule):
     This class repeatedly executes a work method until it receives
     a quit message via its control port.
 
+    Parameters
+    ----------
+    port_data : int
+        Port to use when communicating with broker.
+    port_ctrl : int
+        Port used by broker to control module.
+
     Notes
     -----
     A module instance connected to other module instances contains a list of the
@@ -369,10 +376,10 @@ class Module(base.BaseModule):
 
     """
 
-    def __init__(self, net='unconnected', port_data=base.PORT_DATA,
-                                  port_ctrl=base.PORT_CTRL, device=None):
+    def __init__(self, port_data=base.PORT_DATA,
+                 port_ctrl=base.PORT_CTRL, device=None):
         self.device = device
-        super(Module, self).__init__(net, port_data, port_ctrl)
+        super(Module, self).__init__(port_data, port_ctrl)
                         
     def _init_gpu(self):
         """
@@ -397,7 +404,7 @@ class Module(base.BaseModule):
                 atexit.register(self.gpu_ctx.pop)
                 self.logger.info('GPU initialized')
 
-    def add_conn(self, conn, conn_type, id):
+    def add_conn(self, conn):
         """
         Add the specified connectivity object.
 
@@ -405,17 +412,17 @@ class Module(base.BaseModule):
         ----------
         conn : Connectivity
             Connectivity object.
-        conn_type : {'in', 'out'}
-            Connectivity type. 
-        id :
-            ID of module instance that is being connected via the specified
-            object.
+
+        Notes
+        -----
+        The module's ID must be one of the two IDs specified in the
+        connnectivity object.
         
         """
         
-        if not isinstance(conn, base.BaseConnectivity):
+        if not isinstance(conn, Connectivity):
             raise ValueError('invalid connectivity object')        
-        super(Module, self).add_conn(conn, conn_type, id)
+        super(Module, self).add_conn(conn)
         
     @property
     def N_in_gpot(self):
@@ -538,9 +545,9 @@ class Module(base.BaseModule):
         # Use indices of destination neurons to select which neuron
         # values or spikes need to be transmitted to each destination
         # module:
-        for id in self.out_ids:
-            out_idx_gpot = self.conn_dict['out'][id].src_idx_gpot
-            out_idx_spike = self.conn_dict['out'][id].src_idx_spike
+        for out_id in self.out_ids:
+            out_idx_gpot = self.conn_dict[out_id].src_idx_gpot(self.id, out_id)
+            out_idx_spike = self.conn_dict[out_id].src_idx_spike(self.id, out_id)
             self.logger.info('out_idx_gpot '+str(out_idx_gpot))
             self.logger.info('out_gpot '+str(out_gpot))            
             self.logger.info('out_idx_spike '+str(out_idx_spike))
@@ -550,7 +557,7 @@ class Module(base.BaseModule):
             # that since out_spike contains neuron indices, those indices
             # that need to be transmitted can be obtained via a set
             # operation:
-            self._out_data.append((id, np.asarray(out_gpot)[out_idx_gpot],
+            self._out_data.append((out_id, np.asarray(out_gpot)[out_idx_gpot],
                 np.asarray(np.intersect1d(out_spike, out_idx_spike))))
         self.logger.info('output buffer: '+str(self._out_data))
         
@@ -629,35 +636,34 @@ class Manager(base.BaseManager):
 
     """
 
-    def connect(self, m_src, m_dest, conn, dir):
+    def connect(self, m_A, m_B, conn):
         """
-        Connect a source and destination module with a connectivity pattern.
+        Connect two module instances with a connectivity object instance.
 
         Parameters
         ----------
-        m_src : Module
-            Source module.
-        m_dest : Module
-            Destination module
+        m_A, m_B : Module
+            Module instances to connect
         conn : Connectivity
             Connectivity object.
-        dir : {'+','-','='}
-           Connectivity direction; '+' denotes a connection from `m_src` to
-           `m_dest`; '-' denotes a connection from `m_dest` to `m_src`; '='
-           denotes connections in both directions.
         
         """
 
+        if not isinstance(conn, Connectivity):
+            raise ValueError('invalid type')
+        
         # Check whether the numbers of source and destination graded potential
         # neurons and spiking neurons supported by the connectivity object
-        # are compatible
-        if m_src.N_out_gpot != conn.N_src_gpot or \
-            m_dest.N_in_gpot != conn.N_dest_gpot or \
-            m_src.N_out_spike != conn.N_src_spike or \
-            m_dest.N_in_spike != conn.N_dest_spike:
+        # are compatible:
+        if (m_A.N_out_gpot, m_A.N_out_spike) not in \
+            [(conn.N_A_gpot, conn.N_A_spike),
+             (conn.N_B_gpot, conn.N_B_spike)] or \
+            (m_B.N_out_gpot, m_B.N_out_spike) not in \
+             [(conn.N_A_gpot, conn.N_A_spike),
+              (conn.N_B_gpot, conn.N_B_spike)]: 
             raise ValueError('modules and connectivity objects are incompatible')
-        
-        super(Manager, self).connect(m_src, m_dest, conn, dir)
+
+        super(Manager, self).connect(m_A, m_B, conn)
 
 if __name__ == '__main__':
 
@@ -666,10 +672,10 @@ if __name__ == '__main__':
         Example of derived module class.
         """
 
-        def __init__(self, N_gpot, N_spike, net='unconnected',
+        def __init__(self, N_gpot, N_spike, 
                      port_data=base.PORT_DATA,
                      port_ctrl=base.PORT_CTRL, device=None):
-            super(MyModule, self).__init__(net, port_data, port_ctrl, device)
+            super(MyModule, self).__init__(port_data, port_ctrl, device)
             self.gpot_data = np.zeros(N_gpot, np.float64)
             self.spike_data = np.zeros(N_spike, int)
 
@@ -713,21 +719,21 @@ if __name__ == '__main__':
 
     N1_gpot = N1_spike = 2
     N2_gpot = N2_spike = 4
-    m1 = man.add_mod(MyModule(N1_gpot, N1_spike, 'none',
+    m1 = man.add_mod(MyModule(N1_gpot, N1_spike, 
                               man.port_data, man.port_ctrl))
-    m2 = man.add_mod(MyModule(N2_gpot, N2_spike, 'none',
+    m2 = man.add_mod(MyModule(N2_gpot, N2_spike, 
                               man.port_data, man.port_ctrl))
     # m3 = MyModule(N, 'unconnected', man.port_data, man.port_ctrl)
     # man.add_mod(m3)
     # m4 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
     # man.add_mod(m4)    
 
-    c1to2 = Connectivity(N1_gpot, N1_spike, N2_gpot, N2_spike)
+    c1to2 = Connectivity(N1_gpot, N1_spike, N2_gpot, N2_spike, 1, m1.id, m2.id)
     # c1to2['all',:,'all',:,0,'+'] = \
     #     rand_bin_matrix((N1_gpot+N1_spike, N2_gpot+N2_spike),
     #                     (N1_gpot+N1_spike)*(N2_gpot+N2_spike)/2, int)
-    c1to2['all',:,'all',:,0,'+'] = np.ones((N1_gpot+N1_spike,
-                                            N2_gpot+N2_spike), int)
+    c1to2[m1.id,'all',:,m2.id,'all',:] = np.ones((N1_gpot+N1_spike,
+                                                  N2_gpot+N2_spike), int)
     print c1to2
     
     # c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
@@ -745,7 +751,7 @@ if __name__ == '__main__':
 
 
 
-    man.connect(m1, m2, c1to2, '+')
+    man.connect(m1, m2, c1to2)
     # man.connect(m2, m3, c2to3)
     # man.connect(m1, m3, c1to3)
     # man.connect(m3, m4, c3to4)

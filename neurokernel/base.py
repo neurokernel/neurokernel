@@ -729,7 +729,7 @@ class BaseConnectivity(object):
             dir = self._AtoB
         else:
             self._validate_mod_names(src_id, dest_id)
-        dir = '/'.join((src_id, dest_id))
+            dir = '/'.join((src_id, dest_id))
             
         # XXX Performing a sum over the results of this list comprehension
         # might not be necessary if multapses are assumed to always have an
@@ -760,7 +760,7 @@ class BaseConnectivity(object):
             dir = self._AtoB
         else:
             self._validate_mod_names(src_id, dest_id)
-        dir = '/'.join((src_id, dest_id))
+            dir = '/'.join((src_id, dest_id))
             
         # XXX Performing a sum over the results of this list comprehension
         # might not be necessary if multapses are assumed to always have an
