@@ -63,6 +63,7 @@ if __name__ == "__main__":
         include_package_data = True,
         install_requires = [
             'bidict',
+            'bottleneck',
             'la',
             'msgpack_numpy',
             'networkx',
