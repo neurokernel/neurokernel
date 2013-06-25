@@ -163,8 +163,11 @@ class BaseModule(ControlledProcess):
             raise ValueError('invalid connectivity object')
         if self.id not in [conn.A_id, conn.B_id]:
             raise ValueError('connectivity object must contain module ID')
-        self._conn_dict[conn.other_mod(self.id)] = conn
         self.logger.info('connecting to %s' % conn.other_mod(self.id))
+
+        # The connectivity instances associated with this module are keyed by
+        # the ID of the other module:
+        self._conn_dict[conn.other_mod(self.id)] = conn
         
         # Update internal connectivity based upon contents of connectivity
         # object. When the add_conn() method is invoked, the module's internal
@@ -241,31 +244,51 @@ class BaseModule(ControlledProcess):
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
                 self.logger.info('network connection initialized')
 
-    def _get_in_data(self):
+    def _get_in_data(self, in_dict):
         """
         Get input data from incoming transmission buffer.
 
-        Notes
-        -----
-        This method should retrieve input data transmitted to the module from
-        the input buffer to a data structure which can be used for processing.
+        Input data received from other modules is used to populate the specified
+        data structures.
+        
+        Parameters
+        ----------
+        in_dict : dict of numpy.ndarray of float
+            Dictionary of data from other modules keyed by source module ID.
+        
         """
 
-        self.logger.info('retrieving input')
+        self.logger.info('retrieving input')        
+        for entry in self._in_data:
+            in_dict[entry[0]] = entry[1]
 
-    def _put_out_data(self):
+        # Clear input buffer:
+        self._in_data = []
+        
+    def _put_out_data(self, out):
         """
         Put output data in outgoing transmission buffer.
 
-        Notes
-        -----
-        This method should put generated data that must be transmitted to other
-        modules into the output buffer.
+        Using the indices of the ports in destination modules that receive input
+        from this module instance, data extracted from the module's neurons is
+        staged for output transmission.
 
+        Parameter
+        ---------
+        out : numpy.ndarray of float
+            Output data.
+        
         """
 
-        self.logger.info('populating output buffer')        
-                
+        self.logger.info('populating output buffer')
+
+        # Clear output buffer before populating it:
+        self._out_data = []
+
+        for out_id in self.out_ids:
+            out_idx = self._conn_dict[out_id].src_idx(self.id, out_id)
+            self._out_data.append((out_id, np.asarray(out)[out_idx]))
+        
     def _sync(self):
         """
         Send output data and receive input data.
@@ -323,7 +346,7 @@ class BaseModule(ControlledProcess):
                         self._in_data.append((in_id, data))
                 self.logger.info('recv data from all input IDs')
 
-    def run_step(self, *args, **kwargs):
+    def run_step(self, in_dict, out):
         """
         Perform a single step of computation.
 
@@ -346,16 +369,19 @@ class BaseModule(ControlledProcess):
             with IgnoreKeyboardInterrupt():
 
                 self._init_net()
+
+                in_dict = {}
+                out = []
                 while True:
 
                     # Get input data:
-                    self._get_in_data()
+                    self._get_in_data(in_dict)
 
                     # Run the processing step:
-                    self.run_step()
+                    self.run_step(in_dict, out)
 
                     # Prepare the generated data for output:
-                    self._put_out_data()
+                    self._put_out_data(out)
 
                     # Synchronize:
                     self._sync()
@@ -1103,13 +1129,10 @@ if __name__ == '__main__':
         Example of derived module class.
         """
 
-        def _put_out_data(self):
-            super(MyModule, self)._put_out_data()
-
-            if self.net in ['out', 'full']:
-                self._out_data = []
-                for i in self.out_ids:
-                    self._out_data.append((i, str(np.random.rand()))) 
+        def run_step(self, in_dict, out):
+            super(MyModule, self).run_step(in_dict, out)
+            
+            out[:] = np.random.rand(3)
    
     # Set up logging:
     logger = setup_logger()
@@ -1126,7 +1149,9 @@ if __name__ == '__main__':
     # m4 = man.add_mod(MyModule(net='full'))
 
     conn = BaseConnectivity(3, 3, 1, m1.id, m2.id)
-    conn[m1.id, :, m2.id, :] = rand_bin_matrix((3,3),5)
+    conn[m1.id, :, m2.id, :] = [[1, 0, 0],
+                                [0, 1, 0],
+                                [0, 0, 1]]
     
     man.add_conn(conn)
     man.connect(m1, m2, conn)
