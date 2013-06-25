@@ -43,11 +43,6 @@ class BaseModule(ControlledProcess):
 
     Parameters
     ----------
-    net: str
-        Network connectivity. May be `none` for no connection,
-        `ctrl` for incoming control data only,
-        `in` for incoming data, `out` for outgoing data, or
-        `full` for both incoming and outgoing data.
     port_data : int
         Port to use when communicating with broker.
     port_ctrl : int
@@ -97,21 +92,21 @@ class BaseModule(ControlledProcess):
         self.logger.info('net status changed: %s -> %s' % (self._net, value))
         self._net = value
 
-    def __init__(self, net='none',
-                 port_data=PORT_DATA, port_ctrl=PORT_CTRL):
+    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
+                 
         super(BaseModule, self).__init__(port_ctrl, signal.SIGUSR1)
 
         # Logging:
         self.logger = twiggy.log.name('module %s' % self.id)
-
-        # Network connection type:
-        self.net = net
 
         # Data port:
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
 
+        # Initial connectivity:
+        self.net = 'none'
+        
         # Lists used for storing incoming and outgoing data; each
         # entry is a tuple whose first entry is the source or destination
         # module ID and whose second entry is the data:
@@ -168,8 +163,29 @@ class BaseModule(ControlledProcess):
             raise ValueError('invalid connectivity object')
         if self.id not in [conn.A_id, conn.B_id]:
             raise ValueError('connectivity object must contain module ID')
-        self._conn_dict[conn_type][id] = conn
+        self._conn_dict[conn.other_mod(self.id)] = conn
+        self.logger.info('connecting to %s' % conn.other_mod(self.id))
         
+        # Update internal connectivity based upon contents of connectivity
+        # object. When the add_conn() method is invoked, the module's internal
+        # connectivity is always upgraded to at least 'ctrl':
+        if self.net == 'none':
+            self.net = 'ctrl'        
+        if conn.is_connected(self.id, conn.other_mod(self.id)):
+            old_net = self.net
+            if self.net == 'ctrl':
+                self.net = 'out'
+            elif self.net == 'in':
+                self.net = 'full'
+            self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
+        if conn.is_connected(conn.other_mod(self.id), self.id):
+            old_net = self.net
+            if self.net == 'ctrl':
+                self.net = 'in'
+            elif self.net == 'out':
+                self.net = 'full'
+            self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
+
     def _ctrl_handler(self, msg):
         """
         Control port handler.
@@ -546,9 +562,12 @@ class BaseConnectivity(object):
     -------
     N(id)
         Number of ports associated with the specified module.
-    connected_to(id)
-        Returns the ID of the module to which the object connects the specified
-        module.
+    is_connected(src_id, dest_id)
+        Returns True of at least one connection
+        exists between `src_id` and `dest_id`.
+    other_mod(id)
+        Returns the ID of the other module connected by the object to
+        the one specified as `id`.
     transpose()
         Returns a BaseConnectivity instance with the source and destination
         flipped.
@@ -875,90 +894,46 @@ class BaseManager(object):
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
 
-    def connect(self, m_src, m_dest, conn, dir='='):
+    def connect(self, m_A, m_B, conn):
         """
         Connect two module instances with a connectivity object instance.
 
         Parameters
         ----------
-        m_src : BaseModule
-           Source module instance.
-        m_dest : BaseModule
-           Destination module instance.
+        m_A, m_B : BaseModule
+           Module instances to connect
         conn : BaseConnectivity
            Connectivity object instance.
-        dir : {'+','-','='}
-           Connectivity direction; '+' denotes a connection from `m_src` to
-           `m_dest`; '-' denotes a connection from `m_dest` to `m_src`; '='
-           denotes connections in both directions.
-        
-        Notes
-        -----
-        A module's connectivity can only be increased; if it already is either
-        'in' or 'out', attempting to create a connection that would cause its
-        connectivity to become 'out' or 'in' if unconnected will cause it to be
-        set to 'full'. 
-        
+                
         """
 
-        if not isinstance(m_src, BaseModule) or \
-            not isinstance(m_dest, BaseModule) or \
+        if not isinstance(m_A, BaseModule) or \
+            not isinstance(m_B, BaseModule) or \
             not isinstance(conn, BaseConnectivity):
             raise ValueError('invalid types')
 
+        if m_A.id not in [conn.A_id, conn.B_id] or \
+            m_B.id not in [conn.A_id, conn.B_id]:
+            raise ValueError('connectivity object doesn\'t contain modules\' IDs')
+
         # Add the module and connection instances to the internal
         # dictionaries of the manager instance if they are not already there:
-        if m_src.id not in self.mod_dict:
-            self.add_mod(m_src)
-        if m_dest.id not in self.mod_dict:
-            self.add_mod(m_dest)
+        if m_A.id not in self.mod_dict:
+            self.add_mod(m_A)
+        if m_B.id not in self.mod_dict:
+            self.add_mod(m_B)
         if conn.id not in self.conn_dict:
             self.add_conn(conn)
 
-        # Update the routing table and the network connectivity of the source
-        # and destination module instances:
-        if dir == '+':
-            self.routing_table[m_src.id, m_dest.id] = 1
-            
-            if m_src.net == 'none':
-                m_src.net = 'out'
-            elif m_src.net == 'in':
-                m_src.net = 'full'
-                
-            if m_dest.net == 'none':
-                m_dest.net = 'in'
-            elif m_dest.net == 'out':
-                m_dest.net = 'full'
+        # Connect the modules with the specified connectivity module:
+        m_A.add_conn(conn)
+        m_B.add_conn(conn)
 
-            m_src.add_conn(conn, 'out', m_dest.id)
-            m_dest.add_conn(conn.T, 'in', m_src.id)            
-        elif dir == '-':
-            self.routing_table[m_dest.id, m_src.id] = 1
-            
-            if m_src.net == 'none':                
-                m_src.net = 'in'
-            elif m_src.net == 'out':
-                m_src.net = 'full'
-                
-            if m_dest.net == 'none':
-                m_dest.net = 'out'
-            elif m_dest.net == 'in':
-                m_dest.net = 'full'
-
-            m_src.add_conn(conn, 'in', m_dest.id)
-            m_dest.add_conn(conn.T, 'out', m_src.id)            
-        elif dir == '=':
-            self.routing_table[m_src.id, m_dest.id] = 1
-            self.routing_table[m_dest.id, m_src.id] = 1
-            m_src.net = 'full'
-            m_dest.net = 'full'
-
-            m_src.add_conn(conn, 'out', m_dest.id)
-            m_dest.add_conn(conn.T, 'in', m_src.id)            
-            m_src.add_conn(conn, 'in', m_dest.id)
-            m_dest.add_conn(conn.T, 'out', m_src.id)                        
-        else:
-            raise ValueError('unrecognized connectivity direction')
+        # Update the routing table:
+        if conn.is_connected(m_A.id, m_B.id):
+            self.routing_table[m_A.id, m_B.id] = 1
+        if conn.is_connected(m_B.id, m_A.id):
+            self.routing_table[m_B.id, m_A.id] = 1
 
     @property
     def N_brok(self):
@@ -1011,7 +986,7 @@ class BaseManager(object):
 
     def add_conn(self, c):
         """
-        Add or create a connectivity instance to the emulation.
+        Add a connectivity instance to the emulation.
         """
 
         if not isinstance(c, BaseConnectivity):
@@ -1121,7 +1096,8 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     return twiggy.log.name(('{name:%s}' % 12).format(name='main'))
 
 if __name__ == '__main__':
-
+    from neurokernel.tools.misc import rand_bin_matrix
+    
     class MyModule(BaseModule):
         """
         Example of derived module class.
@@ -1144,12 +1120,14 @@ if __name__ == '__main__':
     man = BaseManager()
     man.add_brok()
 
-    m1 = man.add_mod(MyModule(net='out'))
-    m2 = man.add_mod(MyModule(net='in'))
+    m1 = man.add_mod(MyModule())
+    m2 = man.add_mod(MyModule())
     # m3 = man.add_mod(MyModule(net='full'))
     # m4 = man.add_mod(MyModule(net='full'))
 
-    conn = BaseConnectivity(3, 3)
+    conn = BaseConnectivity(3, 3, 1, m1.id, m2.id)
+    conn[m1.id, :, m2.id, :] = rand_bin_matrix((3,3),5)
+    
     man.add_conn(conn)
     man.connect(m1, m2, conn)
     # man.connect(m2, m1, conn)
