@@ -64,7 +64,7 @@ def show_pygraphviz(g, prog='dot', graph_attr={}, node_attr={}, edge_attr={}):
     imdisp(fd.name)
     os.remove(fd.name)
 
-def conn_to_bipartite(c):
+def conn_to_graph(c):
     """
     Convert a connectivity object into a bipartite NetworkX directed multigraph.
 
@@ -79,52 +79,34 @@ def conn_to_bipartite(c):
         raise ValueError('invalid connectivity object')
     
     g = nx.MultiDiGraph()
-    src_nodes = ['src:%i' % i for i in xrange(c.N_src)]
-    dest_nodes = ['dest:%i' % i for i in xrange(c.N_dest)]
-    g.add_nodes_from(src_nodes)
-    g.add_nodes_from(dest_nodes)
+    A_nodes = [c.A_id+':'+str(i) for i in xrange(c.N_A)]
+    B_nodes = [c.B_id+':'+str(i) for i in xrange(c.N_B)]
+    g.add_nodes_from(A_nodes)
+    g.add_nodes_from(B_nodes)
 
-    # First process connection keys:
+    # Create the edges of the graph:
     for key in [k for k in c._data.keys() if re.match('.*\/conn$', k)]:
-        syn, dir, name = key.split('/')
-        syn = int(syn)
-        for src, dest in itertools.product(xrange(c.N_src), xrange(c.N_dest)):
-            if c[src, dest, syn, dir, name] == 1:
-                if dir == '+':
-                    g.add_edge('src:%i' % src, 'dest:%i' % dest, syn)
-                elif dir == '-':
-                    g.add_edge('dest:%i' % dest, 'src:%i' % src, syn)
-                else:
-                    raise ValueError('unrecognized direction')
+        A_id, B_id, conn, name = key.split('/')
+        conn = int(conn)
+        for i, j in itertools.product(xrange(c.N(A_id)), xrange(c.N(B_id))):
+            if c[A_id, i, B_id, j, conn, name] == 1:
+                g.add_edge(A_id+':'+str(i), B_id+':'+str(j))
 
-    # Next, process attributes:
+
+    # Next, set the attributes on each edge: 
     for key in [k for k in c._data.keys() if not re.match('.*\/conn$', k)]:
-        syn, dir, name = key.split('/')
-        syn = int(syn)
-        for src, dest in itertools.product(xrange(c.N_src), xrange(c.N_dest)):
-
+        A_id, B_id, conn, name = key.split('/')
+        conn = int(conn)
+        for i, j in itertools.product(xrange(c.N(A_id)), xrange(c.N(B_id))):
+            
             # Parameters are only defined for node pairs for which there exists
             # a connection:
-            if c[src, dest, syn, dir] == 1:
-                print src,dest,syn,dir,name,c[src, dest, syn, dir, name]
-                if dir == '+':
-                    try:
-                        g['src:%i' % src]['dest:%i' % dest][syn][name] = \
-                            c[src, dest, syn, dir, name]                
-                    except:
-                        pass
-                elif dir == '-':
-                    try:
-                        g['dest:%i' % dest]['src:%i' % src][syn][name] = \
-                            c[src, dest, syn, dir, name]
-                    except:
-                        pass
-                else:
-                    raise ValueError('unrecognized direction')
-            
+            if c[A_id, i, B_id, j, conn, name]:                
+                g[A_id+':'+str(i)][B_id+':'+str(j)][conn][name] = \
+                    c[A_id, i, B_id, j, conn, name]            
     return g
 
-def bipartite_to_conn(g):
+def graph_to_conn(g):
     """
     Convert a bipartite NetworkX directed multigraph.
 
@@ -145,57 +127,47 @@ def bipartite_to_conn(g):
         raise ValueError('graph must be bipartite')
 
     # Categorize nodes and determine number of nodes to support:
-    N_src = 0
-    N_dest = 0
-    src_nodes = []
-    dest_nodes = []
+    N_A = 0
+    N_B = 0
+    A_nodes = []
+    B_nodes = []
+
+    node_dict = {}
     for label in g.nodes():
-        try:
-            n = int(re.search('src:(\d+)', label).group(1))
-        except:
-            pass
-        else:
-            src_nodes.append(n)
-            if n+1 > N_src:
-                N_src = n+1
-            continue
-        
-        try:
-            n = int(re.search('dest:(\d+)', label).group(1))
-        except:
-            raise ValueError('unrecognized node label')
-        else:
-            dest_nodes.append(n)
-            if n+1 > N_dest:
-                N_dest = n+1
-            continue
+        id, n = re.search('(.+):(.+)', label).groups()
+        if not node_dict.has_key(id):
+            node_dict[id] = set()
+        node_dict[id].add(int(n))
+    
+    # Graph must be bipartite:
+    if len(node_dict.keys()) != 2:
+        raise ValueError('incorrectly formatted graph')
+    A_id, B_id = node_dict.keys()
+    N_A = len(node_dict[A_id])
+    N_B = len(node_dict[B_id])
+
+    # Nodes must be consecutively numbered from 0 to N:
+    if set(range(max(node_dict[A_id])+1)) != node_dict[A_id] or \
+        set(range(max(node_dict[B_id])+1)) != node_dict[B_id]:
+        raise ValueError('nodes must be numbered consecutively from 0..N')
             
     # Find maximum number of edges between any two nodes:
-    N_mult = [len(g[u][v]) for u,v in set(g.edges())]
+    N_mult = max([len(g[u][v]) for u,v in set(g.edges())])
 
     # Create empty connectivity structure:
-    c = base.BaseConnectivity(N_src, N_dest, N_mult)
+    c = base.BaseConnectivity(N_A, N_B, N_mult, A_id, B_id)
 
     # Populate:
-    for i, j in itertools.product(src_nodes, dest_nodes):
+    for edge in g.edges():
+        A_id, i = edge[0].split(':')
+        i = int(i)
+        B_id, j = edge[1].split(':')
+        j = int(j)
+        edge_dict = g[edge[0]][edge[1]]
+        for conn in edge_dict.keys():
+            c[A_id, i, B_id, j, conn] = 1
 
-        # Check connections from src to dest nodes and from
-        # dest to src nodes:
-        for src, dest, dir in [('src:%i' % i, 'dest:%i' % j, '+'),
-                               ('dest:%i' % j, 'src:%i' % i, '-')]:
-
-            try:
-                edge = g[src][dest]
-            except:
-                pass
-            else:
-
-                # Loop through all synapses:
-                for syn in edge.keys():
-                    c[i,j,syn,dir] = 1
-
-                    # Loop through all synaptic parameters:
-                    for param in edge[syn].keys():
-                        c[i,j,syn,dir,param] = edge[syn][param]
+            for param in edge_dict[conn].keys():
+                c[A_id, i, B_id, j, conn, param] = edge_dict[conn][param]
     return c                        
         
