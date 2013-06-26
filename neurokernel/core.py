@@ -17,8 +17,8 @@ import bidict
 import base
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from tools.misc import rand_bin_matrix
-
+from tools.misc import rand_bin_matrix, catch_exception
+        
 class IntervalIndex(object):
     """
     Converts between indices within intervals of a sequence and absolute indices.
@@ -257,7 +257,13 @@ class Connectivity(base.BaseConnectivity):
         
     def src_mask_gpot(self, src_id='', dest_id=''):
         """
-        Mask of source graded potential neurons with connections to destination neurons.
+        Mask of source graded potential neurons with connections to destination
+        neurons.
+
+        Notes
+        -----
+        Returns
+        
         """
 
         if src_id == '' and dest_id == '':
@@ -317,11 +323,11 @@ class Connectivity(base.BaseConnectivity):
         assert src_type in ['gpot', 'spike', 'all']
         assert dest_type in ['gpot', 'spike', 'all']
         if src_type == 'all':
-            src_idx_new = self.idx_translate[src_id][src_idx]
+            src_idx_new = src_idx
         else:
             src_idx_new = self.idx_translate[src_id][src_type, src_idx]
         if dest_type == 'all':
-            dest_idx_new = self.idx_translate[dest_id][dest_idx]
+            dest_idx_new = dest_idx
         else:
             dest_idx_new = self.idx_translate[dest_id][dest_type, dest_idx]    
         return super(Connectivity, self).get(src_id, src_idx_new,
@@ -424,9 +430,9 @@ class Module(base.BaseModule):
         super(Module, self).add_conn(conn)
         
     @property
-    def N_in_gpot(self):
+    def N_gpot(self):
         """
-        Number of graded-potential neurons that receive input.
+        Number of exposed graded-potential neurons.
 
         Notes
         -----
@@ -437,9 +443,9 @@ class Module(base.BaseModule):
         raise NotImplementedError('N_in_gpot must be implemented')
 
     @property
-    def N_in_spike(self):
+    def N_spike(self):
         """
-        Number of spiking neurons that receive input.
+        Number of exposed spiking neurons.
 
         Notes
         -----
@@ -450,48 +456,13 @@ class Module(base.BaseModule):
         raise NotImplementedError('N_in_spike must be implemented')
 
     @property
-    def N_in(self):
+    def N(self):
         """
-        Total number of neurons that receive input.
-
-        """
-
-        return self.N_in_gpot+self.N_in_spike
-
-    @property
-    def N_out_gpot(self):
-        """
-        Number of graded-potential neurons that emit output.
-
-        Notes
-        -----
-        Must be overwritten to return the actual number of neurons.
+        Total number of exposed neurons.
 
         """
 
-        raise NotImplementedError('N_out_gpot must be implemented')
-
-    @property
-    def N_out_spike(self):
-        """
-        Number of spiking neurons that emit output.
-
-        Notes
-        -----
-        Must be overwritten to return the actual number of neurons.
-
-        """
-
-        raise NotImplementedError('N_out_spike must be implemented')
-
-    @property
-    def N_out(self):
-        """
-        Total number of neurons that emit output.
-
-        """
-
-        return self.N_out_gpot+self.N_out_spike
+        return self.N_gpot+self.N_spike
 
     def _get_in_data(self, in_gpot_dict, in_spike_dict):
         """
@@ -510,11 +481,15 @@ class Module(base.BaseModule):
         """
         
         self.logger.info('reading input buffer')
-        self.logger.info('input buffer: '+str(self._in_data))
-        
-        for in_id, data in self._in_data:
-            in_gpot_dict[in_id] = data[0]
-            in_spike_dict[in_id] = data[1]
+        for entry in self._in_data:
+            
+            # Every received data packet must contain a source module ID,
+            # graded potential neuron data, and spiking neuron data:
+            if len(entry) != 2:
+                self.logger.info('ignoring invalid input data')
+            else:
+                in_gpot_dict[entry[0]] = entry[1][0]
+                in_spike_dict[entry[0]] = entry[1][1]
             
         # Clear input buffer of reading all of its contents:
         self._in_data = []
@@ -547,10 +522,6 @@ class Module(base.BaseModule):
         for out_id in self.out_ids:
             out_idx_gpot = self._conn_dict[out_id].src_idx_gpot(self.id, out_id)
             out_idx_spike = self._conn_dict[out_id].src_idx_spike(self.id, out_id)
-            # self.logger.info('out_idx_gpot '+str(out_idx_gpot))
-            # self.logger.info('out_gpot '+str(out_gpot))            
-            # self.logger.info('out_idx_spike '+str(out_idx_spike))
-            # self.logger.info('out_spike '+str(out_spike))
 
             # Extract neuron data, wrap it in a tuple containing the
             # destination module ID, and stage it for transmission. Notice
@@ -560,7 +531,6 @@ class Module(base.BaseModule):
             self._out_data.append((out_id,
                                    (np.asarray(out_gpot)[out_idx_gpot],
                                     np.asarray(np.intersect1d(out_spike, out_idx_spike)))))
-        self.logger.info('output buffer: '+str(self._out_data))
         
     def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
         """
@@ -588,41 +558,47 @@ class Module(base.BaseModule):
         """
 
         self.logger.info('running execution step')
-    
+        
     def run(self):        
-        with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
+        """
+        Body of process.
+        """
+                
+        # Don't allow keyboard interruption of process:
+        self.logger.info('starting')
+        with IgnoreKeyboardInterrupt():
 
-            # Don't allow keyboard interruption of process:
-            self.logger.info('starting')
-            with IgnoreKeyboardInterrupt():
+            # Initialize environment:
+            self._init_net()
+            self._init_gpu()
 
-                self._init_net()
-                self._init_gpu()
+            # Initialize data structures for passing data to and from the
+            # run_step method:
+            in_gpot_dict = {}
+            in_spike_dict = {}
+            out_gpot = []
+            out_spike = []                    
+            while True:
 
-                # Initialize data structures for passing data to and from the
-                # run_step method:
-                in_gpot_dict = {}
-                in_spike_dict = {}
-                out_gpot = []
-                out_spike = []                    
-                while True:
+                # Get transmitted input data for processing:
+                catch_exception(self._get_in_data, self.logger.info,
+                                in_gpot_dict, in_spike_dict)
 
-                    # Get transmitted input data for processing:
-                    self._get_in_data(in_gpot_dict, in_spike_dict)
-                                        
-                    # Run the processing step:
-                    self.run_step(in_gpot_dict, in_spike_dict,     
-                                  out_gpot, out_spike)
+                # Run the processing step:
+                catch_exception(self.run_step, self.logger.info,
+                                in_gpot_dict, in_spike_dict,     
+                                out_gpot, out_spike)
 
-                    # Stage generated output data for transmission to other
-                    # modules:
-                    self._put_out_data(out_gpot, out_spike)
-                                        
-                    # Synchronize:
-                    self._sync()
+                # Stage generated output data for transmission to other
+                # modules:
+                catch_exception(self._put_out_data, self.logger.info,
+                                out_gpot, out_spike)
 
-            self.logger.info('exiting')
+                # Synchronize:
+                catch_exception(self._sync, self.logger.info)
 
+        self.logger.info('exiting')
+        
 class Manager(base.BaseManager):
     """
     Module manager.
@@ -655,12 +631,14 @@ class Manager(base.BaseManager):
         # Check whether the numbers of source and destination graded potential
         # neurons and spiking neurons supported by the connectivity object
         # are compatible:
-        if (m_A.N_out_gpot, m_A.N_out_spike) not in \
-            [(conn.N_A_gpot, conn.N_A_spike),
-             (conn.N_B_gpot, conn.N_B_spike)] or \
-            (m_B.N_out_gpot, m_B.N_out_spike) not in \
-             [(conn.N_A_gpot, conn.N_A_spike),
-              (conn.N_B_gpot, conn.N_B_spike)]: 
+        if not((m_A.N_gpot == conn.N_A_gpot and \
+                m_A.N_spike == conn.N_A_spike and \
+                m_B.N_gpot == conn.N_B_gpot and \
+                m_B.N_spike == conn.N_B_spike) or \
+               (m_A.N_gpot == conn.N_B_gpot and \
+                m_A.N_spike == conn.N_B_spike and \
+                m_B.N_gpot == conn.N_A_gpot and \
+                m_B.N_spike == conn.N_A_spike)):
             raise ValueError('modules and connectivity objects are incompatible')
 
         super(Manager, self).connect(m_A, m_B, conn)
@@ -680,19 +658,11 @@ if __name__ == '__main__':
             self.spike_data = np.zeros(N_spike, int)
 
         @property 
-        def N_in_gpot(self):
+        def N_gpot(self):
             return len(self.gpot_data)
 
         @property
-        def N_in_spike(self):
-            return len(self.spike_data)
-
-        @property 
-        def N_out_gpot(self):
-            return len(self.gpot_data)
-
-        @property
-        def N_out_spike(self):
+        def N_spike(self):
             return len(self.spike_data)
 
         def run_step(self, in_gpot_dict, in_spike_dict,                  
@@ -706,20 +676,21 @@ if __name__ == '__main__':
             # for i in in_gpot_dict.keys():
             #     temp += np.random.randint(-1, 1, 1)*in_gpot_dict[i][0]            
             # out_gpot[:] = temp
-            out_gpot[:] = np.random.rand(2)
+            out_gpot[:] = np.random.rand(self.N_gpot)
             
             # Randomly select neurons to emit spikes:
             # out_spike[:] = \
             #     sorted(set(np.random.randint(0, self.N_in_spike,
             #                                  np.random.randint(0, self.N_in_spike))))
-            out_spike[:] = np.array([0,1])
+            out_spike[:] = np.arange(self.N_spike)
+            
     logger = base.setup_logger()
 
     man = Manager()
     man.add_brok()
 
-    N1_gpot = N1_spike = 2
-    N2_gpot = N2_spike = 4
+    N1_gpot = N1_spike = 1
+    N2_gpot = N2_spike = 2
     m1 = man.add_mod(MyModule(N1_gpot, N1_spike, 
                               man.port_data, man.port_ctrl))
     m2 = man.add_mod(MyModule(N2_gpot, N2_spike, 
@@ -729,13 +700,20 @@ if __name__ == '__main__':
     # m4 = MyModule(N-2, 'unconnected', man.port_data, man.port_ctrl)
     # man.add_mod(m4)    
 
-    c1to2 = Connectivity(N1_gpot, N1_spike, N2_gpot, N2_spike, 1, m1.id, m2.id)
+    conn1 = Connectivity(N1_gpot, N1_spike, N2_gpot, N2_spike, 1, m1.id, m2.id)
     # c1to2['all',:,'all',:,0,'+'] = \
     #     rand_bin_matrix((N1_gpot+N1_spike, N2_gpot+N2_spike),
     #                     (N1_gpot+N1_spike)*(N2_gpot+N2_spike)/2, int)
-    c1to2[m1.id,'all',:,m2.id,'all',:] = np.ones((N1_gpot+N1_spike,
-                                                  N2_gpot+N2_spike), int)
-    print c1to2
+    # c1to2[m1.id,'all',:,m2.id,'all',:] = np.ones((N1_gpot+N1_spike,
+    #                                               N2_gpot+N2_spike), int)
+    conn1[m1.id,'all',:,m2.id,'all',:] = \
+        np.ones((N1_gpot+N1_spike,
+                 N2_gpot+N2_spike))      
+    conn1[m2.id,'all',:,m1.id,'all',:] = \
+        np.ones((N2_gpot+N2_spike,
+                 N1_gpot+N1_spike))
+          
+    print conn1
     
     # c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
     # c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 
@@ -752,13 +730,13 @@ if __name__ == '__main__':
 
 
 
-    man.connect(m1, m2, c1to2)
+    man.connect(m1, m2, conn1)
     # man.connect(m2, m3, c2to3)
     # man.connect(m1, m3, c1to3)
     # man.connect(m3, m4, c3to4)
     # man.connect(m4, m1, c4to1)
     
     man.start()
-    time.sleep(1)
+    time.sleep(2)
     man.stop()
     logger.info('all done')

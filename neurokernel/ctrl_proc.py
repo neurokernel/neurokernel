@@ -125,10 +125,9 @@ class ControlledProcess(mp.Process):
         Body of process.
         """
 
-        with TryExceptionOnSignal(self.quit_sig):
-            self._init_net()
-            while True:
-                self.logger.info('idling')
+        self._init_net()
+        while True:
+            self.logger.info('idling')
 
 if __name__ == '__main__':
     output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
