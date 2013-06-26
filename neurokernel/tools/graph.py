@@ -134,7 +134,10 @@ def graph_to_conn(g):
 
     node_dict = {}
     for label in g.nodes():
-        id, n = re.search('(.+):(.+)', label).groups()
+        try:
+            id, n = re.search('(.+):(.+)', label).groups()
+        except:
+            raise ValueError('incorrectly formatted node label: %s' % label)
         if not node_dict.has_key(id):
             node_dict[id] = set()
         node_dict[id].add(int(n))
