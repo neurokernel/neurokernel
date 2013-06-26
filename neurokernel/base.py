@@ -48,6 +48,9 @@ class BaseModule(ControlledProcess):
         Port to use when communicating with broker.
     port_ctrl : int
         Port used by broker to control module.
+    id : str
+        Module identifier. If no identifier is specified, a unique identifier is
+        automatically generated.
 
     Attributes
     ----------
@@ -93,9 +96,13 @@ class BaseModule(ControlledProcess):
         self.logger.info('net status changed: %s -> %s' % (self._net, value))
         self._net = value
 
-    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
-                 
-        super(BaseModule, self).__init__(port_ctrl, signal.SIGUSR1)
+    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
+
+        # Generate a unique ID if none is specified:
+        if id is None:
+            id = uid()
+
+        super(BaseModule, self).__init__(port_ctrl, signal.SIGUSR1, id)
 
         # Logging:
         self.logger = twiggy.log.name('module %s' % self.id)
@@ -431,7 +438,7 @@ class Broker(ControlledProcess):
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
                  routing_table=None):
-        super(Broker, self).__init__(port_ctrl, signal.SIGUSR1)
+        super(Broker, self).__init__(port_ctrl, signal.SIGUSR1, uid())
 
         # Logging:
         self.logger = twiggy.log.name('broker %s' % self.id)
@@ -1159,16 +1166,28 @@ class BaseManager(object):
         recv_ids = self.mod_dict.keys()
         while recv_ids:
 
-            # Send quit messages and wait for acknowledgments:
+            # Send quit messages to all live modules:
             i = recv_ids[0]
+            self.logger.info(str(recv_ids))
             self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
+
+            # If a module acknowledges receiving a quit message,
+            # wait for it to shutdown:
             if is_poll_in(self.sock_ctrl, poller):
                  j, data = self.sock_ctrl.recv_multipart()
                  self.logger.info('recv from %s: ack' % j)
                  if j in recv_ids:
                      recv_ids.remove(j)
                      self.mod_dict[j].join(1)
+
+            # Sometimes quit messages are received but the acknowledgements are lost;
+            # if so, the module will eventually shutdown:
+            # XXX this shouldn't be necessary XXX
+            if not self.mod_dict[i].is_alive() and i in recv_ids:
+                self.logger.info('%s shutdown without ack' % i)
+                recv_ids.remove(i)
+                
         self.logger.info('all modules stopped')
 
         # After all modules have been stopped, shut down the broker:
@@ -1224,15 +1243,17 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
 
 if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix
+
+    np.random.seed(0)
     
     class MyModule(BaseModule):
         """
         Example of derived module class.
         """
 
-        def __init__(self, N, port_data=PORT_DATA,
+        def __init__(self, N, id, port_data=PORT_DATA,
                      port_ctrl=PORT_CTRL):
-            super(MyModule, self).__init__(port_data, port_ctrl)
+            super(MyModule, self).__init__(port_data, port_ctrl, id)
             self.data = np.zeros(N, np.float64)
             
         @property
@@ -1245,9 +1266,6 @@ if __name__ == '__main__':
             out[:] = np.random.rand(self.N)
 
         def run(self):
-
-            # Make each module instance generate different numbers:
-            np.random.seed(int(self.id))
             super(MyModule, self).run()
             
     # Set up logging:
@@ -1257,8 +1275,8 @@ if __name__ == '__main__':
     man = BaseManager()
     man.add_brok()
 
-    m1 = man.add_mod(MyModule(2))
-    m2 = man.add_mod(MyModule(4))
+    m1 = man.add_mod(MyModule(2, 'm1   '))
+    m2 = man.add_mod(MyModule(4, 'm2   '))
     # m3 = man.add_mod(MyModule(net='full'))
     # m4 = man.add_mod(MyModule(net='full'))
     
