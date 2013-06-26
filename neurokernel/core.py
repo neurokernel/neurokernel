@@ -255,64 +255,68 @@ class Connectivity(base.BaseConnectivity):
         else:
             raise ValueError('invalid module ID')
         
-    def src_mask_gpot(self, src_id='', dest_id=''):
+    def src_mask(self, src_id='', dest_id='',
+                 src_type='all', dest_type='all',
+                 dest_ports=slice(None, None)):
         """
-        Mask of source graded potential neurons with connections to destination
-        neurons.
-
-        Notes
-        -----
-        Returns
+        Mask of neurons with connections to destination neurons.
         
-        """
-
-        if src_id == '' and dest_id == '':
-            dir = self._AtoB
-        else:
-            self._validate_mod_names(src_id, dest_id)
-            dir = '/'.join((src_id, dest_id))
-        m_list = [self._data[k][self.idx_translate[src_id]['gpot', :], :] for k in self._keys_by_dir[dir]]
-        return np.any(np.sum(m_list).toarray(), axis=1)
-        
-    def src_idx_gpot(self, src_id='', dest_id=''):
-        """
-        Indices of source graded potential neurons with connections to destination neurons.
+        Parameters
+        ----------
+        src_id, dest_id : str
+           Module IDs. If no IDs are specified, the IDs stored in
+           attributes `A_id` and `B_id` are used in that order.
+        src_type : {'all', 'gpot', 'spike'}
+           Return a mask over all source neurons ('all'), only
+           the graded potential neurons ('gpot'), or only the spiking
+           neurons ('spike').
+        dest_ports : int or slice
+           Only look for source ports with connections to the specified
+           destination ports.        
         """
 
         if src_id == '' and dest_id == '':
             src_id = self.A_id
             dest_id = self.B_id
-        else:
-            self._validate_mod_names(src_id, dest_id)
-        
-        return np.arange(self.N_gpot(dest_id))[self.src_mask_gpot(src_id, dest_id)]
-                         
-    def src_mask_spike(self, src_id='', dest_id=''):
-        """
-        Mask of source spiking neurons with connections to destination neurons.
-        """
 
-        if src_id == '' and dest_id == '':
-            dir = self._AtoB
+        self._validate_mod_names(src_id, dest_id)
+        if src_type not in ['all', 'gpot', 'spike'] or \
+            dest_type not in ['all', 'gpot', 'spike']:
+            raise ValueError('invalid neuron type')
+        dir = '/'.join((src_id, dest_id))
+        if src_type == 'all':
+            src_slice = slice(None, None)
         else:
-            self._validate_mod_names(src_id, dest_id)
-            dir = '/'.join((src_id, dest_id))
-        m_list = [self._data[k][self.idx_translate[src_id]['spike', :], :] for k in self._keys_by_dir[dir]]
+            src_slice = self.idx_translate[src_id][src_type, :]
+        if dest_type == 'all':
+            dest_slice = dest_ports
+        else:                
+            dest_slice = self.idx_translate[dest_id][dest_type, dest_ports]
+        m_list = [self._data[k][src_slice, dest_slice] for k in self._keys_by_dir[dir]]
         return np.any(np.sum(m_list).toarray(), axis=1)
-
-    def src_idx_spike(self, src_id='', dest_id=''):
+        
+    def src_idx(self, src_id='', dest_id='',
+                src_type='all', dest_type='all',
+                dest_ports=slice(None, None)):        
         """
-        Indices of source spiking neurons with connections to destination neurons.
+        Indices of source neurons with connections to destination neurons.
+
+        See Also
+        --------
+        Connectivity.src_mask
         """
 
         if src_id == '' and dest_id == '':
             src_id = self.A_id
             dest_id = self.B_id
-        else:
-            self._validate_mod_names(src_id, dest_id)
-        
-        return np.arange(self.N_spike(dest_id))[self.src_mask_spike(src_id, dest_id)]
-    
+        mask = self.src_mask(src_id, dest_id, src_type, dest_type, dest_ports)    
+        if src_type == 'all':            
+            return np.arange(self.N(dest_id))[mask]
+        elif src_type == 'gpot':
+            return np.arange(self.N_gpot(src_id))[mask]
+        elif src_type == 'spike':
+            return np.arange(self.N_spike(src_id))[mask]
+            
     def get(self, src_id, src_type, src_idx,
             dest_id, dest_type, dest_idx,
             conn=0, param='conn'):
@@ -371,7 +375,12 @@ class Module(base.BaseModule):
         Port to use when communicating with broker.
     port_ctrl : int
         Port used by broker to control module.
-
+    id : str
+        Module identifier. If no identifier is specified, a unique identifier is
+        automatically generated.
+    device : int
+        GPU device to use.
+        
     Notes
     -----
     A module instance connected to other module instances contains a list of the
@@ -382,9 +391,9 @@ class Module(base.BaseModule):
     """
 
     def __init__(self, port_data=base.PORT_DATA,
-                 port_ctrl=base.PORT_CTRL, device=None):
+                 port_ctrl=base.PORT_CTRL, id=None, device=None):
         self.device = device
-        super(Module, self).__init__(port_data, port_ctrl)
+        super(Module, self).__init__(port_data, port_ctrl, id)
                         
     def _init_gpu(self):
         """
@@ -520,8 +529,10 @@ class Module(base.BaseModule):
         # values or spikes need to be transmitted to each destination
         # module:
         for out_id in self.out_ids:
-            out_idx_gpot = self._conn_dict[out_id].src_idx_gpot(self.id, out_id)
-            out_idx_spike = self._conn_dict[out_id].src_idx_spike(self.id, out_id)
+            out_idx_gpot = \
+                self._conn_dict[out_id].src_idx(self.id, out_id, 'gpot')
+            out_idx_spike = \
+                self._conn_dict[out_id].src_idx(self.id, out_id, 'spike')
 
             # Extract neuron data, wrap it in a tuple containing the
             # destination module ID, and stage it for transmission. Notice
@@ -652,8 +663,8 @@ if __name__ == '__main__':
 
         def __init__(self, N_gpot, N_spike, 
                      port_data=base.PORT_DATA,
-                     port_ctrl=base.PORT_CTRL, device=None):
-            super(MyModule, self).__init__(port_data, port_ctrl, device)
+                     port_ctrl=base.PORT_CTRL, id=None, device=None):
+            super(MyModule, self).__init__(port_data, port_ctrl, id, device)
             self.gpot_data = np.zeros(N_gpot, np.float64)
             self.spike_data = np.zeros(N_spike, int)
 
