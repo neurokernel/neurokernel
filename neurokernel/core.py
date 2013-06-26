@@ -255,7 +255,6 @@ class Connectivity(base.BaseConnectivity):
         else:
             raise ValueError('invalid module ID')
         
-    @property
     def src_mask_gpot(self, src_id='', dest_id=''):
         """
         Mask of source graded potential neurons with connections to destination neurons.
@@ -513,9 +512,9 @@ class Module(base.BaseModule):
         self.logger.info('reading input buffer')
         self.logger.info('input buffer: '+str(self._in_data))
         
-        for entry in self._in_data:
-            in_gpot_dict[entry[0]] = entry[1]
-            in_spike_dict[entry[0]] = entry[2]
+        for in_id, data in self._in_data:
+            in_gpot_dict[in_id] = data[0]
+            in_spike_dict[in_id] = data[1]
             
         # Clear input buffer of reading all of its contents:
         self._in_data = []
@@ -546,19 +545,21 @@ class Module(base.BaseModule):
         # values or spikes need to be transmitted to each destination
         # module:
         for out_id in self.out_ids:
-            out_idx_gpot = self.conn_dict[out_id].src_idx_gpot(self.id, out_id)
-            out_idx_spike = self.conn_dict[out_id].src_idx_spike(self.id, out_id)
-            self.logger.info('out_idx_gpot '+str(out_idx_gpot))
-            self.logger.info('out_gpot '+str(out_gpot))            
-            self.logger.info('out_idx_spike '+str(out_idx_spike))
-            self.logger.info('out_spike '+str(out_spike))
+            out_idx_gpot = self._conn_dict[out_id].src_idx_gpot(self.id, out_id)
+            out_idx_spike = self._conn_dict[out_id].src_idx_spike(self.id, out_id)
+            # self.logger.info('out_idx_gpot '+str(out_idx_gpot))
+            # self.logger.info('out_gpot '+str(out_gpot))            
+            # self.logger.info('out_idx_spike '+str(out_idx_spike))
+            # self.logger.info('out_spike '+str(out_spike))
+
             # Extract neuron data, wrap it in a tuple containing the
             # destination module ID, and stage it for transmission. Notice
             # that since out_spike contains neuron indices, those indices
             # that need to be transmitted can be obtained via a set
             # operation:
-            self._out_data.append((out_id, np.asarray(out_gpot)[out_idx_gpot],
-                np.asarray(np.intersect1d(out_spike, out_idx_spike))))
+            self._out_data.append((out_id,
+                                   (np.asarray(out_gpot)[out_idx_gpot],
+                                    np.asarray(np.intersect1d(out_spike, out_idx_spike)))))
         self.logger.info('output buffer: '+str(self._out_data))
         
     def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
@@ -597,7 +598,6 @@ class Module(base.BaseModule):
 
                 self._init_net()
                 self._init_gpu()
-                self.running = True
 
                 # Initialize data structures for passing data to and from the
                 # run_step method:
@@ -702,16 +702,17 @@ if __name__ == '__main__':
 
             # Perform some random transformations of the graded potential neuron
             # data:        
-            temp = np.random.randint(0, 5, self.N_in_gpot)
-            for i in in_gpot_dict.keys():
-                temp += np.random.randint(-1, 1, 1)*in_gpot_dict[i][0]            
-            out_gpot[:] = temp
-
-            # Randomly select neurons to emit spikes:
-            out_spike[:] = \
-                sorted(set(np.random.randint(0, self.N_in_spike,
-                                             np.random.randint(0, self.N_in_spike))))
+            # temp = np.random.randint(0, 5, self.N_in_gpot)
+            # for i in in_gpot_dict.keys():
+            #     temp += np.random.randint(-1, 1, 1)*in_gpot_dict[i][0]            
+            # out_gpot[:] = temp
+            out_gpot[:] = np.random.rand(2)
             
+            # Randomly select neurons to emit spikes:
+            # out_spike[:] = \
+            #     sorted(set(np.random.randint(0, self.N_in_spike,
+            #                                  np.random.randint(0, self.N_in_spike))))
+            out_spike[:] = np.array([0,1])
     logger = base.setup_logger()
 
     man = Manager()
@@ -758,6 +759,6 @@ if __name__ == '__main__':
     # man.connect(m4, m1, c4to1)
     
     man.start()
-    time.sleep(2)
+    time.sleep(1)
     man.stop()
     logger.info('all done')
