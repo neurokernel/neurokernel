@@ -30,6 +30,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
 from tools.comm import is_poll_in
 from routing_table import RoutingTable
 from uid import uid
+from tools.misc import catch_exception
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
@@ -116,7 +117,20 @@ class BaseModule(ControlledProcess):
         # Objects describing connectivity between this module and other modules
         # keyed by the IDs of the other modules:
         self._conn_dict = {}
-        
+
+    @property
+    def N(self):
+        """
+        Number of ports exposed by module.
+
+        Notes
+        -----
+        Must be overwritten to return the actual number of ports.
+
+        """
+
+        raise NotImplementedError('N must be implemented')
+    
     @property
     def all_ids(self):
         """
@@ -367,31 +381,30 @@ class BaseModule(ControlledProcess):
         Body of process.
         """
 
-        with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
+        # Don't allow keyboard interruption of process:
+        self.logger.info('starting')
+        with IgnoreKeyboardInterrupt():
 
-            # Don't allow keyboard interruption of process:
-            self.logger.info('starting')
-            with IgnoreKeyboardInterrupt():
+            # Initialize environment:
+            self._init_net()
 
-                self._init_net()
+            in_dict = {}
+            out = []
+            while True:
 
-                in_dict = {}
-                out = []
-                while True:
+                # Get input data:
+                catch_exception(self._get_in_data,self.logger.info,in_dict)
 
-                    # Get input data:
-                    self._get_in_data(in_dict)
+                # Run the processing step:
+                catch_exception(self.run_step,self.logger.info,in_dict, out)
 
-                    # Run the processing step:
-                    self.run_step(in_dict, out)
+                # Prepare the generated data for output:
+                catch_exception(self._put_out_data,self.logger.info,out)
 
-                    # Prepare the generated data for output:
-                    self._put_out_data(out)
+                # Synchronize:
+                catch_exception(self._sync,self.logger.info)
 
-                    # Synchronize:
-                    self._sync()
-
-            self.logger.info('exiting')
+        self.logger.info('exiting')
 
 class Broker(ControlledProcess):
     """
@@ -552,7 +565,9 @@ class Broker(ControlledProcess):
         Body of process.
         """
 
-        with TryExceptionOnSignal(self.quit_sig, Exception, self.id):
+        # Don't allow keyboard interruption of process:
+        self.logger.info('starting')
+        with IgnoreKeyboardInterrupt():
             self.recv_coords_list = self.routing_table.coords
             self._init_net()
         self.logger.info('exiting')
@@ -728,6 +743,15 @@ class BaseConnectivity(object):
     def src_mask(self, src_id='', dest_id='', dest_ports=slice(None, None)):
         """
         Mask of source ports with connections to destination ports.
+
+        Parameters
+        ----------
+        src_id, dest_id : str
+           Module IDs. If no IDs are specified, the IDs stored in
+           attributes `A_id` and `B_id` are used in that order.
+        dest_ports : int or slice
+           Only look for source ports with connections to the specified
+           destination ports.        
         """
 
         if src_id == '' and dest_id == '':
@@ -745,6 +769,10 @@ class BaseConnectivity(object):
     def src_idx(self, src_id='', dest_id='', dest_ports=slice(None, None)):
         """
         Indices of source ports with connections to destination ports.
+
+        See Also
+        --------
+        BaseConnectivity.src_mask        
         """
 
         if src_id == '' and dest_id == '':
@@ -759,6 +787,15 @@ class BaseConnectivity(object):
     def dest_mask(self, src_id='', dest_id='', src_ports=slice(None, None)):
         """
         Mask of destination ports with connections to source ports.
+
+        Parameters
+        ----------
+        src_id, dest_id : str
+           Module IDs. If no IDs are specified, the IDs stored in
+           attributes `A_id` and `B_id` are used in that order.
+        src_ports : int or slice
+           Only look for destination ports with connections to the specified
+           source ports.        
         """
 
         if src_id == '' and dest_id == '':
@@ -776,6 +813,10 @@ class BaseConnectivity(object):
     def dest_idx(self, src_id='', dest_id='', src_ports=slice(None, None)):
         """
         Indices of destination ports with connections to source ports.
+
+        See Also
+        --------
+        BaseConnectivity.dest_mask        
         """
 
         if src_id == '' and dest_id == '':
@@ -805,10 +846,18 @@ class BaseConnectivity(object):
     def _format_bin_array(self, a, indent=0):
         """
         Format a binary array for printing.
+
+        Parameters
+        ----------
+        a : 2D array_like
+            Array to format. Assumes the array contains binary values.
+        indent : int
+            Number of columns by which to indent the formatted array.
         
-        Notes
-        -----
-        Assumes a 2D array containing binary values.
+        Returns
+        -------
+        result : str
+            Formatted array.            
         """
         
         sp0 = ' '*indent
@@ -989,6 +1038,10 @@ class BaseManager(object):
         if m_A.id not in [conn.A_id, conn.B_id] or \
             m_B.id not in [conn.A_id, conn.B_id]:
             raise ValueError('connectivity object doesn\'t contain modules\' IDs')
+
+        if not((m_A.N == conn.N_A and m_B.N == conn.N_B) or \
+               (m_A.N == conn.N_B and m_B.N == conn.N_A)):
+            raise ValueError('modules and connectivity objects are incompatible')
 
         # Add the module and connection instances to the internal
         # dictionaries of the manager instance if they are not already there:
@@ -1177,11 +1230,20 @@ if __name__ == '__main__':
         Example of derived module class.
         """
 
+        def __init__(self, N, port_data=PORT_DATA,
+                     port_ctrl=PORT_CTRL):
+            super(MyModule, self).__init__(port_data, port_ctrl)
+            self.data = np.zeros(N, np.float64)
+            
+        @property
+        def N(self):
+            return len(self.data)
+        
         def run_step(self, in_dict, out):
             super(MyModule, self).run_step(in_dict, out)
             
-            out[:] = np.random.rand(3)
-            
+            out[:] = np.random.rand(self.N)
+
         def run(self):
 
             # Make each module instance generate different numbers:
@@ -1191,24 +1253,25 @@ if __name__ == '__main__':
     # Set up logging:
     logger = setup_logger()
 
-    np.random.seed(0)
-
     # Set up and start emulation:
     man = BaseManager()
     man.add_brok()
 
-    m1 = man.add_mod(MyModule())
-    m2 = man.add_mod(MyModule())
+    m1 = man.add_mod(MyModule(2))
+    m2 = man.add_mod(MyModule(4))
     # m3 = man.add_mod(MyModule(net='full'))
     # m4 = man.add_mod(MyModule(net='full'))
-
-    conn = BaseConnectivity(3, 3, 1, m1.id, m2.id)
-    conn[m1.id, :, m2.id, :] = [[1, 0, 0],
-                                [0, 1, 0],
-                                [0, 0, 1]]    
-    conn[m2.id, :, m1.id, :] = [[1, 0, 0],
-                                [0, 1, 0],
-                                [0, 0, 1]]    
+    
+    # conn = BaseConnectivity(3, 3, 1, m1.id, m2.id)
+    # conn[m1.id, :, m2.id, :] = [[1, 0, 0],
+    #                             [0, 1, 0],
+    #                             [0, 0, 1]]    
+    # conn[m2.id, :, m1.id, :] = [[1, 0, 0],
+    #                             [0, 1, 0],
+    #                             [0, 0, 1]]
+    conn = BaseConnectivity(2, 4, 1, m1.id, m2.id)    
+    conn[m1.id, :, m2.id, :] = np.ones((2, 4))
+    #conn[m2.id, :, m1.id, :] = np.ones((4, 2))
     man.add_conn(conn)
     man.connect(m1, m2, conn)
     
@@ -1221,6 +1284,6 @@ if __name__ == '__main__':
     # man.connect(m4, m2, conn)
 
     man.start()
-    time.sleep(1)
+    time.sleep(2)
     man.stop()
     logger.info('all done')
