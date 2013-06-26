@@ -194,7 +194,7 @@ class BaseModule(ControlledProcess):
         Control port handler.
         """
 
-        self.logger.info('recv: %s' % str(msg))
+        self.logger.info('recv ctrl message: %s' % str(msg))
         if msg[0] == 'quit':
             try:
                 self.stream_ctrl.flush()
@@ -260,7 +260,12 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('retrieving input')        
         for entry in self._in_data:
-            in_dict[entry[0]] = entry[1]
+
+            # Every received data packet must contain a source module ID and a payload:
+            if len(entry) != 2:
+                self.logger.info('ignoring invalid input data')
+            else:
+                in_dict[entry[0]] = entry[1]
 
         # Clear input buffer:
         self._in_data = []
