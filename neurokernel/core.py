@@ -316,7 +316,36 @@ class Connectivity(base.BaseConnectivity):
             return np.arange(self.N_gpot(src_id))[mask]
         elif src_type == 'spike':
             return np.arange(self.N_spike(src_id))[mask]
+
+    def multapses(self, src_id, src_type, src_idx, dest_id, dest_type,
+                  dest_idx):
+        """
+        Return number of multapses for the specified connection.
+        """
+        
+        assert src_type in ['gpot', 'spike', 'all']
+        assert dest_type in ['gpot', 'spike', 'all']
+        self._validate_mod_names(src_id, dest_id)
+        if src_type == 'all':
+            src_idx_new = src_idx
+        else:
+            src_idx_new = self.idx_translate[src_id][src_type, src_idx]
+        if dest_type == 'all':
+            dest_idx_new = dest_idx
+        else:
+            dest_idx_new = self.idx_translate[dest_id][dest_type, dest_idx]
             
+        dir = '/'.join((src_id, dest_id))
+        count = 0
+        for k in self._keys_by_dir[dir]:
+            conn, name = k.split('/')[2:]
+            conn = int(conn)
+            if name == 'conn' and \
+                self.get(src_id, src_type, src_idx, dest_id,
+                         dest_type, dest_idx, conn, name):
+                count += 1
+        return count
+        
     def get(self, src_id, src_type, src_idx,
             dest_id, dest_type, dest_idx,
             conn=0, param='conn'):
