@@ -901,7 +901,23 @@ class BaseConnectivity(object):
         """
         
         return sp.sparse.lil_matrix(shape, dtype=dtype)
-            
+
+    def multapses(self, src_id, src_idx, dest_id, dest_idx):
+        """
+        Return number of multapses for the specified connection.
+        """
+
+        self._validate_mod_names(src_id, dest_id)
+        dir = '/'.join((src_id, dest_id))
+        count = 0
+        for k in self._keys_by_dir[dir]:
+            conn, name = k.split('/')[2:]
+            conn = int(conn)
+            if name == 'conn' and \
+                self.get(src_id, src_idx, dest_id, dest_idx, conn, name):
+                count += 1
+        return count
+
     def get(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn'):
         """
         Retrieve a value in the connectivity class instance.
