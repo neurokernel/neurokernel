@@ -144,7 +144,10 @@ def graph_to_conn(g):
     Notes
     -----
     Assumes that all nodes are labels 'src:X' or 'dest:X'.
-    
+
+    When loading a graph from a GEXF file via networkx.read_gexf(),
+    the relabel parameter should be set to True to prevent the actual labels in
+    the file from being ignored.
     """
 
     if not isinstance(g, nx.MultiDiGraph):
@@ -197,6 +200,12 @@ def graph_to_conn(g):
             c[A_id, i, B_id, j, conn] = 1
 
             for param in edge_dict[k].keys():
-                c[A_id, i, B_id, j, conn, param] = edge_dict[k][param]
+
+                # The ID loaded by networkx.read_gexf() is always a string, but
+                # should be interpreted as an integer:
+                if param == 'id':
+                    c[A_id, i, B_id, j, conn, param] = int(edge_dict[k][param])
+                else:
+                    c[A_id, i, B_id, j, conn, param] = float(edge_dict[k][param])
     return c                        
         
