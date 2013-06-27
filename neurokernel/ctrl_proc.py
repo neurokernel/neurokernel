@@ -24,7 +24,6 @@ from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
 from ctx_managers import TryExceptionOnSignal, IgnoreKeyboardInterrupt
-from uid import uid
 
 # Use a finite linger time to prevent sockets from either hanging or
 # being uncleanly terminated when shutdown:
@@ -40,17 +39,19 @@ class ControlledProcess(mp.Process):
         Port for receiving control messages.
     quit_sig : int
         OS signal to use when quitting the proess.
-        
+    id : str
+        Unique object identifier. Used for communication and logging.
+    
     See Also
     --------
     multiprocessing.Process
     
     """
 
-    def __init__(self, port_ctrl, quit_sig, *args, **kwargs):
+    def __init__(self, port_ctrl, quit_sig, id, *args, **kwargs):
 
         # Unique object identifier:
-        self.id = uid()
+        self.id = id
 
         # Logging:
         self.logger = twiggy.log.name(self.id)
@@ -143,7 +144,7 @@ if __name__ == '__main__':
     # Protect both the child and parent processes from being clobbered by
     # Ctrl-C:
     with IgnoreKeyboardInterrupt():
-        p = ControlledProcess(PORT_CTRL, signal.SIGUSR1)
+        p = ControlledProcess(PORT_CTRL, signal.SIGUSR1, 'mymod')
         p.start()
 
         time.sleep(3)
