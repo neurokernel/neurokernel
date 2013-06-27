@@ -1,0 +1,3 @@
+include AUTHORS CHANGES INSTALL LICENSE README.rst
+recursive-include docs *
+exclude MANIFEST.in
