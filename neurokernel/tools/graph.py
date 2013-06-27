@@ -167,10 +167,10 @@ def graph_to_conn(g):
         B_id, j = edge[1].split(':')
         j = int(j)
         edge_dict = g[edge[0]][edge[1]]
-        for conn in edge_dict.keys():
+        for conn, k in enumerate(edge_dict.keys()):
             c[A_id, i, B_id, j, conn] = 1
 
-            for param in edge_dict[conn].keys():
-                c[A_id, i, B_id, j, conn, param] = edge_dict[conn][param]
+            for param in edge_dict[k].keys():
+                c[A_id, i, B_id, j, conn, param] = edge_dict[k][param]
     return c                        
         
