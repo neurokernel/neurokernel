@@ -259,7 +259,7 @@ class Connectivity(base.BaseConnectivity):
                  src_type='all', dest_type='all',
                  dest_ports=slice(None, None)):
         """
-        Mask of neurons with connections to destination neurons.
+        Mask of source neurons with connections to destination neurons.
         
         Parameters
         ----------
@@ -317,6 +317,68 @@ class Connectivity(base.BaseConnectivity):
         elif src_type == 'spike':
             return np.arange(self.N_spike(src_id))[mask]
 
+    def dest_mask(self, src_id='', dest_id='',
+                 src_type='all', dest_type='all',
+                 src_ports=slice(None, None)):
+        """
+        Mask of destination with connections to source neurons.
+        
+        Parameters
+        ----------
+        src_id, dest_id : str
+           Module IDs. If no IDs are specified, the IDs stored in
+           attributes `A_id` and `B_id` are used in that order.
+        src_type : {'all', 'gpot', 'spike'}
+           Return a mask over all source neurons ('all'), only
+           the graded potential neurons ('gpot'), or only the spiking
+           neurons ('spike').
+        src_ports : int or slice
+           Only look for destination ports with connections to the specified
+           source ports.        
+        """
+
+        if src_id == '' and dest_id == '':
+            src_id = self.A_id
+            dest_id = self.B_id
+
+        self._validate_mod_names(src_id, dest_id)
+        if src_type not in ['all', 'gpot', 'spike'] or \
+            dest_type not in ['all', 'gpot', 'spike']:
+            raise ValueError('invalid neuron type')
+        dir = '/'.join((src_id, dest_id))
+        if src_type == 'all':
+            src_slice = src_ports
+        else:
+            src_slice = self.idx_translate[src_id][src_type, src_ports]
+        if dest_type == 'all':
+            dest_slice = slice(None, None) 
+        else:                
+            dest_slice = self.idx_translate[dest_id][dest_type, :]
+        m_list = [self._data[k][src_slice, dest_slice] for k in self._keys_by_dir[dir]]
+        return np.any(np.sum(m_list).toarray(), axis=0)
+
+    def dest_idx(self, src_id='', dest_id='',
+                src_type='all', dest_type='all',
+                src_ports=slice(None, None)):        
+        """
+        Indices of destination neurons with connections to source neurons.
+
+        See Also
+        --------
+        Connectivity.src_mask
+        """
+
+        if src_id == '' and dest_id == '':
+            src_id = self.A_id
+            dest_id = self.B_id
+        mask = self.dest_mask(src_id, dest_id, src_type, dest_type, src_ports)    
+        if src_type == 'all':            
+            return np.arange(self.N(dest_id))[mask]
+        elif src_type == 'gpot':
+            return np.arange(self.N_gpot(src_id))[mask]
+        elif src_type == 'spike':
+            return np.arange(self.N_spike(src_id))[mask]
+    
     def multapses(self, src_id, src_type, src_idx, dest_id, dest_type,
                   dest_idx):
         """
