@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 from .. import base
+from .. import core
 
 def imdisp(f):
     """
@@ -84,13 +85,33 @@ def conn_to_graph(c):
     g.add_nodes_from(A_nodes)
     g.add_nodes_from(B_nodes)
 
+    # Set the neuron_type attribute of the nodes if
+    # the specified object is a Connectivity instance:
+    if isinstance(c, core.Connectivity):
+        for i in xrange(c.N_A_gpot):
+            g[c.A_id+':'+\
+                str(c.idx_translate[c.A_id]['gpot', i])]['neuron_type'] = 'gpot'
+        for i in xrange(c.N_B_gpot):
+            g[c.B_id+':'+\
+                str(c.idx_translate[c.B_id]['gpot', i])]['neuron_type'] = 'gpot'
+        for i in xrange(c.N_A_spike):
+            g[c.A_id+':'+\
+                str(c.idx_translate[c.A_id]['spike', i])]['neuron_type'] = 'spike'
+        for i in xrange(c.N_B_spike):
+            g[c.B_id+':'+\
+                str(c.idx_translate[c.B_id]['spike', i])]['neuron_type'] = 'spike'
+            
     # Create the edges of the graph:
     for key in [k for k in c._data.keys() if re.match('.*\/conn$', k)]:
         A_id, B_id, conn, name = key.split('/')
         conn = int(conn)
         for i, j in itertools.product(xrange(c.N(A_id)), xrange(c.N(B_id))):
-            if c[A_id, i, B_id, j, conn, name] == 1:
-                g.add_edge(A_id+':'+str(i), B_id+':'+str(j))
+            if isinstance(c, core.Connectivity):
+                if c[A_id, 'all', i, B_id, 'all', j, conn, name] == 1:
+                    g.add_edge(A_id+':'+str(i), B_id+':'+str(j))                
+            else:
+                if c[A_id, i, B_id, j, conn, name] == 1:
+                    g.add_edge(A_id+':'+str(i), B_id+':'+str(j))
 
 
     # Next, set the attributes on each edge: 
@@ -101,9 +122,14 @@ def conn_to_graph(c):
             
             # Parameters are only defined for node pairs for which there exists
             # a connection:
-            if c[A_id, i, B_id, j, conn, name]:                
-                g[A_id+':'+str(i)][B_id+':'+str(j)][conn][name] = \
-                    c[A_id, i, B_id, j, conn, name]            
+            if isinstance(c, core.Connectivity):
+                if c[A_id, 'all', i, B_id, 'all', j, conn, name]:                
+                    g[A_id+':'+str(i)][B_id+':'+str(j)][conn][name] = \
+                        c[A_id, 'all', i, B_id, 'all', j, conn, name]  
+            else:
+                if c[A_id, i, B_id, j, conn, name]:                
+                    g[A_id+':'+str(i)][B_id+':'+str(j)][conn][name] = \
+                        c[A_id, i, B_id, j, conn, name]            
     return g
 
 def graph_to_conn(g):
