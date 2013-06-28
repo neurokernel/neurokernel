@@ -89,16 +89,16 @@ def conn_to_graph(c):
     # the specified object is a Connectivity instance:
     if isinstance(c, core.Connectivity):
         for i in xrange(c.N_A_gpot):
-            g[c.A_id+':'+\
+            g.node[c.A_id+':'+\
                 str(c.idx_translate[c.A_id]['gpot', i])]['neuron_type'] = 'gpot'
         for i in xrange(c.N_B_gpot):
-            g[c.B_id+':'+\
+            g.node[c.B_id+':'+\
                 str(c.idx_translate[c.B_id]['gpot', i])]['neuron_type'] = 'gpot'
         for i in xrange(c.N_A_spike):
-            g[c.A_id+':'+\
+            g.node[c.A_id+':'+\
                 str(c.idx_translate[c.A_id]['spike', i])]['neuron_type'] = 'spike'
         for i in xrange(c.N_B_spike):
-            g[c.B_id+':'+\
+            g.node[c.B_id+':'+\
                 str(c.idx_translate[c.B_id]['spike', i])]['neuron_type'] = 'spike'
             
     # Create the edges of the graph:
@@ -132,18 +132,21 @@ def conn_to_graph(c):
                         c[A_id, i, B_id, j, conn, name]            
     return g
 
-def graph_to_conn(g):
+def graph_to_conn(g, conn_type=core.Connectivity):
     """
-    Convert a bipartite NetworkX directed multigraph.
+    Convert a bipartite NetworkX directed multigraph to a connectivity object.
 
     Parameters
     ----------
     g : networkx.MultiDiGraph
         Directed multigraph instance.
+    conn_type : {base.BaseConnectivity, core.Connectivity}
+        Type of output to generate.
     
     Notes
     -----
-    Assumes that all nodes are labels 'src:X' or 'dest:X'.
+    Assumes that `g` is bipartite and all of its nodes are labeled 'A:X' or
+    'B:X', where 'A' and 'B' are the names of the connected modules.
 
     When loading a graph from a GEXF file via networkx.read_gexf(),
     the relabel parameter should be set to True to prevent the actual labels in
@@ -154,10 +157,10 @@ def graph_to_conn(g):
         raise ValueError('invalid graph object')
     if not nx.is_bipartite(g):
         raise ValueError('graph must be bipartite')
-
+    if conn_type not in [base.BaseConnectivity, core.Connectivity]:
+        raise ValueError('invalid connectivity type')
+    
     # Categorize nodes and determine number of nodes to support:
-    N_A = 0
-    N_B = 0
     A_nodes = []
     B_nodes = []
 
@@ -182,14 +185,40 @@ def graph_to_conn(g):
     if set(range(max(node_dict[A_id])+1)) != node_dict[A_id] or \
         set(range(max(node_dict[B_id])+1)) != node_dict[B_id]:
         raise ValueError('nodes must be numbered consecutively from 0..N')
-            
+
+    # If a Connectivity object must be created, count how many graded potential
+    # and spiking neurons are comprised by the graph:
+    if conn_type == core.Connectivity:
+        N_A_gpot = 0
+        N_A_spike = 0
+        N_B_gpot = 0
+        N_B_spike = 0
+        for n in node_dict[A_id]:
+            if g.node[A_id+':'+str(n)]['neuron_type'] == 'gpot':
+                N_A_gpot += 1
+            elif g.node[A_id+':'+str(n)]['neuron_type'] == 'spike':
+                N_A_spike += 1
+            else:
+                raise ValueError('invalid neuron type')
+        for n in node_dict[B_id]:
+            if g.node[B_id+':'+str(n)]['neuron_type'] == 'gpot':
+                N_B_gpot += 1
+            elif g.node[B_id+':'+str(n)]['neuron_type'] == 'spike':
+                N_B_spike += 1
+            else:
+                raise ValueError('invalid neuron type')
+        
     # Find maximum number of edges between any two nodes:
     N_mult = max([len(g[u][v]) for u,v in set(g.edges())])
 
     # Create empty connectivity structure:
-    c = base.BaseConnectivity(N_A, N_B, N_mult, A_id, B_id)
-
-    # Populate:
+    if conn_type == base.BaseConnectivity:
+        c = base.BaseConnectivity(N_A, N_B, N_mult, A_id, B_id)
+    else:
+        c = core.Connectivity(N_A_gpot, N_A_spike, N_B_gpot, N_B_spike,
+                              N_mult, A_id, B_id)
+    
+    # Set the parameters in the connectivity object:
     for edge in g.edges():
         A_id, i = edge[0].split(':')
         i = int(i)
@@ -197,15 +226,29 @@ def graph_to_conn(g):
         j = int(j)
         edge_dict = g[edge[0]][edge[1]]
         for conn, k in enumerate(edge_dict.keys()):
-            c[A_id, i, B_id, j, conn] = 1
+            if conn_type == base.BaseConnectivity:
+                c[A_id, i, B_id, j, conn] = 1
+                
+                for param in edge_dict[k].keys():
 
-            for param in edge_dict[k].keys():
+                    # The ID loaded by networkx.read_gexf() is always a string, but
+                    # should be interpreted as an integer:
+                    if param == 'id':
+                        c[A_id, i, B_id, j, conn, param] = int(edge_dict[k][param])
+                    else:
+                        c[A_id, i, B_id, j, conn, param] = float(edge_dict[k][param])                        
+            else:
+                c[A_id, 'all', i, B_id, 'all', j, conn] = 1
+                
+                for param in edge_dict[k].keys():                    
 
-                # The ID loaded by networkx.read_gexf() is always a string, but
-                # should be interpreted as an integer:
-                if param == 'id':
-                    c[A_id, i, B_id, j, conn, param] = int(edge_dict[k][param])
-                else:
-                    c[A_id, i, B_id, j, conn, param] = float(edge_dict[k][param])
+                    # The ID loaded by networkx.read_gexf() is always a string, but
+                    # should be interpreted as an integer:
+                    if param == 'id':
+                        c[A_id, 'all', i, B_id, 'all', j, conn, param] = int(edge_dict[k][param])
+                    else:
+                        c[A_id, 'all', i, B_id, 'all', j, conn, param] = float(edge_dict[k][param])                        
+                
+                    
     return c                        
         
