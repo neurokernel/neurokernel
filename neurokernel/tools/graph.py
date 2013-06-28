@@ -227,28 +227,19 @@ def graph_to_conn(g, conn_type=core.Connectivity):
         edge_dict = g[edge[0]][edge[1]]
         for conn, k in enumerate(edge_dict.keys()):
             if conn_type == base.BaseConnectivity:
-                c[A_id, i, B_id, j, conn] = 1
-                
-                for param in edge_dict[k].keys():
-
-                    # The ID loaded by networkx.read_gexf() is always a string, but
-                    # should be interpreted as an integer:
-                    if param == 'id':
-                        c[A_id, i, B_id, j, conn, param] = int(edge_dict[k][param])
-                    else:
-                        c[A_id, i, B_id, j, conn, param] = float(edge_dict[k][param])                        
+                idx_tuple = (A_id, i, B_id, j, conn)
             else:
-                c[A_id, 'all', i, B_id, 'all', j, conn] = 1
-                
-                for param in edge_dict[k].keys():                    
+                idx_tuple = (A_id, 'all', i, B_id, 'all', j, conn)
+            c[idx_tuple] = 1
 
-                    # The ID loaded by networkx.read_gexf() is always a string, but
-                    # should be interpreted as an integer:
-                    if param == 'id':
-                        c[A_id, 'all', i, B_id, 'all', j, conn, param] = int(edge_dict[k][param])
-                    else:
-                        c[A_id, 'all', i, B_id, 'all', j, conn, param] = float(edge_dict[k][param])                        
-                
-                    
+            for param in edge_dict[k].keys():
+
+                # The ID loaded by networkx.read_gexf() is always a string, but
+                # should be interpreted as an integer:
+                if param == 'id':
+                    c[idx_tuple+(param,)] = int(edge_dict[k][param])
+                else:
+                    c[idx_tuple+(param,)] = float(edge_dict[k][param])                        
+                                    
     return c                        
         
