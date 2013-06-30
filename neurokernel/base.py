@@ -781,11 +781,11 @@ class BaseConnectivity(object):
         # XXX It isn't necessary to consider all of the connectivity matrices if
         # multapses are assumed to always have an entry in the first
         # connectivity matrix:
-        all_src_idx = np.arange(self.N(dest_id))[dest_ports]
+        all_dest_idx = np.arange(self.N(dest_id))[dest_ports]
         result = np.zeros(self.N(src_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
             result[:] = result+ \
-                [np.asarray([bool(np.intersect1d(all_src_idx, r).size) \
+                [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
                              for r in self._data[k].rows])]
         return result
 
@@ -793,6 +793,15 @@ class BaseConnectivity(object):
         """
         Indices of source ports with connections to destination ports.
 
+        Examples
+        --------
+        >>> c = BaseConnectivity(3, 2)
+        >>> c['A', 1, 'B', 0] = 1
+        >>> all(c.src_idx() == [1])
+        True
+        >>> all(c.src_idx(dest_ports=1) == [])
+        True
+        
         See Also
         --------
         BaseConnectivity.src_mask        
@@ -821,7 +830,7 @@ class BaseConnectivity(object):
         --------
         >>> c = BaseConnectivity(3, 2)
         >>> c['A', 1, 'B', 0] = 1
-        >>> all(c.dest_mask() == [False, True])
+        >>> all(c.dest_mask() == [True, False])
         True
         >>> all(c.dest_mask(src_ports=0) == [False, False])
         True
@@ -848,6 +857,15 @@ class BaseConnectivity(object):
         """
         Indices of destination ports with connections to source ports.
 
+        Examples
+        --------
+        >>> c = BaseConnectivity(3, 2)
+        >>> c['A', 1, 'B', 0] = 1
+        >>> all(c.dest_idx() == [0])
+        True
+        >>> all(c.dest_idx(src_ports=0) == [])
+        True
+        
         See Also
         --------
         BaseConnectivity.dest_mask        
