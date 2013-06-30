@@ -7,6 +7,12 @@ def rand_bin_matrix(sh, N, dtype=np.double):
     """
     Generate a rectangular binary matrix with randomly distributed nonzero entries.
 
+    Examples
+    --------
+    >>> m = rand_bin_matrix((2, 3), 3)
+    >>> set(m.flatten()) == set([0, 1])
+    True
+    
     Parameters
     ----------
     sh : tuple
@@ -31,6 +37,13 @@ def catch_exception(func, disp, *args, **kwargs):
     If an exception occurs while executing the specified function, the
     exception's message and the line number where it occurred (in the innermost
     traceback frame) are displayed.
+
+    Examples
+    --------
+    >>> import sys
+    >>> def f(x): x/0
+    >>> catch_exception(f, sys.stdout.write, 1) # doctest: +ELLIPSIS
+    f: integer division or modulo by zero (...:1)
     
     Parameters
     ----------
@@ -44,6 +57,7 @@ def catch_exception(func, disp, *args, **kwargs):
         Named function arguments.
         
     """
+    
     try:
         func(*args, **kwargs)
     except Exception as e:

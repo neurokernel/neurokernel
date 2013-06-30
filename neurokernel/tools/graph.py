@@ -71,8 +71,19 @@ def conn_to_graph(c):
 
     Parameters
     ----------
-    c : base.BaseConnectivity
+    c : {base.BaseConnectivity, core.Connectivity}
         Connectivity object.
+
+    Examples
+    --------
+    >>> c = base.BaseConnectivity(2, 3)
+    >>> c['A', 0, 'B', 1] = 1
+    >>> c['A', 1, 'B', 2] = 1
+    >>> g = conn_to_graph(c)
+    >>> g.nodes()
+    ['A:0', 'A:1', 'B:2', 'B:1', 'B:0']
+    >>> g.edges()
+    [('A:0', 'B:1'), ('A:1', 'B:2')]
     
     """
 
@@ -142,7 +153,18 @@ def graph_to_conn(g, conn_type=core.Connectivity):
         Directed multigraph instance.
     conn_type : {base.BaseConnectivity, core.Connectivity}
         Type of output to generate.
-    
+
+    Examples
+    --------
+    >>> import networkx as nx
+    >>> g = nx.MultiDiGraph()
+    >>> g.add_nodes_from(['A:0', 'A:1', 'B:2', 'B:1', 'B:0'])
+    >>> g.add_edges_from([('A:0', 'B:1'), ('A:1', 'B:2')])
+    >>> c = graph_to_conn(g, base.BaseConnectivity)
+    >>> c['A', :, 'B', :]
+    array([[0, 1, 0],
+           [0, 0, 1]])
+        
     Notes
     -----
     Assumes that `g` is bipartite and all of its nodes are labeled 'A:X' or
