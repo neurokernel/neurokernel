@@ -331,7 +331,7 @@ class Connectivity(base.BaseConnectivity):
             dest_id = self.B_id
         mask = self.src_mask(src_id, dest_id, src_type, dest_type, dest_ports)    
         if src_type == 'all':            
-            return np.arange(self.N(dest_id))[mask]
+            return np.arange(self.N(src_id))[mask]
         elif src_type == 'gpot':
             return np.arange(self.N_gpot(src_id))[mask]
         elif src_type == 'spike':
@@ -380,9 +380,6 @@ class Connectivity(base.BaseConnectivity):
                 result[r] = True
         return result[dest_slice]
 
-        # m_list = [self._data[k][src_slice, dest_slice] for k in self._keys_by_dir[dir]]
-        # return np.any(np.sum(m_list).toarray(), axis=0)
-
     def dest_idx(self, src_id='', dest_id='',
                 src_type='all', dest_type='all',
                 src_ports=slice(None, None)):        
@@ -398,12 +395,12 @@ class Connectivity(base.BaseConnectivity):
             src_id = self.A_id
             dest_id = self.B_id
         mask = self.dest_mask(src_id, dest_id, src_type, dest_type, src_ports)    
-        if src_type == 'all':            
+        if dest_type == 'all':
             return np.arange(self.N(dest_id))[mask]
-        elif src_type == 'gpot':
-            return np.arange(self.N_gpot(src_id))[mask]
-        elif src_type == 'spike':
-            return np.arange(self.N_spike(src_id))[mask]
+        elif dest_type == 'gpot':
+            return np.arange(self.N_gpot(dest_id))[mask]
+        elif dest_type == 'spike':
+            return np.arange(self.N_spike(dest_id))[mask]
     
     def multapses(self, src_id, src_type, src_idx, dest_id, dest_type,
                   dest_idx):
