@@ -231,6 +231,21 @@ class Connectivity(base.BaseConnectivity):
                 IntervalIndex([0, self.N_B_gpot,
                                self.N_B_gpot+self.N_B_spike],
                               ['gpot', 'spike'])
+            
+    def N(self, id, n_type='all'):
+        """
+        Return number of neurons of the specified type associated with the specified module.
+        """
+
+        if n_type == 'all':
+            return super(Connectivity, self).N(id)
+        elif n_type == 'gpot':
+            return self.N_gpot(id)
+        elif n_type == 'spike':
+            return self.N_spike(id)
+        else:
+            raise ValueError('invalid neuron type')
+
     def N_spike(self, id):
         """
         Return number of spiking neurons associated with the specified module.
@@ -292,8 +307,13 @@ class Connectivity(base.BaseConnectivity):
             dest_slice = dest_ports
         else:                
             dest_slice = self.idx_translate[dest_id][dest_type, dest_ports]
-        m_list = [self._data[k][src_slice, dest_slice] for k in self._keys_by_dir[dir]]
-        return np.any(np.sum(m_list).toarray(), axis=1)
+        all_dest_idx = np.arange(self.N(dest_id))[dest_slice]
+        result = np.zeros(self.N(src_id, src_type), dtype=bool)
+        for k in self._keys_by_dir[dir]:
+            result[:] = result+ \
+                [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
+                             for r in self._data[k].rows[src_slice]])]
+        return result
         
     def src_idx(self, src_id='', dest_id='',
                 src_type='all', dest_type='all',
@@ -354,8 +374,14 @@ class Connectivity(base.BaseConnectivity):
             dest_slice = slice(None, None) 
         else:                
             dest_slice = self.idx_translate[dest_id][dest_type, :]
-        m_list = [self._data[k][src_slice, dest_slice] for k in self._keys_by_dir[dir]]
-        return np.any(np.sum(m_list).toarray(), axis=0)
+        result = np.zeros(self.N(dest_id), dtype=bool)
+        for k in self._keys_by_dir[dir]:
+            for r in self._data[k].rows[src_slice]:
+                result[r] = True
+        return result[dest_slice]
+
+        # m_list = [self._data[k][src_slice, dest_slice] for k in self._keys_by_dir[dir]]
+        # return np.any(np.sum(m_list).toarray(), axis=0)
 
     def dest_idx(self, src_id='', dest_id='',
                 src_type='all', dest_type='all',
