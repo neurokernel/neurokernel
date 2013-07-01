@@ -25,6 +25,14 @@ class test_Connectivity(TestCase):
         assert all(c.src_mask(src_type='spike', dest_type='gpot') == [False, False])        
         assert all(c.src_mask(src_type='spike', dest_type='spike') == [False, False])
 
+    def test_Connectivity_src_mask_conn_slice(self):
+        c = core.Connectivity(2, 2, 3, 3)
+        c['A', 'all', :, 'B', 'gpot', 1] = 1
+        assert all(c.src_mask(src_type='gpot', dest_type='gpot') == [True, True])
+        assert all(c.src_mask(src_type='gpot', dest_type='spike') == [False, False])
+        assert all(c.src_mask(src_type='spike', dest_type='gpot') == [True, True])        
+        assert all(c.src_mask(src_type='spike', dest_type='spike') == [False, False])
+        
     def test_Connectivity_dest_mask_no_conn(self):
         c = core.Connectivity(2, 2, 3, 3)
         all(c.dest_mask() == [False, False, False, False, False, False])

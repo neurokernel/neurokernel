@@ -96,6 +96,9 @@ class IntervalIndex(object):
         Validate an index or slice against a specified interval.
         """
 
+        # Convert numpy integer types to native Python int:
+        if isinstance(i, np.generic):
+            i = np.asscalar(i)
         if type(i) == int:
             if i < interval[0] or i >= interval[1]:
                 raise ValueError('invalid index')
@@ -109,7 +112,11 @@ class IntervalIndex(object):
             raise ValueError('invalid type')
         
     def __getitem__(self, i):
-                    
+
+        # Convert numpy integer types to native Python int:
+        if isinstance(i, np.generic):
+            i = np.asscalar(i)
+
         # If a tuple is specified, the first entry is assumed to be the interval
         # label:        
         if type(i) == tuple:
@@ -128,7 +135,7 @@ class IntervalIndex(object):
                     stop = self._bounds[label]+self._intervals[label][1]
                 else:
                     stop = idx.stop+self._bounds[label]
-                return slice(start, stop, idx.step)                             
+                return slice(start, stop, idx.step)
         elif type(i) == int:
             for label in self._intervals.keys():
                 interval = self._intervals[label]
