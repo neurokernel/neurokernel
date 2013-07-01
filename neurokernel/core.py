@@ -515,7 +515,11 @@ class Module(base.BaseModule):
                  port_ctrl=base.PORT_CTRL, id=None, device=None):
         self.device = device
         super(Module, self).__init__(port_data, port_ctrl, id)
-                        
+
+        # Store indices of destination graded potential and spiking neurons separately:
+        self._out_idx_dict['gpot'] = {}
+        self._out_idx_dict['spike'] = {}
+        
     def _init_gpu(self):
         """
         Initialize GPU device.
@@ -650,10 +654,6 @@ class Module(base.BaseModule):
         # values or spikes need to be transmitted to each destination
         # module:
         for out_id in self.out_ids:
-            out_idx_gpot = \
-                self._conn_dict[out_id].src_idx(self.id, out_id, 'gpot')
-            out_idx_spike = \
-                self._conn_dict[out_id].src_idx(self.id, out_id, 'spike')
 
             # Extract neuron data, wrap it in a tuple containing the
             # destination module ID, and stage it for transmission. Notice
@@ -661,8 +661,8 @@ class Module(base.BaseModule):
             # that need to be transmitted can be obtained via a set
             # operation:
             self._out_data.append((out_id,
-                                   (np.asarray(out_gpot)[out_idx_gpot],
-                                    np.asarray(np.intersect1d(out_spike, out_idx_spike)))))
+                                   (np.asarray(out_gpot)[self._out_idx_dict['gpot'][out_id]],
+                                    np.asarray(np.intersect1d(out_spike, self._out_idx_dict['spike'][out_id])))))
         
     def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
         """
@@ -704,6 +704,16 @@ class Module(base.BaseModule):
             self._init_net()
             self._init_gpu()
 
+            # Extract indices of source ports for all modules receiving output
+            # once so that they don't need to be repeatedly extracted during the
+            # simulation:
+            self._out_idx_dict['gpot'] = \
+              {out_id:self._conn_dict[out_id].src_idx(self.id, out_id, 'gpot') for \
+               out_id in self.out_ids}
+            self._out_idx_dict['spike'] = \
+              {out_id:self._conn_dict[out_id].src_idx(self.id, out_id, 'spike') for \
+               out_id in self.out_ids}
+            
             # Initialize data structures for passing data to and from the
             # run_step method:
             in_gpot_dict = {}

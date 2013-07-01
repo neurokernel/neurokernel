@@ -125,6 +125,11 @@ class BaseModule(ControlledProcess):
         # keyed by the IDs of the other modules:
         self._conn_dict = {}
 
+        # Dictionary containing ports of destination modules that receive input
+        # from this module; must be initialized immediately before a simulation
+        # begins running:
+        self._out_idx_dict = {}
+        
     @property
     def N(self):
         """
@@ -311,9 +316,10 @@ class BaseModule(ControlledProcess):
         # Clear output buffer before populating it:
         self._out_data = []
 
+        # Use indices of destination ports to select which values need to be
+        # transmitted to each destination module:
         for out_id in self.out_ids:
-            out_idx = self._conn_dict[out_id].src_idx(self.id, out_id)
-            self._out_data.append((out_id, np.asarray(out)[out_idx]))
+            self._out_data.append((out_id, np.asarray(out)[self._out_idx_dict[out_id]]))
         
     def _sync(self):
         """
@@ -395,6 +401,15 @@ class BaseModule(ControlledProcess):
             # Initialize environment:
             self._init_net()
 
+            # Extract indices of source ports for all modules receiving output
+            # once so that they don't need to be repeatedly extracted during the
+            # simulation:
+            self._out_idx_dict = \
+              {out_id:self._conn_dict[out_id].src_idx(self.id, out_id) for \
+               out_id in self.out_ids}
+
+            # Initialize data structures for passing data to and from the
+            # run_step method:
             in_dict = {}
             out = []
             while True:
