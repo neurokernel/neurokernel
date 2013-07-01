@@ -66,6 +66,6 @@ def catch_exception(func, disp, *args, **kwargs):
         for fname in traceback.extract_tb(sys.exc_info()[2]):
             fname, lineno, fn, text = fname
 
-        disp(func.__name__ + ': ' + e.__class__.__name__ + ': ' + e.message + \
+        disp(func.__name__ + ': ' + e.__class__.__name__ + ': ' + str(e.message) + \
            ' (' + fname + ':' + str(lineno) + ')')
              
