@@ -68,7 +68,7 @@ class IntervalIndex(object):
         self._bounds = collections.OrderedDict()
         self._full_interval = min(bounds), max(bounds)
         for i in xrange(len(bounds)-1):
-            if bounds[i+1] <= bounds[i]:
+            if bounds[i+1] < bounds[i]:
                 raise ValueError('bounds sequence must be monotonic increasing')
             self._intervals[labels[i]] = (0, bounds[i+1]-bounds[i])
             self._bounds[labels[i]] = bounds[i]
@@ -142,6 +142,7 @@ class IntervalIndex(object):
                 bound = self._bounds[label]
                 if i >= interval[0]+bound and i < interval[1]+bound:
                     return i-(interval[0]+bound)
+            raise IndexError('interval index out of range')
         elif type(i) == slice:
             for label in self._intervals.keys():
                 interval = self._intervals[label]
@@ -218,10 +219,10 @@ class Connectivity(base.BaseConnectivity):
         self.idx_translate = {}
         if self.N_A_gpot == 0:
             self.idx_translate[A_id] = \
-                IntervalIndex([0, self.N_A_spike], ['spike'])
+                IntervalIndex([0, 0, self.N_A_spike], ['gpot', 'spike'])
         elif self.N_A_spike == 0:
             self.idx_translate[A_id] = \
-                IntervalIndex([0, self.N_A_gpot], ['gpot'])
+                IntervalIndex([0, self.N_A_gpot, self.N_A_gpot], ['gpot', 'spike'])
         else:
             self.idx_translate[A_id] = \
                 IntervalIndex([0, self.N_A_gpot,
@@ -229,10 +230,10 @@ class Connectivity(base.BaseConnectivity):
                               ['gpot', 'spike'])
         if self.N_B_gpot == 0:
             self.idx_translate[B_id] = \
-                IntervalIndex([0, self.N_B_spike], ['spike'])
+                IntervalIndex([0, 0, self.N_B_spike], ['gpot', 'spike'])
         elif self.N_B_spike == 0:
             self.idx_translate[B_id] = \
-                IntervalIndex([0, self.N_B_gpot], ['gpot'])
+                IntervalIndex([0, self.N_B_gpot, self.N_B_gpot], ['gpot', 'spike'])
         else:
             self.idx_translate[B_id] = \
                 IntervalIndex([0, self.N_B_gpot,
