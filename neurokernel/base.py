@@ -441,7 +441,7 @@ class BaseModule(ControlledProcess):
                 # Synchronize:
                 catch_exception(self._sync,self.logger.info)
 
-                # Exit run loop when a quit signal has been received:
+                # Exit run loop when a quit message has been received:
                 if not self.running:
                     self.logger.info('run loop stopped')
                     break

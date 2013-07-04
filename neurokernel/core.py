@@ -720,7 +720,8 @@ class Module(base.BaseModule):
             in_gpot_dict = {}
             in_spike_dict = {}
             out_gpot = []
-            out_spike = []                    
+            out_spike = []
+            self.running = True
             while True:
 
                 # Get transmitted input data for processing:
@@ -739,6 +740,11 @@ class Module(base.BaseModule):
 
                 # Synchronize:
                 catch_exception(self._sync, self.logger.info)
+
+                # Exit run loop when a quit signal has been received:
+                if not self.running:
+                    self.logger.info('run loop stopped')
+                    break
 
         self.logger.info('exiting')
         
