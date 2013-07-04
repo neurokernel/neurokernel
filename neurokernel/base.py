@@ -391,7 +391,30 @@ class BaseModule(ControlledProcess):
                         self.logger.info('run loop stopped - stopping sync')
                         break
                 self.logger.info('recv data from all input IDs')
-    
+
+    def pre_run(self, *args, **kwargs):
+        """
+        Code to run before main module run loop.
+        
+        Code in this method will be executed after a module's process has been
+        launched and all connectivity objects made available, but before the
+        main run loop begins.
+
+        """
+        
+        self.logger.info('performing pre-emulation operations')
+
+    def post_run(self, *args, **kwargs):
+        """
+        Code to run after main module run loop.
+        
+        Code in this method will be executed after a module's main loop has
+        terminated.
+
+        """
+
+        self.logger.info('performing post-emulation operations')
+                
     def run_step(self, in_dict, out):
         """
         Perform a single step of computation.
@@ -421,7 +444,10 @@ class BaseModule(ControlledProcess):
             self._out_idx_dict = \
               {out_id:self._conn_dict[out_id].src_idx(self.id, out_id) for \
                out_id in self.out_ids}
-            
+
+            # Perform any pre-emulation operations:
+            self.pre_run()
+               
             # Initialize data structures for passing data to and from the
             # run_step method:
             in_dict = {}
@@ -446,8 +472,9 @@ class BaseModule(ControlledProcess):
                     self.logger.info('run loop stopped')
                     break
 
-        # This line never is reached because of the shutdown performed by the
-        # control handler:
+            # Perform any post-emulation operations:
+            self.post_run()
+                
         self.logger.info('exiting')
 
 class Broker(ControlledProcess):
