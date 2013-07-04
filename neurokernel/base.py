@@ -230,10 +230,12 @@ class BaseModule(ControlledProcess):
                 self.logger.info('streams already closed')
             except:
                 self.logger.info('other error occurred')
-            self.logger.info('issuing signal %s' % self.quit_sig)
+
+            # Force the module's main loop to exit:
+            self.running = False
             self.sock_ctrl.send('ack')
             self.logger.info('sent to manager: ack')
-            os.kill(os.getpid(), self.quit_sig)
+
         # One can define additional messages to be recognized by the control
         # handler:        
         # elif msg[0] == 'conn':
@@ -269,6 +271,10 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
                 self.logger.info('network connection initialized')
+
+                # Set up a poller for detecting incoming data:
+                self.data_poller = zmq.Poller()
+                self.data_poller.register(self.sock_data, zmq.POLLIN)
 
     def _get_in_data(self, in_dict):
         """
@@ -337,7 +343,7 @@ class BaseModule(ControlledProcess):
         received.
 
         """
-
+        
         if self.net in ['none', 'ctrl']:
             self.logger.info('not synchronizing with network')
         else:
@@ -369,15 +375,23 @@ class BaseModule(ControlledProcess):
                 recv_ids = self.in_ids
                 self._in_data = []
                 while recv_ids:
-                    in_id, data = msgpack.unpackb(self.sock_data.recv())
-                    self.logger.info('recv from %s: %s ' % (in_id, str(data)))
-                    recv_ids.remove(in_id)
 
-                    # Ignore incoming data containing None:
-                    if data is not None:
-                        self._in_data.append((in_id, data))
+                    # Use poller to avoid blocking:
+                    if is_poll_in(self.sock_data, self.data_poller):
+                        in_id, data = msgpack.unpackb(self.sock_data.recv())
+                        self.logger.info('recv from %s: %s ' % (in_id, str(data)))
+                        recv_ids.remove(in_id)
+
+                        # Ignore incoming data containing None:
+                        if data is not None:
+                            self._in_data.append((in_id, data))
+
+                    # Stop the synchronization if a quit message has been received:
+                    if not self.running:
+                        self.logger.info('run loop stopped - stopping sync')
+                        break
                 self.logger.info('recv data from all input IDs')
-
+    
     def run_step(self, in_dict, out):
         """
         Perform a single step of computation.
@@ -407,11 +421,12 @@ class BaseModule(ControlledProcess):
             self._out_idx_dict = \
               {out_id:self._conn_dict[out_id].src_idx(self.id, out_id) for \
                out_id in self.out_ids}
-
+            
             # Initialize data structures for passing data to and from the
             # run_step method:
             in_dict = {}
             out = []
+            self.running = True
             while True:
 
                 # Get input data:
@@ -426,6 +441,13 @@ class BaseModule(ControlledProcess):
                 # Synchronize:
                 catch_exception(self._sync,self.logger.info)
 
+                # Exit run loop when a quit signal has been received:
+                if not self.running:
+                    self.logger.info('run loop stopped')
+                    break
+
+        # This line never is reached because of the shutdown performed by the
+        # control handler:
         self.logger.info('exiting')
 
 class Broker(ControlledProcess):
@@ -489,9 +511,6 @@ class Broker(ControlledProcess):
                 self.logger.info('other error occurred: '+e.message)
             self.sock_ctrl.send('ack')
             self.logger.info('sent to  broker: ack')
-            # For some reason, the following lines cause problems:
-            # self.logger.info('issuing signal %s' % self.quit_sig)
-            # os.kill(os.getpid(), self.quit_sig)
 
     def _data_handler(self, msg):
         """
@@ -1089,6 +1108,10 @@ class BaseManager(object):
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
 
+        # Set up a poller for detecting acknowledgements to control messages:
+        self.ctrl_poller = zmq.Poller()
+        self.ctrl_poller.register(self.sock_ctrl, zmq.POLLIN)
+        
         # Data structures for storing broker, module, and connectivity instances:
         self.brok_dict = bidict.bidict()
         self.mod_dict = bidict.bidict()
@@ -1220,10 +1243,8 @@ class BaseManager(object):
 
         self.sock_ctrl.send_multipart([i]+msg)
         self.logger.info('sent to   %s: %s' % (i, msg))
-        poller = zmq.Poller()
-        poller.register(self.sock_ctrl, zmq.POLLIN)
         while True:
-            if is_poll_in(self.sock_ctrl, poller):
+            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
                 j, data = self.sock_ctrl.recv_multipart()
                 self.logger.info('recv from %s: ack' % j)
                 break
@@ -1234,8 +1255,6 @@ class BaseManager(object):
         """
 
         self.logger.info('stopping all processes')
-        poller = zmq.Poller()
-        poller.register(self.sock_ctrl, zmq.POLLIN)
         recv_ids = self.mod_dict.keys()
         while recv_ids:
 
@@ -1247,7 +1266,7 @@ class BaseManager(object):
 
             # If a module acknowledges receiving a quit message,
             # wait for it to shutdown:
-            if is_poll_in(self.sock_ctrl, poller):
+            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
                  j, data = self.sock_ctrl.recv_multipart()
                  self.logger.info('recv from %s: ack' % j)
                  if j in recv_ids:
@@ -1344,36 +1363,40 @@ if __name__ == '__main__':
     # Set up logging:
     logger = setup_logger()
 
-    # Set up and start emulation:
+    # Set up emulation:
     man = BaseManager()
     man.add_brok()
 
     m1 = man.add_mod(MyModule(2, 'm1   '))
     m2 = man.add_mod(MyModule(4, 'm2   '))
-    # m3 = man.add_mod(MyModule(net='full'))
-    # m4 = man.add_mod(MyModule(net='full'))
+    m3 = man.add_mod(MyModule(3, 'm3   '))
+    m4 = man.add_mod(MyModule(2, 'm4   '))
     
-    # conn = BaseConnectivity(3, 3, 1, m1.id, m2.id)
-    # conn[m1.id, :, m2.id, :] = [[1, 0, 0],
-    #                             [0, 1, 0],
-    #                             [0, 0, 1]]    
-    # conn[m2.id, :, m1.id, :] = [[1, 0, 0],
-    #                             [0, 1, 0],
-    #                             [0, 0, 1]]
-    conn = BaseConnectivity(2, 4, 1, m1.id, m2.id)    
-    conn[m1.id, :, m2.id, :] = np.ones((2, 4))
-    #conn[m2.id, :, m1.id, :] = np.ones((4, 2))
-    man.add_conn(conn)
-    man.connect(m1, m2, conn)
-    
-    # man.connect(m2, m1, conn)
-    # man.connect(m4, m3, conn)
-    # man.connect(m3, m4, conn)
-    # man.connect(m4, m1, conn)
-    # man.connect(m1, m4, conn)
-    # man.connect(m2, m4, conn)
-    # man.connect(m4, m2, conn)
+    conn12 = BaseConnectivity(2, 4, 1, m1.id, m2.id)
+    conn12[m1.id, :, m2.id, :] = np.ones((2, 4))
+    conn12[m2.id, :, m1.id, :] = np.ones((4, 2))
+    man.add_conn(conn12)
+    man.connect(m1, m2, conn12)
 
+    conn23 = BaseConnectivity(4, 3, 1, m2.id, m3.id)
+    conn23[m2.id, :, m3.id, :] = np.ones((4, 3))
+    conn23[m3.id, :, m2.id, :] = np.ones((3, 4))
+    man.add_conn(conn23)
+    man.connect(m2, m3, conn23)
+
+    conn34 = BaseConnectivity(3, 2, 1, m3.id, m4.id)
+    conn34[m3.id, :, m4.id, :] = np.ones((3, 2))
+    conn34[m4.id, :, m3.id, :] = np.ones((3, 2))
+    man.add_conn(conn34)
+    man.connect(m3, m4, conn34)
+
+    conn41 = BaseConnectivity(2, 2, 1, m4.id, m1.id)
+    conn41[m4.id, :, m1.id, :] = np.ones((2, 2))
+    conn41[m1.id, :, m4.id, :] = np.ones((2, 2))
+    man.add_conn(conn41)
+    man.connect(m4, m1, conn41)
+
+    # Start emulation and allow it to run for a little while before shutting down:
     man.start()
     time.sleep(2)
     man.stop()
