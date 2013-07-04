@@ -13,7 +13,7 @@ from code that is controlled by a signal handler may cause problems
 
 """
 
-import os, signal, sys, time
+import signal, sys, time
 import multiprocessing as mp
 import threading as th
 
@@ -59,6 +59,9 @@ class ControlledProcess(mp.Process):
         # Control port:
         self.port_ctrl = port_ctrl
 
+        # Flag to use when stopping the process:
+        self.running = False
+        
         # Signal to use when quitting:
         self.quit_sig = quit_sig
         super(ControlledProcess, self).__init__(*args, **kwargs)
@@ -78,8 +81,7 @@ class ControlledProcess(mp.Process):
                 self.logger.info('streams already closed')
             except Exception as e:
                 self.logger.info('other error occurred: '+e.message)
-            self.logger.info('issuing signal %s' % self.quit_sig)
-            os.kill(os.getpid(), self.quit_sig)
+            self.running = False
 
     def _init_ctrl_handler(self):
         """
@@ -127,9 +129,14 @@ class ControlledProcess(mp.Process):
         """
 
         self._init_net()
+        self.running = True
         while True:
             self.logger.info('idling')
-
+            if not self.running:
+                self.logger.info('stopping run loop')
+                break
+        self.logger.info('done')
+        
 if __name__ == '__main__':
     output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
                                          stream=sys.stdout)
