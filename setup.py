@@ -20,6 +20,8 @@ VERSION =            '0.01'
 AUTHOR =             'Lev Givon'
 AUTHOR_EMAIL =       'lev@columbia.edu'
 URL =                'http://github.com/bionet/neurokernel/'
+MAINTAINER =         AUTHOR
+MAINTAINER_EMAIL =   AUTHOR_EMAIL
 DESCRIPTION =        'An open architecture for Drosophila brain emulation'
 LONG_DESCRIPTION =   DESCRIPTION
 DOWNLOAD_URL =       URL
@@ -55,6 +57,8 @@ if __name__ == "__main__":
         description = DESCRIPTION,
         long_description = LONG_DESCRIPTION,
         url = URL,
+        maintainer = MAINTAINER,
+        maintainer_email = MAINTAINER_EMAIL,
         namespace_packages = NAMESPACE_PACKAGES,
         packages = PACKAGES,
 
