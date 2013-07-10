@@ -270,7 +270,7 @@ class Connectivity(base.BaseConnectivity):
         """
         Return number of graded potential neurons associated with the specified module.
         """
-
+        
         if id == self.A_id:
             return self.N_A_gpot
         elif id == self.B_id:
@@ -714,7 +714,10 @@ class Module(base.BaseModule):
             self._out_idx_dict['spike'] = \
               {out_id:self._conn_dict[out_id].src_idx(self.id, out_id, 'spike') for \
                out_id in self.out_ids}
-            
+
+            # Perform any pre-emulation operations:
+            self.pre_run()
+               
             # Initialize data structures for passing data to and from the
             # run_step method:
             in_gpot_dict = {}
@@ -722,8 +725,10 @@ class Module(base.BaseModule):
             out_gpot = []
             out_spike = []
             self.running = True
-            while True:
-
+            curr_steps = 0
+            while curr_steps < self._steps:
+                self.logger.info('execution step: %s' % curr_steps)
+                
                 # Get transmitted input data for processing:
                 catch_exception(self._get_in_data, self.logger.info,
                                 in_gpot_dict, in_spike_dict)
@@ -746,6 +751,18 @@ class Module(base.BaseModule):
                     self.logger.info('run loop stopped')
                     break
 
+                curr_steps += 1
+
+            # Perform any post-emulation operations:
+            self.post_run()
+
+            # Shut down the control handler and signal the manager that the
+            # module has shut down:
+            self._ctrl_stream_shutdown()
+            ack = 'shutdown'
+            self.sock_ctrl.send(ack)
+            self.logger.info('sent to manager: %s' % ack)
+                
         self.logger.info('exiting')
         
 class Manager(base.BaseManager):
@@ -888,4 +905,12 @@ if __name__ == '__main__':
     man.start()
     time.sleep(2)
     man.stop()
+
+    # To set the emulation to exit after executing a fixed
+    # number of steps, run it as follows:
+    
+    # man.start(steps=500)
+    # man.join_modules()
+    # man.stop_brokers()
+    
     logger.info('all done')
