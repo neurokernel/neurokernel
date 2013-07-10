@@ -718,16 +718,17 @@ class Module(base.BaseModule):
             # Perform any pre-emulation operations:
             self.pre_run()
                
-            # Initialize data structures for passing data to and from the
-            # run_step method:
-            in_gpot_dict = {}
-            in_spike_dict = {}
-            out_gpot = []
-            out_spike = []
             self.running = True
             curr_steps = 0
             while curr_steps < self._steps:
                 self.logger.info('execution step: %s' % curr_steps)
+
+                # Clear data structures for passing data to and from the
+                # run_step method:                
+                in_gpot_dict = {}
+                in_spike_dict = {}
+                out_gpot = []
+                out_spike = []
                 
                 # Get transmitted input data for processing:
                 catch_exception(self._get_in_data, self.logger.info,

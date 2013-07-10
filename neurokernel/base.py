@@ -473,14 +473,15 @@ class BaseModule(ControlledProcess):
             # Perform any pre-emulation operations:
             self.pre_run()
                
-            # Initialize data structures for passing data to and from the
-            # run_step method:
-            in_dict = {}
-            out = []
             self.running = True
             curr_steps = 0
             while curr_steps < self._steps:
                 self.logger.info('execution step: %s' % curr_steps)
+
+                # Clear data structures for passing data to and from the
+                # run_step method:
+                in_dict = {}
+                out = []
                 
                 # Get input data:
                 catch_exception(self._get_in_data,self.logger.info,in_dict)
@@ -1449,7 +1450,7 @@ if __name__ == '__main__':
             super(MyModule, self).run()
             
     # Set up logging:
-    logger = setup_logger(screen=False)
+    logger = setup_logger()
 
     # Set up emulation:
     man = BaseManager()
