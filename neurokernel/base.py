@@ -96,6 +96,22 @@ class BaseModule(ControlledProcess):
         self.logger.info('net status changed: %s -> %s' % (self._net, value))
         self._net = value
 
+    # Define properties to perform validation when the maximum number of
+    # execution steps set:
+    _steps = np.inf
+    @property
+    def steps(self):
+        """
+        Maximum number of steps to execute.
+        """
+        return self._steps
+    @steps.setter
+    def steps(self, value):
+        if value <= 0:
+            raise ValueError('invalid maximum number of steps')
+        self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
+        self._steps = value
+
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
 
         # Generate a unique ID if none is specified:
@@ -215,6 +231,22 @@ class BaseModule(ControlledProcess):
                 self.net = 'full'
             self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
 
+    def _ctrl_stream_shutdown(self):
+        """
+        Shut down control port handler's stream and ioloop.
+        """
+
+        try:
+            self.stream_ctrl.flush()
+            self.stream_ctrl.stop_on_recv()
+            self.ioloop_ctrl.stop()
+        except IOError:
+            self.logger.info('streams already closed')
+        except:
+            self.logger.info('other error occurred')
+        else:
+            self.logger.info('ctrl stream shut down')
+
     def _ctrl_handler(self, msg):
         """
         Control port handler.
@@ -222,29 +254,22 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('recv ctrl message: %s' % str(msg))
         if msg[0] == 'quit':
-            try:
-                self.stream_ctrl.flush()
-                self.stream_ctrl.stop_on_recv()
-                self.ioloop_ctrl.stop()
-            except IOError:
-                self.logger.info('streams already closed')
-            except:
-                self.logger.info('other error occurred')
+            self._ctrl_stream_shutdown()
 
             # Force the module's main loop to exit:
             self.running = False
-            self.sock_ctrl.send('ack')
-            self.logger.info('sent to manager: ack')
+            ack = 'shutdown'
 
         # One can define additional messages to be recognized by the control
         # handler:        
         # elif msg[0] == 'conn':
         #     self.logger.info('conn payload: '+str(msgpack.unpackb(msg[1])))
-        #     self.sock_ctrl.send('ack')
-        #     self.logger.info('sent ack') 
+        #     ack = 'ack'
         else:
-            self.sock_ctrl.send('ack')
-            self.logger.info('sent ack')
+            ack = 'ack'
+
+        self.sock_ctrl.send(ack)
+        self.logger.info('sent to manager: %s' % ack)
 
     def _init_net(self):
         """
@@ -453,8 +478,10 @@ class BaseModule(ControlledProcess):
             in_dict = {}
             out = []
             self.running = True
-            while True:
-
+            curr_steps = 0
+            while curr_steps < self._steps:
+                self.logger.info('execution step: %s' % curr_steps)
+                
                 # Get input data:
                 catch_exception(self._get_in_data,self.logger.info,in_dict)
 
@@ -471,10 +498,19 @@ class BaseModule(ControlledProcess):
                 if not self.running:
                     self.logger.info('run loop stopped')
                     break
+                
+                curr_steps += 1
 
             # Perform any post-emulation operations:
             self.post_run()
-                
+
+            # Shut down the control handler and signal the manager that the
+            # module has shut down:
+            self._ctrl_stream_shutdown()
+            ack = 'shutdown'
+            self.sock_ctrl.send(ack)
+            self.logger.info('sent to manager: %s' % ack)
+
         self.logger.info('exiting')
 
 class Broker(ControlledProcess):
@@ -1252,15 +1288,21 @@ class BaseManager(object):
         self.logger.info('added connectivity %s' % c.id)
         return c
 
-    def start(self):
+    def start(self, steps=np.inf):
         """
         Start execution of all processes.
+
+        Parameters
+        ----------
+        steps : int
+            Maximum number of steps to execute.
         """
 
         with IgnoreKeyboardInterrupt():
             for b in self.brok_dict.values():
                 b.start()
             for m in self.mod_dict.values():
+                m.steps = steps
                 m.start();
 
     def send_ctrl_msg(self, i, *msg):
@@ -1276,46 +1318,66 @@ class BaseManager(object):
                 self.logger.info('recv from %s: ack' % j)
                 break
 
-    def stop(self):
+    def stop_brokers(self):
         """
-        Stop execution of all processes.
+        Stop execution of all brokers.
         """
 
-        self.logger.info('stopping all processes')
-        recv_ids = self.mod_dict.keys()
-        while recv_ids:
-
-            # Send quit messages to all live modules:
-            i = recv_ids[0]
-            self.logger.info(str(recv_ids))
-            self.logger.info('sent to   %s: quit' % i)
-            self.sock_ctrl.send_multipart([i, 'quit'])
-
-            # If a module acknowledges receiving a quit message,
-            # wait for it to shutdown:
-            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
-                 j, data = self.sock_ctrl.recv_multipart()
-                 self.logger.info('recv from %s: ack' % j)
-                 if j in recv_ids:
-                     recv_ids.remove(j)
-                     self.mod_dict[j].join(1)
-
-            # Sometimes quit messages are received but the acknowledgements are lost;
-            # if so, the module will eventually shutdown:
-            # XXX this shouldn't be necessary XXX
-            if not self.mod_dict[i].is_alive() and i in recv_ids:
-                self.logger.info('%s shutdown without ack' % i)
-                recv_ids.remove(i)
-                
-        self.logger.info('all modules stopped')
-
-        # After all modules have been stopped, shut down the broker:
+        self.logger.info('stopping all brokers')
         for i in self.brok_dict.keys():
             self.logger.info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
             self.brok_dict[i].join(1)
         self.logger.info('all brokers stopped')
+        
+    def join_modules(self, send_quit=False):
+        """
+        Wait until all modules have stopped.
 
+        Parameters
+        ----------
+        send_quit : bool
+            If True, send quit messages to all modules.            
+        """
+
+        self.logger.info('waiting for modules to shut down')
+        recv_ids = self.mod_dict.keys()
+        while recv_ids:
+            i = recv_ids[0]
+            
+            # Send quit messages to all live modules:
+            if send_quit:                
+                self.logger.info(str(recv_ids))
+                self.logger.info('sent to   %s: quit' % i)
+                self.sock_ctrl.send_multipart([i, 'quit'])
+
+            # If a module acknowledges receiving a quit message,
+            # wait for it to shutdown:
+            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
+                 j, data = self.sock_ctrl.recv_multipart()
+                 self.logger.info('recv from %s: %s' % (j, data))                 
+                 if j in recv_ids and data == 'shutdown':
+                     self.logger.info('waiting for module %s to shut down' % j)
+                     recv_ids.remove(j)
+                     self.mod_dict[j].join(1)
+                     self.logger.info('module %s shut down' % j)
+                     
+            # Sometimes quit messages are received but the acknowledgements are
+            # lost; if so, the module will eventually shutdown:
+            # XXX this shouldn't be necessary XXX
+            if not self.mod_dict[i].is_alive() and i in recv_ids:
+                self.logger.info('%s shutdown without ack' % i)
+                recv_ids.remove(i)                
+        self.logger.info('all modules stopped')
+
+    def stop_modules(self):
+        self.logger.info('stopping all modules')
+        self.join_modules(True)
+        
+    def stop(self):
+        self.stop_modules()
+        self.stop_brokers()
+        
 def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     """
     Convenience function for setting up logging with twiggy.
@@ -1339,7 +1401,6 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     ---
     To use the ZeroMQ output class, it must be added as an emitter within each
     process.
-
     """
 
     if file_name:
@@ -1372,7 +1433,7 @@ if __name__ == '__main__':
 
         def __init__(self, N, id, port_data=PORT_DATA,
                      port_ctrl=PORT_CTRL):
-            super(MyModule, self).__init__(port_data, port_ctrl, id)
+            super(MyModule, self).__init__(port_data, port_ctrl)
             self.data = np.zeros(N, np.float64)
             
         @property
@@ -1388,7 +1449,7 @@ if __name__ == '__main__':
             super(MyModule, self).run()
             
     # Set up logging:
-    logger = setup_logger()
+    logger = setup_logger(screen=False)
 
     # Set up emulation:
     man = BaseManager()
@@ -1425,6 +1486,13 @@ if __name__ == '__main__':
 
     # Start emulation and allow it to run for a little while before shutting down:
     man.start()
-    time.sleep(2)
+    time.sleep(5)
     man.stop()
+
+    # To set the emulation to exit after executing a fixed
+    # number of steps, run it as follows:
+    # man.start(steps=500)
+    # man.join_modules()
+    # man.stop_brokers()
+
     logger.info('all done')
