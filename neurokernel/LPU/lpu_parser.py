@@ -25,7 +25,7 @@ def lpu_parser(filename):
 
     Convert a .gexf LPU specifications into NetworkX graph type, and 
     then pack data into list of dictionaries to be passed to the LPU
-    module.
+    module. The individual parameters will be represented by lists.
     
     Parameters
     ----------
@@ -72,14 +72,65 @@ def lpu_parser(filename):
        of the same type.
     9. Each edge should have a boolean attribute called 'conductance'
        representing whether it's output is a conductance or current.
-    
+    10.For all edges with the 'conductance' attribute true, there should
+       be an attribute called 'reverse'
     """
 
 
     '''
-    Parse the file using networkx and pack the data into n_dict and s_dict.
-    Assert if all the conditions mentioned above are met. If not, log an
-    error.
-    Assert if the synapse class matches the neurons they connect.
-    Return n_dict and s_dict
+    Need to add code to assert all conditions mentioned above are met
     '''
+    graph = nx.read_gexf(filename)
+    types = []
+    n_dict_list = []
+    neurons = graph.node
+    if len(neurons) > 0:
+        for i in range(len(neurons)):
+            if not str(neurons[str(i)]['type']) in types:
+                n_dict = dict.fromkeys(neurons[str(i)])
+                for key in n_dict.iterkeys():
+                    n_dict[key] = list()
+                n_dict['id'] = list()
+                n_dict_list.append(n_dict)
+                types.append(str(neurons[str(i)]['type']))
+            ind = types.index(str(neurons[str(i)]['type']))    
+            for key in neurons[str(i)].iterkeys():
+                n_dict_list[ind][key].append(neurons[str(i)][key])
+            n_dict_list[ind]['id'].append(i)
+    else:
+        n_dict_list = None
+
+    synapses = graph.edges(data=True)
+    types = []
+    s_dict_list = []
+    synapses.sort(cmp=synapse_cmp)
+    if len(synapses) > 0:
+    
+        
+        for i in range(len(synapses)):
+            if not str(synapses[i][2]['type']) in types:
+                s_dict = dict.fromkeys(synapses[i][2])
+                for key in s_dict.viewkeys():
+                    s_dict[key] = list()
+                s_dict['post'] = list()
+                s_dict['pre'] = list()
+                s_dict_list.append(s_dict)
+                types.append(str(synapses[i][2]['type']))
+            ind = types.index(str(synapses[i][2]['type']))
+            s_dict_list[ind]['pre'].append(synapses[i][0])
+            s_dict_list[ind]['post'].append(synapses[i][1])
+            for key in synapses[i][2].viewkeys():
+                s_dict_list[ind][key].append(synapses[i][2][key])
+    else:
+        s_dict_list = None
+
+    return n_dict_list, s_dict_list
+
+
+def synapse_cmp(x, y):
+    if int(x[1]) < int(y[1]):
+        return -1
+    elif int(x[1]) > int(y[1]):
+        return 1
+    else:
+        return 0
