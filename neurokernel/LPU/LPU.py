@@ -548,25 +548,29 @@ class LPU(Module):
             if n_dict['spiking'][0]:
                 idx =  np.where(cond_post >= (self.idx_start_spike[j]+spike_shift))
                 idx1 = np.where(cond_post < (self.idx_start_spike[j+1]+spike_shift))
-                idx = np.intersect1d(idx, idx1, assume_unique=True)
+                idx = np.intersect1d(np.asarray(idx).flatten(),
+                                     np.asarray(idx1).flatten(), assume_unique=True)
                 n_dict['cond_post'] = cond_post[idx] - self.idx_start_spike[j] - spike_shift
                 n_dict['cond_pre'] = cond_pre[idx]
                 n_dict['reverse'] = reverse[idx]
                 idx =  np.where(I_post >= self.idx_start_spike[j]+spike_shift)
                 idx1 = np.where(I_post < self.idx_start_spike[j+1]+spike_shift)
-                idx = np.intersect1d(idx, idx1, assume_unique=True)
+                idx = np.intersect1d(np.asarray(idx).flatten(),
+                                     np.asarray(idx1).flatten(), assume_unique=True)
                 n_dict['I_post'] = I_post[idx] - self.idx_start_spike[j] - spike_shift
                 n_dict['I_pre'] = I_pre[idx]
             else:
                 idx =  np.where(cond_post >= self.idx_start_gpot[j])
                 idx1 = np.where(cond_post < self.idx_start_gpot[j+1])
-                idx = np.intersect1d(idx, idx1, assume_unique=True)
+                idx = np.intersect1d(np.asarray(idx).flatten(),
+                                     np.asarray(idx1).flatten(), assume_unique=True)
                 n_dict['cond_post'] = cond_post[idx] - self.idx_start_gpot[j]
                 n_dict['cond_pre'] = cond_pre[idx]
                 n_dict['reverse'] = reverse[idx]
                 idx =  np.where(I_post >= self.idx_start_gpot[j])
                 idx1 = np.where(I_post < self.idx_start_gpot[j+1])
-                idx - np.intersect1d(idx, idx1, assume_unique=True)
+                idx = np.intersect1d(np.asarray(idx).flatten(),
+                                     np.asarray(idx1).flatten(), assume_unique=True)
                 n_dict['I_post'] = I_post[idx] - self.idx_start_gpot[j]
                 n_dict['I_pre'] = I_pre[idx]
 
@@ -679,7 +683,7 @@ class LPU(Module):
                 self.frame_count = 0
             else:
                 if self.file_pointer == self.input_h5file.root.real.shape[0]:
-                    self.logger.info('Input end of file reached. Behaviour is' +\
+                    self.logger.info('Input end of file reached. Behaviour is ' +\
                                     'undefined for subsequent steps')
                     self.input_eof = True
 
@@ -756,7 +760,7 @@ class LPU(Module):
         try:
             ind = self._neuron_names.index(n_dict['type'][0])
         except:
-            self.logger.info('Error instantiating neurons of type' + \
+            self.logger.info('Error instantiating neurons of type ' + \
                              n_dict['type'][0])
             return []
 
@@ -781,7 +785,7 @@ class LPU(Module):
         try:
             ind = self._synapse_names.index(s_dict['type'][0])
         except:
-            self.logger.info('Error instantiating synapses of type' + \
+            self.logger.info('Error instantiating synapses of type ' + \
                              s_dict['type'][0])
             return []
 
