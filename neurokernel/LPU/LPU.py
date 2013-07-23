@@ -495,6 +495,9 @@ class LPU(Module):
 
         for s_dict in s_dict_list:
             num_synapses.append(len(s_dict['type']))
+            order1 = np.argsort(s_dict['post'])
+            for key in s_dict.iterkeys():
+                s_dict[key] = np.asarray(s_dict[key])[order1]
             if s_dict['conductance'][0]:
                 cond_post.extend(s_dict['post'])
                 reverse.extend(s_dict['reverse'])
@@ -523,7 +526,7 @@ class LPU(Module):
         cond_pre = np.asarray(cond_pre, dtype = np.int32)
         reverse = np.asarray(reverse, dtype=np.double)
 
-        order1 = np.argsort(cond_post)
+        order1 = np.argsort(cond_post, kind='mergesort')
         cond_post = cond_post[order1]
         cond_pre = cond_pre[order1]
         reverse = reverse[order1]
@@ -532,7 +535,7 @@ class LPU(Module):
         I_post = np.asarray(I_post, dtype=np.int32)
         I_pre = np.asarray(I_pre, dtype=np.int32)
 
-        order1 = np.argsort(I_post)
+        order1 = np.argsort(I_post, kind='mergesort')
         I_post = I_post[order1]
         I_pre = I_pre[order1]
 
