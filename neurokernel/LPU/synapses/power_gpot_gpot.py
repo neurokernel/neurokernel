@@ -26,29 +26,29 @@ class power_gpot_gpot(BaseSynapse):
         self.num_synapse = len(s_dict['type'])
 
         self.update_func = self.get_update_func()
-        
+
     @property
     def synapse_class(self): return int(3)
 
-    
+
     def update_state(self, buffer, st = None):
         self.update_func.prepared_async_call(self.grid, self.block, st, buffer.gpot_buffer.gpudata, buffer.gpot_buffer.ld, buffer.gpot_current, buffer.gpot_delay_steps, self.pre.gpudata, self.synapse_state_pointer, self.threshold.gpudata, self.slope.gpudata, self.power.gpudata, self.saturation.gpudata, self.delay.gpudata)
-    
+
 
     def get_update_func(self):
         template = """
         #define N_synapse %(n_synapse)d
-        
+
         __global__ void update_gpot_terminal_synapse(double* buffer, int buffer_ld, int current, int delay_steps, int* pre_neuron, double* conductance, double* thres, double* slope, double* power, double* saturation, int* delay)
         {
             int tid = threadIdx.x + blockIdx.x * blockDim.x;
             int total_threads = gridDim.x * blockDim.x;
-            
+
             int pre;
             double mem;
             int dl;
             int col;
-            
+
             for(int i = tid; i < N_synapse; i += total_threads)
             {
                 pre = pre_neuron[i];
@@ -58,12 +58,12 @@ class power_gpot_gpot(BaseSynapse):
                 {
                     col = delay_steps + col;
                 }
-                
+
                 mem = buffer[col * buffer_ld + pre];
-                
+
                 conductance[i] = fmin(saturation[i], slope[i] * pow(fmax(0.0, mem - thres[i]), power[i]));
             }
-        
+
         }
         """
         #Used 14 registers, 64 bytes cmem[0], 4 bytes cmem[16]
@@ -73,4 +73,3 @@ class power_gpot_gpot(BaseSynapse):
         self.block = (256,1,1)
         self.grid = (min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT, (self.num_synapse-1) / 256 + 1), 1)
         return func
-

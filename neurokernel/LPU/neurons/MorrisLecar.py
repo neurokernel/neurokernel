@@ -8,18 +8,18 @@ from pycuda.compiler import SourceModule
 
 class MorrisLecar(BaseNeuron):
     def __init__(self, n_dict, V, dt , debug=False):
-        
+
         self.num_neurons = len(n_dict['type'])
         self.dt = np.double(dt)
         self.steps = max(int(round(dt / 1e-5)),1)
         self.debug = debug
-        
+
         self.ddt = dt / self.steps
-        
+
         self.V = V
 
         self.n = garray.to_gpu(np.asarray(n_dict['initn'], dtype=np.float64))
-    
+
         self.V_1 = garray.to_gpu(np.asarray(n_dict['V1'], dtype=np.float64))
         self.V_2 = garray.to_gpu(np.asarray(n_dict['V2'], dtype=np.float64))
         self.V_3 = garray.to_gpu(np.asarray(n_dict['V3'], dtype=np.float64))
@@ -30,7 +30,7 @@ class MorrisLecar(BaseNeuron):
 
         cuda.memcpy_htod(int(self.V), np.asarray(n_dict['initV'], dtype=np.double))
         self.update = self.get_euler_kernel()
-        
+
 
     @property
     def neuron_class(self): return True
@@ -38,13 +38,13 @@ class MorrisLecar(BaseNeuron):
     def eval(self, st = None):
         self.update.prepared_async_call(self.update_grid, self.update_block, st, self.V, self.n.gpudata, self.num_neurons, self.I.gpudata, self.ddt*1000, self.steps, self.V_1.gpudata, self.V_2.gpudata, self.V_3.gpudata, self.V_4.gpudata, self.Tphi.gpudata, self.offset.gpudata)
 
-    
+
     def get_euler_kernel(self):
         template = """
 
     #define NVAR 2
     #define NNEU %(nneu)d //NROW * NCOL
-    
+
 
     #define V_L (-0.5)
     #define V_Ca 1.0
@@ -52,18 +52,18 @@ class MorrisLecar(BaseNeuron):
     #define g_Ca 1.1
     #define g_K 2.0
     #define g_L 0.5
-    
-    
-  
-    
-    
+
+
+
+
+
     __device__ %(type)s compute_n(%(type)s V, %(type)s n, %(type)s V_3, %(type)s V_4, %(type)s Tphi)
     {
         %(type)s n_inf = 0.5 * (1 + tanh((V - V_3) / V_4));
         %(type)s dn = Tphi * cosh(( V - V_3) / (V_4*2)) * (n_inf - n);
         return dn;
     }
-    
+
     __device__ %(type)s compute_V(%(type)s V, %(type)s n, %(type)s I, %(type)s V_1, %(type)s V_2, %(type)s offset)
     {
         %(type)s m_inf = 0.5 * (1+tanh((V - V_1)/V_2));
@@ -78,7 +78,7 @@ class MorrisLecar(BaseNeuron):
     {
         int bid = blockIdx.x;
         int cart_id = bid * NNEU + threadIdx.x;
-    
+
         %(type)s I, V, n;
 
         if(cart_id < num_neurons)
@@ -86,26 +86,26 @@ class MorrisLecar(BaseNeuron):
             V = g_V[cart_id];
             I = I_pre[cart_id];
             n = g_n[cart_id];
-        
+
             %(type)s dV, dn;
-        
+
 
             for(int i = 0; i < nsteps; ++i)
             {
-        
+
                dn = compute_n(V, n, V_3[cart_id], V_4[cart_id], Tphi[cart_id]);
-            
+
                dV = compute_V(V, n, I, V_1[cart_id], V_2[cart_id], offset[cart_id]);
-            
+
                V += dV * dt;
                n += dn * dt;
             }
-        
-       
+
+
             g_V[cart_id] = V;
             g_n[cart_id] = n;
         }
-        
+
     }
     """#Used 40 registers, 1024+0 bytes smem, 84 bytes cmem[0], 308 bytes cmem[2], 28 bytes cmem[16]
         dtype = np.double
@@ -114,108 +114,9 @@ class MorrisLecar(BaseNeuron):
         self.update_grid = ((self.num_neurons - 1) / 128 + 1, 1)
         mod = SourceModule(template % {"type": dtype_to_ctype(dtype),  "nneu": self.update_block[0]}, options=["--ptxas-options=-v"])
         func = mod.get_function("hhn_euler_multiple")
-                
-        
+
+
         func.prepare([np.intp, np.intp, np.int32, np.intp, scalartype, np.int32, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
-        
-        
-        return func
 
 
-    
-    def get_input_func(self):
-        template = """
-        #define N 32
-        #define NUM_NEURONS %(num_neurons)d
-        
-        __global__ void get_input(double* synapse, int* cum_num_dendrite, int* num_dendrite, double* I_pre, double* V, double* V_rev)
-        {
-            int tidx = threadIdx.x;
-            int tidy = threadIdx.y;
-            int bid = blockIdx.x;
-            
-            int neuron;
-            
-            __shared__ int num_den[32];
-            __shared__ int den_start[32];
-            __shared__ double V_in[32];
-            __shared__ double input[32][33];
-            
-            if(tidy == 0)
-            {
-                neuron = bid * N + tidx;
-                if(neuron < NUM_NEURONS)
-                {
-                    num_den[tidx] = num_dendrite[neuron];
-                    V_in[tidx] = V[neuron];
-                }
-            }else if(tidy == 1)
-            {
-                neuron = bid * N + tidx;
-                if(neuron < NUM_NEURONS)
-                {
-                    den_start[tidx] = cum_num_dendrite[neuron];
-                }
-            }
-            
-            input[tidy][tidx] = 0.0;
-            
-            __syncthreads();
-            
-            int n_den = num_den[tidy];
-            int start = den_start[tidy];
-            double VV = V_in[tidy];
-            
-            for(int i = tidx; i < n_den; i += N)
-            {
-                input[tidy][tidx] += synapse[start + i] * (VV - V_rev[start + i]);
-            }
-            
-            __syncthreads();
-            
-            
-            
-            if(tidy < 8)
-            {
-                input[tidx][tidy] += input[tidx][tidy + 8];
-                input[tidx][tidy] += input[tidx][tidy + 16];
-                input[tidx][tidy] += input[tidx][tidy + 24];
-            }
-            
-            __syncthreads();
-            
-            if(tidy < 4)
-            {
-                input[tidx][tidy] += input[tidx][tidy + 4];
-            }
-            
-            __syncthreads();
-            
-            if(tidy < 2)
-            {
-                input[tidx][tidy] += input[tidx][tidy + 2];
-            }
-            
-            __syncthreads();
-            
-            if(tidy == 0)
-            {
-                input[tidx][0] += input[tidx][1];
-                
-                if(neuron < NUM_NEURONS)
-                {
-                    I_pre[neuron] -= input[tidx][0];
-                }
-            }
-            
-            
-        }
-        //can be improved
-        """
-        #Used 15 registers, 8704+0 bytes smem, 64 bytes cmem[0]
-        mod = SourceModule(template % {"num_neurons": self.num_neurons}, options = ["--ptxas-options=-v"])
-        func = mod.get_function("get_input")
-        func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
-        self.block_get_input = (32,32,1)
-        self.grid_get_input = ((self.num_neurons - 1) / 32 + 1, 1)
         return func

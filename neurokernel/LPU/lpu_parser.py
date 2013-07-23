@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-LPU parser that parsers local processing unit (LPU) specification of extended 
+LPU parser that parsers local processing unit (LPU) specification of extended
 graphics xml format (EGXF) into python data structure. The python package
 NetworkX is used for generating and storing graphic representation of LPU.
 
@@ -23,10 +23,10 @@ def lpu_parser(filename):
     """
     GEXF-to-python LPU parser.
 
-    Convert a .gexf LPU specifications into NetworkX graph type, and 
+    Convert a .gexf LPU specifications into NetworkX graph type, and
     then pack data into list of dictionaries to be passed to the LPU
     module. The individual parameters will be represented by lists.
-    
+
     Parameters
     ----------
     filename : String
@@ -36,9 +36,9 @@ def lpu_parser(filename):
     Returns
     -------
     n_dict : list of dictionaries
-    
+
     s_dict : list of dictionaries
-    
+
     Notes
     -----
 
@@ -93,7 +93,7 @@ def lpu_parser(filename):
                 n_dict['id'] = list()
                 n_dict_list.append(n_dict)
                 types.append(str(neurons[str(i)]['type']))
-            ind = types.index(str(neurons[str(i)]['type']))    
+            ind = types.index(str(neurons[str(i)]['type']))
             for key in neurons[str(i)].iterkeys():
                 n_dict_list[ind][key].append(neurons[str(i)][key])
             n_dict_list[ind]['id'].append(i)
@@ -105,8 +105,8 @@ def lpu_parser(filename):
     s_dict_list = []
     synapses.sort(cmp=synapse_cmp)
     if len(synapses) > 0:
-    
-        
+
+
         for i in range(len(synapses)):
             if not str(synapses[i][2]['type']) in types:
                 s_dict = dict.fromkeys(synapses[i][2])

@@ -23,7 +23,7 @@ if args.data_port:
     data_port = int(args.data_port)
 else:
     data_port = 5005
-    
+
 if args.ctrl_port:
     ctrl_port = int(args.ctrl_port)
 else:
@@ -47,7 +47,7 @@ else:
 
 dt = 1e-4
 dur = 1.0
-Nt = 10000#int(dur/dt)                                                                                                
+Nt = 10000#int(dur/dt)
 
 logger = base.setup_logger()
 
@@ -58,30 +58,31 @@ man.add_brok()
 lam = LPU( dt, n_dict_lam, s_dict_lam,
                     input_file='videos/flicker_stripe_same6.h5',
                     output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
-                    port_data=man.port_data, device=dev1, LPU_id='lamina', debug=args.debug)
+                    port_data=man.port_data, device=dev1, id='lamina', debug=args.debug)
 print 'lamina init done'
 # initialize medulla
 
-'''
+
 (n_dict_med, s_dict_med) = lpu_parser('./config_files/medulla.gexf')
 med = LPU(dt, n_dict_med, s_dict_med,
                     output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
-                    port_data=man.port_data, device=dev2, LPU_id='medulla',debug=args.debug)
+                    port_data=man.port_data, device=dev2, id='medulla',debug=args.debug)
 print 'medulla init done'
 
-'''
+
 lam = man.add_mod(lam)
-'''
+
 med = man.add_mod(med)
 
 graph = nx.read_gexf('./config_files/lamina_medulla.gexf', relabel=True)
 lam_med_conn = graph_tools.graph_to_conn(graph)
 
 man.connect(lam, med, lam_med_conn)
-'''
+
 man.start(steps=10001)
 man.join_modules()
 man.stop_brokers()
+
 '''
 The extra step is required as during the first step,
 only the initial states are passed between the modules.

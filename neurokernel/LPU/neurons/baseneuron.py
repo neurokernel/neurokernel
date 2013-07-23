@@ -23,7 +23,7 @@ class BaseNeuron(object):
         parameter called bias, n_dict['bias'] will be vector containing
         the bias values fol all the IAF neurons in a particular LPU.
 
-        In addition to the neuron parameters, n_dict will also contain:- 
+        In addition to the neuron parameters, n_dict will also contain:-
         1. n_dict['cond_pre'] representing the conductance based synapses
            with connection to neurons represented by this class.
         2. n_dict['cond_post'] denoting the neuron indices the synapses mentioned
@@ -49,8 +49,8 @@ class BaseNeuron(object):
 
         Note that you only need the above information if you plan to override the
         default update_I method.
-        
-        neuron_state_pointer is an integer representing the inital memory location 
+
+        neuron_state_pointer is an integer representing the inital memory location
         on the GPU for storing the neuron states for this object.
         For graded potential neurons, the data type will be double whereas for
         spiking neurons, it will be int.
@@ -58,7 +58,7 @@ class BaseNeuron(object):
         dt represents one time step.
 
         debug is a boolean and is intended to be used for debugging purposes.
-        
+
         '''
         self._neuron_state_pointer = neuron_state_pointer
         self._num_neurons = len(n_dict['type'])
@@ -68,7 +68,7 @@ class BaseNeuron(object):
         _num_dendrite = np.asarray([n_dict['num_dendrites_I'][i] \
                                     for i in range(self._num_neurons)], \
                                    dtype=np.int32).flatten()
-        
+
         self._cum_num_dendrite = garray.to_gpu(np.concatenate(( \
                                     np.asarray([0,], dtype=np.int32), \
                                     np.cumsum(_num_dendrite, dtype=np.int32))))
@@ -85,7 +85,7 @@ class BaseNeuron(object):
         self.I = garray.zeros(self.num_neurons, np.double)
         self._update_I_cond = self._get_update_I_cond_func()
         self._update_I_non_cond = self._get_update_I_non_cond_func()
-        
+
     @abstractmethod
     def eval(self):
         '''
@@ -95,22 +95,22 @@ class BaseNeuron(object):
 
         self.I.gpudata will be a pointer to the memory location
         where the input current to all the neurons at each step is updated
-        if the child class does not override update_I() method 
+        if the child class does not override update_I() method
         '''
         pass
-    
+
 
     @abstractproperty
     def neuron_class(self):
         '''
-        Should return zero if the 
+        Should return zero if the
         '''
         pass
 
-    
+
     @property
     def update_I_override(self): return False
-    
+
     def update_I(self, synapse_state, st=None):
         '''
         This method should compute the input current to each neuron
@@ -125,19 +125,22 @@ class BaseNeuron(object):
         BaseNeuron provides an implementation of this method. To use a
         different implementation, this method should be overrided and
         update_I_override property must be defined to be True in the derived class.
-        
+
         '''
-        self._update_I_non_cond.prepared_async_call(self._grid_get_input,\
-            self._block_get_input, st, int(synapse_state), \
-            self._cum_num_dendrite.gpudata, self._num_dendrite.gpudata, self._pre.gpudata,
-            self.I.gpudata)
-        self._update_I_cond.prepared_async_call(self._grid_get_input,\
-            self._block_get_input, st, int(synapse_state), \
-            self._cum_num_dendrite_cond.gpudata, self._num_dendrite_cond.gpudata,
-            self._cond_pre.gpudata, self.I.gpudata, int(self._neuron_state_pointer), \
-            self._V_rev.gpudata)
-        
-        
+        self.I.fill(0)
+        if self._pre.size>0:
+            self._update_I_non_cond.prepared_async_call(self._grid_get_input,\
+                self._block_get_input, st, int(synapse_state), \
+                self._cum_num_dendrite.gpudata, self._num_dendrite.gpudata, self._pre.gpudata,
+                self.I.gpudata)
+        if self._cond_pre.size>0:
+            self._update_I_cond.prepared_async_call(self._grid_get_input,\
+                self._block_get_input, st, int(synapse_state), \
+                self._cum_num_dendrite_cond.gpudata, self._num_dendrite_cond.gpudata,
+                self._cond_pre.gpudata, self.I.gpudata, int(self._neuron_state_pointer), \
+                self._V_rev.gpudata)
+
+
     def post_run(self):
         '''
         This method will be called at the end of the simulation.
@@ -148,20 +151,20 @@ class BaseNeuron(object):
         template = """
         #define N 32
         #define NUM_NEURONS %(num_neurons)d
-        
+
         __global__ void get_input(double* synapse, int* cum_num_dendrite, int* num_dendrite, int* pre, double* I_pre, double* V, double* V_rev)
         {
             int tidx = threadIdx.x;
             int tidy = threadIdx.y;
             int bid = blockIdx.x;
-            
+
             int neuron;
-            
+
             __shared__ int num_den[32];
             __shared__ int den_start[32];
             __shared__ double V_in[32];
             __shared__ double input[32][33];
-            
+
             if(tidy == 0)
             {
                 neuron = bid * N + tidx;
@@ -178,59 +181,59 @@ class BaseNeuron(object):
                     den_start[tidx] = cum_num_dendrite[neuron];
                 }
             }
-            
+
             input[tidy][tidx] = 0.0;
-            
+
             __syncthreads();
-            
-            
+
+
             int n_den = num_den[tidy];
             int start = den_start[tidy];
             double VV = V_in[tidy];
 
-        
+
                for(int i = tidx; i < n_den; i += N)
                {
-                   input[tidy][tidx] += synapse[pre[start] + i] * (VV - V_rev[start + i]);
+                   input[tidy][tidx] += synapse[pre[start + i]] * (VV - V_rev[start + i]);
                }
-            
+
                __syncthreads();
-            
-            
-            
+
+
+
                if(tidy < 8)
                {
                    input[tidx][tidy] += input[tidx][tidy + 8];
                    input[tidx][tidy] += input[tidx][tidy + 16];
                    input[tidx][tidy] += input[tidx][tidy + 24];
                }
-             
+
                __syncthreads();
-            
+
                if(tidy < 4)
                {
                    input[tidx][tidy] += input[tidx][tidy + 4];
                }
-            
+
                __syncthreads();
-            
+
                if(tidy < 2)
-               {   
+               {
                    input[tidx][tidy] += input[tidx][tidy + 2];
                }
-               
+
                __syncthreads();
-               
+
                if(tidy == 0)
                {
                    input[tidx][0] += input[tidx][1];
-                   
+
                    if(neuron < NUM_NEURONS)
                    {
                        I_pre[neuron] -= input[tidx][0];
                     }
                }
-            
+
         }
         //can be improved
         """
@@ -245,19 +248,19 @@ class BaseNeuron(object):
         template = """
         #define N 32
         #define NUM_NEURONS %(num_neurons)d
-        
+
         __global__ void get_input(double* synapse, int* cum_num_dendrite, int* num_dendrite, int* pre, double* I_pre)
         {
             int tidx = threadIdx.x;
             int tidy = threadIdx.y;
             int bid = blockIdx.x;
-            
+
             int neuron;
-            
+
             __shared__ int num_den[32];
             __shared__ int den_start[32];
             __shared__ double input[32][33];
-            
+
             if(tidy == 0)
             {
                 neuron = bid * N + tidx;
@@ -273,59 +276,57 @@ class BaseNeuron(object):
                     den_start[tidx] = cum_num_dendrite[neuron];
                 }
             }
-            
+
             input[tidy][tidx] = 0.0;
-            
+
             __syncthreads();
-            
-            
+
+
             int n_den = num_den[tidy];
             int start = den_start[tidy];
- 
-            
+
                for(int i = tidx; i < n_den; i += N)
                {
                    input[tidy][tidx] += synapse[pre[start] + i];
                }
-            
+
                __syncthreads();
-            
-            
-            
+
+
+
                if(tidy < 8)
                {
                    input[tidx][tidy] += input[tidx][tidy + 8];
                    input[tidx][tidy] += input[tidx][tidy + 16];
                    input[tidx][tidy] += input[tidx][tidy + 24];
                }
-             
+
                __syncthreads();
-            
+
                if(tidy < 4)
                {
                    input[tidx][tidy] += input[tidx][tidy + 4];
                }
-            
+
                __syncthreads();
-            
+
                if(tidy < 2)
-               {   
+               {
                    input[tidx][tidy] += input[tidx][tidy + 2];
                }
-               
+
                __syncthreads();
-               
+
                if(tidy == 0)
                {
                    input[tidx][0] += input[tidx][1];
-                   
+
                    if(neuron < NUM_NEURONS)
                    {
-                       I_pre[neuron] = input[tidx][0];
+                       I_pre[neuron] += input[tidx][0];
                    }
                }
-            
-            
+
         }
         //can be improved
         """
