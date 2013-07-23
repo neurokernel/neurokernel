@@ -4,8 +4,9 @@
 Graph/connectivity manipulation and visualization tools
 """
 
+import glob
 import itertools
-import os
+import os.path
 import re
 import tempfile
 
@@ -265,3 +266,57 @@ def graph_to_conn(g, conn_type=core.Connectivity):
                                     
     return c                        
         
+def load_conn_all(data_dir, conn_type=core.Connectivity):
+    """
+    Load all emulation inter-module connectivity data from a specified directory.
+
+    Searches for GEXF files describing modules and connectivity objects,
+    verifies that the connectivity objects actually do refer to the modules,
+    and verifies that the connectivity objects and the modules that they
+    connect are compatible.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing emulation files
+    conn_type : {base.BaseConnectivity, core.Connectivity}
+        Type of connectivity object to create.
+        
+    Returns
+    -------
+    mod_dict : dict
+        Dictionary mapping module file base names to
+        NetworkX MultiDiGraph instances.
+    conn_dict : dict
+        Dictionary mapping connectivity file base names to
+        generated connectivity object instances.
+    """
+
+    gexf_list = glob.glob(os.path.join(data_dir, '*.gexf'))
+    mod_dict = {}
+    conn_dict = {}
+    for file_name in gexf_list:
+
+        # Try to load inter-module connectivity data from a GEXF file; if the
+        # load fails, the file is assumed to contain module information:
+        g = nx.MultiDiGraph(nx.read_gexf(file_name, relabel=True))
+        try:
+            conn = graph.graph_to_conn(g)
+        except:
+            mod_dict[os.path.splitext(file_name)][0] = g
+        else:
+            conn_dict[os.path.splitext(file_name)][0] = conn
+
+    # Check whether all of the loaded connectivity objects refer to the
+    # specified module files
+    for conn_name in conn_dict.keys():
+        conn = conn_dict[conn_name]
+        if conn.A_id not in mod_dict.keys():
+            raise ValueError('module %s in connectivity object %s not found' % \
+                             (conn.A_id, conn_name))
+        if conn.B_id not in mod_dict.keys():
+            raise ValueError('module %s in connectivity object %s not found' % \
+                             (conn.B_id, conn_name))
+    
+    return mod_dict, conn_dict
+    
