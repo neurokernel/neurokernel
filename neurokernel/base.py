@@ -1058,9 +1058,10 @@ class BaseConnectivity(object):
                 count += 1
         return count
 
-    def get(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn'):
+    def _get_sparse(self, src_id, src_idx, dest_id, dest_idx, conn, param):
         """
-        Retrieve a value in the connectivity class instance.
+        Retrieve a value or values in the connectivity class instance and return
+        as scalar or sparse.
         """
 
         if src_id == '' and dest_id == '':
@@ -1070,7 +1071,14 @@ class BaseConnectivity(object):
         dir = '/'.join((src_id, dest_id))
         assert type(conn) == int
         
-        result = self._data[self._make_key(dir, conn, param)][src_idx, dest_idx]
+        return self._data[self._make_key(dir, conn, param)][src_idx, dest_idx]
+
+    def get(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn'):
+        """
+        Retrieve a value in the connectivity class instance.
+        """
+
+        self._get_sparse(self, src_id, src_idx, dest_id, dest_idx, conn, param)
         if not np.isscalar(result):
             return result.toarray()
         else:
