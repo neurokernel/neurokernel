@@ -970,16 +970,11 @@ if __name__ == '__main__':
     # man.connect(m1, m3, c1to3)
     # man.connect(m3, m4, c3to4)
     # man.connect(m4, m1, c4to1)
-    
+
+    # To set the emulation to exit after executing a fixed number of steps,
+    # start it as follows and remove the sleep statement:    
+    # man.start(steps=500)    
     man.start()
     time.sleep(2)
     man.stop()
-
-    # To set the emulation to exit after executing a fixed
-    # number of steps, run it as follows:
-    
-    # man.start(steps=500)
-    # man.join_modules()
-    # man.stop_brokers()
-    
     logger.info('all done')
