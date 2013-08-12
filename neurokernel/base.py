@@ -54,13 +54,13 @@ class BaseModule(ControlledProcess):
 
     Attributes
     ----------
-    conn_dict dict of BaseConnectivity
-       Connectivity objects connecting the module instance with
-       other module instances.
+    conn_dict : dict of BaseConnectivity
+        Connectivity objects connecting the module instance with
+        other module instances.
     in_ids : list of int
-       List of source module IDs.
+        List of source module IDs.
     out_ids : list of int
-       List of destination module IDs.
+        List of destination module IDs.
 
     Methods
     -------
@@ -69,7 +69,7 @@ class BaseModule(ControlledProcess):
     run_step(data)
         Processes the specified data and returns a result for
         transmission to other modules.
-
+    
     Notes
     -----
     If the ports specified upon instantiation are None, the module

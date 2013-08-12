@@ -28,8 +28,8 @@ class IntervalIndex(object):
     converted to a relative index. If a label is specified, the index is assumed
     to be relative and is converted to an absolute index.
     
-    Example
-    -------
+    Examples
+    --------
     >>> idx = IntervalIndex([0, 5, 10], ['a', 'b'])
     >>> idx[3]
     3
