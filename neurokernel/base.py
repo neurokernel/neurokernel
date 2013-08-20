@@ -1078,7 +1078,7 @@ class BaseConnectivity(object):
         Retrieve a value in the connectivity class instance.
         """
 
-        self._get_sparse(self, src_id, src_idx, dest_id, dest_idx, conn, param)
+        result = self._get_sparse(src_id, src_idx, dest_id, dest_idx, conn, param)
         if not np.isscalar(result):
             return result.toarray()
         else:
