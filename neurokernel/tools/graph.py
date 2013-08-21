@@ -232,7 +232,7 @@ def graph_to_conn(g, conn_type=core.Connectivity):
                 raise ValueError('invalid neuron type')
         
     # Find maximum number of edges between any two nodes:
-    N_mult = max([len(g[u][v]) for u,v in set(g.edges())])
+    N_mult = max([1]+[len(g[u][v]) for u,v in set(g.edges())])
 
     # Create empty connectivity structure:
     if conn_type == base.BaseConnectivity:
@@ -301,11 +301,11 @@ def load_conn_all(data_dir, conn_type=core.Connectivity):
         # load fails, the file is assumed to contain module information:
         g = nx.MultiDiGraph(nx.read_gexf(file_name, relabel=True))
         try:
-            conn = graph.graph_to_conn(g)
+            conn = graph_to_conn(g)
         except:
-            mod_dict[os.path.splitext(file_name)][0] = g
+            mod_dict[os.path.splitext(os.path.basename(file_name))[0]] = g
         else:
-            conn_dict[os.path.splitext(file_name)][0] = conn
+            conn_dict[os.path.splitext(os.path.basename(file_name))[0]] = conn
 
     # Check whether all of the loaded connectivity objects refer to the
     # specified module files

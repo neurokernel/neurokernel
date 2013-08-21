@@ -54,13 +54,13 @@ class BaseModule(ControlledProcess):
 
     Attributes
     ----------
-    conn_dict dict of BaseConnectivity
-       Connectivity objects connecting the module instance with
-       other module instances.
+    conn_dict : dict of BaseConnectivity
+        Connectivity objects connecting the module instance with
+        other module instances.
     in_ids : list of int
-       List of source module IDs.
+        List of source module IDs.
     out_ids : list of int
-       List of destination module IDs.
+        List of destination module IDs.
 
     Methods
     -------
@@ -69,7 +69,7 @@ class BaseModule(ControlledProcess):
     run_step(data)
         Processes the specified data and returns a result for
         transmission to other modules.
-
+    
     Notes
     -----
     If the ports specified upon instantiation are None, the module
@@ -142,7 +142,7 @@ class BaseModule(ControlledProcess):
         self._conn_dict = {}
 
         # Dictionary containing ports of destination modules that receive input
-        # from this module; must be initialized immediately before a simulation
+        # from this module; must be initialized immediately before an emulation
         # begins running:
         self._out_idx_dict = {}
         
@@ -465,7 +465,7 @@ class BaseModule(ControlledProcess):
 
             # Extract indices of source ports for all modules receiving output
             # once so that they don't need to be repeatedly extracted during the
-            # simulation:
+            # emulation:
             self._out_idx_dict = \
               {out_id:self._conn_dict[out_id].src_idx(self.id, out_id) for \
                out_id in self.out_ids}
@@ -1058,9 +1058,10 @@ class BaseConnectivity(object):
                 count += 1
         return count
 
-    def get(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn'):
+    def _get_sparse(self, src_id, src_idx, dest_id, dest_idx, conn, param):
         """
-        Retrieve a value in the connectivity class instance.
+        Retrieve a value or values in the connectivity class instance and return
+        as scalar or sparse.
         """
 
         if src_id == '' and dest_id == '':
@@ -1070,7 +1071,14 @@ class BaseConnectivity(object):
         dir = '/'.join((src_id, dest_id))
         assert type(conn) == int
         
-        result = self._data[self._make_key(dir, conn, param)][src_idx, dest_idx]
+        return self._data[self._make_key(dir, conn, param)][src_idx, dest_idx]
+
+    def get(self, src_id, src_idx, dest_id, dest_idx, conn=0, param='conn'):
+        """
+        Retrieve a value in the connectivity class instance.
+        """
+
+        result = self._get_sparse(src_id, src_idx, dest_id, dest_idx, conn, param)
         if not np.isscalar(result):
             return result.toarray()
         else:
@@ -1183,6 +1191,9 @@ class BaseManager(object):
 
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
+
+        # Number of emulation steps to run:
+        self.steps = np.inf
 
     def connect(self, m_A, m_B, conn):
         """
@@ -1299,12 +1310,13 @@ class BaseManager(object):
             Maximum number of steps to execute.
         """
 
+        self.steps = steps
         with IgnoreKeyboardInterrupt():
             for b in self.brok_dict.values():
                 b.start()
             for m in self.mod_dict.values():
                 m.steps = steps
-                m.start();
+                m.start()
 
     def send_ctrl_msg(self, i, *msg):
         """
@@ -1371,12 +1383,17 @@ class BaseManager(object):
                 recv_ids.remove(i)                
         self.logger.info('all modules stopped')
 
-    def stop_modules(self):
-        self.logger.info('stopping all modules')
-        self.join_modules(True)
-        
     def stop(self):
-        self.stop_modules()
+        """
+        Stop execution of an emulation.
+        """
+
+        if np.isinf(self.steps):
+            self.logger.info('stopping all modules')
+            send_quit = True
+        else:
+            send_quit = False
+        self.join_modules(send_quit)
         self.stop_brokers()
         
 def setup_logger(file_name='neurokernel.log', screen=True, port=None):
@@ -1485,15 +1502,11 @@ if __name__ == '__main__':
     man.add_conn(conn41)
     man.connect(m4, m1, conn41)
 
-    # Start emulation and allow it to run for a little while before shutting down:
-    man.start()
-    time.sleep(5)
-    man.stop()
-
-    # To set the emulation to exit after executing a fixed
-    # number of steps, run it as follows:
+    # Start emulation and allow it to run for a little while before shutting
+    # down.  To set the emulation to exit after executing a fixed number of
+    # steps, start it as follows and remove the sleep statement:
     # man.start(steps=500)
-    # man.join_modules()
-    # man.stop_brokers()
-
+    man.start()
+    time.sleep(3)
+    man.stop()
     logger.info('all done')

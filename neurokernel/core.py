@@ -28,8 +28,8 @@ class IntervalIndex(object):
     converted to a relative index. If a label is specified, the index is assumed
     to be relative and is converted to an absolute index.
     
-    Example
-    -------
+    Examples
+    --------
     >>> idx = IntervalIndex([0, 5, 10], ['a', 'b'])
     >>> idx[3]
     3
@@ -175,7 +175,9 @@ class Connectivity(base.BaseConnectivity):
  
     Each connection may therefore have several parameters; parameters associated
     with nonexistent connections (i.e., those whose 'conn' parameter is set to
-    0) should be ignored.
+    0) should be ignored. A nonzero 'conn' parameter value denotes the 
+    type ID of connection; consecutive integer IDs are assigned to each of the
+    types specified in `type_params`.
     
     Parameters
     ----------
@@ -194,7 +196,10 @@ class Connectivity(base.BaseConnectivity):
         First module ID (default 'A').
     B_id : str
         Second module ID (default 'B').
-
+    type_params : dict
+        Dictionary mapping type identifiers to lists of parameters
+        associated with each type.
+    
     Examples
     --------
     The first connection between spiking neuron 0 in one LPU with graded
@@ -203,13 +208,31 @@ class Connectivity(base.BaseConnectivity):
     connection can be accessed as c['A','spike',0,'B','gpot',3,0,'weight']
 
     """
-    
+
+    _type_params = {}
+    _type_ids = bidict.bidict()
+    @property
+    def type_params(self):
+        """
+        Parameters supported by each recognized connection type.
+        """
+        
+        return self._type_params
+    @type_params.setter
+    def type_params(self, d):
+        id = 1
+        for k in d.keys():
+            self._type_ids[k] = id
+            id += 1
+        self._type_params = d
     def __init__(self, N_A_gpot, N_A_spike, N_B_gpot, N_B_spike,
-                 N_mult=1, A_id='A', B_id='B'):
+                 N_mult=1, A_id='A', B_id='B', type_params={}):
         self.N_A_gpot = N_A_gpot
         self.N_A_spike = N_A_spike
         self.N_B_gpot = N_B_gpot
         self.N_B_spike = N_B_spike
+        self.type_params = type_params
+
         super(Connectivity, self).__init__(N_A_gpot+N_A_spike,
                                            N_B_gpot+N_B_spike, N_mult,
                                            A_id, B_id)
@@ -239,7 +262,7 @@ class Connectivity(base.BaseConnectivity):
                 IntervalIndex([0, self.N_B_gpot,
                                self.N_B_gpot+self.N_B_spike],
                               ['gpot', 'spike'])
-            
+
     def N(self, id, n_type='all'):
         """
         Return number of neurons of the specified type associated with the specified module.
@@ -438,12 +461,38 @@ class Connectivity(base.BaseConnectivity):
                          dest_type, dest_idx, conn, name):
                 count += 1
         return count
+
+    def _validate_types(self, src_id, src_idx,
+                        dest_id, dest_idx,
+                        conn, param):
+        """
+        Check whether the specified connections have types that are associated
+        with a specific parameter. Assumes that the indices are absolute.
+        """
+
+        # Get the type IDs from the conn parameter:
+        type_ids = super(Connectivity, self)._get_sparse(src_id, src_idx,
+                                                         dest_id, dest_idx,
+                                                         conn, 'conn')
+        
+        # Using the type IDs and the dictionary mapping types to associated
+        # parameters, check whether the specified parameter is supported by
+        # one of the specified connections:
+        if not np.isscalar(type_ids):
+            type_ids = type_ids.copy()
+
+            # This will raise an exception if the matrix corresponding to the
+            # 'conn' parameter contains type IDs that are not in self.type_params.keys()
+            type_ids.data = \
+                map(lambda x: filter(lambda y: param in self.type_params[y], x),                                
+                    type_ids.data)
+        return type_ids
         
     def get(self, src_id, src_type, src_idx,
             dest_id, dest_type, dest_idx,
             conn=0, param='conn'):
         """
-        Retrieve a value in the connectivity class instance.
+        Retrieve a value in the connectivity class instance. 
         """
 
         assert src_type in ['gpot', 'spike', 'all']
@@ -474,16 +523,35 @@ class Connectivity(base.BaseConnectivity):
         if dest_type == 'all':
             dest_idx_new = dest_idx
         else:
-            dest_idx_new = self.idx_translate[dest_id][dest_type, dest_idx]
+            dest_idx_new = self.idx_translate[dest_id][dest_type, dest_idx]            
         return super(Connectivity, self).set(src_id, src_idx_new,
                                              dest_id, dest_idx_new,
                                              conn, param, val=val)
     
     def __repr__(self):
-        return super(Connectivity, self).__repr__()+\
+        # Find maximum string length of recognized type identifiers:
+        max_type_len = max([0]+map(lambda s:len(str(s)),
+                                   self.type_params.keys()))
+        max_type_id_len = max([0]+map(lambda s:len(str(s)),
+                                      self._type_ids.values()))
+        
+        # Format connectivity data:
+        result = super(Connectivity, self).__repr__()+\
           '\nA idx\n'+self.idx_translate[self.A_id].__repr__()+\
           '\n\nB idx\n'+self.idx_translate[self.B_id].__repr__()
 
+        # Format list of parameters associated with each type:
+        result += '\n\nallowed params by type\n'          
+        if max_type_len:
+            result += \
+              '\n'.join(map(lambda k: ('%'+str(max_type_id_len)+\
+                                       's: %-'+str(max_type_len)+'s %s') % (str(self._type_ids[k]),
+                                                                             str(k),
+                                       str(self.type_params[k])), self.type_params))
+        else:
+            result += 'none'
+        return result
+    
 class Module(base.BaseModule):
     """
     Processing module.
@@ -902,16 +970,11 @@ if __name__ == '__main__':
     # man.connect(m1, m3, c1to3)
     # man.connect(m3, m4, c3to4)
     # man.connect(m4, m1, c4to1)
-    
+
+    # To set the emulation to exit after executing a fixed number of steps,
+    # start it as follows and remove the sleep statement:    
+    # man.start(steps=500)    
     man.start()
     time.sleep(2)
     man.stop()
-
-    # To set the emulation to exit after executing a fixed
-    # number of steps, run it as follows:
-    
-    # man.start(steps=500)
-    # man.join_modules()
-    # man.stop_brokers()
-    
     logger.info('all done')
