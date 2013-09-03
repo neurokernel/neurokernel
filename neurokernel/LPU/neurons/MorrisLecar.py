@@ -9,7 +9,7 @@ from pycuda.compiler import SourceModule
 class MorrisLecar(BaseNeuron):
     def __init__(self, n_dict, V, dt , debug=False):
 
-        self.num_neurons = len(n_dict['type'])
+        self.num_neurons = len(n_dict['id'])
         self.dt = np.double(dt)
         self.steps = max(int(round(dt / 1e-5)),1)
         self.debug = debug

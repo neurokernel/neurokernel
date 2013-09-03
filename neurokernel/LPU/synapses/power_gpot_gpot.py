@@ -23,7 +23,7 @@ class power_gpot_gpot(BaseSynapse):
                                                   dtype = np.double))
         self.delay = garray.to_gpu(np.round(np.asarray(s_dict['delay']) \
                                             * 1e-3 / dt).astype(np.int32))
-        self.num_synapse = len(s_dict['type'])
+        self.num_synapse = len(s_dict['id'])
 
         self.update_func = self.get_update_func()
 

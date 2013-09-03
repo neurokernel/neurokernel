@@ -141,8 +141,8 @@ class LPU(Module):
 
             self.synapse_types.append(s_dict['type'][0])
 
-        self.my_num_gpot_neurons = np.sum(self.num_gpot_neurons)
-        self.my_num_spike_neurons = np.sum(self.num_spike_neurons)
+        self.my_num_gpot_neurons = np.sum(self.num_gpot_neurons, dtype=np.int32)
+        self.my_num_spike_neurons = np.sum(self.num_spike_neurons, dtype=np.int32)
 
         self.input_neuron_list = np.asarray(self.input_neuron_list,
                                             dtype=np.int32)
@@ -487,10 +487,10 @@ class LPU(Module):
         count = 0
 
 
-        self.total_gpot_neurons = self.my_num_gpot_neurons + \
-                                            self.num_virtual_gpot_neurons
-        self.total_spike_neurons = self.my_num_spike_neurons + \
-                                            self.num_virtual_spike_neurons
+        self.total_gpot_neurons = int( self.my_num_gpot_neurons + \
+                                            self.num_virtual_gpot_neurons )
+        self.total_spike_neurons = int( self.my_num_spike_neurons + \
+                                            self.num_virtual_spike_neurons )
 
 
         for s_dict in s_dict_list:
@@ -516,7 +516,7 @@ class LPU(Module):
                     spike_delay_steps = max_del if max_del > spike_delay_steps \
                                        else spike_delay_steps
 
-        self.total_synapses = np.sum(num_synapses)
+        self.total_synapses = int(np.sum(num_synapses))
         I_post.extend(self.input_neuron_list)
         I_pre.extend(range(self.total_synapses, self.total_synapses + \
                           len(self.input_neuron_list)))
@@ -595,10 +595,10 @@ class LPU(Module):
         self.synapse_state = garray.zeros(self.total_synapses + \
                                     len(self.input_neuron_list), np.float64)
         if self.my_num_gpot_neurons>0:
-            self.V = garray.zeros(self.my_num_gpot_neurons, np.float64)
+            self.V = garray.zeros(int(self.my_num_gpot_neurons), np.float64)
 
         if self.my_num_spike_neurons>0:
-            self.spike_state = garray.zeros(self.my_num_spike_neurons, np.int32)
+            self.spike_state = garray.zeros(int(self.my_num_spike_neurons), np.int32)
 
         if len(self.public_gpot_list)>0:
             self.public_gpot_list_g = garray.to_gpu(self.public_gpot_list)

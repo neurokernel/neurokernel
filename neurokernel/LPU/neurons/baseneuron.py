@@ -61,7 +61,7 @@ class BaseNeuron(object):
 
         '''
         self._neuron_state_pointer = neuron_state_pointer
-        self._num_neurons = len(n_dict['type'])
+        self._num_neurons = len(n_dict['id'])
         _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i] \
                                     for i in range(self._num_neurons)], \
                                     dtype=np.int32).flatten()
