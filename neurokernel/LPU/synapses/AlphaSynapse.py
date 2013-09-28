@@ -1,0 +1,66 @@
+from basesynapse import BaseSynapse
+
+import numpy as np
+
+import pycuda.gpuarray as garray
+from pycuda.tools import dtype_to_ctype
+import pycuda.driver as cuda
+from pycuda.compiler import SourceModule
+
+class AlphaSynape(BaseSynapse):
+
+    def __init__( self, s_dict, synapse_state, dt, debug=False):
+        self.debug = debug
+        self.dt = dt
+        self.num = len( s_dict['id'] )
+
+        self.pre  = garray.to_gpu( np.asarray( s_dict['pre'], dtype=np.int32 ))
+        self.ar   = garray.to_gpu( np.asarray( s_dict['ar'], dtype=np.float64 ))
+        self.ad   = garray.to_gpu( np.asarray( s_dict['ad'], dtype=np.float64 ))
+        self.gmax = garray.to_gpu( np.asarray( s_dict['gmax'], dtype=np.float64 ))
+        self.a0   = garray.zeros( (self.num,), dtype=np.float64 )
+        self.a1   = garray.zeros( (self.num,), dtype=np.float64 )
+        self.a2   = garray.zeros( (self.num,), dtype=np.float64 )
+        self.cond = synapse_state
+
+        self.update = self.get_gpu_kernel()
+
+    @property
+    def synapse_class(self): return int(0)
+
+    def update_state(self, buffer, st = None):
+        self.update.prepared_async_call(
+            self.gpu_block,\
+            self.gpu_grid,\
+            st,\
+            self.num,\
+            self.dt,\
+            buffer.spike_buffer.gpudata,\
+            self.Ar.gpudata,\
+            self.Ad.gpudata,\
+            self.Gmax.gpudata,\
+            self.a0.gpudata,\
+            self.a1.gpudata,\
+            self.a2.gpudata,\
+            self.cond)
+
+    def get_gpu_kernel(self):
+        self.gpu_block = (128,1,1)
+        self.gpu_grid = (min( 6*cuda.Context.get_device().MULTIPROCESSOR_COUNT,\
+                              (self.num-1)/self.gpu_block[0] + 1)), 1)
+        cuda_src = open('./alpha_synapse.cu','r')
+        mod = SourceModule( \
+                cuda_src.read() % {"type": dtype_to_ctype(np.float64)},\
+                options=["--ptxas-options=-v"])
+        func = mod.get_function("alpha_synapse")
+        func.prepare( [ np.int32,   # syn_num
+                        np.float64, # dt
+                        np.intp,    # spike list
+                        np.intp,    # ar array
+                        np.intp,    # ad array
+                        np.intp,    # gmax array
+                        np.intp,    # a0 array
+                        np.intp,    # a1 array
+                        np.intp,    # a2 array
+                        np.intp ] ) # cond array
+        return func
