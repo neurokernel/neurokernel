@@ -1,8 +1,8 @@
 from baseneuron import BaseNeuron
 
 import numpy as np
-import pycude.gpuarray as garray
-from pycude.tools import dtype_to_ctype
+import pycuda.gpuarray as garray
+from pycuda.tools import dtype_to_ctype
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 

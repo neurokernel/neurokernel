@@ -546,6 +546,8 @@ class LPU_rev(Module):
                                     len(self.input_neuron_list), np.float64)
         if self.my_num_gpot_neurons>0:
             self.V = garray.zeros(int(self.my_num_gpot_neurons), np.float64)
+        else:
+            self.V = garray.zeros(int(1), np.float64)
 
         if self.my_num_spike_neurons>0:
             self.spike_state = garray.zeros(int(self.my_num_spike_neurons), np.int32)

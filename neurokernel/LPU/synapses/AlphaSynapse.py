@@ -47,7 +47,7 @@ class AlphaSynape(BaseSynapse):
     def get_gpu_kernel(self):
         self.gpu_block = (128,1,1)
         self.gpu_grid = (min( 6*cuda.Context.get_device().MULTIPROCESSOR_COUNT,\
-                              (self.num-1)/self.gpu_block[0] + 1)), 1)
+                              (self.num-1)/self.gpu_block[0] + 1), 1)
         cuda_src = open('./alpha_synapse.cu','r')
         mod = SourceModule( \
                 cuda_src.read() % {"type": dtype_to_ctype(np.float64)},\
