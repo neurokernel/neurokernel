@@ -56,38 +56,36 @@ class LPU_rev(Module):
         Notes
         -----
 
-        1. Each node(neuron) in the graph should necessarily have
-        a boolean attribute called 'spiking' indicating whether the neuron is
-        spiking or graded potential.
+        1. Each node(neuron) in the graph should necessarily have a boolean
+           attribute called 'spiking' indicating whether the neuron is spiking
+           or graded potential.
         2. Each node should have an integer attribute called 'type' indicating
-        the model to be used for that neuron( Eg:- IAF, Morris-Lecar).
-        Refer the documentation of LPU.neurons.BaseNeuron to implement
-        custom neuron models.
+           the model to be used for that neuron( Eg:- IAF, Morris-Lecar).
+           Refer the documentation of LPU.neurons.BaseNeuron to implement
+           custom neuron models.
         3. The attributes of the nodes should be consistent across all nodes
-        of the same type. For example if a particular node of type 'IAF'
-        has attribute 'bias', all nodes of type 'IAF' must necessarily
-        have this attribute.
-        4. Each node should have an boolean attribute called public - indicating
-        whether that neuron either recieves input or provides output to
-        other LPUs.
-        5. Each node should have an boolean attribute called input indicating
-        whether the neuron accepts external input from a file.
-        6. Each edge(synapse) in the graph should have an integer
-        attribute called 'class' which should be one of the following values.
+           of the same type. For example if a particular node of type 'IAF'
+           has attribute 'bias', all nodes of type 'IAF' must necessarily
+           have this attribute.
+        4. Each node should have an boolean attribute called 'public',
+           indicating whether that neuron either recieves input or provides
+           output to other LPUs.
+        5. Each node should have an boolean attribute called 'input' indicating
+           whether the neuron accepts external input from a file.
+        6. Each edge(synapse) in the graph should have an integer attribute
+           called 'class' which should be one of the following values.
             0. spike-spike synapse
             1. spike-gpot synapse
             2. gpot-spike synapse
             3. gpot-gpot synapse
         7. Each edge should have an integer attribute called 'type' indicating
-        the model to be used for that synapse( Eg:- alpha).
-        Refer the documentation of LPU.synapses.BaseSynapse to implement
-        custom synapse models.
-        8. The attributes of the nodes should be consistent across all nodes
-        of the same type.
-        9. Each edge should have a boolean attribute called 'conductance'
-        representing whether it's output is a conductance or current.
+           the model to be used for that synapse( Eg:- alpha). Refer the
+           documentation of LPU.synapses.BaseSynapse to implement custom
+           synapse models.
+        8. Each edge should have a boolean attribute called 'conductance'
+           representing whether it's output is a conductance or current.
         10.For all edges with the 'conductance' attribute true, there should
-        be an attribute called 'reverse'
+           be an attribute called 'reverse'
 
         TODO
         ----
