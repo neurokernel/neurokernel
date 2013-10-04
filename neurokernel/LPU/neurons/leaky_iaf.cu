@@ -4,7 +4,7 @@
 __global__ void leaky_iaf(
     int neu_num,
     %(type)s dt,
-    int      spk,
+    int      *spk,
     %(type)s *V,
     %(type)s *I,
     %(type)s *Vt,

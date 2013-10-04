@@ -2,6 +2,7 @@ __global__ void alpha_synapse(
     int num,
     %(type)s dt,
     int *spike,
+    int *Pre,
     %(type)s *Ar,
     %(type)s *Ad,
     %(type)s *Gmax,
@@ -10,7 +11,7 @@ __global__ void alpha_synapse(
     %(type)s *a2,
     %(type)s *cond )
 {
-    int tid = threadIdx.x + blockIdx.x*blockDim.x
+    int tid = threadIdx.x + blockIdx.x*blockDim.x;
     int tot_threads = gridDim.x * blockDim.x;
     int pre;
     %(type)s ar,ad,gmax;
@@ -31,7 +32,7 @@ __global__ void alpha_synapse(
         new_a[0] = fmax( 0., old_a[0] + dt*old_a[1] );
         new_a[1] = old_a[1] + dt*old_a[2];
         if( spike[pre] )
-            new_a[1] += ar*ad
+            new_a[1] += ar*ad;
         new_a[2] = -( ar+ad )*old_a[1] - ar*ad*old_a[0];
 
         // copy data from register to the global memory

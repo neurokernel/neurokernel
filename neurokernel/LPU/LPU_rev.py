@@ -379,10 +379,7 @@ class LPU_rev(Module):
         order = self.order
         spike_shift = self.spike_shift
 
-        connectivity = self._conn_dict
-
-
-        if len(connectivity)==0:
+        if len(self._conn_dict)==0:
             self.update_resting_potential_history = False
             self.run_on_myself = True
             self.num_virtual_gpot_neurons = 0
@@ -394,8 +391,8 @@ class LPU_rev(Module):
             self.update_resting_potential_history = True
             self.run_on_myself = False
 
-            self.num_input_gpot_neurons = np.empty(len(connectivity), np.int32)
-            self.num_input_spike_neurons = np.empty(len(connectivity),np.int32)
+            self.num_input_gpot_neurons = np.empty(len(self._conn_dict), np.int32)
+            self.num_input_spike_neurons = np.empty(len(self._conn_dict),np.int32)
             self.virtual_gpot_idx = []
             self.virtual_spike_idx = []
 
@@ -404,9 +401,9 @@ class LPU_rev(Module):
 
 
 
-            for i,c in enumerate(connectivity.itervalues()):
+            for i,c in enumerate(self._conn_dict.itervalues()):
                 other_lpu = c.B_id if self.id == c.A_id else c.A_id
-                # parser synapse with gpot pre-synaptic neuron
+                # parse synapse with gpot pre-synaptic neuron
                 pre_gpot = c.src_idx(other_lpu, self.id, src_type='gpot')
 
                 self.num_input_gpot_neurons[i] = len(pre_gpot)
@@ -417,6 +414,7 @@ class LPU_rev(Module):
 
                 parse_interLPU_syn( pre_gpot, 'gpot', 'gpot' )
                 parse_interLPU_syn( pre_gpot, 'gpot', 'spike')
+
                 # parse synapse with spike pre-synaptic neuron
                 pre_spike = c.src_idx(other_lpu, self.id, src_type='spike')
                 self.num_input_spike_neurons[i] = len(pre_spike)
@@ -449,7 +447,6 @@ class LPU_rev(Module):
 
         count = 0
 
-
         self.total_gpot_neurons = self.my_num_gpot_neurons + \
                                             self.num_virtual_gpot_neurons
         self.total_spike_neurons = self.my_num_spike_neurons + \
@@ -459,7 +456,8 @@ class LPU_rev(Module):
         num_synapses = [ len(s['id']) for t,s in self.s_list ]
         for (t,s) in self.s_list:
             order = np.argsort(s['post'])
-            for v in s.itervalues():
+            print "post : " + str(len(s['post']))
+            for k,v in s.items():
                 v = np.asarray(v)[order]
             if s['conductance'][0]:
                 cond_post.extend(s['post'])
@@ -754,6 +752,7 @@ class LPU_rev(Module):
     def _load_synapses(self):
         self._synapse_classes = basesynapse.BaseSynapse.__subclasses__()
         self._synapse_names = [cls.__name__ for cls in self._synapse_classes]
+        print self._synapse_names
 
 def neuron_cmp( x, y):
     if int(x[0]) < int(y[0]): return -1
