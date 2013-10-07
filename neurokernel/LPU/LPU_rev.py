@@ -217,10 +217,11 @@ class LPU_rev(Module):
 
         #TODO: comment
         self.s_dict = s_dict
-        for s in self.s_dict.itervalues():
-            shift = self.spike_shift if s['class'][0] == 0 or s['class'][0] == 1 else 0
-            s['pre'] = [ self.order[int(neu_id)]-shift for neu_id in s['pre'] ]
-            s['post'] = [ self.order[int(neu_id)] for neu_id in s['post'] ]
+        if s_dict:
+            for s in self.s_dict.itervalues():
+                shift = self.spike_shift if s['class'][0] == 0 or s['class'][0] == 1 else 0
+                s['pre'] = [ self.order[int(neu_id)]-shift for neu_id in s['pre'] ]
+                s['post'] = [ self.order[int(neu_id)] for neu_id in s['post'] ]
 
     def compare( self, lpu ):
         """
@@ -332,6 +333,7 @@ class LPU_rev(Module):
                 # Maybe only gpot_buffer or spike_buffer should be passed
                 # based on the synapse class.
                 synapse.update_state(self.buffer)
+
             self.buffer.step()
 
         if not self.run_on_myself:
@@ -456,7 +458,6 @@ class LPU_rev(Module):
         num_synapses = [ len(s['id']) for t,s in self.s_list ]
         for (t,s) in self.s_list:
             order = np.argsort(s['post'])
-            print "post : " + str(len(s['post']))
             for k,v in s.items():
                 v = np.asarray(v)[order]
             if s['conductance'][0]:
@@ -710,6 +711,7 @@ class LPU_rev(Module):
     def _instantiate_neuron(self, i, t, n):
         try:
             ind = self._neuron_names.index(t)
+            #ind = int(t)
         except:
             self.logger.info('Error instantiating neurons of type ' + t )
             return []
@@ -734,6 +736,7 @@ class LPU_rev(Module):
     def _instantiate_synapse(self, i, t, s):
         try:
             ind = self._synapse_names.index( t )
+            # ind = int(t)
         except:
             self.logger.info('Error instantiating synapses of type ' + t )
             return []
@@ -752,7 +755,6 @@ class LPU_rev(Module):
     def _load_synapses(self):
         self._synapse_classes = basesynapse.BaseSynapse.__subclasses__()
         self._synapse_names = [cls.__name__ for cls in self._synapse_classes]
-        print self._synapse_names
 
 def neuron_cmp( x, y):
     if int(x[0]) < int(y[0]): return -1
@@ -789,8 +791,7 @@ class circular_array:
                     self.gpot_buffer.ld * i * self.gpot_buffer.dtype.itemsize,\
                     rest.gpudata, rest.nbytes)
 
-            self.num_spike_neurons = num_spike_neurons
-
+        self.num_spike_neurons = num_spike_neurons
         if num_spike_neurons > 0:
             self.spike_delay_steps = spike_delay_steps
             self.spike_buffer = parray.zeros((spike_delay_steps,num_spike_neurons),np.int32)

@@ -19,8 +19,7 @@ parser.set_defaults(debug=False)
 parser.add_argument('-s', '--steps', help = ('No of steps [default:10000]'))
 parser.add_argument('-d', '--data_port', help = ('Data port [default:5005]'))
 parser.add_argument('-c', '--ctrl_port', help = ('Control port [default:5006]'))
-parser.add_argument('-l', '--lamina_device', help = ('GPU to use for lamina [default:0]'))
-parser.add_argument('-m', '--medulla_device', help = ('GPU to use for medulla [default:1]'))
+parser.add_argument('-a', '--al_device', help = ('GPU to use for antennal lobe [default:4]'))
 args = parser.parse_args()
 
 
@@ -34,16 +33,10 @@ if args.ctrl_port:
 else:
     ctrl_port = 5006
 
-if args.lamina_device:
-    dev1 = int(args.lamina_device)
+if args.al_device:
+    dev1 = int(args.al_device)
 else:
-    dev1 = 0
-
-if args.medulla_device:
-    dev2 = int(args.medulla_device)
-else:
-    dev2 = 1
-
+    dev1 = 4
 
 if args.steps:
     steps= int(args.steps)
@@ -61,6 +54,7 @@ man.add_brok()
 
 
 (n_dict, s_dict) = LPU_rev.lpu_parser( './config_files/antennallobe.gexf')
+#(n_dict, s_dict) = LPU_rev.lpu_parser( './config_files/antennallobe_no_synapse.gexf')
 
 
 al = LPU_rev( dt, n_dict, s_dict,\
@@ -69,7 +63,6 @@ al = LPU_rev( dt, n_dict, s_dict,\
                     port_data=man.port_data, device=dev1, id='a;',
                     debug=args.debug)
 
-print 'al init done'
 al = man.add_mod(al)
 
 

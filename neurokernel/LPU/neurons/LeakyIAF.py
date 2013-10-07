@@ -49,7 +49,6 @@ __global__ void leaky_iaf(
 }
 """
 
-
 class LeakyIAF(BaseNeuron):
     def __init__(self, n_dict, spk, dt, debug=False):
         self.num_neurons = len(n_dict['id'])

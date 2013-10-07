@@ -54,7 +54,7 @@ __global__ void alpha_synapse(
     return;
 }
 """
-class AlphaSynape(BaseSynapse):
+class AlphaSynapse(BaseSynapse):
 
     def __init__( self, s_dict, synapse_state, dt, debug=False):
         self.debug = debug
@@ -77,8 +77,8 @@ class AlphaSynape(BaseSynapse):
 
     def update_state(self, buffer, st = None):
         self.update.prepared_async_call(
-            self.gpu_block,\
             self.gpu_grid,\
+            self.gpu_block,\
             st,\
             self.num,\
             self.dt,\
@@ -86,7 +86,7 @@ class AlphaSynape(BaseSynapse):
             self.pre.gpudata,\
             self.ar.gpudata,\
             self.ad.gpudata,\
-            self.Gmax.gpudata,\
+            self.gmax.gpudata,\
             self.a0.gpudata,\
             self.a1.gpudata,\
             self.a2.gpudata,\
