@@ -294,7 +294,7 @@ class LPU_rev(Module):
             if self.my_num_gpot_neurons > 0:
                 self.output_gpot_file.close()
             if self.my_num_spike_neurons > 0:
-                self.output.spike_file.close()
+                self.output_spike_file.close()
 
         for neuron in self.neurons:
             neuron.post_run()

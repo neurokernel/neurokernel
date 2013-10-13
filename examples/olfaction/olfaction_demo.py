@@ -53,8 +53,8 @@ man = core.Manager(port_data=data_port, port_ctrl=ctrl_port)
 man.add_brok()
 
 
-(n_dict, s_dict) = LPU_rev.lpu_parser( './config_files/antennallobe.gexf')
-#(n_dict, s_dict) = LPU_rev.lpu_parser( './config_files/antennallobe_no_synapse.gexf')
+(n_dict, s_dict) = LPU_rev.lpu_parser( './config_files/antennallobe.gexf.gz')
+#(n_dict, s_dict) = LPU_rev.lpu_parser( './config_files/antennallobe_no_synapse.gexf.gz')
 
 
 al = LPU_rev( dt, n_dict, s_dict,\
@@ -67,8 +67,7 @@ al = man.add_mod(al)
 
 
 man.start(steps=10001)
-man.join_modules()
-man.stop_brokers()
+man.stop()
 
 '''
 The extra step is required as during the first step,
