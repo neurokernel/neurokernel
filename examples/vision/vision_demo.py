@@ -54,7 +54,7 @@ logger = base.setup_logger()
 man = core.Manager(port_data=data_port, port_ctrl=ctrl_port)
 man.add_brok()
 
-(n_dict_lam, s_dict_lam) = lpu_parser('./config_files/lamina.gexf')
+(n_dict_lam, s_dict_lam) = lpu_parser('./config_files/lamina.gexf.gz')
 lam = LPU( dt, n_dict_lam, s_dict_lam,
                     input_file='videos/flicker_stripe_same6.h5',
                     output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
@@ -63,7 +63,7 @@ print 'lamina init done'
 # initialize medulla
 
 
-(n_dict_med, s_dict_med) = lpu_parser('./config_files/medulla.gexf')
+(n_dict_med, s_dict_med) = lpu_parser('./config_files/medulla.gexf.gz')
 med = LPU(dt, n_dict_med, s_dict_med,
                     output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
                     port_data=man.port_data, device=dev2, id='medulla',debug=args.debug)
@@ -74,14 +74,13 @@ lam = man.add_mod(lam)
 
 med = man.add_mod(med)
 
-graph = nx.read_gexf('./config_files/lamina_medulla.gexf', relabel=True)
+graph = nx.read_gexf('./config_files/lamina_medulla.gexf.gz', relabel=True)
 lam_med_conn = graph_tools.graph_to_conn(graph)
 
 man.connect(lam, med, lam_med_conn)
 
 man.start(steps=10001)
-man.join_modules()
-man.stop_brokers()
+man.stop()
 
 '''
 The extra step is required as during the first step,
