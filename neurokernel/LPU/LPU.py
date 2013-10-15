@@ -759,14 +759,15 @@ class LPU(Module):
 
     def _instantiate_neuron(self, i):
         n_dict = self.n_dict_list[i]
-
+		ind = n_dict['type'][0]
+		'''
         try:
             ind = self._neuron_names.index(n_dict['type'][0])
         except:
             self.logger.info('Error instantiating neurons of type ' + \
                              n_dict['type'][0])
             return []
-
+		'''
         if n_dict['spiking'][0]:
             neuron = self._neuron_classes[ind](n_dict, int(int(self.spike_state.gpudata) + \
                         self.spike_state.dtype.itemsize*self.idx_start_spike[i]), \
@@ -785,13 +786,15 @@ class LPU(Module):
 
     def _instantiate_synapse(self, i):
         s_dict = self.s_dict_list[i]
+        ind = s_dict['type'][0]
+        '''
         try:
             ind = self._synapse_names.index(s_dict['type'][0])
         except:
             self.logger.info('Error instantiating synapses of type ' + \
                              s_dict['type'][0])
             return []
-
+		'''
         return self._synapse_classes[ind](s_dict, int(int(self.synapse_state.gpudata) + \
                 self.synapse_state.dtype.itemsize*self.idx_start_synapse[i]), \
                 self.dt, debug=self.debug)
