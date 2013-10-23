@@ -164,10 +164,10 @@ class Connectivity(base.BaseConnectivity):
     Stores the connectivity between two LPUs as a series of sparse matrices.
     Every entry in an instance of the class has the following indices:
 
-    - source module ID (must be defined upon class instantiation)
+    - source module ID
     - source neuron type ('gpot', 'spike', or 'all')
     - source neuron ID
-    - destination module ID (must be defined upon class instantiation)
+    - destination module ID
     - destination neuron type ('gpot', 'spike', or 'all')
     - destination neuron ID
     - connection number (when two ports are connected by more than one connection)
@@ -265,7 +265,8 @@ class Connectivity(base.BaseConnectivity):
 
     def N(self, id, n_type='all'):
         """
-        Return number of neurons of the specified type associated with the specified module.
+        Return number of neurons of the specified type associated with the
+        specified module.
         """
 
         if n_type == 'all':
@@ -291,7 +292,8 @@ class Connectivity(base.BaseConnectivity):
 
     def N_gpot(self, id):
         """
-        Return number of graded potential neurons associated with the specified module.
+        Return number of graded potential neurons associated with the specified
+        module.
         """
         
         if id == self.A_id:
@@ -482,7 +484,8 @@ class Connectivity(base.BaseConnectivity):
             type_ids = type_ids.copy()
 
             # This will raise an exception if the matrix corresponding to the
-            # 'conn' parameter contains type IDs that are not in self.type_params.keys()
+            # 'conn' parameter contains type IDs that are not in
+            # self.type_params.keys()
             type_ids.data = \
                 map(lambda x: filter(lambda y: param in self.type_params[y], x),                                
                     type_ids.data)

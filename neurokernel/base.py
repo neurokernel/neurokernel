@@ -684,9 +684,9 @@ class BaseConnectivity(object):
     Stores the connectivity between two LPUs as a series of sparse matrices.
     Every entry in an instance of the class has the following indices:
 
-    - source module ID (must be defined upon class instantiation)
+    - source module ID
     - source port ID
-    - destination module ID (must be defined upon class instantiation)
+    - destination module ID
     - destination port ID
     - connection number (when two ports are connected by more than one connection)
     - parameter name (the default is 'conn' for simple connectivity)
@@ -724,10 +724,16 @@ class BaseConnectivity(object):
     other_mod(id)
         Returns the ID of the other module connected by the object to
         the one specified as `id`.
-    src_idx(src_id, dest_id)
+    dest_idx(src_id, dest_id, src_ports)
+        Indices of ports in module `dest_id` with incoming 
+        connections from module `src_id`.
+    dest_mask(src_id, dest_id, src_ports)
+        Mask of ports in module `dest_id` with incoming
+        connections from module `src_id`.
+    src_idx(src_id, dest_id, dest_ports)
         Indices of ports in module `src_id` with outgoing
         connections to module `dest_id`.
-    src_mask(src_id, dest_id)
+    src_mask(src_id, dest_id, dest_ports)
         Mask of ports in module `src_id` with outgoing
         connections to module `dest_id`.
     transpose()
@@ -761,7 +767,7 @@ class BaseConnectivity(object):
         assert N_A != 0
         assert N_B != 0
 
-        # The maximum number of synapses between any two neurons must be
+        # The maximum number of connections between any two ports must be
         # nonzero:
         assert N_mult != 0
 
@@ -1030,7 +1036,7 @@ class BaseConnectivity(object):
         
     def _make_key(self, *args):
         """
-        Create a unique key for a matrix of synapse properties.
+        Create a unique key for a matrix of connection properties.
         """
         
         return string.join(map(str, args), '/')
@@ -1481,25 +1487,21 @@ if __name__ == '__main__':
     conn12 = BaseConnectivity(2, 4, 1, m1.id, m2.id)
     conn12[m1.id, :, m2.id, :] = np.ones((2, 4))
     conn12[m2.id, :, m1.id, :] = np.ones((4, 2))
-    man.add_conn(conn12)
     man.connect(m1, m2, conn12)
 
     conn23 = BaseConnectivity(4, 3, 1, m2.id, m3.id)
     conn23[m2.id, :, m3.id, :] = np.ones((4, 3))
     conn23[m3.id, :, m2.id, :] = np.ones((3, 4))
-    man.add_conn(conn23)
     man.connect(m2, m3, conn23)
 
     conn34 = BaseConnectivity(3, 2, 1, m3.id, m4.id)
     conn34[m3.id, :, m4.id, :] = np.ones((3, 2))
-    conn34[m4.id, :, m3.id, :] = np.ones((3, 2))
-    man.add_conn(conn34)
+    conn34[m4.id, :, m3.id, :] = np.ones((2, 3))
     man.connect(m3, m4, conn34)
 
     conn41 = BaseConnectivity(2, 2, 1, m4.id, m1.id)
     conn41[m4.id, :, m1.id, :] = np.ones((2, 2))
     conn41[m1.id, :, m4.id, :] = np.ones((2, 2))
-    man.add_conn(conn41)
     man.connect(m4, m1, conn41)
 
     # Start emulation and allow it to run for a little while before shutting
