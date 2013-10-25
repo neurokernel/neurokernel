@@ -276,17 +276,18 @@ class BaseModule(ControlledProcess):
         Initialize network connection.
         """
 
+        # Initialize control port handler:
+        self.logger.info('initializing ctrl network connection')
+        super(BaseModule, self)._init_net()
+
         if self.net == 'none':
-            self.logger.info('not initializing network connection')
+            self.logger.info('not initializing data network connection')
         else:
 
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
             with IgnoreKeyboardInterrupt():
-                self.logger.info('initializing network connection')
-
-                # Initialize control port handler:
-                super(BaseModule, self)._init_net()
+                self.logger.info('initializing data network connection')
 
                 # Use a nonblocking port for the data interface; set
                 # the linger period to prevent hanging on unsent
