@@ -99,7 +99,7 @@ class IntervalIndex(object):
         # Convert numpy integer types to native Python int:
         if isinstance(i, np.generic):
             i = np.asscalar(i)
-        if type(i) == int:
+        if np.issubdtype(type(i), int):
             if i < interval[0] or i >= interval[1]:
                 raise ValueError('invalid index')
         elif type(i) == slice:
@@ -122,7 +122,7 @@ class IntervalIndex(object):
         if type(i) == tuple:
             label, idx = i
             self._validate(idx, self._intervals[label])
-            if type(idx) == int:
+            if np.issubdtype(type(idx), int):
                 return idx+self._bounds[label]
             else:
 
@@ -136,7 +136,7 @@ class IntervalIndex(object):
                 else:
                     stop = idx.stop+self._bounds[label]
                 return slice(start, stop, idx.step)
-        elif type(i) == int:
+        elif np.issubdtype(type(i), int):
             for label in self._intervals.keys():
                 interval = self._intervals[label]
                 bound = self._bounds[label]
