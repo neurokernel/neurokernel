@@ -352,7 +352,7 @@ class LPU_rev(Module):
 
         def parse_interLPU_syn( pre_neu, pre_type, post_type ):
             virtual_id = self.virtual_gpot_idx[-1] if pre_type=='gpot' else self.virtual_spike_idx[-1]
-            public_id = self.public_gpot_list if post_type=='spike' else self.public_spike_list
+            public_id = self.public_gpot_list if post_type=='gpot' else self.public_spike_list
             for j, pre in enumerate( pre_neu ):
                 pre_id = int(pre)
                 post_neu = c.dest_idx(other_lpu, self.id, pre_type, post_type, src_ports=pre_id)
@@ -370,7 +370,7 @@ class LPU_rev(Module):
                         self.s_dict[syn_type]['pre'].append( virtual_id[j] )
                         self.s_dict[syn_type]['post'].append( public_id[post_id] )
                         for k,v in self.s_dict[syn_type].items():
-                            if k!='pre' and key!='post':
+                            if k!='pre' and k!='post':
                                 v.append( c.get(other_lpu, pre_type,  pre_id,
                                                 self.id, post_type, post_id,
                                                 conn=conn, param=k) )
