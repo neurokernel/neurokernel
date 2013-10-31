@@ -66,7 +66,7 @@ al = LPU_rev( dt, n_dict, s_dict,\
 al = man.add_mod(al)
 
 
-man.start(steps=step)
+man.start(steps=steps)
 man.stop()
 
 '''
