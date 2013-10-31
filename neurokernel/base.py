@@ -1018,15 +1018,14 @@ class BaseConnectivity(object):
         
         return re.sub('^(.*)', indent*' '+r'\1', s, flags=re.MULTILINE)
     
-    def _format_bin_array(self, a, indent=0):
+    def _format_array(self, a, indent=0):
         """
-        Format a binary array for printing.
+        Format an array for printing.
 
         Parameters
         ----------
         a : 2D array_like
-            Array to format. Assumes the array contains binary integer
-            values.
+            Array to format.
         indent : int
             Number of columns by which to indent the formatted array.
         
@@ -1037,21 +1036,21 @@ class BaseConnectivity(object):
         """
 
         if scipy.sparse.issparse(a):            
-            return self._indent_str(a.toarray().astype(int).__str__(), indent)
+            return self._indent_str(a.toarray().__str__(), indent)
         else:
-            return self._indent_str(np.asarray(a).astype(int).__str__(), indent)
+            return self._indent_str(np.asarray(a).__str__(), indent)
         
     def __repr__(self):
         result = '%s -> %s\n' % (self.A_id, self.B_id)
         result += '-----------\n'
         for key in self._keys_by_dir[self._AtoB]:
             result += key + '\n'
-            result += self._format_bin_array(self._data[key]) + '\n'
+            result += self._format_array(self._data[key]) + '\n'
         result += '\n%s -> %s\n' % (self.B_id, self.A_id)
         result += '-----------\n'
         for key in self._keys_by_dir[self._BtoA]:
             result += key + '\n'
-            result += self._format_bin_array(self._data[key]) + '\n'
+            result += self._format_array(self._data[key]) + '\n'
         return result
         
     def _make_key(self, *args):
