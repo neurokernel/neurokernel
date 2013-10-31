@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import copy
 import multiprocessing as mp
 import os
+import re
 import signal
 import string
 import sys
@@ -1002,6 +1003,20 @@ class BaseConnectivity(object):
         for key in self._data.keys():
             count += self._data[key].dtype.itemsize*self._data[key].nnz
         return count
+
+    def _indent_str(self, s, indent=0):
+        """
+        Indent a string by the specified number of spaces.
+
+        Parameters
+        ----------
+        s : str
+            String to indent.
+        indent : int
+            Number of spaces to prepend to each line in the string.
+        """
+        
+        return re.sub('^(.*)', indent*' '+r'\1', s, flags=re.MULTILINE)
     
     def _format_bin_array(self, a, indent=0):
         """
@@ -1010,7 +1025,8 @@ class BaseConnectivity(object):
         Parameters
         ----------
         a : 2D array_like
-            Array to format. Assumes the array contains binary values.
+            Array to format. Assumes the array contains binary integer
+            values.
         indent : int
             Number of columns by which to indent the formatted array.
         
@@ -1019,17 +1035,11 @@ class BaseConnectivity(object):
         result : str
             Formatted array.            
         """
-        
-        sp0 = ' '*indent
-        sp1 = sp0+' '
-        if scipy.sparse.issparse(a):
-            a_list = a.toarray().tolist()
+
+        if scipy.sparse.issparse(a):            
+            return self._indent_str(a.toarray().astype(int).__str__(), indent)
         else:
-            a_list = a.tolist()
-        if a.shape[0] == 1:
-            return sp0+str(a_list)
-        else:
-            return sp0+'['+str(a_list[0])+'\n'+''.join(map(lambda s: sp1+str(s)+'\n', a_list[1:-1]))+sp1+str(a_list[-1])+']'
+            return self._indent_str(np.asarray(a).astype(int).__str__(), indent)
         
     def __repr__(self):
         result = '%s -> %s\n' % (self.A_id, self.B_id)
