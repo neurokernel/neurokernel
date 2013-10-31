@@ -354,10 +354,10 @@ class LPU_rev(Module):
             virtual_id = self.virtual_gpot_idx[-1] if pre_type=='gpot' else self.virtual_spike_idx[-1]
             public_id = self.public_gpot_list if post_type=='spike' else self.public_spike_list
             for j, pre in enumerate( pre_neu ):
-                pre = int(pre)
+                pre_id = int(pre)
                 post_neu = c.dest_idx(other_lpu, self.id, pre_type, post_type, src_ports=pre_id)
                 for post in post_neu:
-                    post = int(post)
+                    post_id = int(post)
                     num_syn = c.multapses( other_lpu,  pre_type,  pre_id,
                                             self.id, post_type, post_id)
                     for con in range(num_syn):
@@ -412,7 +412,7 @@ class LPU_rev(Module):
 
                 self.virtual_gpot_idx.append(np.arange(tmp1,tmp1+\
                      self.num_input_gpot_neurons[i]).astype(np.int32))
-                tmp1 += num_input_gpot_neurons[i]
+                tmp1 += self.num_input_gpot_neurons[i]
 
                 parse_interLPU_syn( pre_gpot, 'gpot', 'gpot' )
                 parse_interLPU_syn( pre_gpot, 'gpot', 'spike')
@@ -422,8 +422,8 @@ class LPU_rev(Module):
                 self.num_input_spike_neurons[i] = len(pre_spike)
 
                 self.virtual_spike_idx.append(np.arange(tmp2,tmp2+\
-                     num_input_spike_neurons[i]).astype(np.int32))
-                tmp2 += num_input_spike_neurons[i]
+                     self.num_input_spike_neurons[i]).astype(np.int32))
+                tmp2 += self.num_input_spike_neurons[i]
 
                 parse_interLPU_syn( pre_spike, 'spike', 'gpot' )
                 parse_interLPU_syn( pre_spike, 'spike', 'spike' )
