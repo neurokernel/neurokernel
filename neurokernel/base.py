@@ -1016,7 +1016,10 @@ class BaseConnectivity(object):
         
         sp0 = ' '*indent
         sp1 = sp0+' '
-        a_list = a.toarray().tolist()
+        if scipy.sparse.issparse(a):
+            a_list = a.toarray().tolist()
+        else:
+            a_list = a.tolist()
         if a.shape[0] == 1:
             return sp0+str(a_list)
         else:
@@ -1046,8 +1049,13 @@ class BaseConnectivity(object):
         """
         Create a sparse matrix of the specified shape.
         """
-        
-        return sp.sparse.lil_matrix(shape, dtype=dtype)
+
+        # scipy.sparse doesn't support sparse arrays of strings;
+        # we therefore use an ordinary ndarray of objects:
+        if np.issubdtype(dtype, str):
+            return np.empty(shape, dtype=np.object)
+        else:
+            return sp.sparse.lil_matrix(shape, dtype=dtype)
 
     def multapses(self, src_id, src_idx, dest_id, dest_idx):
         """
@@ -1086,7 +1094,7 @@ class BaseConnectivity(object):
         """
 
         result = self._get_sparse(src_id, src_idx, dest_id, dest_idx, conn, param)
-        if not np.isscalar(result):
+        if scipy.sparse.issparse(result):
             return result.toarray()
         else:
             return result
