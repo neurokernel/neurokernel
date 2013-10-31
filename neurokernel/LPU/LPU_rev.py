@@ -366,7 +366,7 @@ class LPU_rev(Module):
                                         conn=conn, param='type')
                         if syn_type not in self.s_dict:
                             s = { k:[] for k in c.get_dict_params(s_type).keys() }
-                            self.s_dict.upate( {syn_type:s} )
+                            self.s_dict.update( {syn_type:s} )
                         self.s_dict[syn_type]['pre'].append( virtual_id[j] )
                         self.s_dict[syn_type]['post'].append( public_id[post_id] )
                         for k,v in self.s_dict[syn_type].items():
