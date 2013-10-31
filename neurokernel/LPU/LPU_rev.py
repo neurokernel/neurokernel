@@ -360,7 +360,7 @@ class LPU_rev(Module):
                     post_id = int(post)
                     num_syn = c.multapses( other_lpu,  pre_type,  pre_id,
                                             self.id, post_type, post_id)
-                    for con in range(num_syn):
+                    for conn in range(num_syn):
                         syn_type = c.get( other_lpu, pre_type, pre_id,
                                         self.id, post_type, post_id,
                                         conn=conn, param='type')
