@@ -210,7 +210,7 @@ class LPU(Module):
             if self.my_num_gpot_neurons > 0:
                 self.output_gpot_file.close()
             if self.my_num_spike_neurons > 0:
-                self.output.spike_file.close()
+                self.output_spike_file.close()
 
         for neuron in self.neurons:
             neuron.post_run()
@@ -235,7 +235,7 @@ class LPU(Module):
             self.buffer.update_other_rest(in_gpot_dict, \
                 np.sum(self.num_gpot_neurons), self.num_virtual_gpot_neurons)
             self.update_resting_potential_history = False
-
+            
         if update:
             if self.input_file is not None:
                 self._read_external_input()
@@ -243,14 +243,14 @@ class LPU(Module):
             for neuron in self.neurons:
                 neuron.update_I(self.synapse_state.gpudata)
                 neuron.eval()
-
+                
             self._update_buffer()
             for synapse in self.synapses:
                 # Maybe only gpot_buffer or spike_buffer should be passed
                 # based on the synapse class.
                 synapse.update_state(self.buffer)
             self.buffer.step()
-
+            
         if not self.run_on_myself:
             self._extract_output(out_gpot, out_spike)
 

@@ -72,7 +72,7 @@ class visualizer(object):
             LPU = 'input'
         if not LPU:
             LPU = len(self._data)
-        self._data[LPU] = np.transpose(sio.read_file(data_file))
+        self._data[LPU] = np.transpose(sio.read_array(data_file))
         if self._maxt:
             self._maxt = min(self._maxt, self._data[LPU].shape[1])
         else:
@@ -109,13 +109,20 @@ class visualizer(object):
                     else:
                         config['handle'].set_ydata(\
                                         data[key][config['ids'][0], t])
+
+                elif config['type']==4:
+                    for j,id in enumerate(config['ids'][0]):
+                        if data[id,t]:
+                            config['handle'].vlines(t*self._dt,j+0.5, j+1.5)
                 elif refresh:
-                    shape = config['shape']
-                    ids = config['ids']
                     if config['type'] == 0:
+                        shape = config['shape']
+                        ids = config['ids']
                         config['handle'].U = np.reshape(data[ids[0], t],shape)
                         config['handle'].V = np.reshape(data[ids[1], t],shape)
                     elif config['type']==1:
+                        shape = config['shape']
+                        ids = config['ids']
                         X = np.reshape(data[ids[0], t],shape)
                         Y = np.reshape(data[ids[1], t],shape)
                         V = (X**2 + Y**2)**0.5
@@ -125,9 +132,10 @@ class visualizer(object):
                         RGB = hsv_to_rgb(HSV)
                         config['handle'].set_data(RGB)
                     elif config['type'] == 2:
+                        shape = config['shape']
+                        ids = config['ids']
                         config['handle'].set_data(np.reshape(data[ids[0], t],shape))
-                            
-        
+                    
         if refresh:
             self.f.canvas.draw()
             if self.out_filename:
@@ -153,7 +161,7 @@ class visualizer(object):
         cnt = 0
         self.handles = []
         self.types = []
-        keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'title', 'shape'] 
+        keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape'] 
         if not isinstance(self.axarr, np.ndarray):
             self.axarr = np.asarray([self.axarr])
         for LPU, configs in self._config.iteritems():
@@ -220,8 +228,13 @@ class visualizer(object):
                     else:
                         config['handle'] = self.axarr[ind].plot(self._data[LPU][config['ids'][0],0])[0]
 
-                # Waveforms and spiking neurons not yet supported
-                        
+                # Spiking neurons not yet supported
+                elif config['type'] == 4:
+                    config['handle'] = self.axarr[ind]
+                    config['handle'].vlines(0, 0, 0.01)
+                    config['handle'].set_ylim([.5, len(config['ids'][0]) + .5])
+                    config['handle'].set_ylabel('Neuron')
+                    config['handle'].set_xlabel('Time')
                 for key in config.iterkeys():
                     if key not in keywds:
                         try:
@@ -245,7 +258,7 @@ class visualizer(object):
         else:
             self.f.show()
 
-    def add_plot(self, config_dict, LPU=0,names=['']):
+    def add_plot(self, config_dict, LPU=0,names=[''], shift=0):
         config = config_dict.copy()
         if not LPU in self._config:
             self._config[LPU] = []
@@ -262,7 +275,7 @@ class visualizer(object):
                 config['ids'][i]=[]
                 for id in range(len(self._graph[LPU].node)):
                     if self._graph[LPU].node[str(id)]['name'] == name:
-                        config['ids'][i].append(id)
+                        config['ids'][i].append(id-shift)
             self._config[LPU].append(config)
         if not 'title' in config:
             config['title'] = "{0} - {1} ".format(str(LPU),str(names[0]))

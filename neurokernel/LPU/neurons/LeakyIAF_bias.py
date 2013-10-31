@@ -19,22 +19,24 @@ __global__ void leaky_iaf(
     %(type)s *Vt,
     %(type)s *Vr,
     %(type)s *R,
-    %(type)s *C)
+    %(type)s *C,
+    %(type)s *B)
 {
     int bid = blockIdx.x;
     int nid = bid * NNEU + threadIdx.x;
 
-    %(type)s v,i,r,c;
+    %(type)s v,i,r,c,b;
 
     if( nid < neu_num ){
         v = V[nid];
         i = I[nid];
         r = R[nid];
         c = C[nid];
+        b = B[nid];
 
         // update v
         %(type)s bh = exp( -dt/r/c );
-        v = v*bh - r*i*(1.0-bh);
+        v = v*bh + r*(-i+b)*(1.0-bh);
 
         // spike detection
         spk[nid] = 0;
@@ -49,18 +51,19 @@ __global__ void leaky_iaf(
 }
 """
 
-class LeakyIAF(BaseNeuron):
+class LeakyIAF_bias(BaseNeuron):
     def __init__(self, n_dict, spk, dt, debug=False):
         self.num_neurons = len(n_dict['id'])
         self.dt = np.double(dt)
         self.steps = 1
         self.debug = debug
-
+        self.idx =n_dict['id'] 
         self.Vr  = garray.to_gpu( np.asarray( n_dict['Vr'], dtype=np.float64 ))
         self.Vt  = garray.to_gpu( np.asarray( n_dict['Vt'], dtype=np.float64 ))
         self.C   = garray.to_gpu( np.asarray( n_dict['C'], dtype=np.float64 ))
         self.R   = garray.to_gpu( np.asarray( n_dict['R'], dtype=np.float64 ))
         self.V   = garray.to_gpu( np.asarray( n_dict['Vr'], dtype=np.float64 ))
+        self.b   = garray.to_gpu( np.asarray( n_dict['b'], dtype=np.float64 ))
         self.spk = spk
 
         _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i] \
@@ -93,6 +96,8 @@ class LeakyIAF(BaseNeuron):
     def neuron_class(self): return True
 
     def eval( self, st = None):
+        print self.I.get()
+        print self.V.get()
         self.update.prepared_async_call(\
             self.gpu_grid,\
             self.gpu_block,\
@@ -105,7 +110,8 @@ class LeakyIAF(BaseNeuron):
             self.Vt.gpudata,\
             self.Vr.gpudata,\
             self.R.gpudata,\
-            self.C.gpudata )
+            self.C.gpudata,\
+            self.b.gpudata)
 
     def get_gpu_kernel( self):
         self.gpu_block = (128,1,1)
@@ -124,10 +130,10 @@ class LeakyIAF(BaseNeuron):
                         np.intp,    # Vt array
                         np.intp,    # Vr array
                         np.intp,    # R array
-                        np.intp ])  # C array
+                        np.intp,    # C array
+                        np.intp])   # b array
 
         return func
-
 
     @property
     def update_I_override(self): return True

@@ -111,7 +111,7 @@ class BaseNeuron(object):
     @property
     def update_I_override(self): return False
 
-    def update_I(self, synapse_state, st=None):
+    def update_I(self, synapse_state, st=None, logger=None):
         '''
         This method should compute the input current to each neuron
         based on the synapse states.
@@ -186,19 +186,21 @@ class BaseNeuron(object):
 
             __syncthreads();
 
-
-            int n_den = num_den[tidy];
-            int start = den_start[tidy];
-            double VV = V_in[tidy];
+            neuron = bid * N + tidy ;
+            if(neuron < NUM_NEURONS){
+               int n_den = num_den[tidy];
+               int start = den_start[tidy];
+               double VV = V_in[tidy];
 
 
                for(int i = tidx; i < n_den; i += N)
                {
                    input[tidy][tidx] += synapse[pre[start + i]] * (VV - V_rev[start + i]);
                }
+            }
 
-               __syncthreads();
-
+              __syncthreads();
+    
 
 
                if(tidy < 8)
@@ -227,7 +229,7 @@ class BaseNeuron(object):
                if(tidy == 0)
                {
                    input[tidx][0] += input[tidx][1];
-
+                   neuron = bid*N+tidx;
                    if(neuron < NUM_NEURONS)
                    {
                        I_pre[neuron] -= input[tidx][0];
