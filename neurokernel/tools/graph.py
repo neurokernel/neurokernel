@@ -164,24 +164,40 @@ def graph_to_df(g):
     df_edge : pandas.DataFrame
         Edge attributes; the index is a MultiIndex that permits
         access to the edges by origin node, destination node, and edge number
-        (i.e., for multigraphs in which nodes connected by more than one edge with the same
-        direction).
-
+        (i.e., for multigraphs in which nodes connected by more than one
+        edge with the same direction).
+        
     """
 
     # Extract the node/edge data:
-    node_data = {int(k): v for k, v in g.node.iteritems()}
-    if not isinstance(g, nx.MultiGraph):
-        edge_data = {(int(k1), int(k2)):v for k1 in g.edge.keys() \
-                         for k2, v in g.edge[k1].iteritems()}
+    try:
+        node_data = {int(k): v for k, v in g.node.iteritems()}
+    except:
+        node_data = {k: v for k, v in g.node.iteritems()}
+
+    try:
+        if not isinstance(g, nx.MultiGraph):
+            edge_data = {(int(k1), int(k2)):v for k1 in g.edge.keys() \
+                             for k2, v in g.edge[k1].iteritems()}
+
+        else:
+
+            # Include the edge number in the index for multigraphs:
+            edge_data = {(int(k1), int(k2), int(m)):v for k1 in g.edge.keys() \
+                             for k2 in g.edge[k1].keys() \
+                             for m, v in g.edge[k1][k2].iteritems()}
+    except:
+        if not isinstance(g, nx.MultiGraph):
+            edge_data = {(k1, k2):v for k1 in g.edge.keys() \
+                             for k2, v in g.edge[k1].iteritems()}
+
+        else:
+
+            # Include the edge number in the index for multigraphs:
+            edge_data = {(k1, k2, m):v for k1 in g.edge.keys() \
+                             for k2 in g.edge[k1].keys() \
+                             for m, v in g.edge[k1][k2].iteritems()}
         
-    else:
-        
-        # Include the edge number in the index for multigraphs:
-        edge_data = {(int(k1), int(k2), int(m)):v for k1 in g.edge.keys() \
-                         for k2 in g.edge[k1].keys() \
-                         for m, v in g.edge[k1][k2].iteritems()}
-    
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data, orient='index')
     df_edge = pandas.DataFrame.from_dict(edge_data, orient='index')
