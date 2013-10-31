@@ -34,7 +34,7 @@ __global__ void leaky_iaf(
 
         // update v
         %(type)s bh = exp( -dt/r/c );
-        v = v*bh - r*i*(1.0-bh);
+        v = v*bh + r*i*(1.0-bh);
 
         // spike detection
         spk[nid] = 0;
