@@ -889,9 +889,12 @@ class BaseConnectivity(object):
         all_dest_idx = np.arange(self.N(dest_id))[dest_ports]
         result = np.zeros(self.N(src_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            result[:] = result+ \
-                [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
-                             for r in self._data[k].rows])]
+
+            # Only look at the 'conn' parameter:
+            if k.endswith('/conn'):
+                result[:] = result+ \
+                    [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
+                                     for r in self._data[k].rows])]
         return result
 
     def src_idx(self, src_id='', dest_id='', dest_ports=slice(None, None)):
@@ -954,8 +957,11 @@ class BaseConnectivity(object):
         # connectivity matrix:
         result = np.zeros(self.N(dest_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            for r in self._data[k].rows[src_ports]:
-                result[r] = True
+
+            # Only look at the 'conn' parameter:
+            if k.endswith('/conn'):
+                for r in self._data[k].rows[src_ports]:
+                    result[r] = True
         return result
     
     def dest_idx(self, src_id='', dest_id='', src_ports=slice(None, None)):

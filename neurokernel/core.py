@@ -343,9 +343,10 @@ class Connectivity(base.BaseConnectivity):
         all_dest_idx = np.arange(self.N(dest_id))[dest_slice]
         result = np.zeros(self.N(src_id, src_type), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            result[:] = result+ \
-                [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
-                             for r in self._data[k].rows[src_slice]])]
+            if k.endswith('/conn'):
+                result[:] = result+ \
+                    [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
+                                     for r in self._data[k].rows[src_slice]])]
         return result
         
     def src_idx(self, src_id='', dest_id='',
@@ -409,8 +410,9 @@ class Connectivity(base.BaseConnectivity):
             dest_slice = self.idx_translate[dest_id][dest_type, :]
         result = np.zeros(self.N(dest_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            for r in self._data[k].rows[src_slice]:
-                result[r] = True
+            if k.endswith('/conn'):
+                for r in self._data[k].rows[src_slice]:
+                    result[r] = True
         return result[dest_slice]
 
     def dest_idx(self, src_id='', dest_id='',
