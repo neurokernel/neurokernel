@@ -19,7 +19,7 @@ Rt = 1000 # number of data point during odor delivery period
 Nt = 4*Ot + 3*Rt # number of data point
 t  = np.arange(0,dt*Nt,dt)
 
-I       = 0.0195 # amplitude of the onset odorant concentration
+I       = -1.*0.0195 # amplitude of the onset odorant concentration
 u_on    = I*np.ones( Ot, dtype=np.float64)
 u_off   = np.zeros( Ot, dtype=np.float64)
 u_reset = np.zeros( Rt, dtype=np.float64)
