@@ -1490,7 +1490,7 @@ if __name__ == '__main__':
         
         def run_step(self, in_dict, out):
             super(MyModule, self).run_step(in_dict, out)
-            
+
             out[:] = np.random.rand(self.N)
 
         def run(self):

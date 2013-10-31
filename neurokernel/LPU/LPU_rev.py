@@ -308,38 +308,39 @@ class LPU_rev(Module):
         super(LPU_rev, self).run_step(in_gpot_dict, in_spike_dict, \
                                   out_gpot, out_spike)
 
-        update = True
+        # Try to read LPU input when connected to other LPUs and some data has
+        # been received:
         if not self.run_on_myself:
-            if (len(in_gpot_dict) +len(in_spike_dict)) == 0:
-                update = False
-            else:
+            if (len(in_gpot_dict) +len(in_spike_dict)) != 0:
                 self._read_LPU_input(in_gpot_dict, in_spike_dict)
 
-        if update and self.update_resting_potential_history:
+        if self.update_resting_potential_history and \
+          (len(in_gpot_dict) +len(in_spike_dict)) != 0:
             self.buffer.update_other_rest(in_gpot_dict, \
                 np.sum(self.num_gpot_neurons), self.num_virtual_gpot_neurons)
             self.update_resting_potential_history = False
 
-        if update:
-            if self.input_file is not None:
-                self._read_external_input()
+        if self.input_file is not None:
+            self._read_external_input()
 
-            for neuron in self.neurons:
-                neuron.update_I(self.synapse_state.gpudata)
-                neuron.eval()
+        for neuron in self.neurons:
+            neuron.update_I(self.synapse_state.gpudata)
+            neuron.eval()
 
-            self._update_buffer()
-            for synapse in self.synapses:
-                # Maybe only gpot_buffer or spike_buffer should be passed
-                # based on the synapse class.
-                synapse.update_state(self.buffer)
+        self._update_buffer()
+        for synapse in self.synapses:
+            # Maybe only gpot_buffer or spike_buffer should be passed
+            # based on the synapse class.
+            synapse.update_state(self.buffer)
 
-            self.buffer.step()
+        self.buffer.step()
 
+        # Extract data to transmit to other LPUs:
         if not self.run_on_myself:
             self._extract_output(out_gpot, out_spike)
 
-        if update and self.output:
+        # Save output data to disk:
+        if self.output:
             self._write_output()
 
 
@@ -351,6 +352,10 @@ class LPU_rev(Module):
     def _setup_connectivity(self):
 
         def parse_interLPU_syn( pre_neu, pre_type, post_type ):
+            """
+            Insert parameters for synapses between neurons in this LPU and other LPUs.
+            """
+            
             virtual_id = self.virtual_gpot_idx[-1] if pre_type=='gpot' else self.virtual_spike_idx[-1]
             public_id = self.public_gpot_list if post_type=='gpot' else self.public_spike_list
             for j, pre in enumerate( pre_neu ):
@@ -540,7 +545,10 @@ class LPU_rev(Module):
 
 
     def _initialize_gpu_ds(self):
-
+        """
+        Setup GPU arrays.
+        """
+        
         self.synapse_state = garray.zeros(int(self.total_synapses) + \
                                     len(self.input_neuron_list), np.float64)
         if self.my_num_gpot_neurons>0:
@@ -586,13 +594,13 @@ class LPU_rev(Module):
                     * self.buffer.spike_buffer.dtype.itemsize), spike_data)
 
 
-
     def _extract_output(self, out_gpot, out_spike, st=None):
-        '''
+        """
         This function should be changed so that if the output attribute is True,
         the following kernel calls are not made as all the GPU data will have to be
         transferred to the CPU anyways.
-        '''
+        """
+        
         if self.num_public_gpot>0:
             self._extract_gpot.prepared_async_call(\
                 self.grid_extract_gpot, self.block_extract, st, self.V.gpudata, \
@@ -604,14 +612,18 @@ class LPU_rev(Module):
                 self.projection_spike.gpudata, self.public_spike_list_g.gpudata, \
                 self.num_public_spike)
 
+        # Save the states of the graded potential neurons and the indices of the
+        # spiking neurons that have emitted a spike:
         if self.num_public_gpot>0:
             out_gpot.extend(self.projection_gpot.get())
         if self.num_public_spike>0:
-            out_spike.extend(self.projection_spike.get())
+            out_spike.extend(np.where(self.projection_spike.get())[0])
 
-
-    #TODO
     def _write_output(self):
+        """
+        Save neuron states or spikes to output file.
+        """
+        
         if self.my_num_gpot_neurons>0:
             self.output_gpot_file.root.array.append(self.V.get()\
                 [self.gpot_order].reshape((1,-1)))
@@ -619,8 +631,6 @@ class LPU_rev(Module):
             self.output_spike_file.root.array.append(self.spike_state.get()\
                 [self.spike_order].reshape((1,-1)))
 
-
-    #TODO
     def _read_external_input(self):
         if self.input_eof:
             return
