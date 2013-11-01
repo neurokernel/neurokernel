@@ -110,8 +110,7 @@ class visualizer(object):
                 elif config['type']==4:
                     for j,id in enumerate(config['ids'][0]):
                         for time in np.where(data[id,max(0,t-self._update_interval):t])[0]:
-                            if data[id,time]:
-                                config['handle'].vlines(float(t-time)*self._dt,j+0.5, j+1.5)
+                            config['handle'].vlines(float(t-time)*self._dt,j+0.5, j+1.5)
                 else:
                     if config['type'] == 0:
                         shape = config['shape']
