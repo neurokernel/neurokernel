@@ -49,14 +49,14 @@ class LPU_rev(Module):
         Returns
         -------
         n_dict : dict of dict of neuron
-            The outter dict maps each neuron type to an inner dict which maps
+            The outer dict maps each neuron type to an inner dict which maps
             each attibutes of such neuron, ex. V1, to a list of data.
 
             ex. {'LeakyIAF':{'Vr':[...],'Vt':[...]},
                 'MorrisLecar':{'V1':[...],'V2':[...]}}
 
         s_dict : dict of dict of synapse
-            The outter dic maps each synapse type to an inner dict which maps
+            The outer dict maps each synapse type to an inner dict which maps
             each attribute of such synapse type to a list of data.
 
         Notes
@@ -136,7 +136,7 @@ class LPU_rev(Module):
             s_dict[type]['pre'].append( syn[0] )
             s_dict[type]['post'].append( syn[1] )
         for val in s_dict.itervalues(): val.pop('type')
-        if not s_dict: s_dict = None
+        if not s_dict: s_dict = {}
         return n_dict, s_dict
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, device=0,
@@ -361,7 +361,8 @@ class LPU_rev(Module):
             """
             Insert parameters for synapses between neurons in this LPU and other LPUs.
             """
-            
+
+            #import ipdb; ipdb.set_trace()
             virtual_id = self.virtual_gpot_idx[-1] if pre_type=='gpot' else self.virtual_spike_idx[-1]
             public_id = self.public_gpot_list if post_type=='gpot' else self.public_spike_list
             for j, pre in enumerate( pre_neu ):
@@ -372,15 +373,23 @@ class LPU_rev(Module):
                     num_syn = c.multapses( other_lpu,  pre_type,  pre_id,
                                             self.id, post_type, post_id)
                     for conn in range(num_syn):
-                        syn_type = c.get( other_lpu, pre_type, pre_id,
+
+                        # Get names of parameters associated with connection type:
+                        s_type = c.get( other_lpu, pre_type, pre_id,
                                         self.id, post_type, post_id,
                                         conn=conn, param='type')
-                        if syn_type not in self.s_dict:
-                            s = { k:[] for k in c.get_dict_params(s_type).keys() }
-                            self.s_dict.update( {syn_type:s} )
-                        self.s_dict[syn_type]['pre'].append( virtual_id[j] )
-                        self.s_dict[syn_type]['post'].append( public_id[post_id] )
-                        for k,v in self.s_dict[syn_type].items():
+                        if s_type not in self.s_dict:
+#                            s = { k:[] for k in c.get_dict_params(s_type).keys() }
+#                            self.s_dict.update( {s_type:s} )
+                            s = { k:[] for k in c.type_params[s_type] }
+                            self.s_dict.update( {s_type:s} )
+                        if not self.s_dict[s_type].has_key('pre'):
+                            self.s_dict[s_type]['pre'] = []
+                        if not self.s_dict[s_type].has_key('post'):
+                            self.s_dict[s_type]['post'] = []
+                        self.s_dict[s_type]['pre'].append( virtual_id[j] )
+                        self.s_dict[s_type]['post'].append( public_id[post_id] )
+                        for k,v in self.s_dict[s_type].items():
                             if k!='pre' and k!='post':
                                 v.append( c.get(other_lpu, pre_type,  pre_id,
                                                 self.id, post_type, post_id,
@@ -460,6 +469,7 @@ class LPU_rev(Module):
 
         count = 0
 
+        #import ipdb; ipdb.set_trace()
         self.total_gpot_neurons = self.my_num_gpot_neurons + \
                                             self.num_virtual_gpot_neurons
         self.total_spike_neurons = self.my_num_spike_neurons + \
