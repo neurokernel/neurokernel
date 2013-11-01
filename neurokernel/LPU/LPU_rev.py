@@ -10,6 +10,12 @@ from pycuda.compiler import SourceModule
 
 import networkx as nx
 
+# Work around bug that causes networkx to choke on GEXF files with boolean
+# attributes that contain the strings 'True' or 'False'
+# (bug already observed in https://github.com/networkx/networkx/pull/971)
+nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
+                                        'true':True, 'True':True}
+
 from neurokernel.core import Module
 import neurokernel.base as base
 
@@ -338,7 +344,7 @@ class LPU_rev(Module):
         # Extract data to transmit to other LPUs:
         if not self.run_on_myself:
             self._extract_output(out_gpot, out_spike)
-
+            #self.logger.info('out_spike: '+str(out_spike))
         # Save output data to disk:
         if self.output:
             self._write_output()

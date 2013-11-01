@@ -12,6 +12,14 @@ import tempfile
 
 import matplotlib.pyplot as plt
 import networkx as nx
+
+# Work around bug that causes networkx to choke on GEXF files with boolean
+# attributes that contain the strings 'True' or 'False'
+# (bug already observed in https://github.com/networkx/networkx/pull/971)
+nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
+                                        'true':True, 'True':True}
+
+
 import pandas
 
 from .. import base
