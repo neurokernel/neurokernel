@@ -11,7 +11,7 @@ import numpy as np
 import h5py
 
 osn_num = 1375;
-f = h5py.File("al.hdf5","w")
+f = h5py.File("olfactory_stimulus.h5","w")
 
 dt = 1e-4 # time step
 Ot = 2000 # number of data point during reset period
@@ -27,7 +27,7 @@ u       = np.concatenate((u_off,u_reset,u_on,u_reset,u_off,u_reset,u_on))
 u_all   = np.transpose( np.kron( np.ones((osn_num,1)), u))
 
 # create the dataset
-dset = f.create_dataset("acetone_on_off.hdf5",(Nt, osn_num), dtype=np.float64,\
+dset = f.create_dataset("real",(Nt, osn_num), dtype=np.float64,\
         data = u_all)
 
 f.close()
