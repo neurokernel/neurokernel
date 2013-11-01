@@ -110,7 +110,7 @@ class visualizer(object):
                 elif config['type']==4:
                     for j,id in enumerate(config['ids'][0]):
                         for time in np.where(data[id,max(0,t-self._update_interval):t])[0]:
-                            config['handle'].vlines(float(t-time)*self._dt,j+0.5, j+1.5)
+                            config['handle'].vlines(float(t-time)*self._dt,j+0.75, j+1.25)
                 else:
                     if config['type'] == 0:
                         shape = config['shape']
@@ -183,7 +183,7 @@ class visualizer(object):
                     else:
                         raise ValueError('Plot type not supported')
                 else:
-                    if LPU=='input' or not self._graph[LPU][str(config[ids][0])]['spiking']:
+                    if LPU=='input' or not self._graph[LPU][str(config['ids'][0])]['spiking']:
                         config['type'] = 2
                     else:
                         config['type'] = 4
@@ -229,9 +229,10 @@ class visualizer(object):
                     config['handle'] = self.axarr[ind]
                     config['handle'].vlines(0, 0, 0.01)
                     config['handle'].set_ylim([.5, len(config['ids'][0]) + .5])
-                    config['handle'].set_ylabel('Neuron')
-                    config['handle'].set_xlabel('Time')
+                    config['handle'].set_ylabel('Neurons')
+                    config['handle'].set_xlabel('Time(s)')
                     config['handle'].set_xlim([0,len(self._data[LPU][config['ids'][0][0],:])*self._dt])
+                    config['handle'].axes.set_yticks([])
                 for key in config.iterkeys():
                     if key not in keywds:
                         try:
@@ -275,8 +276,10 @@ class visualizer(object):
                         config['ids'][i].append(id-shift)
             self._config[LPU].append(config)
         if not 'title' in config:
-            config['title'] = "{0} - {1} ".format(str(LPU),str(names[0]))
-            
+            if 'type' in config and config['type'] =='raster':
+                config['title'] = "{0} - Raster plot ".format(str(LPU))
+            else:
+                config['title'] = "{0} - {1} ".format(str(LPU),str(names[0]))
     def close(self):
         self.writer.finish()
 

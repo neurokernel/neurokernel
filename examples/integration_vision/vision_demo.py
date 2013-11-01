@@ -56,17 +56,17 @@ man.add_brok()
 
 (n_dict_lam, s_dict_lam) = lpu_parser('./config_files/lamina.gexf.gz')
 lam = LPU( dt, n_dict_lam, s_dict_lam,
-                    input_file='videos/integration_vision_stimulus.h5',
-                    output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
-                    port_data=man.port_data, device=dev1, id='lamina', debug=args.debug)
+           input_file='videos/integration_vision_stimulus.h5',
+           output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
+           port_data=man.port_data, device=dev1, id='lamina', debug=args.debug)
 print 'lamina init done'
 # initialize medulla
 
 
 (n_dict_med, s_dict_med) = lpu_parser('./config_files/medulla.gexf.gz')
 med = LPU(dt, n_dict_med, s_dict_med,
-                    output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
-                    port_data=man.port_data, device=dev2, id='medulla',debug=args.debug)
+          output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
+          port_data=man.port_data, device=dev2, id='medulla',debug=args.debug)
 print 'medulla init done'
 
 

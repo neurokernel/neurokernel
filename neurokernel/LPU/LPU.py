@@ -290,7 +290,7 @@ class LPU(Module):
             self.num_input_gpot_neurons = 0
             self.num_input_spike_neurons = 0
             '''
-            Need to complete this
+n            Need to complete this
             '''
         else:
             self.update_resting_potential_history = True
