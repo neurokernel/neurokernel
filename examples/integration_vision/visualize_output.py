@@ -26,7 +26,7 @@ V.add_plot(config2, 'medulla', 'T5a')
 V._update_interval = 50
 V.out_filename = 'output_int.avi'
 V.codec = 'h264'
-
+V.dt = 0.0001
 V.run()
 
 '''

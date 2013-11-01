@@ -85,36 +85,34 @@ class visualizer(object):
         a figure window, without it beig saved.
         '''
         self._initialize()
-        for i in range(1,self._maxt):
+        for i in range(1,self._maxt, self._update_interval):
             self.update()
         if self.out_filename:
             self.close()
         
     def update(self):
-        refresh = False
         dt = self._dt
         t = self._t
-        if np.mod(self._t, self._update_interval)==0:
-            refresh = True
         for key, configs in self._config.iteritems():
             data = self._data[key]
             for config in configs:
                 if config['type'] == 3:
                     if len(config['ids'][0])==1:
-                        config['ydata'].append(np.double(\
-                                        data[key][config['ids'][0], t]))
-                        if refresh:
-                            config['handle'].set_xdata(dt*np.arange(0, t))
-                            config['handle'].set_ydata(np.asarray(config['ydata']))
+                        config['ydata'].extend(np.double(\
+                                        data[config['ids'][0], \
+                                                  max(0,t-self._update_interval):t]))
+                        config['handle'].set_xdata(dt*np.arange(0, t))
+                        config['handle'].set_ydata(np.asarray(config['ydata']))
                     else:
                         config['handle'].set_ydata(\
-                                        data[key][config['ids'][0], t])
+                                        data[config['ids'][0], t])
 
                 elif config['type']==4:
                     for j,id in enumerate(config['ids'][0]):
-                        if data[id,t]:
-                            config['handle'].vlines(t*self._dt,j+0.5, j+1.5)
-                elif refresh:
+                        for time in np.where(data[id,max(0,t-self._update_interval):t])[0]:
+                            if data[id,time]:
+                                config['handle'].vlines(float(t-time)*self._dt,j+0.5, j+1.5)
+                else:
                     if config['type'] == 0:
                         shape = config['shape']
                         ids = config['ids']
@@ -136,12 +134,11 @@ class visualizer(object):
                         ids = config['ids']
                         config['handle'].set_data(np.reshape(data[ids[0], t],shape))
                     
-        if refresh:
-            self.f.canvas.draw()
-            if self.out_filename:
-                self.writer.grab_frame()
+        self.f.canvas.draw()
+        if self.out_filename:
+            self.writer.grab_frame()
             
-        self._t+=1
+        self._t+=self._update_interval
         
     def _set_wrapper(self, obj, name, value):
         name = name.lower()
@@ -235,6 +232,7 @@ class visualizer(object):
                     config['handle'].set_ylim([.5, len(config['ids'][0]) + .5])
                     config['handle'].set_ylabel('Neuron')
                     config['handle'].set_xlabel('Time')
+                    config['handle'].set_xlim([0,len(self._data[LPU][config['ids'][0][0],:])*self._dt])
                 for key in config.iterkeys():
                     if key not in keywds:
                         try:
@@ -341,6 +339,13 @@ class visualizer(object):
     @cols.setter
     def cols(self, value):
         self._cols = value
+
+    @property
+    def dt(self): return self._dt
+
+    @dt.setter
+    def dt(self, value):
+        self._dt = value
 
     @property
     def figsize(self): return self._figsize
