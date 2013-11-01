@@ -101,8 +101,6 @@ class LeakyIAF_bias(BaseNeuron):
     def neuron_class(self): return True
 
     def eval( self, st = None):
-        print self.I.get()
-        print self.V.get()
         self.update.prepared_async_call(\
             self.gpu_grid,\
             self.gpu_block,\
