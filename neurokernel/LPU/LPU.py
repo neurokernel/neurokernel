@@ -656,8 +656,7 @@ class LPU(Module):
         if self.num_public_gpot>0:
             out_gpot.extend(self.projection_gpot.get())
         if self.num_public_spike>0:
-            out_spike.extend(self.projection_spike.get())
-
+            out_spike.extend(np.where(self.projection_spike.get())[0])
 
 
     def _write_output(self):
