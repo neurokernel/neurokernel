@@ -176,8 +176,8 @@ class Connectivity(base.BaseConnectivity):
     Each connection may therefore have several parameters; parameters associated
     with nonexistent connections (i.e., those whose 'conn' parameter is set to
     0) should be ignored. A nonzero 'conn' parameter value denotes the 
-    type ID of connection; consecutive integer IDs are assigned to each of the
-    types specified in `type_params`.
+    type ID of connection; the names of parameters associated with specific connection
+    types are specified in `type_params`.
     
     Parameters
     ----------
@@ -197,7 +197,7 @@ class Connectivity(base.BaseConnectivity):
     B_id : str
         Second module ID (default 'B').
     type_params : dict
-        Dictionary mapping type identifiers to lists of parameters
+        Dictionary mapping connection types to lists of parameters
         associated with each type.
     
     Examples
@@ -209,22 +209,6 @@ class Connectivity(base.BaseConnectivity):
 
     """
 
-    _type_params = {}
-    _type_ids = bidict.bidict()
-    @property
-    def type_params(self):
-        """
-        Parameters supported by each recognized connection type.
-        """
-        
-        return self._type_params
-    @type_params.setter
-    def type_params(self, d):
-        id = 1
-        for k in d.keys():
-            self._type_ids[k] = id
-            id += 1
-        self._type_params = d
     def __init__(self, N_A_gpot, N_A_spike, N_B_gpot, N_B_spike,
                  N_mult=1, A_id='A', B_id='B', type_params={}):
         self.N_A_gpot = N_A_gpot
@@ -537,8 +521,6 @@ class Connectivity(base.BaseConnectivity):
         # Find maximum string length of recognized type identifiers:
         max_type_len = max([0]+map(lambda s:len(str(s)),
                                    self.type_params.keys()))
-        max_type_id_len = max([0]+map(lambda s:len(str(s)),
-                                      self._type_ids.values()))
         
         # Format connectivity data:
         result = super(Connectivity, self).__repr__()+\
@@ -549,10 +531,9 @@ class Connectivity(base.BaseConnectivity):
         result += '\n\nallowed params by type\n'          
         if max_type_len:
             result += \
-              '\n'.join(map(lambda k: ('%'+str(max_type_id_len)+\
-                                       's: %-'+str(max_type_len)+'s %s') % (str(self._type_ids[k]),
-                                                                             str(k),
-                                       str(self.type_params[k])), self.type_params))
+              '\n'.join(map(lambda k: ('%'+str(max_type_len)+'s: %s') % (str(k),
+                                                                         str(self.type_params[k])), 
+                                                                         self.type_params))
         else:
             result += 'none'
         return result
