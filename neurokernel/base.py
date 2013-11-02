@@ -14,6 +14,7 @@ import string
 import sys
 import threading
 import time
+import collections
 
 import bidict
 import numpy as np
@@ -131,11 +132,10 @@ class BaseModule(ControlledProcess):
 
         # Initial connectivity:
         self.net = 'none'
-        
-        # Lists used for storing incoming and outgoing data; each
+
+        # List used for storing outgoing data; each
         # entry is a tuple whose first entry is the source or destination
         # module ID and whose second entry is the data:
-        self._in_data = []
         self._out_data = []
 
         # Objects describing connectivity between this module and other modules
@@ -318,16 +318,10 @@ class BaseModule(ControlledProcess):
         """
 
         self.logger.info('retrieving input')        
-        for entry in self._in_data:
+        for in_id in self.in_ids:
+            if in_id in self._in_data.keys() and self._in_data[in_id]:
+                in_dict[in_id] = self._in_data[in_id].popleft()
 
-            # Every received data packet must contain a source module ID and a payload:
-            if len(entry) != 2:
-                self.logger.info('ignoring invalid input data')
-            else:
-                in_dict[entry[0]] = entry[1]
-
-        # Clear input buffer:
-        self._in_data = []
         
     def _put_out_data(self, out):
         """
@@ -397,21 +391,16 @@ class BaseModule(ControlledProcess):
 
             # Receive inbound data:
             if self.net in ['in', 'full']:
-
                 # Wait until inbound data is received from all source modules:  
-                recv_ids = self.in_ids
-                self._in_data = []
-                while recv_ids:
-
+                while not all((q for q in self._in_data.itervalues())):
                     # Use poller to avoid blocking:
-                    if is_poll_in(self.sock_data, self.data_poller):
+                    if is_poll_in(self.sock_data, self.data_poller)):
                         in_id, data = msgpack.unpackb(self.sock_data.recv())
                         self.logger.info('recv from %s: %s ' % (in_id, str(data)))
-                        recv_ids.remove(in_id)
 
                         # Ignore incoming data containing None:
                         if data is not None:
-                            self._in_data.append((in_id, data))
+                            self._in_data[in_id].append(data)
 
                     # Stop the synchronization if a quit message has been received:
                     if not self.running:
@@ -464,6 +453,11 @@ class BaseModule(ControlledProcess):
 
             # Initialize environment:
             self._init_net()
+
+            # Initialize Buffer for incoming data.
+            # Dict used to store the incoming data keyed by the source module id.
+            # Each value is a queue buferring the received data
+            self._in_data = {k:collections.deque() for k in self.in_ids}
 
             # Extract indices of source ports for all modules receiving output
             # once so that they don't need to be repeatedly extracted during the
@@ -556,7 +550,12 @@ class Broker(ControlledProcess):
 
         # Buffers used to accumulate data to route:
         self.data_to_route = []
-        self.recv_coords_list = routing_table.coords
+
+        # A dictionary keyed by routing table coords.
+        # Each value represents the difference between number of data
+        # messages received for that routing relation and the current number
+        # of exectued steps.
+                   
 
     def _ctrl_handler(self, msg):
         """
@@ -594,20 +593,17 @@ class Broker(ControlledProcess):
             self.logger.info('skipping malformed message: %s' % str(msg))
         else:
 
-            # When a message arrives, remove its source ID from the
-            # list of source modules from which data is expected:
+            # When a message arrives, increase the corresponding received_count
             in_id = msg[0]
             out_id, data = msgpack.unpackb(msg[1])
             self.logger.info('recv from %s: %s' % (in_id, data))
-            self.logger.info('recv coords list len: '+ str(len(self.recv_coords_list)))
-            if (in_id, out_id) in self.recv_coords_list:
-                self.data_to_route.append((in_id, out_id, data))
-                self.recv_coords_list.remove((in_id, out_id))
-
+            # Increase the appropriate count in recv_counts by 1
+            self.recv_counts[(in_id,out_id)] += 1
+            self.data_to_route.append((in_id, out_id, data))
             # When data with source/destination IDs corresponding to
-            # every entry in the routing table has been received,
-            # deliver the data:
-            if not self.recv_coords_list:
+            # every entry in the routing table has been received upto
+            # current time step, deliver the data in the buffer:
+            if all((c for c in self.recv_counts.values())):
                 self.logger.info('recv from all modules')
                 for in_id, out_id, data in self.data_to_route:
                     self.logger.info('sent to   %s: %s' % (out_id, data))
@@ -617,10 +613,11 @@ class Broker(ControlledProcess):
                     self.sock_data.send_multipart([out_id,
                                                    msgpack.packb((in_id, data))])
 
-                # Reset the incoming data buffer and list of connection
-                # coordinates:
+                # Reset the incoming data buffer
                 self.data_to_route = []
-                self.recv_coords_list = self.routing_table.coords
+                # Decrease all values in recv_counts to indicate that an
+                # execution time_step has been succesfully completed
+                for k in self.recv_counts.iterkeys(): self.recv_counts[k]-=1
                 self.logger.info('----------------------')
 
     def _init_ctrl_handler(self):
@@ -675,7 +672,8 @@ class Broker(ControlledProcess):
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
-            self.recv_coords_list = self.routing_table.coords
+            self.recv_counts = dict(zip(self.routing_table.coords,\
+                        np.zeros(len(self.routing_table.coords),dtype=np.int32)))
             self._init_net()
         self.logger.info('exiting')
 
