@@ -64,11 +64,6 @@ class LeakyIAF_bias(BaseNeuron):
         self.R   = garray.to_gpu( np.asarray( n_dict['R'], dtype=np.float64 ))
         self.V   = garray.to_gpu( np.asarray( n_dict['Vr'], dtype=np.float64 ))
         self.b   = garray.to_gpu( np.asarray( n_dict['b'], dtype=np.float64 ))
-        print n_dict['b']
-        print n_dict['Vr']
-        print n_dict['Vt']
-        print n_dict['C']
-        print n_dict['R']
         self.spk = spk
 
         _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i] \
