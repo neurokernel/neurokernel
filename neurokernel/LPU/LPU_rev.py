@@ -413,8 +413,8 @@ class LPU_rev(Module):
             self.update_resting_potential_history = True
             self.run_on_myself = False
 
-            self.num_input_gpot_neurons = np.empty(len(self._conn_dict), np.int32)
-            self.num_input_spike_neurons = np.empty(len(self._conn_dict),np.int32)
+            self.num_input_gpot_neurons = []
+            self.num_input_spike_neurons = []
             self.virtual_gpot_idx = []
             self.virtual_spike_idx = []
 
@@ -428,22 +428,22 @@ class LPU_rev(Module):
                 # parse synapse with gpot pre-synaptic neuron
                 pre_gpot = c.src_idx(other_lpu, self.id, src_type='gpot')
 
-                self.num_input_gpot_neurons[i] = len(pre_gpot)
+                self.num_input_gpot_neurons.append(len(pre_gpot))
 
                 self.virtual_gpot_idx.append(np.arange(tmp1,tmp1+\
-                     self.num_input_gpot_neurons[i]).astype(np.int32))
-                tmp1 += self.num_input_gpot_neurons[i]
+                     self.num_input_gpot_neurons[-1]).astype(np.int32))
+                tmp1 += self.num_input_gpot_neurons[-1]
 
                 parse_interLPU_syn( pre_gpot, 'gpot', 'gpot' )
                 parse_interLPU_syn( pre_gpot, 'gpot', 'spike')
 
                 # parse synapse with spike pre-synaptic neuron
                 pre_spike = c.src_idx(other_lpu, self.id, src_type='spike')
-                self.num_input_spike_neurons[i] = len(pre_spike)
+                self.num_input_spike_neurons.append(len(pre_spike))
 
                 self.virtual_spike_idx.append(np.arange(tmp2,tmp2+\
-                     self.num_input_spike_neurons[i]).astype(np.int32))
-                tmp2 += self.num_input_spike_neurons[i]
+                     self.num_input_spike_neurons[-1]).astype(np.int32))
+                tmp2 += self.num_input_spike_neurons[-1]
 
                 parse_interLPU_syn( pre_spike, 'spike', 'gpot' )
                 parse_interLPU_syn( pre_spike, 'spike', 'spike' )

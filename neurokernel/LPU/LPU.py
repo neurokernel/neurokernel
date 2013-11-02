@@ -296,8 +296,8 @@ n            Need to complete this
             self.update_resting_potential_history = True
             self.run_on_myself = False
 
-            num_input_gpot_neurons = np.empty(len(connectivity), np.int32)
-            num_input_spike_neurons = np.empty(len(connectivity),np.int32)
+            num_input_gpot_neurons = []
+            num_input_spike_neurons = []
             self.virtual_gpot_idx = []
             self.virtual_spike_idx = []
 
@@ -305,16 +305,18 @@ n            Need to complete this
             tmp2 = np.sum(self.num_spike_neurons)
 
 
-
             for i,c in enumerate(connectivity.itervalues()):
                 other_lpu = c.B_id if self.id == c.A_id else c.A_id
                 pre_gpot = c.src_idx(other_lpu, self.id, src_type='gpot')
-
-                num_input_gpot_neurons[i] = len(pre_gpot)
+                pre_spike = c.src_idx(other_lpu, \
+                                      self.id, src_type='spike')
+                if len(pre_gpot)+len(pre_spike)==0: continue
+                num_input_spike_neurons.append(len(pre_spike))
+                num_input_gpot_neurons.append(len(pre_gpot))
 
                 self.virtual_gpot_idx.append(np.arange(tmp1,tmp1+\
-                                    num_input_gpot_neurons[i]).astype(np.int32))
-                tmp1 += num_input_gpot_neurons[i]
+                                    num_input_gpot_neurons[-1]).astype(np.int32))
+                tmp1 += num_input_gpot_neurons[-1]
 
                 for j,pre_id in enumerate(pre_gpot):
                     pre_id = int(pre_id)
@@ -346,7 +348,7 @@ n            Need to complete this
                                 s_dict_list.append(s)
 
                             s_dict_list[s_id]['pre'].append(\
-                                        self.virtual_gpot_idx[i][j])
+                                        self.virtual_gpot_idx[-1][j])
                             s_dict_list[s_id]['post'].append(\
                                         self.public_gpot_list[post_id])
                             for key in s_dict_list[s_id].iterkeys():
@@ -377,7 +379,7 @@ n            Need to complete this
                                 s_dict_list.append(s)
 
                             s_dict_list[s_id]['pre'].append(\
-                                        self.virtual_gpot_idx[i][j])
+                                        self.virtual_gpot_idx[-1][j])
                             s_dict_list[s_id]['post'].append(\
                                         self.public_spike_list[post_id])
                             for key in s_dict_list[s_id].iterkeys():
@@ -388,12 +390,9 @@ n            Need to complete this
                                           param=key))
 
 
-                pre_spike = c.src_idx(other_lpu, \
-                                      self.id, src_type='spike')
-                num_input_spike_neurons[i] = len(pre_spike)
                 self.virtual_spike_idx.append(np.arange(tmp2,tmp2+\
-                    num_input_spike_neurons[i]).astype(np.int32))
-                tmp2 += num_input_spike_neurons[i]
+                    num_input_spike_neurons[-1]).astype(np.int32))
+                tmp2 += num_input_spike_neurons[-1]
 
                 for j,pre_id in enumerate(pre_spike):
                     pre_id = int(pre_id)
@@ -418,7 +417,7 @@ n            Need to complete this
                                 s_dict_list.append(s)
 
                             s_dict_list[s_id]['pre'].append(\
-                                        self.virtual_spike_idx[i][j])
+                                        self.virtual_spike_idx[-1][j])
                             s_dict_list[s_id]['post'].append(\
                                         self.public_gpot_list[post_id])
                             for key in s_dict_list[s_id].iterkeys():
@@ -449,7 +448,7 @@ n            Need to complete this
                                 s_dict_list.append(s)
 
                             s_dict_list[s_id]['pre'].append(\
-                                        self.virtual_spike_idx[i][j])
+                                        self.virtual_spike_idx[-1][j])
                             s_dict_list[s_id]['post'].append(\
                                         self.public_spike_list[post_id])
                             for key in s_dict_list[s_id].iterkeys():
@@ -617,7 +616,6 @@ n            Need to complete this
         Put inputs from other LPUs to buffer.
 
         """
-
         for i, gpot_data in enumerate(in_gpot_dict.itervalues()):
             if self.num_input_gpot_neurons[i] > 0:
                 cuda.memcpy_htod(int(int(self.buffer.gpot_buffer.gpudata) \
@@ -787,7 +785,6 @@ n            Need to complete this
     def _load_neurons(self):
         self._neuron_classes = baseneuron.BaseNeuron.__subclasses__()
         self._neuron_names = [cls.__name__ for cls in self._neuron_classes]
-        print self._neuron_names
         
     def _load_synapses(self):
         self._synapse_classes = basesynapse.BaseSynapse.__subclasses__()
