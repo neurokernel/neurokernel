@@ -33,7 +33,7 @@ class visualizer(object):
         self._update_interval = 50
         self._out_file = None
         self._fps = 5
-        self._codec = 'mpeg4'
+        self._codec = 'h264'
         self._config = {};
         self._rows = 0
         self._cols = 0
@@ -43,8 +43,9 @@ class visualizer(object):
         self._data = {}
         self._graph = {}
         self._maxt = None
+        self._title = None
 
-    def add_LPU(self, data_file, gexf_file=None, LPU=None):
+    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None):
         '''
         Add an LPU for visualization. To add a plot containing
         neurons from a particular LPU, the LPU needs to be added
@@ -73,6 +74,8 @@ class visualizer(object):
         if not LPU:
             LPU = len(self._data)
         self._data[LPU] = np.transpose(sio.read_array(data_file))
+        if win is not None:
+            self._data[LPU] = self._data[LPU][:,win]
         if self._maxt:
             self._maxt = min(self._maxt, self._data[LPU].shape[1])
         else:
@@ -82,11 +85,13 @@ class visualizer(object):
         '''
         Starts the visualization process. If out_filename is specified,
         will create a movie. If not, the visualization will be done in
-        a figure window, without it beig saved.
+        a figure window, without it being saved.
+        Thr final frame will be saved to final_frame.png regardless.
         '''
         self._initialize()
         for i in range(1,self._maxt, self._update_interval):
             self.update()
+        self.f.savefig('final_frame.png', dpi=300)
         if self.out_filename:
             self.close()
         
@@ -136,20 +141,25 @@ class visualizer(object):
         self.f.canvas.draw()
         if self.out_filename:
             self.writer.grab_frame()
-            
+
         self._t+=self._update_interval
         
     def _set_wrapper(self, obj, name, value):
         name = name.lower()
         func = getattr(obj, 'set_'+name, None)
         if func:
-            func(value)
+            try:
+                func(value, fontsize=18, weight='bold')
+            except:
+                try:
+                    func(value)
+                except:
+                    pass
         
     def _initialize(self):
         num_plots = 0
         for config in self._config.itervalues():
             num_plots += len(config)
-        
         if not self._rows*self._cols == num_plots:
             self._cols = int(np.ceil(np.sqrt(num_plots)))
             self._rows = int(np.ceil(num_plots/float(self._cols)))
@@ -223,16 +233,16 @@ class visualizer(object):
                         config['ydata'] = [self._data[LPU][config['ids'][0],0]]
                     else:
                         config['handle'] = self.axarr[ind].plot(self._data[LPU][config['ids'][0],0])[0]
-
-                # Spiking neurons not yet supported
+                        
                 elif config['type'] == 4:
                     config['handle'] = self.axarr[ind]
                     config['handle'].vlines(0, 0, 0.01)
                     config['handle'].set_ylim([.5, len(config['ids'][0]) + .5])
-                    config['handle'].set_ylabel('Neurons')
-                    config['handle'].set_xlabel('Time(s)')
+                    config['handle'].set_ylabel('Neurons', fontsize=17, weight='bold')
+                    config['handle'].set_xlabel('Time',fontsize=17, weight='bold')
                     config['handle'].set_xlim([0,len(self._data[LPU][config['ids'][0][0],:])*self._dt])
                     config['handle'].axes.set_yticks([])
+                    config['handle'].axes.set_xticks([])                
                 for key in config.iterkeys():
                     if key not in keywds:
                         try:
@@ -246,7 +256,8 @@ class visualizer(object):
                 if config['type']<3:
                     config['handle'].axes.set_xticks([])
                     config['handle'].axes.set_yticks([])
-                    
+
+            self.f.suptitle(self._title, fontsize=19, x=0.5,y=0.03, weight='bold')
                      
         if self.out_filename:
             self.writer = FFMpegFileWriter(fps=self.fps, codec=self.codec)
@@ -276,10 +287,8 @@ class visualizer(object):
                         config['ids'][i].append(id-shift)
             self._config[LPU].append(config)
         if not 'title' in config:
-            if 'type' in config and config['type'] =='raster':
-                config['title'] = "{0} - Raster plot ".format(str(LPU))
-            else:
-                config['title'] = "{0} - {1} ".format(str(LPU),str(names[0]))
+            config['title'] = "{0} - {1} ".format(str(LPU),str(names[0]))
+                
     def close(self):
         self.writer.finish()
 
@@ -356,3 +365,10 @@ class visualizer(object):
     def figsize(self, value):
         assert(isinstance(value, tuple) and len(value)==2)
         self._figsize = value
+
+    @property
+    def suptitle(self): return self._title
+
+    @suptitle.setter
+    def suptitle(self, value):
+        self._title = value
