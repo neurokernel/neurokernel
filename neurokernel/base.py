@@ -394,7 +394,7 @@ class BaseModule(ControlledProcess):
                 # Wait until inbound data is received from all source modules:  
                 while not all((q for q in self._in_data.itervalues())):
                     # Use poller to avoid blocking:
-                    if is_poll_in(self.sock_data, self.data_poller)):
+                    if is_poll_in(self.sock_data, self.data_poller):
                         in_id, data = msgpack.unpackb(self.sock_data.recv())
                         self.logger.info('recv from %s: %s ' % (in_id, str(data)))
 
