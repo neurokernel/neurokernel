@@ -2,7 +2,6 @@
 
 Authors & Acknowledgements
 ==========================
-
 Lev Givon [1]_ began the Neurokernel project in 2012 under the 
 supervision of Prof. Aurel. A. Lazar [2]_ while at the Bionet Group [3]_ at
 Columbia University. Since then, the following contributors (referred to as the
@@ -11,7 +10,7 @@ Neurokernel Development Team) have participated in the project:
 * Daniel S. Chevitarese
 * Lev Givon
 * Nikul H. Ukani
-* Chung-Heng Yeh.
+* Chung-Heng Yeh
 * Yiyin Zhou
 
 The Neurokernel logo is based upon the logo of the FlyJunkies web site [4]_, 
