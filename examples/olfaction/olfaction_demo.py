@@ -25,7 +25,7 @@ parser.add_argument('--debug', default=False,
                     dest='debug', action='store_true',
                     help='Write connectivity structures and inter-LPU routed data in debug folder')
 parser.add_argument('-l', '--log', default='none', type=str,
-                    help='Log output to screen [file,screen,both,or none;default:none]')
+                    help='Log output to screen [file, screen, both, or none; default:none]')
 parser.add_argument('-s', '--steps', default=10000, type=int,
                     help='Number of steps [default:10000]')
 parser.add_argument('-d', '--data_port', default=5005, type=int,

@@ -10,10 +10,6 @@ NetworkX is used for generating and storing graphic representation of LPU.
 
 __all__ = ['lpu_parser']
 
-__author__ = """\n""".join(['Nikul Ukani <nhu2001@columbia.edu>',
-                            'Chung-Heng Yeh <chyeh@ee.columbia.edu>',
-                            'Yiyin Zhou <yz2227@columbia.edu>'])
-
 import networkx as nx
 
 # Work around bug that causes networkx to choke on GEXF files with boolean
