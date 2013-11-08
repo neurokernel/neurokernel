@@ -670,19 +670,12 @@ class Module(base.BaseModule):
         """
         
         self.logger.info('reading input buffer')
-        for entry in self._in_data:
-            
-            # Every received data packet must contain a source module ID,
-            # graded potential neuron data, and spiking neuron data:
-            if len(entry) != 2:
-                self.logger.info('ignoring invalid input data')
-            else:
-                in_gpot_dict[entry[0]] = entry[1][0]
-                in_spike_dict[entry[0]] = entry[1][1]
-            
-        # Clear input buffer of reading all of its contents:
-        self._in_data = []
-        
+        for in_id in self.in_ids:
+            if in_id in self._in_data.keys() and self._in_data[in_id]:
+                data = self._in_data[in_id].popleft()
+                in_gpot_dict[in_id] = data[0]
+                in_spike_dict[in_id] = data[1]
+
     def _put_out_data(self, out_gpot, out_spike):
         """
         Put specified output neuron data in outgoing transmission buffer.
@@ -769,6 +762,11 @@ class Module(base.BaseModule):
               {out_id:self._conn_dict[out_id].src_idx(self.id, out_id, 'spike') for \
                out_id in self.out_ids}
 
+            # Initialize Buffer for incoming data.
+            # Dict used to store the incoming data keyed by the source module id.
+            # Each value is a queue buferring the received data
+            self._in_data = {k:collections.deque() for k in self.in_ids}
+            
             # Perform any pre-emulation operations:
             self.pre_run()
                
