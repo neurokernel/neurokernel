@@ -8,11 +8,13 @@ from contextlib import contextmanager
 import copy
 import multiprocessing as mp
 import os
+import re
 import signal
 import string
 import sys
 import threading
 import time
+import collections
 
 import bidict
 import numpy as np
@@ -130,11 +132,10 @@ class BaseModule(ControlledProcess):
 
         # Initial connectivity:
         self.net = 'none'
-        
-        # Lists used for storing incoming and outgoing data; each
+
+        # List used for storing outgoing data; each
         # entry is a tuple whose first entry is the source or destination
         # module ID and whose second entry is the data:
-        self._in_data = []
         self._out_data = []
 
         # Objects describing connectivity between this module and other modules
@@ -317,16 +318,10 @@ class BaseModule(ControlledProcess):
         """
 
         self.logger.info('retrieving input')        
-        for entry in self._in_data:
+        for in_id in self.in_ids:
+            if in_id in self._in_data.keys() and self._in_data[in_id]:
+                in_dict[in_id] = self._in_data[in_id].popleft()
 
-            # Every received data packet must contain a source module ID and a payload:
-            if len(entry) != 2:
-                self.logger.info('ignoring invalid input data')
-            else:
-                in_dict[entry[0]] = entry[1]
-
-        # Clear input buffer:
-        self._in_data = []
         
     def _put_out_data(self, out):
         """
@@ -396,21 +391,16 @@ class BaseModule(ControlledProcess):
 
             # Receive inbound data:
             if self.net in ['in', 'full']:
-
                 # Wait until inbound data is received from all source modules:  
-                recv_ids = self.in_ids
-                self._in_data = []
-                while recv_ids:
-
+                while not all((q for q in self._in_data.itervalues())):
                     # Use poller to avoid blocking:
                     if is_poll_in(self.sock_data, self.data_poller):
                         in_id, data = msgpack.unpackb(self.sock_data.recv())
                         self.logger.info('recv from %s: %s ' % (in_id, str(data)))
-                        recv_ids.remove(in_id)
 
                         # Ignore incoming data containing None:
                         if data is not None:
-                            self._in_data.append((in_id, data))
+                            self._in_data[in_id].append(data)
 
                     # Stop the synchronization if a quit message has been received:
                     if not self.running:
@@ -463,6 +453,11 @@ class BaseModule(ControlledProcess):
 
             # Initialize environment:
             self._init_net()
+
+            # Initialize Buffer for incoming data.
+            # Dict used to store the incoming data keyed by the source module id.
+            # Each value is a queue buferring the received data
+            self._in_data = {k:collections.deque() for k in self.in_ids}
 
             # Extract indices of source ports for all modules receiving output
             # once so that they don't need to be repeatedly extracted during the
@@ -555,7 +550,12 @@ class Broker(ControlledProcess):
 
         # Buffers used to accumulate data to route:
         self.data_to_route = []
-        self.recv_coords_list = routing_table.coords
+
+        # A dictionary keyed by routing table coords.
+        # Each value represents the difference between number of data
+        # messages received for that routing relation and the current number
+        # of exectued steps.
+                   
 
     def _ctrl_handler(self, msg):
         """
@@ -593,20 +593,17 @@ class Broker(ControlledProcess):
             self.logger.info('skipping malformed message: %s' % str(msg))
         else:
 
-            # When a message arrives, remove its source ID from the
-            # list of source modules from which data is expected:
+            # When a message arrives, increase the corresponding received_count
             in_id = msg[0]
             out_id, data = msgpack.unpackb(msg[1])
             self.logger.info('recv from %s: %s' % (in_id, data))
-            self.logger.info('recv coords list len: '+ str(len(self.recv_coords_list)))
-            if (in_id, out_id) in self.recv_coords_list:
-                self.data_to_route.append((in_id, out_id, data))
-                self.recv_coords_list.remove((in_id, out_id))
-
+            # Increase the appropriate count in recv_counts by 1
+            self.recv_counts[(in_id,out_id)] += 1
+            self.data_to_route.append((in_id, out_id, data))
             # When data with source/destination IDs corresponding to
-            # every entry in the routing table has been received,
-            # deliver the data:
-            if not self.recv_coords_list:
+            # every entry in the routing table has been received upto
+            # current time step, deliver the data in the buffer:
+            if all((c for c in self.recv_counts.values())):
                 self.logger.info('recv from all modules')
                 for in_id, out_id, data in self.data_to_route:
                     self.logger.info('sent to   %s: %s' % (out_id, data))
@@ -616,10 +613,11 @@ class Broker(ControlledProcess):
                     self.sock_data.send_multipart([out_id,
                                                    msgpack.packb((in_id, data))])
 
-                # Reset the incoming data buffer and list of connection
-                # coordinates:
+                # Reset the incoming data buffer
                 self.data_to_route = []
-                self.recv_coords_list = self.routing_table.coords
+                # Decrease all values in recv_counts to indicate that an
+                # execution time_step has been succesfully completed
+                for k in self.recv_counts.iterkeys(): self.recv_counts[k]-=1
                 self.logger.info('----------------------')
 
     def _init_ctrl_handler(self):
@@ -674,7 +672,8 @@ class Broker(ControlledProcess):
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
-            self.recv_coords_list = self.routing_table.coords
+            self.recv_counts = dict(zip(self.routing_table.coords,\
+                        np.zeros(len(self.routing_table.coords),dtype=np.int32)))
             self._init_net()
         self.logger.info('exiting')
 
@@ -889,9 +888,12 @@ class BaseConnectivity(object):
         all_dest_idx = np.arange(self.N(dest_id))[dest_ports]
         result = np.zeros(self.N(src_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            result[:] = result+ \
-                [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
-                             for r in self._data[k].rows])]
+
+            # Only look at the 'conn' parameter:
+            if k.endswith('/conn'):
+                result[:] = result+ \
+                    [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
+                                     for r in self._data[k].rows])]
         return result
 
     def src_idx(self, src_id='', dest_id='', dest_ports=slice(None, None)):
@@ -954,8 +956,11 @@ class BaseConnectivity(object):
         # connectivity matrix:
         result = np.zeros(self.N(dest_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            for r in self._data[k].rows[src_ports]:
-                result[r] = True
+
+            # Only look at the 'conn' parameter:
+            if k.endswith('/conn'):
+                for r in self._data[k].rows[src_ports]:
+                    result[r] = True
         return result
     
     def dest_idx(self, src_id='', dest_id='', src_ports=slice(None, None)):
@@ -996,15 +1001,29 @@ class BaseConnectivity(object):
         for key in self._data.keys():
             count += self._data[key].dtype.itemsize*self._data[key].nnz
         return count
-    
-    def _format_bin_array(self, a, indent=0):
+
+    def _indent_str(self, s, indent=0):
         """
-        Format a binary array for printing.
+        Indent a string by the specified number of spaces.
+
+        Parameters
+        ----------
+        s : str
+            String to indent.
+        indent : int
+            Number of spaces to prepend to each line in the string.
+        """
+        
+        return re.sub('^(.*)', indent*' '+r'\1', s, flags=re.MULTILINE)
+    
+    def _format_array(self, a, indent=0):
+        """
+        Format an array for printing.
 
         Parameters
         ----------
         a : 2D array_like
-            Array to format. Assumes the array contains binary values.
+            Array to format.
         indent : int
             Number of columns by which to indent the formatted array.
         
@@ -1013,26 +1032,23 @@ class BaseConnectivity(object):
         result : str
             Formatted array.            
         """
-        
-        sp0 = ' '*indent
-        sp1 = sp0+' '
-        a_list = a.toarray().tolist()
-        if a.shape[0] == 1:
-            return sp0+str(a_list)
+
+        if scipy.sparse.issparse(a):            
+            return self._indent_str(a.toarray().__str__(), indent)
         else:
-            return sp0+'['+str(a_list[0])+'\n'+''.join(map(lambda s: sp1+str(s)+'\n', a_list[1:-1]))+sp1+str(a_list[-1])+']'
+            return self._indent_str(np.asarray(a).__str__(), indent)
         
     def __repr__(self):
         result = '%s -> %s\n' % (self.A_id, self.B_id)
         result += '-----------\n'
         for key in self._keys_by_dir[self._AtoB]:
             result += key + '\n'
-            result += self._format_bin_array(self._data[key]) + '\n'
+            result += self._format_array(self._data[key]) + '\n'
         result += '\n%s -> %s\n' % (self.B_id, self.A_id)
         result += '-----------\n'
         for key in self._keys_by_dir[self._BtoA]:
             result += key + '\n'
-            result += self._format_bin_array(self._data[key]) + '\n'
+            result += self._format_array(self._data[key]) + '\n'
         return result
         
     def _make_key(self, *args):
@@ -1046,8 +1062,13 @@ class BaseConnectivity(object):
         """
         Create a sparse matrix of the specified shape.
         """
-        
-        return sp.sparse.lil_matrix(shape, dtype=dtype)
+
+        # scipy.sparse doesn't support sparse arrays of strings;
+        # we therefore use an ordinary ndarray of objects:
+        if np.issubdtype(dtype, str):
+            return np.empty(shape, dtype=np.object)
+        else:
+            return sp.sparse.lil_matrix(shape, dtype=dtype)
 
     def multapses(self, src_id, src_idx, dest_id, dest_idx):
         """
@@ -1086,7 +1107,7 @@ class BaseConnectivity(object):
         """
 
         result = self._get_sparse(src_id, src_idx, dest_id, dest_idx, conn, param)
-        if not np.isscalar(result):
+        if scipy.sparse.issparse(result):
             return result.toarray()
         else:
             return result
@@ -1467,7 +1488,7 @@ if __name__ == '__main__':
         
         def run_step(self, in_dict, out):
             super(MyModule, self).run_step(in_dict, out)
-            
+
             out[:] = np.random.rand(self.N)
 
         def run(self):

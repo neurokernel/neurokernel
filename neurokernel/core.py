@@ -99,7 +99,7 @@ class IntervalIndex(object):
         # Convert numpy integer types to native Python int:
         if isinstance(i, np.generic):
             i = np.asscalar(i)
-        if type(i) == int:
+        if np.issubdtype(type(i), int):
             if i < interval[0] or i >= interval[1]:
                 raise ValueError('invalid index')
         elif type(i) == slice:
@@ -122,7 +122,7 @@ class IntervalIndex(object):
         if type(i) == tuple:
             label, idx = i
             self._validate(idx, self._intervals[label])
-            if type(idx) == int:
+            if np.issubdtype(type(idx), int):
                 return idx+self._bounds[label]
             else:
 
@@ -136,7 +136,7 @@ class IntervalIndex(object):
                 else:
                     stop = idx.stop+self._bounds[label]
                 return slice(start, stop, idx.step)
-        elif type(i) == int:
+        elif np.issubdtype(type(i), int):
             for label in self._intervals.keys():
                 interval = self._intervals[label]
                 bound = self._bounds[label]
@@ -176,8 +176,8 @@ class Connectivity(base.BaseConnectivity):
     Each connection may therefore have several parameters; parameters associated
     with nonexistent connections (i.e., those whose 'conn' parameter is set to
     0) should be ignored. A nonzero 'conn' parameter value denotes the 
-    type ID of connection; consecutive integer IDs are assigned to each of the
-    types specified in `type_params`.
+    type ID of connection; the names of parameters associated with specific connection
+    types are specified in `type_params`.
     
     Parameters
     ----------
@@ -197,7 +197,7 @@ class Connectivity(base.BaseConnectivity):
     B_id : str
         Second module ID (default 'B').
     type_params : dict
-        Dictionary mapping type identifiers to lists of parameters
+        Dictionary mapping connection types to lists of parameters
         associated with each type.
     
     Examples
@@ -209,22 +209,6 @@ class Connectivity(base.BaseConnectivity):
 
     """
 
-    _type_params = {}
-    _type_ids = bidict.bidict()
-    @property
-    def type_params(self):
-        """
-        Parameters supported by each recognized connection type.
-        """
-        
-        return self._type_params
-    @type_params.setter
-    def type_params(self, d):
-        id = 1
-        for k in d.keys():
-            self._type_ids[k] = id
-            id += 1
-        self._type_params = d
     def __init__(self, N_A_gpot, N_A_spike, N_B_gpot, N_B_spike,
                  N_mult=1, A_id='A', B_id='B', type_params={}):
         self.N_A_gpot = N_A_gpot
@@ -343,9 +327,10 @@ class Connectivity(base.BaseConnectivity):
         all_dest_idx = np.arange(self.N(dest_id))[dest_slice]
         result = np.zeros(self.N(src_id, src_type), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            result[:] = result+ \
-                [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
-                             for r in self._data[k].rows[src_slice]])]
+            if k.endswith('/conn'):
+                result[:] = result+ \
+                    [np.asarray([bool(np.intersect1d(all_dest_idx, r).size) \
+                                     for r in self._data[k].rows[src_slice]])]
         return result
         
     def src_idx(self, src_id='', dest_id='',
@@ -409,8 +394,9 @@ class Connectivity(base.BaseConnectivity):
             dest_slice = self.idx_translate[dest_id][dest_type, :]
         result = np.zeros(self.N(dest_id), dtype=bool)
         for k in self._keys_by_dir[dir]:
-            for r in self._data[k].rows[src_slice]:
-                result[r] = True
+            if k.endswith('/conn'):
+                for r in self._data[k].rows[src_slice]:
+                    result[r] = True
         return result[dest_slice]
 
     def dest_idx(self, src_id='', dest_id='',
@@ -535,8 +521,6 @@ class Connectivity(base.BaseConnectivity):
         # Find maximum string length of recognized type identifiers:
         max_type_len = max([0]+map(lambda s:len(str(s)),
                                    self.type_params.keys()))
-        max_type_id_len = max([0]+map(lambda s:len(str(s)),
-                                      self._type_ids.values()))
         
         # Format connectivity data:
         result = super(Connectivity, self).__repr__()+\
@@ -547,10 +531,9 @@ class Connectivity(base.BaseConnectivity):
         result += '\n\nallowed params by type\n'          
         if max_type_len:
             result += \
-              '\n'.join(map(lambda k: ('%'+str(max_type_id_len)+\
-                                       's: %-'+str(max_type_len)+'s %s') % (str(self._type_ids[k]),
-                                                                             str(k),
-                                       str(self.type_params[k])), self.type_params))
+              '\n'.join(map(lambda k: ('%'+str(max_type_len)+'s: %s') % (str(k),
+                                                                         str(self.type_params[k])), 
+                                                                         self.type_params))
         else:
             result += 'none'
         return result
@@ -687,19 +670,12 @@ class Module(base.BaseModule):
         """
         
         self.logger.info('reading input buffer')
-        for entry in self._in_data:
-            
-            # Every received data packet must contain a source module ID,
-            # graded potential neuron data, and spiking neuron data:
-            if len(entry) != 2:
-                self.logger.info('ignoring invalid input data')
-            else:
-                in_gpot_dict[entry[0]] = entry[1][0]
-                in_spike_dict[entry[0]] = entry[1][1]
-            
-        # Clear input buffer of reading all of its contents:
-        self._in_data = []
-        
+        for in_id in self.in_ids:
+            if in_id in self._in_data.keys() and self._in_data[in_id]:
+                data = self._in_data[in_id].popleft()
+                in_gpot_dict[in_id] = data[0]
+                in_spike_dict[in_id] = data[1]
+
     def _put_out_data(self, out_gpot, out_spike):
         """
         Put specified output neuron data in outgoing transmission buffer.
@@ -786,6 +762,11 @@ class Module(base.BaseModule):
               {out_id:self._conn_dict[out_id].src_idx(self.id, out_id, 'spike') for \
                out_id in self.out_ids}
 
+            # Initialize Buffer for incoming data.
+            # Dict used to store the incoming data keyed by the source module id.
+            # Each value is a queue buferring the received data
+            self._in_data = {k:collections.deque() for k in self.in_ids}
+            
             # Perform any pre-emulation operations:
             self.pre_run()
                
