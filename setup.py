@@ -17,9 +17,9 @@ from setuptools import setup
 
 NAME =               'neurokernel'
 VERSION =            '0.01'
-AUTHOR =             'Lev Givon'
-AUTHOR_EMAIL =       'lev@columbia.edu'
-URL =                'http://github.com/bionet/neurokernel/'
+AUTHOR =             'Neurokernel Development Team'
+AUTHOR_EMAIL =       'neurokernel-dev@columbia.edu'
+URL =                'http://github.com/neurokernel/neurokernel/'
 MAINTAINER =         AUTHOR
 MAINTAINER_EMAIL =   AUTHOR_EMAIL
 DESCRIPTION =        'An open architecture for Drosophila brain emulation'
