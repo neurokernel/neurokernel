@@ -420,7 +420,7 @@ def get_scalardiv_function(src_type, pitch = True):
 
 
 transpose_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     #define TILE_DIM 32
     #define BLOCK_ROWS 8
     
@@ -476,7 +476,7 @@ transpose_template = """
 """templates"""
 
 pitch_template = """
-            #include <pycuda/pycuda-complex.hpp>
+            #include <pycuda-complex.hpp>
             #include <cuComplex.h>
 
             __global__ void %(name)s (const int M, const int N, %(dest_type)s *dest, const int ld_dest, const %(src_type)s *src, const int ld_src)
@@ -509,7 +509,7 @@ pitch_template = """
 
             
 non_pitch_template = """
-            #include <pycuda/pycuda-complex.hpp>
+            #include <pycuda-complex.hpp>
             #include <cuComplex.h>
             
             __global__ void %(name)s (%(dest_type)s *dest, const %(src_type)s *src, const int N)
@@ -530,7 +530,7 @@ non_pitch_template = """
 
 
 reshape_template = """
-            #include <pycuda/pycuda-complex.hpp>
+            #include <pycuda-complex.hpp>
             #include <cuComplex.h>
             __global__ void %(name)s(const int Msrc, const int Nsrc, const int Mdest, const int Ndest, %(dest_type)s *dest, const int ld_dest, const %(src_type)s *src, const int ld_src)
             {
@@ -549,7 +549,7 @@ reshape_template = """
 """ launching MULTIPROCESSOR_COUNT*6 blocks of (256,1,1), M: number of rows, N: number of columns, ld: leading dimension entries(aasumed to be row major)"""
 
 irregular_pitch_template = """
-            #include <pycuda/pycuda-complex.hpp>
+            #include <pycuda-complex.hpp>
             #include <cuComplex.h>
             __global__ void %(name)s(const int M, const int N, %(dest_type)s *dest, const int ld_dest, const %(src_type)s *src, const int ld_src)
             {
@@ -572,7 +572,7 @@ irregular_pitch_template = """
 
 
 pitch_array_op_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     
     extern "C++" {
 	namespace pycuda{
@@ -642,7 +642,7 @@ pitch_array_op_template = """
     """
 
 non_pitch_array_op_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     
     
     extern "C++" {
@@ -703,7 +703,7 @@ non_pitch_array_op_template = """
     """
 
 pitch_left_scalar_op_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     __global__ void %(name)s(const int M, const int N, %(dest_type)s *dest, const int ld_dest, const %(dest_type)s *left, const int ld_left, const %(dest_type)s right)
     {
         //M is the number of rows, N is the number of columns
@@ -731,7 +731,7 @@ pitch_left_scalar_op_template = """
     """
 
 non_pitch_left_scalar_op_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     __global__ void %(name)s(%(dest_type)s *dest, const %(dest_type)s *left, const %(dest_type)s right, const int N)
     {
         const int totalthreads = blockDim.x * gridDim.x;
@@ -750,7 +750,7 @@ non_pitch_left_scalar_op_template = """
     """
 
 pitch_right_scalar_op_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     __global__ void %(name)s(const int M, const int N, %(dest_type)s *dest, const int ld_dest, const %(dest_type)s *left, const int ld_left, const %(dest_type)s right)
     {
         //M is the number of rows, N is the number of columns
@@ -778,7 +778,7 @@ pitch_right_scalar_op_template = """
     """
 
 non_pitch_right_scalar_op_template = """
-    #include <pycuda/pycuda-complex.hpp>
+    #include <pycuda-complex.hpp>
     __global__ void %(name)s(%(dest_type)s *dest, const %(dest_type)s *left, const %(dest_type)s right, const int N)
     {
         const int totalthreads = blockDim.x * gridDim.x;
@@ -797,7 +797,7 @@ non_pitch_right_scalar_op_template = """
     """
 
 fill_pitch_template = """
-            #include <pycuda/pycuda-complex.hpp>
+            #include <pycuda-complex.hpp>
 
             __global__ void %(name)s (const int M, const int N, %(type_dst)s *dst, const int ld_dst, %(type_dst)s value)
             {
@@ -821,7 +821,7 @@ fill_pitch_template = """
 """ launching MULTIPROCESSOR_COUNT*6 blocks of (32,8,1), M: number of rows, N: number of columns, ld: leading dimension entries(aasumed to be row major)"""
 
 fill_nonpitch_template = """
-            #include <pycuda/pycuda-complex.hpp>
+            #include <pycuda-complex.hpp>
 
             __global__ void %(name)s (const int M,  %(type_dst)s *dst, %(type_dst)s value)
             {
