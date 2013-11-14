@@ -62,7 +62,7 @@ man.add_brok()
 
 (n_dict_al, s_dict_al) = LPU_rev.lpu_parser( './data/antennallobe.gexf.gz')
 lpu_al = LPU_rev(dt, n_dict_al, s_dict_al,
-                 input_file='./data/olfaction_input.h5',
+                 input_file='./data/olfactory_input.h5',
                  output_file='antennallobe_output.h5', port_ctrl=man.port_ctrl,
                  port_data=man.port_data, device=args.al_dev, id='antennallobe')
 man.add_mod(lpu_al)
