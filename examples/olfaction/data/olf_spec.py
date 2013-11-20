@@ -7,7 +7,7 @@ Olfaction model specification.
 import numpy as np
 from random import random
 from lxml import etree
-import pdb
+import gzip
 
 Odor_database       = {'Acetone':[ 1, -10,  29,   0, -25, 38,
                                  -7, -10,   8, -16,  11,  3,
@@ -383,8 +383,9 @@ class AntennalLobe():
             for syn in self.syn_list: syn.toGEXF( edges )
         # write to file if filename is given
         if filename is not None:
-            etree.ElementTree(root).write( filename, pretty_print = True,
-                xml_declaration = True, encoding="utf-8" )
+            with gzip.open(filename, 'w') as f:
+                etree.ElementTree(root).write(f, pretty_print = True,
+                                              xml_declaration = True, encoding="utf-8" )
         return root
 
     def _getAllNeuList(self):
