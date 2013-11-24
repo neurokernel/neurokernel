@@ -1,15 +1,12 @@
-#!/usr/bin/env python
-
 """
-Olfaction model specification.
+Olfaction specification for NeuroKernel
 """
-
+from random import uniform
 import numpy as np
-from random import random
 from lxml import etree
 import gzip
 
-Odor_database       = {'Acetone':[ 1, -10,  29,   0, -25, 38,
+Odor_databas       = {'Acetone':[ 1, -10,  29,   0, -25, 38,
                                  -7, -10,   8, -16,  11,  3,
                                  -6,  -3, 130,  -7,  27, -5,
                                  -4,  -5,  28,  18,  -9, -1],
@@ -66,7 +63,7 @@ Hallem06 = {
                  'Or85b':13,'Or85f': 7,'Or88a':26,'Or98a':12},
     'osn_para':{'Vr':-0.07,'Vt':-0.025,'R':1,'C':0.07,'V0':-0.05},
     'pn_para':{'Vr':-0.07,'Vt':-0.025,'R':1,'C':0.07,'V0':-0.05},
-    'op_syn_para':{'gmax':1,'reverse':-80,'ar':400,'ad':400},
+    'op_syn_para':{'gmax':1,'reverse':-0.08,'ar':400.,'ad':400.},
     'type':'osn_spike_rate'
     }
 
@@ -74,20 +71,20 @@ class AlphaSynapse:
     """
     Alpha-Synapse
     """
-    def __init__(self, name=None, id=None, reverse=-60, ar=400, ad=400, gmax=1,\
-                 pre_neu=None,post_neu=None):
+    def __init__(self, name=None, id=None, reverse=-0.06, ar=400., ad=400., gmax=1.,\
+                 pre_neu=None,post_neu=None, rand=0.):
         self.id = id
         self.name = name
-        self.reverse = reverse # the reverse potential
-        self.ar = ar           # the rise rate of the synaptic conductance
-        self.ad = ad           # the drop rate of the synaptic conductance
-        self.gmax = gmax
-        self.I = 0
-        self.a = np.zeros(3,)  # a stands for alpha
+        self.reverse = reverse*uniform(1.-rand,1.+rand) # the reverse potential
+        self.ar = ar*uniform(1.-rand,1.+rand)           # the rise rate of the synaptic conductance
+        self.ad = ad *uniform(1.-rand,1.+rand)          # the drop rate of the synaptic conductance
+        self.gmax = gmax*uniform(1.-rand,1.+rand)       # maximum conductance
+        self.I = 0.
+        self.a = np.zeros(3,)       # a stands for alpha
         self.pre_neu = pre_neu
         self.post_neu = post_neu
 
-    def prepare(self,dt=0):
+    def prepare(self,dt=0.):
         pass
 
     def update(self,dt):
@@ -154,15 +151,15 @@ class LeakyIAF:
     Leaky Integrated-and-Fire Neuron
     """
 
-    def __init__(self,id=None,name=None,V0=0,Vr=-50,Vt=-20,R=1,C=1,\
-                 syn_list=None,public=True,input=True):
+    def __init__(self,id=None,name=None,V0=0.,Vr=-0.05,Vt=-0.02,R=1.,C=1.,\
+                 syn_list=None,public=True,input=True,rand=0.):
         self.id = id
         self.name = name
-        self.V = V0
-        self.Vr = Vr
-        self.Vt = Vt
-        self.R = R
-        self.C = C
+        self.V = V0*uniform(1.-rand,1.+rand)
+        self.Vr = Vr*uniform(1.-rand,1.+rand)
+        self.Vt = Vt*uniform(1.-rand,1.+rand)
+        self.R = R*uniform(1.-rand,1.+rand)
+        self.C = C*uniform(1.-rand,1.+rand)
 
         # For GEXF
         self.public = public
@@ -182,7 +179,7 @@ class LeakyIAF:
         """
         self.bh = np.exp( -dt/self.R/self.C )
 
-    def update(self, I_ext=0):
+    def update(self, I_ext=0.):
         """
         Update the neuron state
 
@@ -197,7 +194,7 @@ class LeakyIAF:
         """
 
         # Compute the total external current
-        I_syn = 0
+        I_syn = 0.
         for syn in self.syn_list:
             I_syn += syn.I
         self.I = I_ext + I_syn
@@ -261,12 +258,13 @@ class Glomerulus:
     Glomerulus in the Antenna lobe of Drosophila olfactory system
     """
     def __init__(self,idx=None,name=None,database=None,osn_type=None,\
-                 osn_num=25,pn_num=3):
+                 osn_num=25,pn_num=3,rand=0.):
         self.idx = idx
         self.name = name
         self.osn_type = osn_type
         self.osn_num = osn_num
         self.pn_num = pn_num
+        self.rand = rand
         if database:
             self.setNeuron(database)
 
@@ -294,7 +292,9 @@ class Glomerulus:
                 R=database['pn_para']['R'],
                 C=database['pn_para']['C'],
                 public=True,
-                input=False))
+                input=False,
+                rand=self.rand))
+
         self.osn_list = [] # initialize the osn list
         self.syn_list = []
         for i in xrange(self.osn_num):
@@ -306,7 +306,8 @@ class Glomerulus:
                 R=database['osn_para']['R'],
                 C=C,
                 public=True,
-                input=True))
+                input=True,
+                rand=self.rand))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
@@ -317,7 +318,8 @@ class Glomerulus:
                     ar=database['op_syn_para']['ar'],
                     ad=database['op_syn_para']['ad'],
                     pre_neu=self.osn_list[i],
-                    post_neu=self.pn_list[j]))
+                    post_neu=self.pn_list[j],
+                    rand=self.rand))
                 self.pn_list[j].syn_list.append(self.syn_list[-1])
         return self
 
@@ -345,7 +347,7 @@ class AntennalLobe():
         self.neu_list = None
         self.syn_list = None
 
-    def setGlomeruli(self, anatomy_db=None, odor_db=None, gl_name=None):
+    def setGlomeruli(self, anatomy_db=None, odor_db=None, gl_name=None, rand=0.):
         if anatomy_db is not None: self.anatomy_db = anatomy_db
         if odor_db is not None: self.odor_db = odor_db
         if gl_name is not None: self.gl_name = gl_name
@@ -355,8 +357,8 @@ class AntennalLobe():
             self.gl_list.append( Glomerulus(
                 name=gl,
                 database=self.odor_db,
-                osn_type=self.anatomy_db['gl'][gl]))
-
+                osn_type=self.anatomy_db['gl'][gl],
+                rand=rand))
 
     def setLN():
         pass
@@ -385,7 +387,7 @@ class AntennalLobe():
         if filename is not None:
             with gzip.open(filename, 'w') as f:
                 etree.ElementTree(root).write(f, pretty_print = True,
-                                              xml_declaration = True, encoding="utf-8" )
+                                              xml_declaration = True, encoding="utf-8")
         return root
 
     def _getAllNeuList(self):
