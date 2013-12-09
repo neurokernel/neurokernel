@@ -1472,9 +1472,6 @@ if __name__ == '__main__':
 
     np.random.seed(0)
 
-    port_data = get_random_port()
-    port_ctrl = get_random_port()
-
     class MyModule(BaseModule):
         """
         Example of derived module class.
@@ -1500,13 +1497,13 @@ if __name__ == '__main__':
     logger = setup_logger()
 
     # Set up emulation:
-    man = BaseManager(port_data, port_ctrl)
+    man = BaseManager(get_random_port(), get_random_port())
     man.add_brok()
 
-    m1 = man.add_mod(MyModule(2, 'm1   ', port_data, port_ctrl))
-    m2 = man.add_mod(MyModule(4, 'm2   ', port_data, port_ctrl))
-    m3 = man.add_mod(MyModule(3, 'm3   ', port_data, port_ctrl))
-    m4 = man.add_mod(MyModule(2, 'm4   ', port_data, port_ctrl))
+    m1 = man.add_mod(MyModule(2, 'm1   ', man.port_data, man.port_ctrl))
+    m2 = man.add_mod(MyModule(4, 'm2   ', man.port_data, man.port_ctrl))
+    m3 = man.add_mod(MyModule(3, 'm3   ', man.port_data, man.port_ctrl))
+    m4 = man.add_mod(MyModule(2, 'm4   ', man.port_data, man.port_ctrl))
     
     conn12 = BaseConnectivity(2, 4, 1, m1.id, m2.id)
     conn12[m1.id, :, m2.id, :] = np.ones((2, 4))
