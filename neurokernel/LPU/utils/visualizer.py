@@ -25,6 +25,7 @@ class visualizer(object):
     V.out_filename = 'test.avi'
     V.run()
     """
+    
     def __init__(self):
         self._data = None
         self._xlim = [0,1]
@@ -163,7 +164,11 @@ class visualizer(object):
         if not self._rows*self._cols == num_plots:
             self._cols = int(np.ceil(np.sqrt(num_plots)))
             self._rows = int(np.ceil(num_plots/float(self._cols)))
-        self.f, self.axarr = plt.subplots(self._rows, self._cols, figsize=self._figsize)
+        self.f, self.axarr = plt.subplots(self._rows, self._cols,
+                                          figsize=self._figsize)
+        # Remove unused subplots:
+        for i in xrange(num_plots, self._rows*self._cols):
+            plt.delaxes(self.axarr[np.unravel_index(i, (self._rows, self._cols))])
         cnt = 0
         self.handles = []
         self.types = []
