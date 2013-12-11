@@ -89,7 +89,8 @@ class visualizer(object):
         Thr final frame will be saved to final_frame.png regardless.
         '''
         self._initialize()
-        for i in range(1,self._maxt, self._update_interval):
+        self._t = self._update_interval+1
+        for i in range(self._update_interval,self._maxt, self._update_interval):
             self.update()
         self.f.savefig('final_frame.png', dpi=300)
         if self.out_filename:
@@ -102,14 +103,15 @@ class visualizer(object):
             data = self._data[key]
             for config in configs:
                 if config['type'] == 3:
-                    if len(config['ids'][0])==1:
-                        config['ydata'].extend(np.double(\
-                                        data[config['ids'][0], \
-                                                  max(0,t-self._update_interval):t]))
-                        config['handle'].set_xdata(dt*np.arange(0, t))
-                        config['handle'].set_ydata(np.asarray(config['ydata']))
-                    else:
-                        config['handle'].set_ydata(\
+                    if self._t>1:
+                        if len(config['ids'][0])==1:
+                            config['ydata'].extend(np.double(\
+                                        data[config['ids'][0][0], \
+                                                  int(max(0,t-self._update_interval)):int(t)]))
+                            config['handle'].set_xdata(dt*np.arange(0, t))
+                            config['handle'].set_ydata(np.asarray(config['ydata']))
+                        else:
+                            config['handle'].set_ydata(\
                                         data[config['ids'][0], t])
 
                 elif config['type']==4:
@@ -229,8 +231,8 @@ class visualizer(object):
                     self.axarr[ind].set_ylim(self._ylim)
                     if len(config['ids'][0])==1:
                         config['handle'] = self.axarr[ind].plot([0], \
-                                            [self._data[LPU][config['ids'][0],0]], fmt)[0]
-                        config['ydata'] = [self._data[LPU][config['ids'][0],0]]
+                                            [self._data[LPU][config['ids'][0][0],0]], fmt)[0]
+                        config['ydata'] = [self._data[LPU][config['ids'][0][0],0]]
                     else:
                         config['handle'] = self.axarr[ind].plot(self._data[LPU][config['ids'][0],0])[0]
                         
