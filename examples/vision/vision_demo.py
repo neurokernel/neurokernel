@@ -16,6 +16,7 @@ import networkx as nx
 import neurokernel.core as core
 import neurokernel.base as base
 import neurokernel.tools.graph as graph_tools
+from neurokernel.tools.comm import get_random_port
 
 from neurokernel.LPU.lpu_parser import lpu_parser
 from neurokernel.LPU.LPU_rev import LPU_rev
@@ -29,10 +30,10 @@ parser.add_argument('-l', '--log', default='none', type=str,
                     help='Log output to screen [file, screen, both, or none; default:none]')
 parser.add_argument('-s', '--steps', default=10000, type=int,
                     help='Number of steps [default:10000]')
-parser.add_argument('-d', '--data_port', default=5005, type=int,
-                    help='Data port [default:5005]')
-parser.add_argument('-c', '--ctrl_port', default=5006, type=int,
-                    help='Control port [default:5006]')
+parser.add_argument('-d', '--port_data', default=None, type=int,
+                    help='Data port [default:randomly selected]')
+parser.add_argument('-c', '--port_ctrl', default=None, type=int,
+                    help='Control port [default:randomly selected]')
 parser.add_argument('-a', '--lam_dev', default=0, type=int,
                     help='GPU for lamina lobe [default:0]')
 parser.add_argument('-m', '--med_dev', default=1, type=int,
@@ -52,20 +53,27 @@ if args.log.lower() in ['screen', 'both']:
     screen = True    
 logger = base.setup_logger(file_name, screen)
 
-man = core.Manager(port_data=args.data_port, port_ctrl=args.ctrl_port)
+if args.port_data is None and args.port_ctrl is None:
+    port_data = get_random_port()
+    port_ctrl = get_random_port()
+else:
+    port_data = args.port_data
+    port_ctrl = args.port_ctrl
+
+man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
 (n_dict_lam, s_dict_lam) = lpu_parser('./data/lamina.gexf.gz')
 lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
           input_file='./data/vision_input.h5',
-          output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
-          port_data=man.port_data, device=args.lam_dev, id='lamina')
+          output_file='lamina_output.h5', port_ctrl=port_ctrl,
+          port_data=port_data, device=args.lam_dev, id='lamina')
 man.add_mod(lpu_lam)
 
 (n_dict_med, s_dict_med) = lpu_parser('./data/medulla.gexf.gz')
 lpu_med = LPU(dt, n_dict_med, s_dict_med,
-          output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
-          port_data=man.port_data, device=args.med_dev, id='medulla')
+          output_file='medulla_output.h5', port_ctrl= port_ctrl,
+          port_data=port_data, device=args.med_dev, id='medulla')
 man.add_mod(lpu_med)
 
 g = nx.read_gexf('./data/lamina_medulla.gexf.gz', relabel=True)
