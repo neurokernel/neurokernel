@@ -178,7 +178,7 @@ class LPU(Module):
 
             self.one_time_import = 10
             self.file_pointer = 0
-            self.I_ext = parray.to_gpu(self.input_h5file.root.real.read(\
+            self.I_ext = parray.to_gpu(self.input_h5file.root.array.read(\
                                 self.file_pointer, self.file_pointer + \
                                 self.one_time_import))
             self.file_pointer += self.one_time_import
@@ -676,13 +676,13 @@ n            Need to complete this
             self.num_input * self.synapse_state.dtype.itemsize)
         self.frame_count += 1
         if self.frame_count >= self.one_time_import:
-            h_ext = self.input_h5file.root.real.read(self.file_pointer, self.file_pointer + self.one_time_import)
+            h_ext = self.input_h5file.root.array.read(self.file_pointer, self.file_pointer + self.one_time_import)
             if h_ext.shape[0] == self.I_ext.shape[0]:
                 self.I_ext.set(h_ext)
                 self.file_pointer += self.one_time_import
                 self.frame_count = 0
             else:
-                if self.file_pointer == self.input_h5file.root.real.shape[0]:
+                if self.file_pointer == self.input_h5file.root.array.shape[0]:
                     self.logger.info('Input end of file reached. Behaviour is ' +\
                                     'undefined for subsequent steps')
                     self.input_eof = True
