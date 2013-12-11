@@ -169,7 +169,7 @@ class LPU(Module):
         self._setup_connectivity()
         self._initialize_gpu_ds()
         self._init_objects()
-        self.buffer = circular_array(self.total_gpot_neurons, \
+        self.buffer = circular_array(self.total_gpot_neurons, self.my_num_gpot_neurons,\
                         self.gpot_delay_steps, self.V, \
                         self.total_spike_neurons, self.spike_delay_steps)
 
@@ -271,8 +271,8 @@ class LPU(Module):
     def _setup_connectivity(self):
         n_dict_list = self.n_dict_list
         s_dict_list = self.s_dict_list
-        gpot_delay_steps = 1
-        spike_delay_steps = 1
+        gpot_delay_steps = 0
+        spike_delay_steps = 0
 
 
         order = self.order
@@ -340,10 +340,10 @@ n            Need to complete this
                                 pre/src and post/dest. It need not contain
                                 any items.
                                 '''
-                                s = dict.fromkeys(c.get_dict_params(s_type))
-                                s_id = len(synapse_types)
-                                for key in s.iterkeys():
+                                s = {k:[] for k in c.type_params[s_type]}
+                                for key in ['pre','post','type']:
                                     s[key] = []
+                                s_id = len(synapse_types)
                                 synapse_types.append(s_type)
                                 s_dict_list.append(s)
 
@@ -371,10 +371,10 @@ n            Need to complete this
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
-                                s = dict.fromkeys(c.get_dict_params(s_type))
-                                s_id = len(synapse_types)
-                                for key in s.iterkeys():
+                                s = {k:[] for k in c.type_params[s_type]}
+                                for key in ['pre','post','type']:
                                     s[key] = []
+                                s_id = len(synapse_types)
                                 synapse_types.append(s_type)
                                 s_dict_list.append(s)
 
@@ -409,10 +409,10 @@ n            Need to complete this
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
-                                s = dict.fromkeys(c.get_dict_params(s_type))
-                                s_id = len(synapse_types)
-                                for key in s.iterkeys():
+                                s = {k:[] for k in c.type_params[s_type]}
+                                for key in ['pre','post','type']:
                                     s[key] = []
+                                s_id = len(synapse_types)
                                 synapse_types.append(s_type)
                                 s_dict_list.append(s)
 
@@ -440,7 +440,9 @@ n            Need to complete this
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
-                                s = dict.fromkeys(c.get_dict_params(s_type))
+                                s = {k:[] for k in c.type_params[s_type]}
+                                for key in ['pre','post','type']:
+                                    s[key] = []
                                 s_id = len(synapse_types)
                                 for key in s.iterkeys():
                                     s[key] = []
@@ -595,7 +597,9 @@ n            Need to complete this
                                     len(self.input_neuron_list), np.float64)
         if self.my_num_gpot_neurons>0:
             self.V = garray.zeros(int(self.my_num_gpot_neurons), np.float64)
-
+        else:
+            self.V = None
+        
         if self.my_num_spike_neurons>0:
             self.spike_state = garray.zeros(int(self.my_num_spike_neurons), np.int32)
 
@@ -689,12 +693,12 @@ n            Need to complete this
 
 
     def _update_buffer(self):
-        if self.total_gpot_neurons>0:
+        if self.my_num_gpot_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.gpot_buffer.gpudata) + \
                 self.buffer.gpot_current*self.buffer.gpot_buffer.ld* \
                 self.buffer.gpot_buffer.dtype.itemsize, self.V.gpudata, \
                 self.V.nbytes)
-        if self.total_spike_neurons>0:
+        if self.my_num_spike_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.spike_buffer.gpudata) + \
                 self.buffer.spike_current*self.buffer.spike_buffer.ld* \
                 self.buffer.spike_buffer.dtype.itemsize, self.spike_state.gpudata,\
@@ -796,7 +800,7 @@ class circular_array:
     Please refer the documentation of the template synapse class on information
     on how to access data correctly from this buffer
     '''
-    def __init__(self, num_gpot_neurons, gpot_delay_steps,
+    def __init__(self, num_gpot_neurons, my_num_gpot_neurons, gpot_delay_steps,
                  rest, num_spike_neurons, spike_delay_steps):
 
         self.num_gpot_neurons = num_gpot_neurons
@@ -807,10 +811,11 @@ class circular_array:
 
             self.gpot_current = 0
 
-            for i in range(gpot_delay_steps):
-                cuda.memcpy_dtod(int(self.gpot_buffer.gpudata) + \
-                    self.gpot_buffer.ld * i * self.gpot_buffer.dtype.itemsize,\
-                    rest.gpudata, rest.nbytes)
+            if my_num_gpot_neurons>0:
+                for i in range(gpot_delay_steps):
+                    cuda.memcpy_dtod(int(self.gpot_buffer.gpudata) + \
+                                     self.gpot_buffer.ld * i * self.gpot_buffer.dtype.itemsize,\
+                                     rest.gpudata, rest.nbytes)
 
             self.num_spike_neurons = num_spike_neurons
 

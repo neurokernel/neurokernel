@@ -63,7 +63,7 @@ Hallem06 = {
                  'Or85b':13,'Or85f': 7,'Or88a':26,'Or98a':12},
     'osn_para':{'Vr':-0.07,'Vt':-0.025,'R':1,'C':0.07,'V0':-0.05},
     'pn_para':{'Vr':-0.07,'Vt':-0.025,'R':1,'C':0.07,'V0':-0.05},
-    'op_syn_para':{'gmax':1,'reverse':-0.08,'ar':400.,'ad':400.},
+    'op_syn_para':{'gmax':0.005,'reverse':0.,'ar':400.,'ad':100.},
     'type':'osn_spike_rate'
     }
 
@@ -155,11 +155,11 @@ class LeakyIAF:
                  syn_list=None,public=True,input=True,rand=0.):
         self.id = id
         self.name = name
-        self.V = V0*uniform(1.-rand,1.+rand)
         self.Vr = Vr*uniform(1.-rand,1.+rand)
         self.Vt = Vt*uniform(1.-rand,1.+rand)
         self.R = R*uniform(1.-rand,1.+rand)
         self.C = C*uniform(1.-rand,1.+rand)
+        self.V = uniform(self.Vr,self.Vt)
 
         # For GEXF
         self.public = public
@@ -228,12 +228,12 @@ class LeakyIAF:
         node = etree.SubElement( etree_element, "node", id=str(self.id) )
         attr = etree.SubElement( node, "attvalues" )
         etree.SubElement(attr,"attvalue",attrib={"for":"0","value":"LeakyIAF"})
-        for i,att in enumerate( ("name","Vr","Vt","R","C") ):
+        for i,att in enumerate( ("name","V","Vr","Vt","R","C") ):
             etree.SubElement( attr, "attvalue",\
                 attrib={"for":str(i+1), "value":str(getattr(self,att)) })
-        etree.SubElement( attr, "attvalue", attrib={"for":"6", "value":"true" })
-        etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" if self.public else "false" })
-        etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.input else "false" })
+        etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
+        etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
+        etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.input else "false" })
 
     @staticmethod
     def getGEXFattr(etree_element):
@@ -246,12 +246,12 @@ class LeakyIAF:
         etree.SubElement( def_type, "default" ).text = "LeakyIAF"
         etree.SubElement( etree_element, "attribute",\
             id="1", type="string", title="name" )
-        for (i,attr) in enumerate( ("Vr","Vt","R","C") ):
+        for (i,attr) in enumerate( ("V","Vr","Vt","R","C") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+2), type="float", title=attr )
         for (i,attr) in enumerate( ("spiking","public","input") ):
             etree.SubElement( etree_element, "attribute",\
-                id=str(i+6), type="boolean", title=attr )
+                id=str(i+7), type="boolean", title=attr )
 
 class Glomerulus:
     """
@@ -277,7 +277,7 @@ class Glomerulus:
         if len(osn) > 0:
             rate = database['osn_rate'][osn[0]]
             self.osn_type = osn[0]
-            C = 1/rate   #TODO
+            C = 1./rate/database['osn_para']['C']/np.log(database['osn_para']['Vr']/database['osn_para']['Vt'])
         else:
             self.osn_type = 'default'
             C = database['osn_para']['C']

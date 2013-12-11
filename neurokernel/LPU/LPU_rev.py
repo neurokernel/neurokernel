@@ -394,8 +394,8 @@ class LPU_rev(Module):
                                 v.append( c.get(other_lpu, pre_type,  pre_id,
                                                 self.id, post_type, post_id,
                                                 conn=conn, param=k) )
-        gpot_delay_steps = 1
-        spike_delay_steps = 1
+        gpot_delay_steps = 0
+        spike_delay_steps = 0
 
 
         order = self.order
@@ -677,7 +677,8 @@ class LPU_rev(Module):
         if self.total_spike_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.spike_buffer.gpudata) + \
                 self.buffer.spike_current*self.buffer.spike_buffer.ld* \
-                self.buffer.spike_buffer.dtype.itemsize, self.spike_state.gpudata,\
+                self.buffer.spike_buffer.dtype.itemsize,
+                self.spike_state.gpudata,\
                 int(self.spike_state.dtype.itemsize*self.my_num_spike_neurons))
 
 
