@@ -143,17 +143,15 @@ if __name__ == '__main__':
     twiggy.emitters['*'] = twiggy.filters.Emitter(twiggy.levels.DEBUG,
                                                   True, output)
 
-    PORT_CTRL = 6001
     zmq_ctx = zmq.Context()
     sock = zmq_ctx.socket(zmq.ROUTER)
-    sock.bind('tcp://*:%i' % PORT_CTRL)
+    port_ctrl = sock.bind_to_random_port('tcp://*')
 
     # Protect both the child and parent processes from being clobbered by
     # Ctrl-C:
     with IgnoreKeyboardInterrupt():
-        p = ControlledProcess(PORT_CTRL, signal.SIGUSR1, 'mymod')
+        p = ControlledProcess(port_ctrl, signal.SIGUSR1, 'mymod')
         p.start()
 
         time.sleep(3)
         sock.send_multipart([p.id, 'quit'])   
-

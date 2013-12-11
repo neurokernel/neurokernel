@@ -29,7 +29,7 @@ import msgpack_numpy as msgpack
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from tools.comm import is_poll_in
+from tools.comm import is_poll_in, get_random_port
 from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
@@ -1471,14 +1471,13 @@ if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix
 
     np.random.seed(0)
-    
+
     class MyModule(BaseModule):
         """
         Example of derived module class.
         """
 
-        def __init__(self, N, id, port_data=PORT_DATA,
-                     port_ctrl=PORT_CTRL):
+        def __init__(self, N, id, port_data=PORT_DATA, port_ctrl=PORT_CTRL):                     
             super(MyModule, self).__init__(port_data, port_ctrl)
             self.data = np.zeros(N, np.float64)
             
@@ -1498,13 +1497,13 @@ if __name__ == '__main__':
     logger = setup_logger()
 
     # Set up emulation:
-    man = BaseManager()
+    man = BaseManager(get_random_port(), get_random_port())
     man.add_brok()
 
-    m1 = man.add_mod(MyModule(2, 'm1   '))
-    m2 = man.add_mod(MyModule(4, 'm2   '))
-    m3 = man.add_mod(MyModule(3, 'm3   '))
-    m4 = man.add_mod(MyModule(2, 'm4   '))
+    m1 = man.add_mod(MyModule(2, 'm1   ', man.port_data, man.port_ctrl))
+    m2 = man.add_mod(MyModule(4, 'm2   ', man.port_data, man.port_ctrl))
+    m3 = man.add_mod(MyModule(3, 'm3   ', man.port_data, man.port_ctrl))
+    m4 = man.add_mod(MyModule(2, 'm4   ', man.port_data, man.port_ctrl))
     
     conn12 = BaseConnectivity(2, 4, 1, m1.id, m2.id)
     conn12[m1.id, :, m2.id, :] = np.ones((2, 4))

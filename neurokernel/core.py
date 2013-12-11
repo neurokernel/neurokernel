@@ -18,6 +18,7 @@ import base
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 from tools.misc import rand_bin_matrix, catch_exception
+from tools.comm import get_random_port
         
 class IntervalIndex(object):
     """
@@ -905,7 +906,7 @@ if __name__ == '__main__':
             
     logger = base.setup_logger()
 
-    man = Manager()
+    man = Manager(get_random_port(), get_random_port())
     man.add_brok()
 
     N1_gpot = N1_spike = 1
