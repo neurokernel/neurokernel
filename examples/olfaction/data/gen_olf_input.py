@@ -23,6 +23,6 @@ u       = np.concatenate((u_off, u_reset, u_on, u_reset, u_off, u_reset, u_on))
 u_all   = np.transpose(np.kron(np.ones((osn_num, 1)), u))
 
 with h5py.File('olfactory_input.h5', 'w') as f:
-    f.create_dataset('real', (Nt, osn_num),
+    f.create_dataset('array', (Nt, osn_num),
                      dtype=np.float64,
                      data=u_all)
