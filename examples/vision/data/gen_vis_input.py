@@ -26,4 +26,4 @@ for i in xrange(11000):
 A = S.reshape((n_row*n_col, 11000), order='F')
 A = np.tile(A, [6, 1]).T
 with h5py.File('vision_input.h5', 'w') as f:
-    f.create_dataset('real', A.shape, dtype=A.dtype, data=A)
+    f.create_dataset('array', A.shape, dtype=A.dtype, data=A)
