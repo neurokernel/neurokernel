@@ -39,6 +39,7 @@ V.add_plot(conf_med, 'medulla', 'T5a')
 
 V.rows = 1
 V.cols = 4
+V.fontsize = 22
 V.update_interval = 50
 V.out_filename = 'vision_output.avi'
 V.codec = 'libtheora'

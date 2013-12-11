@@ -45,6 +45,7 @@ class visualizer(object):
         self._rows = 0
         self._cols = 0
         self._figsize = (16,9)
+        self._fontsize = 18
         self._t = 1
         self._dt = 1
         self._data = {}
@@ -112,7 +113,7 @@ class visualizer(object):
         func = getattr(obj, 'set_'+name, None)
         if func:
             try:
-                func(value, fontsize=18, weight='bold')
+                func(value, fontsize=self._fontsize, weight='bold')
             except:
                 try:
                     func(value)
@@ -217,11 +218,12 @@ class visualizer(object):
                     config['handle'] = self.axarr[ind]
                     config['handle'].vlines(0, 0, 0.01)
                     config['handle'].set_ylim([.5, len(config['ids'][0]) + .5])
-                    config['handle'].set_ylabel('Neurons', fontsize=17, weight='bold')
-                    config['handle'].set_xlabel('Time',fontsize=17, weight='bold')
+                    config['handle'].set_ylabel('Neurons',
+                                                fontsize=self._fontsize-1, weight='bold')
+                    config['handle'].set_xlabel('Time',fontsize=self._fontsize-1, weight='bold')
                     config['handle'].set_xlim([0,len(self._data[LPU][config['ids'][0][0],:])*self._dt])
                     config['handle'].axes.set_yticks([])
-                    config['handle'].axes.set_xticks([])                
+                    config['handle'].axes.set_xticks([])
                 for key in config.iterkeys():
                     if key not in keywds:
                         try:
@@ -237,8 +239,10 @@ class visualizer(object):
                     config['handle'].axes.set_yticks([])
 
             if self.suptitle is not None:
-                self.f.suptitle(self._title, fontsize=19, x=0.5,y=0.03, weight='bold')
-                     
+                self.f.suptitle(self._title, fontsize=self._fontsize+1, x=0.5,y=0.03, weight='bold')
+
+        plt.tight_layout()
+
         if self.out_filename:
             self.writer = FFMpegFileWriter(fps=self.fps, codec=self.codec)
             self.writer.setup(self.f, self.out_filename, dpi=80)
@@ -320,7 +324,7 @@ class visualizer(object):
                 config['title'] = "{0} - {1}".format(str(LPU),str(names[0]))
             else:
                 config['title'] = str(LPU)
-                
+
     def close(self):
         self.writer.finish()
 
@@ -397,6 +401,13 @@ class visualizer(object):
     def figsize(self, value):
         assert(isinstance(value, tuple) and len(value)==2)
         self._figsize = value
+
+    @property
+    def fontsize(self): return self._fontsize
+
+    @fontsize.setter
+    def fontsize(self, value):
+        self._fontsize = value
 
     @property
     def suptitle(self): return self._title
