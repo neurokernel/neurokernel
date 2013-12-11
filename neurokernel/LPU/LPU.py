@@ -271,8 +271,8 @@ class LPU(Module):
     def _setup_connectivity(self):
         n_dict_list = self.n_dict_list
         s_dict_list = self.s_dict_list
-        gpot_delay_steps = 1
-        spike_delay_steps = 1
+        gpot_delay_steps = 0
+        spike_delay_steps = 0
 
 
         order = self.order
