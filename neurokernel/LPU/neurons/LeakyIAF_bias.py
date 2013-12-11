@@ -25,27 +25,32 @@ __global__ void leaky_iaf(
     int bid = blockIdx.x;
     int nid = bid * NNEU + threadIdx.x;
 
-    %(type)s v,i,r,c,b;
+    %(type)s v,i,r,c,b,vr,vt;
+    int spked = 0;
 
     if( nid < neu_num ){
-        v = V[nid];
-        i = I[nid];
         r = R[nid];
         c = C[nid];
-        b = B[nid];
-
         // update v
         %(type)s bh = exp( -dt/r/c );
-        v = v*bh + r*(i+b)*(1.0-bh);
+        
+        v = V[nid];
+        i = I[nid];
+        b = B[nid];
+        vr = Vr[nid];
+        
+        v = v*bh + (r*(i+b)+vr)*(1.0-bh);
  
         // spike detection
-        spk[nid] = 0;
-        if( v >= Vt[nid] ){
-            v = Vr[nid];
-            spk[nid] = 1;
+        vt = Vt[nid];
+        
+        if( v >= vt ){
+            v = vr;
+            spked = 1;
         }
 
         V[nid] = v;
+        spk[nid] = spked;
     }
     return;
 }
@@ -62,7 +67,7 @@ class LeakyIAF_bias(BaseNeuron):
         self.Vt  = garray.to_gpu( np.asarray( n_dict['Vt'], dtype=np.float64 ))
         self.C   = garray.to_gpu( np.asarray( n_dict['C'], dtype=np.float64 ))
         self.R   = garray.to_gpu( np.asarray( n_dict['R'], dtype=np.float64 ))
-        self.V   = garray.to_gpu( np.asarray( n_dict['Vr'], dtype=np.float64 ))
+        self.V   = garray.to_gpu( np.asarray( n_dict['V'], dtype=np.float64 ))
         self.b   = garray.to_gpu( np.asarray( n_dict['b'], dtype=np.float64 ))
         self.spk = spk
 
