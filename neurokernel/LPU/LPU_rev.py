@@ -586,7 +586,8 @@ class LPU_rev(Module):
             self._extract_gpot = self._extract_projection_gpot_func()
 
         if len(self.public_spike_list)>0:
-            self.public_spike_list_g = garray.to_gpu(self.public_spike_list-self.spike_shift)
+            self.public_spike_list_g = garray.to_gpu( \
+                (self.public_spike_list-self.spike_shift).astype(np.int32))
             self.projection_spike = garray.zeros(len(self.public_spike_list), np.int32)
             self._extract_spike = self._extract_projection_spike_func()
 
