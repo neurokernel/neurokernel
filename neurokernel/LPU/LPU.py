@@ -634,7 +634,7 @@ n            Need to complete this
         for i, sparse_spike in enumerate(in_spike_dict.itervalues()):
             if self.num_input_spike_neurons[i] > 0:
                 full_spike = np.zeros(num_input_spike_neurons[i],dtype=np.int32)
-                if len(full_spike)>0:
+                if len(sparse_spike)>0:
                     idx = np.asarray([self.input_spike_idx_map[i][k] \
                                       for k in sparse_spike], dtype=np.int32)
                     full_spike[idx] = 1
