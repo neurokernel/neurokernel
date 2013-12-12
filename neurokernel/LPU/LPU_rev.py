@@ -417,13 +417,15 @@ class LPU_rev(Module):
             self.num_input_spike_neurons = []
             self.virtual_gpot_idx = []
             self.virtual_spike_idx = []
-
+            self.input_spike_idx_map = []
+            
             tmp1 = np.sum(self.num_gpot_neurons)
             tmp2 = np.sum(self.num_spike_neurons)
 
 
 
             for i,c in enumerate(self._conn_dict.itervalues()):
+                self.input_spike_idx_map.append({})
                 other_lpu = c.B_id if self.id == c.A_id else c.A_id
                 # parse synapse with gpot pre-synaptic neuron
                 pre_gpot = c.src_idx(other_lpu, self.id, src_type='gpot')
@@ -444,6 +446,9 @@ class LPU_rev(Module):
                 self.virtual_spike_idx.append(np.arange(tmp2,tmp2+\
                      self.num_input_spike_neurons[-1]).astype(np.int32))
                 tmp2 += self.num_input_spike_neurons[-1]
+
+                for j,pre in enumerate(pre_spike):
+                    self.input_spike_idx_map[i][pre] = j
 
                 parse_interLPU_syn( pre_spike, 'spike', 'gpot' )
                 parse_interLPU_syn( pre_spike, 'spike', 'spike' )
@@ -602,12 +607,18 @@ class LPU_rev(Module):
 
 
         #Will need to change this if only spike indexes are transmitted
-        for i, spike_data in enumerate(in_spike_dict.itervalues()):
+        for i, sparse_spike in enumerate(in_spike_dict.itervalues()):
             if self.num_input_spike_neurons[i] > 0:
+                full_spike = np.zeros(num_input_spike_neurons[i],dtype=np.int32)
+                if len(sparse_spike)>0:
+                    idx = np.asarray([self.input_spike_idx_map[i][k] \
+                                      for k in sparse_spike], dtype=np.int32)
+                    full_spike[idx] = 1
+                
                 cuda.memcpy_htod(int(int(self.buffer.spike_buffer.gpudata) \
                     +(self.buffer.spike_current * self.buffer.spike_buffer.ld \
                     + self.my_num_spike_neurons + self.cum_virtual_spike_neurons[i]) \
-                    * self.buffer.spike_buffer.dtype.itemsize), spike_data)
+                    * self.buffer.spike_buffer.dtype.itemsize), full_spike)
 
 
     def _extract_output(self, out_gpot, out_spike, st=None):

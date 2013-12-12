@@ -300,7 +300,7 @@ n            Need to complete this
             num_input_spike_neurons = []
             self.virtual_gpot_idx = []
             self.virtual_spike_idx = []
-
+            self.input_spike_idx_map = []
             tmp1 = np.sum(self.num_gpot_neurons)
             tmp2 = np.sum(self.num_spike_neurons)
 
@@ -318,6 +318,7 @@ n            Need to complete this
                                     num_input_gpot_neurons[-1]).astype(np.int32))
                 tmp1 += num_input_gpot_neurons[-1]
 
+                self.input_spike_idx_map.append({})
                 for j,pre_id in enumerate(pre_gpot):
                     pre_id = int(pre_id)
                     post_idx = c.dest_idx(other_lpu, self.id, \
@@ -396,6 +397,7 @@ n            Need to complete this
 
                 for j,pre_id in enumerate(pre_spike):
                     pre_id = int(pre_id)
+                    self.input_spike_idx_map[i][pre_id] = j
                     post_idx = c.dest_idx(other_lpu, self.id, \
                                           'spike', 'gpot', src_ports=int(pre_id))
                     for post_id in post_idx:
@@ -620,6 +622,7 @@ n            Need to complete this
         Put inputs from other LPUs to buffer.
 
         """
+        num_input_spike_neurons = np.diff(self.cum_virtual_spike_neurons)
         for i, gpot_data in enumerate(in_gpot_dict.itervalues()):
             if self.num_input_gpot_neurons[i] > 0:
                 cuda.memcpy_htod(int(int(self.buffer.gpot_buffer.gpudata) \
@@ -628,13 +631,17 @@ n            Need to complete this
                     * self.buffer.gpot_buffer.dtype.itemsize), gpot_data)
 
 
-        #Will need to change this if only spike indexes are transmitted
-        for i, spike_data in enumerate(in_spike_dict.itervalues()):
+        for i, sparse_spike in enumerate(in_spike_dict.itervalues()):
             if self.num_input_spike_neurons[i] > 0:
+                full_spike = np.zeros(num_input_spike_neurons[i],dtype=np.int32)
+                if len(full_spike)>0:
+                    idx = np.asarray([self.input_spike_idx_map[i][k] \
+                                      for k in sparse_spike], dtype=np.int32)
+                    full_spike[idx] = 1
                 cuda.memcpy_htod(int(int(self.buffer.spike_buffer.gpudata) \
-                    +(self.buffer.spike_current * self.buffer.spike_buffer.ld \
-                    + self.my_num_spike_neurons + self.cum_virtual_spike_neurons[i]) \
-                    * self.buffer.spike_buffer.dtype.itemsize), spike_data)
+                            +(self.buffer.spike_current * self.buffer.spike_buffer.ld \
+                            + self.my_num_spike_neurons + self.cum_virtual_spike_neurons[i]) \
+                            * self.buffer.spike_buffer.dtype.itemsize), full_spike)
 
 
 
