@@ -80,7 +80,10 @@ class visualizer(object):
         if gexf_file:
             self._graph[LPU] = nx.read_gexf(gexf_file)
         else:
-            LPU = 'input'
+            if LPU:
+                LPU = 'input_' + str(LPU)
+            else:
+                LPU = 'input_' + str(len(self._data))
         if not LPU:
             LPU = len(self._data)
         self._data[LPU] = np.transpose(sio.read_array(data_file))
@@ -169,7 +172,7 @@ class visualizer(object):
                     else:
                         raise ValueError('Plot type not supported')
                 else:
-                    if LPU=='input' or not self._graph[LPU][str(config['ids'][0])]['spiking']:
+                    if str(LPU).startswith('input') or not self._graph[LPU][str(config['ids'][0])]['spiking']:
                         config['type'] = 2
                     else:
                         config['type'] = 4
@@ -308,7 +311,7 @@ class visualizer(object):
             self._config[LPU] = []
         if 'ids' in config:
             self._config[LPU].append(config)
-        elif LPU=='input':
+        elif str(LPU).startswith('input'):
             config['ids'] = [range(0, self._data['input'].shape[0])]
             self._config[LPU].append(config)
         else:
@@ -323,7 +326,10 @@ class visualizer(object):
             if names[0]:
                 config['title'] = "{0} - {1}".format(str(LPU),str(names[0]))
             else:
-                config['title'] = str(LPU)
+                if str(LPU).startswith('input_'):
+                    config['title'] = LPU.split('_',1)[1] + ' - ' + 'Input'
+                else:
+                    config['title'] = str(LPU)
 
     def close(self):
         self.writer.finish()
