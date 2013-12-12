@@ -312,7 +312,7 @@ class visualizer(object):
         if 'ids' in config:
             self._config[LPU].append(config)
         elif str(LPU).startswith('input'):
-            config['ids'] = [range(0, self._data['input'].shape[0])]
+            config['ids'] = {0:[range(0, self._data['input'].shape[0])]}
             self._config[LPU].append(config)
         else:
             config['ids'] = {}
