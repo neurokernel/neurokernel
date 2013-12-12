@@ -210,9 +210,9 @@ class LPU_rev(Module):
         self.my_num_spike_neurons = sum( self.num_spike_neurons )
         self.gpot_idx = n_id[ ~n_is_spk ]
         self.spike_idx = n_id[ n_is_spk ]
-        self.order = np.argsort( np.concatenate( (self.gpot_idx, self.spike_idx )) )
-        self.gpot_order = np.argsort( self.gpot_idx )
-        self.spike_order = np.argsort( self.spike_idx )
+        self.order = np.argsort( np.concatenate((self.gpot_idx, self.spike_idx ))).astype(np.int32)
+        self.gpot_order = np.argsort( self.gpot_idx ).astype(np.int32)
+        self.spike_order = np.argsort( self.spike_idx ).astype(np.int32)
         self.spike_shift = self.my_num_gpot_neurons
         self.input_neuron_list = self.order[ n_id[ n_has_in ] ]
         self.public_spike_list = self.order[ n_id[ n_is_pub & n_is_spk ] ]
@@ -483,7 +483,7 @@ class LPU_rev(Module):
         self.s_list = self.s_dict.items()
         num_synapses = [ len(s['id']) for t,s in self.s_list ]
         for (t,s) in self.s_list:
-            order = np.argsort(s['post'])
+            order = np.argsort(s['post']).astype(np.int32)
             for k,v in s.items():
                 v = np.asarray(v)[order]
             if s['conductance'][0]:

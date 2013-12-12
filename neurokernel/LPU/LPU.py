@@ -110,8 +110,8 @@ class LPU(Module):
 
         self.order = np.argsort(np.concatenate((np.asarray(self.gpot_idx), \
                         np.asarray(self.spike_idx)))).astype(np.int32)
-        self.gpot_order = np.argsort(np.asarray(self.gpot_idx, dtype=np.int32))
-        self.spike_order = np.argsort(np.asarray(self.spike_idx, dtype=np.int32))
+        self.gpot_order = np.argsort(np.asarray(self.gpot_idx)).astype(np.int32)
+        self.spike_order = np.argsort(np.asarray(self.spike_idx)).astype(np.int32)
         # Would be better to  use IntervalIndex here instead
         self.spike_shift = np.sum(self.num_gpot_neurons)
 
