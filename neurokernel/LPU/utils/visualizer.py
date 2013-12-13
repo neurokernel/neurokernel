@@ -262,9 +262,9 @@ class visualizer(object):
             for config in configs:
                 if config['type'] == 3:
                     if len(config['ids'][0])==1:
-                        config['ydata'].extend(np.double(\
+                        config['ydata'].extend(np.reshape(np.double(\
                                         data[config['ids'][0], \
-                                                  max(0,t-self._update_interval):t]))
+                                                  max(0,t-self._update_interval):t]),(-1,)))
                         config['handle'].set_xdata(dt*np.arange(0, t))
                         config['handle'].set_ydata(np.asarray(config['ydata']))
                     else:
@@ -312,7 +312,7 @@ class visualizer(object):
         if 'ids' in config:
             self._config[LPU].append(config)
         elif str(LPU).startswith('input'):
-            config['ids'] = {0:[range(0, self._data['input'].shape[0])]}
+            config['ids'] = [range(0, self._data[LPU].shape[0])]
             self._config[LPU].append(config)
         else:
             config['ids'] = {}
