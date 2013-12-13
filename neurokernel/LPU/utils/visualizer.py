@@ -10,6 +10,7 @@ from matplotlib.animation import FFMpegWriter, FFMpegFileWriter
 from matplotlib.colors import hsv_to_rgb
 import networkx as nx
 import simpleio as sio
+from collections import OrderedDict
 
 class visualizer(object):
     """
@@ -41,7 +42,7 @@ class visualizer(object):
         self._out_file = None
         self._fps = 5
         self._codec = 'h264'
-        self._config = {};
+        self._config = OrderedDict()
         self._rows = 0
         self._cols = 0
         self._figsize = (16,9)
