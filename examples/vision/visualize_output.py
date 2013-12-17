@@ -4,6 +4,8 @@
 Visualize vision model output.
 """
 
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 import neurokernel.LPU.utils.visualizer as vis
 
@@ -11,7 +13,7 @@ V = vis.visualizer()
 
 conf_input = {}
 conf_input['type'] = 'image'
-conf_input['clim'] = [0, 0.5]
+conf_input['clim'] = [0, 0.02]
 conf_input['ids'] = [range(32*24)]
 conf_input['shape'] = [32, 24]
 
@@ -20,12 +22,12 @@ V.add_plot(conf_input, 'input_Vision')
 
 conf_lam_R1 = {}
 conf_lam_R1['type'] = 'image'
-conf_lam_R1['clim'] = [-0.55,-0.2]
+conf_lam_R1['clim'] = [-0.055,-0.02]
 conf_lam_R1['shape'] = [32, 24]
 
 conf_lam_L1 = {}
 conf_lam_L1['type'] = 'image'
-conf_lam_L1['clim'] = [-0.52,-0.51]
+conf_lam_L1['clim'] = [-0.053,-0.047]
 conf_lam_L1['shape'] = [32, 24]
 
 V.add_LPU('lamina_output_gpot.h5', './data/lamina.gexf.gz', 'Lamina')
@@ -33,6 +35,7 @@ V.add_plot(conf_lam_R1, 'Lamina', 'R1')
 V.add_plot(conf_lam_L1, 'Lamina', 'L1')
 
 conf_med = conf_lam_L1.copy()
+conf_med['clim'] = [-0.052, -0.050]
 
 V.add_LPU('medulla_output_gpot.h5', './data/medulla.gexf.gz', 'Medulla')
 V.add_plot(conf_med, 'Medulla', 'T5a')

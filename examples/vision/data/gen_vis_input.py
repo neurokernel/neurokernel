@@ -12,13 +12,13 @@ n_row = 24
 
 dt = 1e-4
 a = np.zeros(11000, np.float64)
-a[0:2000] = 0.16
-a[6000:8000] = 0.16
+a[2000:4000] = 0.016
+a[6000:8000] = 0.016
 
 S = np.zeros((n_row, n_col, 11000), np.float64)
 for i in xrange(11000):
     if a[i] != 0:
-        c = np.sign(np.sin(8*np.arange(32)*np.pi/180+16*np.pi*i*dt))
+        c = (np.sign(np.sin(8*np.arange(32)*np.pi/180+16*np.pi*i*dt))+1)/2
         I = np.tile(c, [n_row, 1])
         b = I*a[i]
         S[:, :, i] = b
