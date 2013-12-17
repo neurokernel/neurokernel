@@ -46,9 +46,9 @@ class MorrisLecar(BaseNeuron):
     #define NNEU %(nneu)d //NROW * NCOL
 
 
-    #define V_L (-0.5)
-    #define V_Ca 1.0
-    #define V_K (-0.7)
+    #define V_L (-0.05)
+    #define V_Ca 0.1
+    #define V_K (-0.07)
     #define g_Ca 1.1
     #define g_K 2.0
     #define g_L 0.5
