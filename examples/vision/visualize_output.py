@@ -30,9 +30,9 @@ conf_lam_L1['type'] = 'image'
 conf_lam_L1['clim'] = [-0.053,-0.047]
 conf_lam_L1['shape'] = [32, 24]
 
-V.add_LPU('lamina_output_gpot.h5', './data/lamina.gexf.gz', 'Lamina')
-V.add_plot(conf_lam_R1, 'Lamina', 'R1')
-V.add_plot(conf_lam_L1, 'Lamina', 'L1')
+V.add_LPU('lamina_output_gpot.h5', './data/lamina.gexf.gz', 'Ret/Lam')
+V.add_plot(conf_lam_R1, 'Ret/Lam', 'R1')
+V.add_plot(conf_lam_L1, 'Ret/Lam', 'L1')
 
 conf_med = conf_lam_L1.copy()
 conf_med['clim'] = [-0.052, -0.050]

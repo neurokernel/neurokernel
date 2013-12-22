@@ -30,7 +30,6 @@ V.fontsize = 18
 V.out_filename = 'output_int_1.avi'
 V.codec = 'libtheora'
 V.dt = 0.0001
-V.suptitle = 'Integration of LPUs'
 V.xlim = [0,1.4]
 V.run()
 
