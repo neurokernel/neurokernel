@@ -134,7 +134,7 @@ class AlphaSynapse:
         generate GXEF attributes
         """
         def_type = etree.SubElement( etree_element, "attribute",\
-                       id="0", type="string", title="type" )
+                       id="0", type="string", title="model" )
         etree.SubElement( def_type, "default" ).text = "AlphaSynapse"
         etree.SubElement( etree_element, "attribute",\
             id="1", type="string", title="name" )
@@ -242,7 +242,7 @@ class LeakyIAF:
 
         """
         def_type = etree.SubElement( etree_element, "attribute",\
-                       id="0", type="string", title="type" )
+                       id="0", type="string", title="model" )
         etree.SubElement( def_type, "default" ).text = "LeakyIAF"
         etree.SubElement( etree_element, "attribute",\
             id="1", type="string", title="name" )
