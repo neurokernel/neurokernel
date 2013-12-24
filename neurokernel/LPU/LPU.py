@@ -373,7 +373,7 @@ n            Need to complete this
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
                                 s = {k:[] for k in c.type_params[s_type]}
-                                for key in ['pre','post','type']:
+                                for key in ['pre','post','model']:
                                     s[key] = []
                                 s_id = len(synapse_types)
                                 synapse_types.append(s_type)

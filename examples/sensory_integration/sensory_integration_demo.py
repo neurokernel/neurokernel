@@ -116,7 +116,7 @@ med_id = 'medulla'
 al_id = 'antennallobe'
 
 
-alphasynapse_type_params = {0: ['reverse', 'gmax', 
+alphasynapse_type_params = {0: ['reverse', 'gmax',
                                              'id', 'ar', 'ad', 'class','conductance']}
 power_gpot_type_params = {1: ['id','class','slope','threshold','power',\
                                          'saturation','delay','reverse','conductance']}
@@ -129,7 +129,7 @@ for id, i in enumerate(range(N_med_gpot-8,N_med_gpot)):
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8] = 1
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'id'] = id
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'name'] = 'med_int_%s_%s' % (i, i)
-    conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'type'] = 1
+    conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'model'] = 1
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'class'] = 2
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'conductance'] = True
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'slope'] = 4e9
@@ -139,7 +139,7 @@ for id, i in enumerate(range(N_med_gpot-8,N_med_gpot)):
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'delay'] = 1
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'reverse'] = -0.015
 
-    
+
 man.connect(lpu_med, lpu_int, conn_med_int)
 
 
@@ -152,7 +152,7 @@ for id, (i, j) in enumerate(itertools.product(xrange(1501,1504),
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j] = 1
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'id'] = id
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'name'] = 'al_int_%s_%s' % (i, j*3+i-1501)
-    conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'type'] = 0
+    conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'model'] = 0
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'class'] = 0
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'ar'] = 1.1*100
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'ad'] = 0.19*1000
