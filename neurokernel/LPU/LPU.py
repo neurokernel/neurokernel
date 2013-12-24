@@ -91,13 +91,13 @@ class LPU(Module):
         for n_dict in n_dict_list:
             if n_dict['spiking'][0]:
                 self.num_gpot_neurons.append(0)
-                self.num_spike_neurons.append(len(n_dict['type']))
+                self.num_spike_neurons.append(len(n_dict['model']))
                 self.spike_idx.extend(n_dict['id'])
                 idx = np.asarray(n_dict['id'])[np.where(np.asarray(\
                     n_dict['public'], dtype=bool) == True)]
                 self.public_spike_list.extend(idx.flatten())
             else:
-                self.num_gpot_neurons.append(len(n_dict['type']))
+                self.num_gpot_neurons.append(len(n_dict['model']))
                 self.num_spike_neurons.append(0)
                 self.gpot_idx.extend(n_dict['id'])
                 idx = np.asarray(n_dict['id'])[np.where(np.asarray(\
@@ -139,7 +139,7 @@ class LPU(Module):
             s_dict['pre'] = s_dict['pre'].tolist()
             s_dict['post'] = s_dict['post'].tolist()
 
-            self.synapse_types.append(s_dict['type'][0])
+            self.synapse_types.append(s_dict['model'][0])
 
         self.my_num_gpot_neurons = np.sum(self.num_gpot_neurons, dtype=np.int32)
         self.my_num_spike_neurons = np.sum(self.num_spike_neurons, dtype=np.int32)
@@ -330,7 +330,7 @@ n            Need to complete this
                         for conn in range(num_syn):
                             s_type = c.get(other_lpu, 'gpot', pre_id, self.id,
                                            'gpot', post_id, conn=conn,
-                                           param='type')
+                                           param='model')
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
@@ -342,7 +342,7 @@ n            Need to complete this
                                 any items.
                                 '''
                                 s = {k:[] for k in c.type_params[s_type]}
-                                for key in ['pre','post','type']:
+                                for key in ['pre','post','model']:
                                     s[key] = []
                                 s_id = len(synapse_types)
                                 synapse_types.append(s_type)
@@ -368,7 +368,7 @@ n            Need to complete this
                         for conn in range(num_syn):
                             s_type = c.get(other_lpu, 'gpot', pre_id,  self.id,
                                            'spike', post_id, conn=conn,
-                                           param='type')
+                                           param='model')
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
@@ -407,12 +407,12 @@ n            Need to complete this
                         for conn in range(num_syn):
                             s_type = c.get(other_lpu, 'spike', pre_id, self.id,
                                            'gpot', post_id, conn=conn,
-                                           param='type')
+                                           param='model')
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
                                 s = {k:[] for k in c.type_params[s_type]}
-                                for key in ['pre','post','type']:
+                                for key in ['pre','post','model']:
                                     s[key] = []
                                 s_id = len(synapse_types)
                                 synapse_types.append(s_type)
@@ -438,12 +438,12 @@ n            Need to complete this
                         for conn in range(num_syn):
                             s_type = c.get(other_lpu, 'spike', pre_id, self.id,
                                            'spike', post_id, conn=conn,
-                                           param='type')
+                                           param='model')
                             try:
                                 s_id = synapse_types.index(s_type)
                             except ValueError:
                                 s = {k:[] for k in c.type_params[s_type]}
-                                for key in ['pre','post','type']:
+                                for key in ['pre','post','model']:
                                     s[key] = []
                                 s_id = len(synapse_types)
                                 for key in s.iterkeys():
@@ -497,7 +497,7 @@ n            Need to complete this
 
 
         for s_dict in s_dict_list:
-            num_synapses.append(len(s_dict['type']))
+            num_synapses.append(len(s_dict['model']))
             order1 = np.argsort(s_dict['post'])
             for key in s_dict.iterkeys():
                 s_dict[key] = np.asarray(s_dict[key])[order1]
@@ -768,7 +768,7 @@ n            Need to complete this
 
     def _instantiate_neuron(self, i):
         n_dict = self.n_dict_list[i]
-        ind = int(n_dict['type'][0])
+        ind = int(n_dict['model'][0])
         if n_dict['spiking'][0]:
             neuron = self._neuron_classes[ind](n_dict, int(int(self.spike_state.gpudata) + \
                         self.spike_state.dtype.itemsize*self.idx_start_spike[i]), \
@@ -787,7 +787,7 @@ n            Need to complete this
 
     def _instantiate_synapse(self, i):
         s_dict = self.s_dict_list[i]
-        ind = int(s_dict['type'][0])
+        ind = int(s_dict['model'][0])
         return self._synapse_classes[ind](s_dict, int(int(self.synapse_state.gpudata) + \
                 self.synapse_state.dtype.itemsize*self.idx_start_synapse[i]), \
                 self.dt, debug=self.debug)

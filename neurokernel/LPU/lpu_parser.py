@@ -48,13 +48,13 @@ def lpu_parser(filename):
     1. Each node(neuron) in the graph should necessarily have
        a boolean attribute called 'spiking' indicating whether the neuron is
        spiking or graded potential.
-    2. Each node should have an integer attribute called 'type' indicating
+    2. Each node should have an integer attribute called 'model' indicating
        the model to be used for that neuron( Eg:- IAF, Morris-Lecar).
        Refer the documentation of LPU.neurons.BaseNeuron to implement
        custom neuron models.
     3. The attributes of the nodes should be consistent across all nodes
-       of the same type. For example if a particular node of type 'IAF'
-       has attribute 'bias', all nodes of type 'IAF' must necessarily
+       of the same model. For example if a particular node of model 'IAF'
+       has attribute 'bias', all nodes of model 'IAF' must necessarily
        have this attribute.
     4. Each node should have an boolean attribute called public - indicating
        whether that neuron either recieves input or provides output to
@@ -67,12 +67,12 @@ def lpu_parser(filename):
           1. spike-gpot synapse
           2. gpot-spike synapse
           3. gpot-gpot synapse
-    7. Each edge should have an integer attribute called 'type' indicating
+    7. Each edge should have an integer attribute called 'model' indicating
        the model to be used for that synapse( Eg:- alpha).
        Refer the documentation of LPU.synapses.BaseSynapse to implement
        custom synapse models.
     8. The attributes of the nodes should be consistent across all nodes
-       of the same type.
+       of the same model.
     9. Each edge should have a boolean attribute called 'conductance'
        representing whether it's output is a conductance or current.
     10.For all edges with the 'conductance' attribute true, there should
@@ -84,19 +84,19 @@ def lpu_parser(filename):
     Need to add code to assert all conditions mentioned above are met
     '''
     graph = nx.read_gexf(filename)
-    types = []
+    models = []
     n_dict_list = []
     neurons = graph.node
     if len(neurons) > 0:
         for i in range(len(neurons)):
-            if not str(neurons[str(i)]['type']) in types:
+            if not str(neurons[str(i)]['model']) in models:
                 n_dict = dict.fromkeys(neurons[str(i)])
                 for key in n_dict.iterkeys():
                     n_dict[key] = list()
                 n_dict['id'] = list()
                 n_dict_list.append(n_dict)
-                types.append(str(neurons[str(i)]['type']))
-            ind = types.index(str(neurons[str(i)]['type']))
+                models.append(str(neurons[str(i)]['model']))
+            ind = models.index(str(neurons[str(i)]['model']))
             for key in neurons[str(i)].iterkeys():
                 n_dict_list[ind][key].append(neurons[str(i)][key])
             n_dict_list[ind]['id'].append(i)
@@ -104,22 +104,22 @@ def lpu_parser(filename):
         n_dict_list = None
 
     synapses = graph.edges(data=True)
-    types = []
+    models = []
     s_dict_list = []
     synapses.sort(cmp=synapse_cmp)
     if len(synapses) > 0:
 
 
         for i in range(len(synapses)):
-            if not str(synapses[i][2]['type']) in types:
+            if not str(synapses[i][2]['model']) in models:
                 s_dict = dict.fromkeys(synapses[i][2])
                 for key in s_dict.viewkeys():
                     s_dict[key] = list()
                 s_dict['post'] = list()
                 s_dict['pre'] = list()
                 s_dict_list.append(s_dict)
-                types.append(str(synapses[i][2]['type']))
-            ind = types.index(str(synapses[i][2]['type']))
+                models.append(str(synapses[i][2]['model']))
+            ind = models.index(str(synapses[i][2]['model']))
             s_dict_list[ind]['pre'].append(synapses[i][0])
             s_dict_list[ind]['post'].append(synapses[i][1])
             for key in synapses[i][2].viewkeys():
