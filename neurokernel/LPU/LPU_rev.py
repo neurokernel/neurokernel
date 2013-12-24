@@ -49,15 +49,15 @@ class LPU_rev(Module):
         Returns
         -------
         n_dict : dict of dict of neuron
-            The outer dict maps each neuron type to an inner dict which maps
+            The outer dict maps each neuron model to an inner dict which maps
             each attibutes of such neuron, ex. V1, to a list of data.
 
             ex. {'LeakyIAF':{'Vr':[...],'Vt':[...]},
                 'MorrisLecar':{'V1':[...],'V2':[...]}}
 
         s_dict : dict of dict of synapse
-            The outer dict maps each synapse type to an inner dict which maps
-            each attribute of such synapse type to a list of data.
+            The outer dict maps each synapse model to an inner dict which maps
+            each attribute of such synapse model to a list of data.
 
         Notes
         -----
@@ -65,13 +65,13 @@ class LPU_rev(Module):
         1. Each node(neuron) in the graph should necessarily have a boolean
            attribute called 'spiking' indicating whether the neuron is spiking
            or graded potential.
-        2. Each node should have an integer attribute called 'type' indicating
+        2. Each node should have an integer attribute called 'model' indicating
            the model to be used for that neuron( Eg:- IAF, Morris-Lecar).
            Refer the documentation of LPU.neurons.BaseNeuron to implement
            custom neuron models.
         3. The attributes of the nodes should be consistent across all nodes
-           of the same type. For example if a particular node of type 'IAF'
-           has attribute 'bias', all nodes of type 'IAF' must necessarily
+           of the same model. For example if a particular node of model 'IAF'
+           has attribute 'bias', all nodes of model 'IAF' must necessarily
            have this attribute.
         4. Each node should have an boolean attribute called 'public',
            indicating whether that neuron either recieves input or provides
@@ -84,7 +84,7 @@ class LPU_rev(Module):
             1. spike-gpot synapse
             2. gpot-spike synapse
             3. gpot-gpot synapse
-        7. Each edge should have an integer attribute called 'type' indicating
+        7. Each edge should have an integer attribute called 'model' indicating
            the model to be used for that synapse( Eg:- alpha). Refer the
            documentation of LPU.synapses.BaseSynapse to implement custom
            synapse models.
@@ -107,16 +107,16 @@ class LPU_rev(Module):
         neurons = graph.node.items()
         neurons.sort( cmp=neuron_cmp  )
         for id, neu in neurons:
-            type = neu['type']
-            # if the neuron type does not appear before, add the type into n_dict
-            if type not in n_dict:
-                n_dict[type] = { k:[] for k in neu.keys()+['id'] }
+            model = neu['model']
+            # if the neuron model does not appear before, add it into n_dict
+            if model not in n_dict:
+                n_dict[model] = { k:[] for k in neu.keys()+['id'] }
             # add neuron data into the subdictionary of n_dict
             for key in neu.iterkeys():
-                n_dict[type][key].append( neu[key] )
-            n_dict[type]['id'].append( id ) # id is a string in GXEF
-        # remove duplicate type information
-        for val in n_dict.itervalues(): val.pop('type')
+                n_dict[model][key].append( neu[key] )
+            n_dict[model]['id'].append( id ) # id is a string in GXEF
+        # remove duplicate model information
+        for val in n_dict.itervalues(): val.pop('model')
         if not n_dict: n_dict = None
 
         # parse synapse data
@@ -125,17 +125,17 @@ class LPU_rev(Module):
         synapses.sort(cmp=synapse_cmp)
         for syn in synapses:
             # syn[0/1]: pre-/post-neu id; syn[2]: dict of synaptic data
-            type = syn[2]['type']
+            model = syn[2]['model']
             syn[2]['id'] = int( syn[2]['id'] )
-            # if the sysnapse type does not apear before, add it into s_dict
-            if type not in s_dict:
-                s_dict[type] = { k:[] for k in syn[2].keys()+['pre','post'] }
+            # if the sysnapse model does not apear before, add it into s_dict
+            if model not in s_dict:
+                s_dict[model] = { k:[] for k in syn[2].keys()+['pre','post'] }
             # add sysnaptic data into the subdictionary of s_dict
             for key in syn[2].iterkeys():
-                s_dict[type][key].append( syn[2][key] )
-            s_dict[type]['pre'].append( syn[0] )
-            s_dict[type]['post'].append( syn[1] )
-        for val in s_dict.itervalues(): val.pop('type')
+                s_dict[model][key].append( syn[2][key] )
+            s_dict[model]['pre'].append( syn[0] )
+            s_dict[model]['post'].append( syn[1] )
+        for val in s_dict.itervalues(): val.pop('model')
         if not s_dict: s_dict = {}
         return n_dict, s_dict
 
@@ -153,10 +153,10 @@ class LPU_rev(Module):
             one time step.
         n_dict_list : list of dictionaries
             a list of dictionaries describing the neurons in this LPU - one
-        dictionary for each type of neuron.
+        dictionary for each model of neuron.
             s_dict_list : list of dictionaries
         a list of dictionaries describing the synapses in this LPU - one
-            for each type of synapse.
+            for each model of synapse.
         input_file : string
             path and name of the input video file
         output_file : string
@@ -196,16 +196,16 @@ class LPU_rev(Module):
 
         #TODO: comment
         self.n_list = n_dict.items()
-        n_type_is_spk = [ n['spiking'][0] for t,n in self.n_list ]
-        n_type_num = [ len(n['id']) for t,n in self.n_list ]
+        n_model_is_spk = [ n['spiking'][0] for t,n in self.n_list ]
+        n_model_num = [ len(n['id']) for t,n in self.n_list ]
         n_id = np.array(sum( [ n['id'] for t,n in self.n_list ], []), dtype=np.int32)
         n_is_spk = np.array(sum( [ n['spiking'] for t,n in self.n_list ], []))
         n_is_pub = np.array(sum( [ n['public'] for t,n in self.n_list ], []))
         n_has_in = np.array(sum( [ n['input'] for t,n in self.n_list ], []))
 
         #TODO: comment
-        self.num_gpot_neurons = np.where( n_type_is_spk, 0, n_type_num)
-        self.num_spike_neurons = np.where( n_type_is_spk, n_type_num, 0)
+        self.num_gpot_neurons = np.where( n_model_is_spk, 0, n_model_num)
+        self.num_spike_neurons = np.where( n_model_is_spk, n_model_num, 0)
         self.my_num_gpot_neurons = sum( self.num_gpot_neurons )
         self.my_num_spike_neurons = sum( self.num_spike_neurons )
         self.gpot_idx = n_id[ ~n_is_spk ]
@@ -357,42 +357,41 @@ class LPU_rev(Module):
 
     def _setup_connectivity(self):
 
-        def parse_interLPU_syn( pre_neu, pre_type, post_type ):
+        def parse_interLPU_syn( pre_neu, pre_model, post_model ):
             """
             Insert parameters for synapses between neurons in this LPU and other LPUs.
             """
 
             #import ipdb; ipdb.set_trace()
-            virtual_id = self.virtual_gpot_idx[-1] if pre_type=='gpot' else self.virtual_spike_idx[-1]
-            public_id = self.public_gpot_list if post_type=='gpot' else self.public_spike_list
+            virtual_id = self.virtual_gpot_idx[-1] if pre_model=='gpot' else self.virtual_spike_idx[-1]
+            public_id = self.public_gpot_list if post_model=='gpot' else self.public_spike_list
             for j, pre in enumerate( pre_neu ):
                 pre_id = int(pre)
-                post_neu = c.dest_idx(other_lpu, self.id, pre_type, post_type, src_ports=pre_id)
+                post_neu = c.dest_idx(other_lpu, self.id, pre_model, post_model, src_ports=pre_id)
                 for post in post_neu:
                     post_id = int(post)
-                    num_syn = c.multapses( other_lpu,  pre_type,  pre_id,
-                                            self.id, post_type, post_id)
+                    num_syn = c.multapses( other_lpu,  pre_model,  pre_id,
+                                            self.id, post_model, post_id)
                     for conn in range(num_syn):
 
-                        # Get names of parameters associated with connection type:
-                        s_type = c.get( other_lpu, pre_type, pre_id,
-                                        self.id, post_type, post_id,
-                                        conn=conn, param='type')
-                        if s_type not in self.s_dict:
-#                            s = { k:[] for k in c.get_dict_params(s_type).keys() }
-#                            self.s_dict.update( {s_type:s} )
-                            s = { k:[] for k in c.type_params[s_type] }
-                            self.s_dict.update( {s_type:s} )
-                        if not self.s_dict[s_type].has_key('pre'):
-                            self.s_dict[s_type]['pre'] = []
-                        if not self.s_dict[s_type].has_key('post'):
-                            self.s_dict[s_type]['post'] = []
-                        self.s_dict[s_type]['pre'].append( virtual_id[j] )
-                        self.s_dict[s_type]['post'].append( public_id[post_id] )
-                        for k,v in self.s_dict[s_type].items():
+                        # Get names of parameters associated with connection
+                        # model:
+                        s_model = c.get( other_lpu, pre_model, pre_id,
+                                        self.id, post_model, post_id,
+                                        conn=conn, param='model')
+                        if s_model not in self.s_dict:
+                            s = { k:[] for k in c.type_params[s_model] }
+                            self.s_dict.update( {s_model:s} )
+                        if not self.s_dict[s_model].has_key('pre'):
+                            self.s_dict[s_model]['pre'] = []
+                        if not self.s_dict[s_model].has_key('post'):
+                            self.s_dict[s_model]['post'] = []
+                        self.s_dict[s_model]['pre'].append( virtual_id[j] )
+                        self.s_dict[s_model]['post'].append( public_id[post_id] )
+                        for k,v in self.s_dict[s_model].items():
                             if k!='pre' and k!='post':
-                                v.append( c.get(other_lpu, pre_type,  pre_id,
-                                                self.id, post_type, post_id,
+                                v.append( c.get(other_lpu, pre_model,  pre_id,
+                                                self.id, post_model, post_id,
                                                 conn=conn, param=k) )
         gpot_delay_steps = 0
         spike_delay_steps = 0
@@ -418,10 +417,9 @@ class LPU_rev(Module):
             self.virtual_gpot_idx = []
             self.virtual_spike_idx = []
             self.input_spike_idx_map = []
-            
+
             tmp1 = np.sum(self.num_gpot_neurons)
             tmp2 = np.sum(self.num_spike_neurons)
-
 
 
             for i,c in enumerate(self._conn_dict.itervalues()):
@@ -569,7 +567,7 @@ class LPU_rev(Module):
         """
         Setup GPU arrays.
         """
-        
+
         self.synapse_state = garray.zeros(int(self.total_synapses) + \
                                     len(self.input_neuron_list), np.float64)
         if self.my_num_gpot_neurons>0:
@@ -615,7 +613,7 @@ class LPU_rev(Module):
                     idx = np.asarray([self.input_spike_idx_map[i][k] \
                                       for k in sparse_spike], dtype=np.int32)
                     full_spike[idx] = 1
-                
+
                 cuda.memcpy_htod(int(int(self.buffer.spike_buffer.gpudata) \
                     +(self.buffer.spike_current * self.buffer.spike_buffer.ld \
                     + self.my_num_spike_neurons + self.cum_virtual_spike_neurons[i]) \
@@ -628,7 +626,7 @@ class LPU_rev(Module):
         the following kernel calls are not made as all the GPU data will have to be
         transferred to the CPU anyways.
         """
-        
+
         if self.num_public_gpot>0:
             self._extract_gpot.prepared_async_call(\
                 self.grid_extract_gpot, self.block_extract, st, self.V.gpudata, \
@@ -651,7 +649,7 @@ class LPU_rev(Module):
         """
         Save neuron states or spikes to output file.
         """
-        
+
         if self.my_num_gpot_neurons>0:
             self.output_gpot_file.root.array.append(self.V.get()\
                 [self.gpot_order].reshape((1,-1)))
@@ -752,7 +750,7 @@ class LPU_rev(Module):
             ind = self._neuron_names.index(t)
             #ind = int(t)
         except:
-            self.logger.info('Error instantiating neurons of type ' + t )
+            self.logger.info('Error instantiating neurons of model ' + t )
             return []
 
         if n['spiking'][0]:
@@ -777,7 +775,7 @@ class LPU_rev(Module):
             ind = self._synapse_names.index( t )
             # ind = int(t)
         except:
-            self.logger.info('Error instantiating synapses of type ' + t )
+            self.logger.info('Error instantiating synapses of model ' + t )
             return []
 
         return self._synapse_classes[ind](s, int(int(self.synapse_state.gpudata) + \
