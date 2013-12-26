@@ -68,6 +68,7 @@ if __name__ == "__main__":
         install_requires = [
             'bidict',
             'bottleneck',
+            'h5py',
             'la',
             'msgpack_numpy',
             'networkx',
