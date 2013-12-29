@@ -1,5 +1,8 @@
 
 import numpy as np
+import matplotlib as mpl
+mpl.use('agg')
+
 import neurokernel.LPU.utils.visualizer as vis
 import networkx as nx
 
