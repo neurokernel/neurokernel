@@ -5,7 +5,8 @@ Generic LPU demo
 
 Notes
 -----
-
+Generate input file and LPU configuration by running
+./data/gen_generic_lpu.py
 """
 
 import argparse
@@ -32,8 +33,8 @@ parser.add_argument('-d', '--port_data', default=None, type=int,
                     help='Data port [default:randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default:randomly selected]')
-parser.add_argument('-a', '--al_dev', default=0, type=int,
-                    help='GPU for antennal lobe [default:0]')
+parser.add_argument('-g', '--gpu_dev', default=0, type=int,
+                    help='GPU device number [default:0]')
 args = parser.parse_args()
 
 dt = 1e-4
@@ -64,7 +65,7 @@ ge = LPU_rev(dt, n_dict, s_dict,
              input_file='./data/generic_input.h5',
              output_file='generic_output.h5', port_ctrl=port_ctrl,
              port_data=port_data,
-             device=args.al_dev, id='ge',
+             device=args.gpu_dev, id='ge',
              debug=args.debug)
 man.add_mod(ge)
 
