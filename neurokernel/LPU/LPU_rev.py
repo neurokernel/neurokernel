@@ -62,7 +62,7 @@ class LPU_rev(Module):
         Notes
         -----
 
-        1. Each node(neuron) in the graph should necessarily have a boolean
+        1. Each node (neuron) in the graph should necessarily have a boolean
            attribute called 'spiking' indicating whether the neuron is spiking
            or graded potential.
         2. Each node should have an integer attribute called 'model' indicating
@@ -74,23 +74,23 @@ class LPU_rev(Module):
            has attribute 'bias', all nodes of model 'IAF' must necessarily
            have this attribute.
         4. Each node should have an boolean attribute called 'public',
-           indicating whether that neuron either recieves input or provides
+           indicating whether that neuron either receives input or provides
            output to other LPUs.
         5. Each node should have an boolean attribute called 'input' indicating
            whether the neuron accepts external input from a file.
-        6. Each edge(synapse) in the graph should have an integer attribute
+        6. Each edge (synapse) in the graph should have an integer attribute
            called 'class' which should be one of the following values.
             0. spike-spike synapse
             1. spike-gpot synapse
             2. gpot-spike synapse
             3. gpot-gpot synapse
         7. Each edge should have an integer attribute called 'model' indicating
-           the model to be used for that synapse( Eg:- alpha). Refer the
+           the model to be used for that synapse(e.g, alpha). Refer to the
            documentation of LPU.synapses.BaseSynapse to implement custom
            synapse models.
         8. Each edge should have a boolean attribute called 'conductance'
-           representing whether it's output is a conductance or current.
-        10.For all edges with the 'conductance' attribute true, there should
+           representing whether its output is a conductance or current.
+        10.For all edges with the 'conductance' attribute set to True, there should
            be an attribute called 'reverse'
 
         TODO
