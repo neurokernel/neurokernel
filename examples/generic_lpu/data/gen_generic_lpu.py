@@ -56,8 +56,8 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                     'n_dendrites': 1}
             idx += 1
 
-    for r, (i, j) in zip((0.5, 0.1, 0.1),
-                         ((0, 1), (0, 2), (1, 2))):
+    for r, (i, j) in zip((0.5, 0.1, 0.1, 0.3),
+                         ((0, 1), (0, 2), (1, 2), (2,1))):
         src_off = sum(neu_num[0:i])
         tar_off = sum(neu_num[0:j])
         for src,tar in product( range( src_off, src_off+neu_num[i]),
