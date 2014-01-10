@@ -134,8 +134,6 @@ if __name__ == '__main__':
         lpu_file_name = sys.argv[1] 
         in_file_name = sys.argv[2]
 
-    random.seed(20131224)
-
     dt = 1e-4
     dur = 1.0
     start = 0.3
