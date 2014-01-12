@@ -225,7 +225,7 @@ class visualizer(object):
                     config['handle'].set_ylim([.5, len(config['ids'][0]) + .5])
                     config['handle'].set_ylabel('Neurons',
                                                 fontsize=self._fontsize-1, weight='bold')
-                    config['handle'].set_xlabel('Time',fontsize=self._fontsize-1, weight='bold')
+                    config['handle'].set_xlabel('Time (s)',fontsize=self._fontsize-1, weight='bold')
                     config['handle'].set_xlim([0,len(self._data[LPU][config['ids'][0][0],:])*self._dt])
                     config['handle'].axes.set_yticks([])
                     config['handle'].axes.set_xticks([])
