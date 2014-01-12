@@ -11,6 +11,7 @@ from matplotlib.colors import hsv_to_rgb
 import networkx as nx
 import simpleio as sio
 from collections import OrderedDict
+import os
 
 class visualizer(object):
     """
@@ -249,7 +250,12 @@ class visualizer(object):
 
         if self.out_filename:
             self.writer = FFMpegFileWriter(fps=self.fps, codec=self.codec)
-            self.writer.setup(self.f, self.out_filename, dpi=80)
+
+            # Use the output file to determine the name of the temporary frame
+            # files so that two concurrently run visualizations don't clobber
+            # each other's frames:
+            self.writer.setup(self.f, self.out_filename, dpi=80,
+                              frame_prefix=os.path.splitext(self.out_filename)[0]+'_')
             self.writer.frame_format = 'png'
             self.writer.grab_frame()
         else:
@@ -311,6 +317,7 @@ class visualizer(object):
         if not LPU in self._config:
             self._config[LPU] = []
         if 'ids' in config:
+            # XXX should check whether the specified ids are within range
             self._config[LPU].append(config)
         elif str(LPU).startswith('input'):
             config['ids'] = [range(0, self._data[LPU].shape[0])]
