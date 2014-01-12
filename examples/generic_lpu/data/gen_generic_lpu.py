@@ -127,13 +127,18 @@ def create_input(file_name, N_sensory, dt=1e-4, dur=1.0, start=0.3, stop=0.6, I_
                          data=I)
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        lpu_file_name = 'generic_lpu.gexf.gz'
-        in_file_name = 'generic_input.h5'        
-    else:
-        lpu_file_name = sys.argv[1] 
-        in_file_name = sys.argv[2]
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('lpu_file_name', default='generic_lpu.gexf.gz',
+                        help='LPU file name')
+    parser.add_argument('in_file_name', default='generic_input.h5',
+                        help='Input file name')
+    parser.add_argument('-s', type=int,
+                        help='Seed random number generator')
+    args = parser.parse_args()
 
+    if args.s is not None:
+        np.random.seed(args.s)
     dt = 1e-4
     dur = 1.0
     start = 0.3
@@ -141,5 +146,5 @@ if __name__ == '__main__':
     I_max = 0.6
     neu_num = [np.random.randint(30, 41) for i in xrange(3)]
 
-    create_input(in_file_name, neu_num[0], dt, dur, start, stop, I_max)
-    create_lpu(lpu_file_name, *neu_num)
+    create_input(args.in_file_name, neu_num[0], dt, dur, start, stop, I_max)
+    create_lpu(args.lpu_file_name, *neu_num)
