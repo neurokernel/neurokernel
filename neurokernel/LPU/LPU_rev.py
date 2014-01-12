@@ -101,7 +101,7 @@ class LPU_rev(Module):
 
         # parse the GEXF file using networkX
         graph = nx.read_gexf(filename)
-
+        
         # parse neuron data
         n_dict = {}
         neurons = graph.node.items()
@@ -608,7 +608,7 @@ class LPU_rev(Module):
         #Will need to change this if only spike indexes are transmitted
         for i, sparse_spike in enumerate(in_spike_dict.itervalues()):
             if self.num_input_spike_neurons[i] > 0:
-                full_spike = np.zeros(num_input_spike_neurons[i],dtype=np.int32)
+                full_spike = np.zeros(self.num_input_spike_neurons[i],dtype=np.int32)
                 if len(sparse_spike)>0:
                     idx = np.asarray([self.input_spike_idx_map[i][k] \
                                       for k in sparse_spike], dtype=np.int32)
@@ -750,7 +750,7 @@ class LPU_rev(Module):
             ind = self._neuron_names.index(t)
             #ind = int(t)
         except:
-            self.logger.info('Error instantiating neurons of model ' + t )
+            self.logger.info('Error instantiating neurons of model \'%s\'' % t)
             return []
 
         if n['spiking'][0]:
@@ -775,7 +775,7 @@ class LPU_rev(Module):
             ind = self._synapse_names.index( t )
             # ind = int(t)
         except:
-            self.logger.info('Error instantiating synapses of model ' + t )
+            self.logger.info('Error instantiating synapses of model \'%s\'' % t)
             return []
 
         return self._synapse_classes[ind](s, int(int(self.synapse_state.gpudata) + \
@@ -846,7 +846,8 @@ class circular_array:
                 self.spike_current = 0
 
     def update_other_rest(self, gpot_data, my_num_gpot_neurons, num_virtual_gpot_neurons):
-        if self.num_gpot_neurons > 0:
+        # ??? is the second part of the below condition correct?
+        if self.num_gpot_neurons > 0 and num_virtual_gpot_neurons > 0:            
             d_other_rest = garray.zeros(num_virtual_gpot_neurons, np.double)
             a = 0
             for data in gpot_data.itervalues():
