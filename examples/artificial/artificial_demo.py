@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
 """
-Generic LPU demo
+Artificial LPU demo
 
 Notes
 -----
 Generate input file and LPU configuration by running
-./data/gen_generic_lpu.py
+
+cd data
+python gen_artificial_lpu.py
 """
 
 import argparse
@@ -59,11 +61,11 @@ else:
 man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
-(n_dict, s_dict) = LPU_rev.lpu_parser('./data/generic_lpu.gexf.gz')
+(n_dict, s_dict) = LPU_rev.lpu_parser('./data/artificial_lpu.gexf.gz')
 
 ge = LPU_rev(dt, n_dict, s_dict,
-             input_file='./data/generic_input.h5',
-             output_file='generic_output.h5', port_ctrl=port_ctrl,
+             input_file='./data/artificial_input.h5',
+             output_file='artificial_output.h5', port_ctrl=port_ctrl,
              port_data=port_data,
              device=args.gpu_dev, id='ge',
              debug=args.debug)

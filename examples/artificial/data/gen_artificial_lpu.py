@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Create GEXF file detailing generic lpu.
+Create artificial LPU and simple pulse input signal.
 """
 
 from itertools import product
@@ -13,9 +13,9 @@ import h5py
 import networkx as nx
 
 def create_lpu(file_name, N_sensory, N_local, N_output):
-    
+
     # Set numbers of neurons:
-    neu_type = ('sensory', 'local', 'output')    
+    neu_type = ('sensory', 'local', 'output')
     neu_num = (N_sensory, N_local, N_output)
 
     G = nx.DiGraph()
@@ -91,12 +91,12 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
 
 def create_input(file_name, N_sensory, dt=1e-4, dur=1.0, start=0.3, stop=0.6, I_max=0.6):
     """
-    Create input stimulus for sensory neurons in generic LPU.
+    Create input stimulus for sensory neurons in artificial LPU.
 
     Creates an HDF5 file containing input signals for the specified number of
     neurons. The signals consist of a rectangular pulse of specified duration
     and magnitude.
-    
+
     Parameters
     ----------
     file_name : str
@@ -112,9 +112,9 @@ def create_input(file_name, N_sensory, dt=1e-4, dur=1.0, start=0.3, stop=0.6, I_
     stop : float
         Stop time of signal pulse.
     I_max : float
-        Pulse magnitude.  
+        Pulse magnitude.
     """
-    
+
     Nt = int(dur/dt)
     t  = np.arange(0, dt*Nt, dt)
 
@@ -129,9 +129,9 @@ def create_input(file_name, N_sensory, dt=1e-4, dur=1.0, start=0.3, stop=0.6, I_
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('lpu_file_name', default='generic_lpu.gexf.gz',
+    parser.add_argument('lpu_file_name', nargs='?', default='artificial_lpu.gexf.gz',
                         help='LPU file name')
-    parser.add_argument('in_file_name', default='generic_input.h5',
+    parser.add_argument('in_file_name', nargs='?', default='artificial_input.h5',
                         help='Input file name')
     parser.add_argument('-s', type=int,
                         help='Seed random number generator')
