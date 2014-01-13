@@ -9,7 +9,7 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="1005.5464"
+   width="1271.925"
    height="766.67987"
    id="svg3521"
    version="1.1"
@@ -530,7 +530,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.70710678"
-     inkscape:cx="375.17611"
+     inkscape:cx="493.73431"
      inkscape:cy="368.28202"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
@@ -539,9 +539,9 @@
      showguides="true"
      inkscape:guide-bbox="true"
      showborder="true"
-     inkscape:window-width="1050"
-     inkscape:window-height="1583"
-     inkscape:window-x="0"
+     inkscape:window-width="1920"
+     inkscape:window-height="981"
+     inkscape:window-x="1600"
      inkscape:window-y="25"
      inkscape:window-maximized="1"
      fit-margin-left="5"
@@ -555,31 +555,31 @@
        visible="true"
        enabled="true"
        snapvisiblegridlinesonly="true"
-       originx="312.6px"
+       originx="431.1582px"
        originy="274.13988px" />
     <sodipodi:guide
        orientation="0,1"
-       position="732.6,274.13988"
+       position="851.1582,274.13988"
        id="guide3531" />
     <sodipodi:guide
        orientation="1,0"
-       position="292.6,874.13988"
+       position="411.1582,874.13988"
        id="guide3533" />
     <sodipodi:guide
        orientation="1,0"
-       position="612.6,814.13988"
+       position="731.1582,814.13988"
        id="guide3850" />
     <sodipodi:guide
        orientation="0,1"
-       position="392.6,614.13988"
+       position="511.1582,614.13988"
        id="guide3852" />
     <sodipodi:guide
        orientation="0,1"
-       position="492.6,454.13988"
+       position="611.1582,454.13988"
        id="guide6096" />
     <sodipodi:guide
        orientation="0,1"
-       position="432.6,714.13988"
+       position="551.1582,714.13988"
        id="guide6098" />
   </sodipodi:namedview>
   <metadata
@@ -590,7 +590,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -598,7 +598,7 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(312.6,-559.82219)">
+     transform="translate(431.1582,-559.82219)">
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:6;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0;filter:url(#filter5524)"
        id="rect7165"
@@ -1139,5 +1139,27 @@
          id="tspan4537-6"
          x="276.93396"
          y="1144.5316">Inter-LPU Synapses</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:30px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans;-inkscape-font-specification:Sans Bold"
+       x="777.23169"
+       y="761.98822"
+       id="text3176"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3178"
+         x="777.23169"
+         y="761.98822">Output</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:30px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans;-inkscape-font-specification:Sans Bold"
+       x="-384"
+       y="760.36218"
+       id="text3180"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3182"
+         x="-384"
+         y="760.36218">Input</tspan></text>
   </g>
 </svg>
