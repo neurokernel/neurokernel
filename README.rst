@@ -16,6 +16,11 @@ installed; once you do, run the following to install the latest code::
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
 
+If you have all of the requirements listed in ``INSTALL.rst`` installed, you can
+also install the downloaded code using the usual::
+
+  python setup.py install
+
 Check out the demos in ``neurokernel/examples`` subdirectory and 
 their corresponding `IPython notebooks <http://ipython.org/notebook.html>`_ 
 in ``neurokernel/notebooks``.
