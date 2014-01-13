@@ -68,6 +68,7 @@ if __name__ == "__main__":
         install_requires = [
             'bidict',
             #'bottleneck', # temporarily disable - see bottleneck issue 78
+            'futures',
             'h5py',
             'la',
             'msgpack_numpy',
