@@ -39,7 +39,7 @@ NAMESPACE_PACKAGES = ['neurokernel']
 PACKAGES =           find_packages()
 
 if __name__ == "__main__":
-    if os.path.exists('MANIFEST'): 
+    if os.path.exists('MANIFEST'):
         os.remove('MANIFEST')
 
     # This enables the installation of neurokernel/__init__.py as a data
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         include_package_data = True,
         install_requires = [
             'bidict',
-            'bottleneck',
+            #'bottleneck', # temporarily disable - see bottleneck issue 78
             'h5py',
             'la',
             'msgpack_numpy',
