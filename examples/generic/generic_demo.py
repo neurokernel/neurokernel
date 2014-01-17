@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
 """
-Artificial LPU demo
+Generic LPU demo
 
 Notes
 -----
 Generate input file and LPU configuration by running
 
 cd data
-python gen_artificial_lpu.py
+python gen_generic_lpu.py
 """
 
 import argparse
