@@ -1,1 +1,0 @@
-../../artificial/data/gen_artificial_lpu.py

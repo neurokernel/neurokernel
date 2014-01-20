@@ -8,8 +8,8 @@ Notes
 Generate input files and LPU configurations by running
 
 cd data
-python gen_artificial_lpu.py -s 0 artificial_lpu_0.gexf.gz artificial_input_0.h5
-python gen_artificial_lpu.py -s 1 artificial_lpu_1.gexf.gz artificial_input_1.h5
+python gen_generic_lpu.py -s 0 generic_lpu_0.gexf.gz generic_input_0.h5
+python gen_generic_lpu.py -s 1 generic_lpu_1.gexf.gz generic_input_1.h5
 """
 
 import argparse
@@ -67,25 +67,25 @@ def run(connected):
     man = core.Manager(port_data, port_ctrl)
     man.add_brok()
 
-    lpu_file_0 = './data/artificial_lpu_0.gexf.gz'
-    lpu_file_1 = './data/artificial_lpu_1.gexf.gz'
+    lpu_file_0 = './data/generic_lpu_0.gexf.gz'
+    lpu_file_1 = './data/generic_lpu_1.gexf.gz'
     (n_dict_0, s_dict_0) = LPU_rev.lpu_parser(lpu_file_0)
     (n_dict_1, s_dict_1) = LPU_rev.lpu_parser(lpu_file_1)
 
     ge_0_id = 'ge_0'
     ge_0 = LPU_rev(dt, n_dict_0, s_dict_0,
-                   input_file='./data/artificial_input_0.h5',
-                   output_file='artificial_output_0_%s.h5' % out_name,
-                   port_ctrl=port_ctrl, port_data=port_data,               
+                   input_file='./data/generic_input_0.h5',
+                   output_file='generic_output_0_%s.h5' % out_name,
+                   port_ctrl=port_ctrl, port_data=port_data,
                    device=args.gpu_dev[0], id=ge_0_id,
                    debug=args.debug)
     man.add_mod(ge_0)
 
     ge_1_id = 'ge_1'
     ge_1 = LPU_rev(dt, n_dict_1, s_dict_1,
-                   input_file='./data/artificial_input_1.h5',
-                   output_file='artificial_output_1_%s.h5' % out_name,
-                   port_ctrl=port_ctrl, port_data=port_data,               
+                   input_file='./data/generic_input_1.h5',
+                   output_file='generic_output_1_%s.h5' % out_name,
+                   port_ctrl=port_ctrl, port_data=port_data,
                    device=args.gpu_dev[1], id=ge_1_id,
                    debug=args.debug)
     man.add_mod(ge_1)
@@ -125,6 +125,6 @@ def run(connected):
     man.start(steps=args.steps)
     man.stop()
 
-with futures.ProcessPoolExecutor() as executor:    
+with futures.ProcessPoolExecutor() as executor:
     for connected in [False, True]:
         executor.submit(run, connected)
