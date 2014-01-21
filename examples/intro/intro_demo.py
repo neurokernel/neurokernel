@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Generic LPU integration demo
+Introductory Neurokernel demo
 
 Notes
 -----
@@ -107,7 +107,6 @@ def run(connected):
         conn = core.Connectivity(N_gpot_0, N_spike_0, N_gpot_1, N_spike_1, 1,
                                  ge_0.id, ge_1.id, alphasynapse_type_params)
         for id, (i, j) in enumerate(itertools.product(xrange(N_spike_0), xrange(N_spike_1))):
-            #if i in [0, 2, 4] and j in [0, 2, 4]:
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j] = 1
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'name'] = 'int_0to1_%s_%s' % (i, j)
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'model'] = 'AlphaSynapse'
@@ -117,7 +116,7 @@ def run(connected):
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'class'] = 0
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'conductance'] = True
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'gmax'] = 0.003
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'id'] = id                
+            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'id'] = id
             conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'reverse'] = 0.065
 
         man.connect(ge_0, ge_1, conn)
