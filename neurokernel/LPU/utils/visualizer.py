@@ -98,12 +98,10 @@ class visualizer(object):
 
     def run(self, final_frame_name=None):
         '''
-        Starts the visualization process. If out_filename is specified,
-        will create a movie. If not, the visualization will be done in
-        a figure window, without it being saved.
-        The final frame is saved to the specified file name.
+        Starts the visualization process The final frame is saved to the specified
+        file name; otherwise, the visualization is displayed in a window without being saved.
         '''
-        
+
         self._initialize()
         self._t = self._update_interval+1
         for i in range(self._update_interval,self._maxt, self._update_interval):
@@ -112,7 +110,7 @@ class visualizer(object):
             self.f.savefig(final_frame_name, dpi=300)
         if self.out_filename:
             self.close()
-            
+
     def _set_wrapper(self, obj, name, value):
         name = name.lower()
         func = getattr(obj, 'set_'+name, None)
