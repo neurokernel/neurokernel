@@ -96,7 +96,7 @@ class visualizer(object):
         else:
             self._maxt = self._data[LPU].shape[1]
 
-    def run(self, final_frame_name=None):
+    def run(self, final_frame_name=None, dpi=300):
         '''
         Starts the visualization process The final frame is saved to the specified
         file name; otherwise, the visualization is displayed in a window without being saved.
@@ -107,7 +107,7 @@ class visualizer(object):
         for i in range(self._update_interval,self._maxt, self._update_interval):
             self.update()
         if final_frame_name is not None:
-            self.f.savefig(final_frame_name, dpi=300)
+            self.f.savefig(final_frame_name, dpi=dpi)
         if self.out_filename:
             self.close()
 
