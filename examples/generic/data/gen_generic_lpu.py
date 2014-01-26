@@ -13,7 +13,31 @@ import h5py
 import networkx as nx
 
 def create_lpu(file_name, N_sensory, N_local, N_output):
+    """
+    Create a generic LPU.
 
+    Creates a GEXF file containing the neuron and synapse parameters for an LPU
+    containing the specified number of local and projection neurons. The GEXF
+    file also contains the parameters for a set of sensory neurons that accept
+    external input. All neurons are either spiking or graded potential neurons;
+    the Leaky Integrate-and-Fire model is used for the former, while the
+    Morris-Lecar model is used for the latter (i.e., the neuron's membrane
+    potential is deemed to be its output rather than the time when it emits an
+    action potential). Synapses use either the alpha function model or a
+    conductance-based model. 
+
+    Parameters
+    ----------
+    file_name : str
+        Output GEXF file name.
+    N_sensory : int
+        Number of sensory neurons.
+    N_local : int
+        Number of local neurons.
+    N_output : int
+        Number of project neurons.
+    """
+    
     # Set numbers of neurons:
     neu_type = ('sensory', 'local', 'output')
     neu_num = (N_sensory, N_local, N_output)
