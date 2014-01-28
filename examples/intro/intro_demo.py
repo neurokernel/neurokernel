@@ -101,9 +101,11 @@ def run(connected):
     N_spike_1 = len(df_neu_1[(df_neu_1['spiking']==True)&(df_neu_1['public']==True)])
     N_gpot_1 = len(df_neu_1[(df_neu_1['spiking']==False)&(df_neu_1['public']==True)])
 
+    # Alpha function synaptic parameters:
+    alphasynapse_type_params = {'AlphaSynapse': ['ad', 'ar', 'gmax', 'id', 'class', 'conductance',
+                                                 'reverse']}
+
     if connected:
-        alphasynapse_type_params = {'AlphaSynapse': ['ad', 'ar', 'gmax', 'id', 'class', 'conductance',
-                                                     'reverse']}
         conn = core.Connectivity(N_gpot_0, N_spike_0, N_gpot_1, N_spike_1, 1,
                                  ge_0.id, ge_1.id, alphasynapse_type_params)
         for id, (i, j) in enumerate(itertools.product(xrange(N_spike_0), xrange(N_spike_1))):

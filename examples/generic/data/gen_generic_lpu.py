@@ -42,14 +42,16 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
     neu_type = ('sensory', 'local', 'output')
     neu_num = (N_sensory, N_local, N_output)
 
+    # Neuron ids are between 0 and the total number of neurons:
     G = nx.DiGraph()
-
     G.add_nodes_from(range(sum(neu_num)))
 
     idx = 0
     for (t, n) in zip(neu_type, neu_num):
         for i in range(n):
             name = t+"_"+str(i)
+
+            # All local neurons are graded potential only:
             if t != 'local' or np.random.rand() < 0.5:
                 G.node[idx] = {
                     'model': 'LeakyIAF',
@@ -80,13 +82,20 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                     'n_dendrites': 1}
             idx += 1
 
+    # Assume a probability of synapse existence for each group of synapses:
+    # sensory -> local, sensory -> output, local -> output, output -> local:            
     for r, (i, j) in zip((0.5, 0.1, 0.1, 0.3),
                          ((0, 1), (0, 2), (1, 2), (2,1))):
         src_off = sum(neu_num[0:i])
         tar_off = sum(neu_num[0:j])
-        for src,tar in product( range( src_off, src_off+neu_num[i]),
-                                range( tar_off, tar_off+neu_num[j]) ):
+        for src, tar in product(range(src_off, src_off+neu_num[i]),
+                                range(tar_off, tar_off+neu_num[j])):
+
+            # Don't connect all neurons:
             if np.random.rand() > r: continue
+
+            # Connections from the sensory neurons use the alpha function model;
+            # all other connections use the power_gpot_gpot model:
             name = G.node[src]['name'] + '-' + G.node[tar]['name']
             if G.node[src]['name'][-1] == 's':
                 G.add_edge(src,tar,type='directed',attr_dict={
