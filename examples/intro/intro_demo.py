@@ -27,25 +27,25 @@ from neurokernel.LPU.LPU_rev import LPU_rev
 
 import neurokernel.tools.graph
 
+dt = 1e-4
+dur = 1.0
+steps = int(dur/dt)
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--debug', default=False,
                     dest='debug', action='store_true',
                     help='Write connectivity structures and inter-LPU routed data in debug folder')
 parser.add_argument('-l', '--log', default='none', type=str,
                     help='Log output to screen [file, screen, both, or none; default:none]')
-parser.add_argument('-s', '--steps', default=10000, type=int,
-                    help='Number of steps [default:10000]')
+parser.add_argument('-s', '--steps', default=steps, type=int,
+                    help='Number of steps [default: %s]' % steps)
 parser.add_argument('-d', '--port_data', default=None, type=int,
-                    help='Data port [default:randomly selected]')
+                    help='Data port [default: randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
-                    help='Control port [default:randomly selected]')
+                    help='Control port [default: randomly selected]')
 parser.add_argument('-g', '--gpu_dev', default=[0, 1], type=int, nargs='+',
-                    help='GPU device numbers [default:[0, 1]]')
+                    help='GPU device numbers [default: [0, 1]]')
 args = parser.parse_args()
-
-dt = 1e-4
-dur = 1.0
-Nt = int(dur/dt)
 
 file_name = None
 screen = False
