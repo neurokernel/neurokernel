@@ -6,12 +6,11 @@ Generate and run generic LPU on multiple GPUs.
 
 import argparse
 import itertools
-import time
 
 import numpy as np
 import networkx as nx
 
-import gen_generic_lpu as g
+import data.gen_generic_lpu as g
 
 from neurokernel.tools.graph import graph_to_df
 from neurokernel.tools.comm import get_random_port
@@ -27,9 +26,9 @@ stop = 0.6
 I_max = 0.6
 steps = int(dur/dt)
 
-num_sensory = 30
-num_local = 30
-num_output = 30
+N_sensory = 30
+N_local = 30
+N_output = 30
 
 num_lpus = 2
 
@@ -45,12 +44,12 @@ parser.add_argument('-d', '--port_data', default=None, type=int,
                     help='Data port [default: randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
-parser.add_argument('-y', '--num_sensory', default=num_sensory, type=int,
-                    help='Number of sensory neurons associated with LPU 0 [default: %s]' % num_sensory)
-parser.add_argument('-n', '--num_local', default=num_local, type=int,
-                    help='Number of local neurons in each LPU [default: %s]' % num_local)
-parser.add_argument('-o', '--num_output', default=num_output, type=int,
-                    help='Number of output neurons in each LPU [default: %s]' % num_output)
+parser.add_argument('-y', '--num_sensory', default=N_sensory, type=int,
+                    help='Number of sensory neurons associated with LPU 0 [default: %s]' % N_sensory)
+parser.add_argument('-n', '--num_local', default=N_local, type=int,
+                    help='Number of local neurons in each LPU [default: %s]' % N_local)
+parser.add_argument('-o', '--num_output', default=N_output, type=int,
+                    help='Number of output neurons in each LPU [default: %s]' % N_output)
 parser.add_argument('-u', '--num_lpus', default=num_lpus, type=int,
                     help='Number of LPUs [default: %s]' % num_lpus)
 args = parser.parse_args()
@@ -160,7 +159,5 @@ for lpu_0, lpu_1 in itertools.combinations(lpu_dict.keys(), 2):
         
     man.connect(lpu_dict[lpu_0]['lpu'], lpu_dict[lpu_1]['lpu'], conn)
 
-start = time.time()
 man.start(steps=steps)        
 man.stop()
-print 'time: ', time.time()-start
