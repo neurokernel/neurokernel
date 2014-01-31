@@ -1,4 +1,4 @@
-import vision_configuration_new as vc
+import vision_configuration as vc
 import numpy as np
 np.random.seed(10000)
 
