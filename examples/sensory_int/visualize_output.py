@@ -9,7 +9,8 @@ nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
 V = vis.visualizer()
 
 conf_vis_input = {'type':'image','clim':[0, 0.032],
-                  'shape':[32,24],'ids':[range(32*24)]}
+                  'shape':[32,24],'ids':[range(32*24)],
+                  'trans': True}
 conf_olf_input = {'type':'waveform','ids':[[0]]}
 
 V.add_LPU('data/vision_input.h5', LPU='Vision')
