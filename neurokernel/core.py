@@ -557,6 +557,8 @@ class Module(base.BaseModule):
         automatically generated.
     device : int
         GPU device to use.
+    debug : bool
+        Debug flag.
         
     Notes
     -----
@@ -568,11 +570,13 @@ class Module(base.BaseModule):
     """
 
     def __init__(self, port_data=base.PORT_DATA,
-                 port_ctrl=base.PORT_CTRL, id=None, device=None):
+                 port_ctrl=base.PORT_CTRL, id=None, device=None, debug=False):
         self.device = device
+        self.debug = debug
         super(Module, self).__init__(port_data, port_ctrl, id)
 
-        # Store indices of destination graded potential and spiking neurons separately:
+        # Store indices of destination graded potential and spiking neurons
+        # separately:
         self._out_idx_dict['gpot'] = {}
         self._out_idx_dict['spike'] = {}
         
@@ -782,23 +786,43 @@ class Module(base.BaseModule):
                 in_spike_dict = {}
                 out_gpot = []
                 out_spike = []
-                
-                # Get transmitted input data for processing:
-                catch_exception(self._get_in_data, self.logger.info,
-                                in_gpot_dict, in_spike_dict)
 
-                # Run the processing step:
-                catch_exception(self.run_step, self.logger.info,
-                                in_gpot_dict, in_spike_dict,     
-                                out_gpot, out_spike)
+                # If the debug flag is set, don't catch exceptions so that
+                # errors will lead to visible failures:
+                if self.debug:
 
-                # Stage generated output data for transmission to other
-                # modules:
-                catch_exception(self._put_out_data, self.logger.info,
-                                out_gpot, out_spike)
+                    # Get transmitted input data for processing:
+                    self._get_in_data(in_gpot_dict, in_spike_dict)
 
-                # Synchronize:
-                catch_exception(self._sync, self.logger.info)
+                    # Run the processing step:
+                    self.run_step(in_gpot_dict, in_spike_dict,     
+                                  out_gpot, out_spike)
+
+                    # Stage generated output data for transmission to other
+                    # modules:
+                    self._put_out_data(out_gpot, out_spike)
+
+                    # Synchronize:
+                    self._sync()
+                    
+                else:
+                    
+                    # Get transmitted input data for processing:
+                    catch_exception(self._get_in_data, self.logger.info,
+                                    in_gpot_dict, in_spike_dict)
+
+                    # Run the processing step:
+                    catch_exception(self.run_step, self.logger.info,
+                                    in_gpot_dict, in_spike_dict,     
+                                    out_gpot, out_spike)
+
+                    # Stage generated output data for transmission to other
+                    # modules:
+                    catch_exception(self._put_out_data, self.logger.info,
+                                    out_gpot, out_spike)
+
+                    # Synchronize:
+                    catch_exception(self._sync, self.logger.info)
 
                 # Exit run loop when a quit signal has been received:
                 if not self.running:
