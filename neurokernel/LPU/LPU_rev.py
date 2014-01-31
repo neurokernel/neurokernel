@@ -76,7 +76,7 @@ class LPU_rev(Module):
         4. Each node should have an boolean attribute called 'public',
            indicating whether that neuron either receives input or provides
            output to other LPUs.
-        5. Each node should have an boolean attribute called 'input' indicating
+        5. Each node should have an boolean attribute called 'extern' indicating
            whether the neuron accepts external input from a file.
         6. Each edge (synapse) in the graph should have an integer attribute
            called 'class' which should be one of the following values.
@@ -201,7 +201,7 @@ class LPU_rev(Module):
         n_id = np.array(sum( [ n['id'] for t,n in self.n_list ], []), dtype=np.int32)
         n_is_spk = np.array(sum( [ n['spiking'] for t,n in self.n_list ], []))
         n_is_pub = np.array(sum( [ n['public'] for t,n in self.n_list ], []))
-        n_has_in = np.array(sum( [ n['input'] for t,n in self.n_list ], []))
+        n_has_in = np.array(sum( [ n['extern'] for t,n in self.n_list ], []))
 
         #TODO: comment
         self.num_gpot_neurons = np.where( n_model_is_spk, 0, n_model_num)

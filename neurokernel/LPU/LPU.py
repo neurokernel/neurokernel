@@ -104,7 +104,7 @@ class LPU(Module):
                     n_dict['public'], dtype=bool) == True)]
                 self.public_gpot_list.extend(idx.flatten())
             idx = np.asarray(n_dict['id'])[np.where(np.asarray(\
-                n_dict['input'], dtype=bool) == True)]
+                n_dict['extern'], dtype=bool) == True)]
             self.input_neuron_list.extend(idx.flatten())
 
 

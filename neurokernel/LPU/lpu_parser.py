@@ -59,7 +59,7 @@ def lpu_parser(filename):
     4. Each node should have an boolean attribute called public - indicating
        whether that neuron either recieves input or provides output to
        other LPUs.
-    5. Each node should have an boolean attribute called input indicating
+    5. Each node should have an boolean attribute called extern indicating
        whether the neuron accepts external input from a file.
     6. Each edge(synapse) in the graph should have an integer
        atribute called 'class' which should be one of the following values.
