@@ -201,8 +201,24 @@ class visualizer(object):
                     RGB = hsv_to_rgb(HSV)
                     config['handle'] = self.axarr[ind].imshow(RGB)
                 elif config['type'] == 2:
-                    temp = self.axarr[ind].imshow(np.reshape(\
-                                self._data[LPU][config['ids'][0],0],config['shape']))
+                    if 'trans' in config:
+                        if config['trans'] is True:
+                            to_transpose = True
+                        else:
+                            to_transpose = False
+                    else:
+                        to_transpose = False
+                        config['trans'] = False
+                    
+                    if to_transpose:
+                        temp = self.axarr[ind].imshow(np.transpose(np.reshape(\
+                                self._data[LPU][config['ids'][0],0], config['shape'])))
+                    else:
+                        temp = self.axarr[ind].imshow(np.reshape(\
+                                self._data[LPU][config['ids'][0],0], config['shape']))
+            
+            
+            
                     temp.set_clim(self._imlim)
                     temp.set_cmap(plt.cm.gist_gray)
                     config['handle'] = temp
@@ -298,9 +314,14 @@ class visualizer(object):
                         RGB = hsv_to_rgb(HSV)
                         config['handle'].set_data(RGB)
                     elif config['type'] == 2:
-                        shape = config['shape']
                         ids = config['ids']
-                        config['handle'].set_data(np.reshape(data[ids[0], t],shape))
+                        if config['trans']:
+                            config['handle'].set_data(
+                                np.transpose(np.reshape(data[ids[0], t], config['shape'
+                            ])))
+                        else:
+                            config['handle'].set_data(
+                                np.reshape(data[ids[0], t], config['shape']))
                     
         self.f.canvas.draw()
         if self.out_filename:
