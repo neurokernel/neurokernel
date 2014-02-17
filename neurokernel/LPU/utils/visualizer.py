@@ -42,7 +42,7 @@ class visualizer(object):
         self._update_interval = 50
         self._out_file = None
         self._fps = 5
-        self._codec = 'h264'
+        self._codec = 'libtheora'
         self._config = OrderedDict()
         self._rows = 0
         self._cols = 0
