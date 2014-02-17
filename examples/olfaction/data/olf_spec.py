@@ -152,7 +152,7 @@ class LeakyIAF:
     """
 
     def __init__(self,id=None,name=None,V0=0.,Vr=-0.05,Vt=-0.02,R=1.,C=1.,\
-                 syn_list=None,public=True,input=True,rand=0.):
+                 syn_list=None,public=True,extern=True,rand=0.):
         self.id = id
         self.name = name
         self.Vr = Vr*uniform(1.-rand,1.+rand)
@@ -163,7 +163,7 @@ class LeakyIAF:
 
         # For GEXF
         self.public = public
-        self.input = input
+        self.extern = extern
 
         self.isSpiking = False
         if syn_list is not None:
@@ -233,7 +233,7 @@ class LeakyIAF:
                 attrib={"for":str(i+1), "value":str(getattr(self,att)) })
         etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
         etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
-        etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.input else "false" })
+        etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.extern else "false" })
 
     @staticmethod
     def getGEXFattr(etree_element):
@@ -249,7 +249,7 @@ class LeakyIAF:
         for (i,attr) in enumerate( ("V","Vr","Vt","R","C") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+2), type="float", title=attr )
-        for (i,attr) in enumerate( ("spiking","public","input") ):
+        for (i,attr) in enumerate( ("spiking","public","extern") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+7), type="boolean", title=attr )
 
@@ -292,7 +292,7 @@ class Glomerulus:
                 R=database['pn_para']['R'],
                 C=database['pn_para']['C'],
                 public=True,
-                input=False,
+                extern=False,
                 rand=self.rand))
 
         self.osn_list = [] # initialize the osn list
@@ -306,7 +306,7 @@ class Glomerulus:
                 R=database['osn_para']['R'],
                 C=C,
                 public=True,
-                input=True,
+                extern=True,
                 rand=self.rand))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):

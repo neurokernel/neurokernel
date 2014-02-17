@@ -56,7 +56,7 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                 G.node[idx] = {
                     'model': 'LeakyIAF',
                     'name': name+'_s',
-                    'input': True if t == 'sensory' else False,
+                    'extern': True if t == 'sensory' else False,
                     'public': True if t == 'output' else False,
                     'spiking': True,
                     'V': np.random.uniform(-0.06,-0.025),
@@ -68,7 +68,7 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                 G.node[idx] = {
                     'model': "MorrisLecar",
                     'name': name+'_g',
-                    'input': True if t == 'sensory' else False,
+                    'extern': True if t == 'sensory' else False,
                     'public': True if t == 'output' else False,
                     'spiking': False,
                     'V1': 0.3,
