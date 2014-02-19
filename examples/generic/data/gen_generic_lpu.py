@@ -97,11 +97,11 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
             # Connections from the sensory neurons use the alpha function model;
             # all other connections use the power_gpot_gpot model:
             name = G.node[src]['name'] + '-' + G.node[tar]['name']
-            if G.node[src]['name'][-1] == 's':
+            if G.node[src]['spiking'] is True:
                 G.add_edge(src,tar,type='directed',attr_dict={
                     'model'       : 'AlphaSynapse',
                     'name'        : name,
-                    'class'       : 0 if G.node[tar]['name'][-1] == 's' else 1,
+                    'class'       : 0 if G.node[tar]['spiking'] is True else 1,
                     'ar'          : 1.1*1e2,
                     'ad'          : 1.9*1e3,
                     'reverse'     : 65*1e-3,
@@ -111,7 +111,7 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                 G.add_edge(src,tar,type='directed',attr_dict={
                     'model'       : 'power_gpot_gpot',
                     'name'        : name,
-                    'class'       : 2 if G.node[tar]['name'][-1] == 's' else 3,
+                    'class'       : 2 if G.node[tar]['spiking'] is True else 3,
                     'slope'       : 4e9,
                     'threshold'   : -0.06,
                     'power'       : 4,
