@@ -214,9 +214,15 @@ class LPU_rev(Module):
         self.gpot_order = np.argsort( self.gpot_idx ).astype(np.int32)
         self.spike_order = np.argsort( self.spike_idx ).astype(np.int32)
         self.spike_shift = self.my_num_gpot_neurons
-        self.input_neuron_list = self.order[ (n_id[ n_has_in ]).sort() ]
-        self.public_spike_list = self.order[ (n_id[ n_is_pub & n_is_spk ]).sort() ]
-        self.public_gpot_list = self.order[ (n_id[ n_is_pub & ~n_is_spk ]).sort() ]
+        in_id = n_id[n_has_in]
+        in_id.sort()
+        pub_spk_id = n_id[ n_is_pub & n_is_spk ]
+        pub_spk_id.sort()
+        pub_gpot_id = n_id[ n_is_pub & ~n_is_spk ]
+        pub_gpot_id.sort()
+        self.input_neuron_list = self.order[in_id]
+        self.public_spike_list = self.order[pub_spk_id]
+        self.public_gpot_list = self.order[pub_gpot_id]
         self.num_public_gpot = len( self.public_gpot_list )
         self.num_public_spike = len( self.public_spike_list )
         self.num_input = len( self.input_neuron_list )
