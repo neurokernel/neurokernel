@@ -38,9 +38,9 @@ def lpu_parser(filename):
 
     Returns
     -------
-    n_dict : list of dictionaries
+    n_dict_list : list of dictionaries
 
-    s_dict : list of dictionaries
+    s_dict_list : list of dictionaries
 
     Notes
     -----
