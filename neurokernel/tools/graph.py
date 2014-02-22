@@ -334,7 +334,7 @@ def graph_to_conn(g, conn_type=core.Connectivity):
                 if param == 'id':
                     c[idx_tuple+(param,)] = int(edge_dict[k][param])
                 else:
-                    c[idx_tuple+(param,)] = float(edge_dict[k][param])                        
+                    c[idx_tuple+(param,)] = edge_dict[k][param]
                                     
     return c                        
         
