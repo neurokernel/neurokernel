@@ -6,6 +6,8 @@ from pycuda.tools import dtype_to_ctype
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 
+from neurokernel.LPU.utils.simpleio import *
+
 cuda_src = """
 // %(type)s and %(nneu)d must be replaced using Python string foramtting
 #define NNEU %(nneu)d
@@ -50,11 +52,12 @@ __global__ void leaky_iaf(
 """
 
 class LeakyIAF(BaseNeuron):
-    def __init__(self, n_dict, spk, dt, debug=False):
+    def __init__(self, n_dict, spk, dt, debug=False, LPU_id=None):
         self.num_neurons = len(n_dict['id'])
         self.dt = np.double(dt)
         self.steps = 1
         self.debug = debug
+        self.LPU_id = LPU_id
 
         self.Vr  = garray.to_gpu( np.asarray( n_dict['Vr'], dtype=np.float64 ))
         self.Vt  = garray.to_gpu( np.asarray( n_dict['Vt'], dtype=np.float64 ))
@@ -86,9 +89,16 @@ class LeakyIAF(BaseNeuron):
         self.I = garray.zeros(self.num_neurons, np.double)
         self._update_I_cond = self._get_update_I_cond_func()
         self._update_I_non_cond = self._get_update_I_non_cond_func()
-
         self.update = self.get_gpu_kernel()
-
+        if self.debug:
+            if self.LPU_id is None:
+                self.LPU_id = "anon"
+            self.I_file = tables.openFile(self.LPU_id + "_I.h5", mode="w")
+            self.I_file.createEArray("/","array", \
+                                     tables.Float64Atom(), (0,self.num_neurons))
+            self.V_file = tables.openFile(self.LPU_id + "_V.h5", mode="w")
+            self.V_file.createEArray("/","array", \
+                                     tables.Float64Atom(), (0,self.num_neurons))
     @property
     def neuron_class(self): return True
 
@@ -106,6 +116,10 @@ class LeakyIAF(BaseNeuron):
             self.Vr.gpudata,\
             self.R.gpudata,\
             self.C.gpudata )
+        if self.debug:
+            self.I_file.root.array.append(self.I.get().reshape((1,-1)))
+            self.V_file.root.array.append(self.V.get().reshape((1,-1)))
+            
 
     def get_gpu_kernel( self):
         self.gpu_block = (128,1,1)
@@ -127,7 +141,11 @@ class LeakyIAF(BaseNeuron):
                         np.intp ])  # C array
 
         return func
-
+        
+    def post_run(self):
+        if self.debug:
+            self.I_file.close()
+            self.V_file.close()
 
     @property
     def update_I_override(self): return True

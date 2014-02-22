@@ -10,7 +10,7 @@ from pycuda.compiler import SourceModule
 class BaseNeuron(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, n_dict, neuron_state_pointer, dt, debug):
+    def __init__(self, n_dict, neuron_state_pointer, dt, debug, LPU_id=None):
         '''
         Every neuron class should setup GPU data structure needed
         by it during initialization. In addition, graded potential neurons
@@ -85,6 +85,7 @@ class BaseNeuron(object):
         self.I = garray.zeros(self.num_neurons, np.double)
         self._update_I_cond = self._get_update_I_cond_func()
         self._update_I_non_cond = self._get_update_I_non_cond_func()
+        self.LPU_id = LPU_id
 
     @abstractmethod
     def eval(self):
