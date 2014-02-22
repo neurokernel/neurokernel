@@ -29,7 +29,7 @@ from synapses import *
 
 import pdb
 
-class LPU_rev(Module):
+class LPU_rev(Module, object):
 
     @staticmethod
     def lpu_parser(filename):
@@ -193,7 +193,9 @@ class LPU_rev(Module):
         # load neurons and synapse definition
         self._load_neurons()
         self._load_synapses()
-
+        
+        # set default one time import
+        self._one_time_import = 10
         #TODO: comment
         self.n_list = n_dict.items()
         n_model_is_spk = [ n['spiking'][0] for t,n in self.n_list ]
@@ -266,21 +268,21 @@ class LPU_rev(Module):
         self._setup_connectivity()
         self._initialize_gpu_ds()
         self._init_objects()
-        self.buffer = circular_array(self.total_gpot_neurons, \
+        self.buffer = circular_array(self.total_gpot_neurons, self.my_num_gpot_neurons,\
                         self.gpot_delay_steps, self.V, \
                         self.total_spike_neurons, self.spike_delay_steps)
 
         if self.input_file:
             self.input_h5file = tables.openFile(self.input_file)
 
-            self.one_time_import = 10
             self.file_pointer = 0
             self.I_ext = parray.to_gpu(self.input_h5file.root.array.read(\
                                 self.file_pointer, self.file_pointer + \
-                                self.one_time_import))
-            self.file_pointer += self.one_time_import
+                                self._one_time_import))
+            self.file_pointer += self._one_time_import
             self.frame_count = 0
-
+            self.frames_in_buffer = self._one_time_import
+            
         if self.output:
             output_file = self.output_file.rsplit('.',1)
             filename = output_file[0]
@@ -299,7 +301,21 @@ class LPU_rev(Module):
                                                     '_spike.' + ext , 'w')
                 self.output_spike_file.createEArray("/","array", \
                             tables.Float64Atom(),(0,self.my_num_spike_neurons))
-
+        
+        if self.debug:
+            self.in_gpot_files = {}
+            for (key,i) in self.other_lpu_map.iteritems():
+                num = self.num_input_gpot_neurons[i]
+                if num>0:
+                    self.in_gpot_files[key] = tables.openFile(filename + \
+                                                    key + '_in_gpot.' + ext , 'w')
+                    self.in_gpot_files[key].createEArray("/","array", \
+                                                        tables.Float64Atom(), (0,num))
+                
+            self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
+            self.gpot_buffer_file.createEArray("/","array", \
+                                               tables.Float64Atom(), (0,self.gpot_delay_steps, self.total_gpot_neurons))
+                
     def post_run(self):
         super(LPU_rev,self).post_run()
         if self.output:
@@ -307,6 +323,10 @@ class LPU_rev(Module):
                 self.output_gpot_file.close()
             if self.my_num_spike_neurons > 0:
                 self.output_spike_file.close()
+        if self.debug:
+            for file in self.in_gpot_files.itervalues():
+                file.close()
+            self.gpot_buffer_file.close()
 
         for neuron in self.neurons:
             neuron.post_run()
@@ -326,36 +346,39 @@ class LPU_rev(Module):
             if (len(in_gpot_dict) +len(in_spike_dict)) != 0:
                 self._read_LPU_input(in_gpot_dict, in_spike_dict)
 
-        if self.update_resting_potential_history and \
-          (len(in_gpot_dict) +len(in_spike_dict)) != 0:
+        if self.update_other_rest:
             self.buffer.update_other_rest(in_gpot_dict, \
                 np.sum(self.num_gpot_neurons), self.num_virtual_gpot_neurons)
-            self.update_resting_potential_history = False
+            self.update_other_rest = False
+        
+        if self.update_flag:
+            if self.input_file is not None:
+                self._read_external_input()
 
-        if self.input_file is not None:
-            self._read_external_input()
+            for neuron in self.neurons:
+                neuron.update_I(self.synapse_state.gpudata)
+                neuron.eval()
 
-        for neuron in self.neurons:
-            neuron.update_I(self.synapse_state.gpudata)
-            neuron.eval()
+            self._update_buffer()
+            for synapse in self.synapses:
+                # Maybe only gpot_buffer or spike_buffer should be passed
+                # based on the synapse class.
+                synapse.update_state(self.buffer)
 
-        self._update_buffer()
-        for synapse in self.synapses:
-            # Maybe only gpot_buffer or spike_buffer should be passed
-            # based on the synapse class.
-            synapse.update_state(self.buffer)
-
-        self.buffer.step()
+            self.buffer.step()
 
         # Extract data to transmit to other LPUs:
         if not self.run_on_myself:
             self._extract_output(out_gpot, out_spike)
             #self.logger.info('out_spike: '+str(out_spike))
         # Save output data to disk:
-        if self.output:
+        if self.update_flag and self.output:
             self._write_output()
 
-
+        if not self.update_flag:
+            self.update_flag = True
+            if np.sum(self.num_input_gpot_neurons)>0:
+                self.update_other_rest = True
 
     def _init_objects(self):
         self.neurons = [ self._instantiate_neuron(i,t,n) for i,(t,n) in enumerate(self.n_list) ]
@@ -407,17 +430,23 @@ class LPU_rev(Module):
         spike_shift = self.spike_shift
 
         if len(self._conn_dict)==0:
-            self.update_resting_potential_history = False
+            self.update_flag = True
+            self.update_other_rest = False
             self.run_on_myself = True
             self.num_virtual_gpot_neurons = 0
             self.num_virtual_spike_neurons = 0
-            self.num_input_gpot_neurons = 0
-            self.num_input_spike_neurons = 0
+            self.num_input_gpot_neurons = []
+            self.num_input_spike_neurons = []
 
         else:
-            self.update_resting_potential_history = True
             self.run_on_myself = False
+            
+            # To use first execution tick to synchronize gpot resting potentials
+            self.update_flag = False
+            self._steps += 1
+            self.update_other_rest = False
 
+            self.other_lpu_map = {}
             self.num_input_gpot_neurons = []
             self.num_input_spike_neurons = []
             self.virtual_gpot_idx = []
@@ -429,11 +458,11 @@ class LPU_rev(Module):
 
 
             for i,c in enumerate(self._conn_dict.itervalues()):
-                self.input_spike_idx_map.append({})
                 other_lpu = c.B_id if self.id == c.A_id else c.A_id
+                self.other_lpu_map[other_lpu] = i
+
                 # parse synapse with gpot pre-synaptic neuron
                 pre_gpot = c.src_idx(other_lpu, self.id, src_type='gpot')
-
                 self.num_input_gpot_neurons.append(len(pre_gpot))
 
                 self.virtual_gpot_idx.append(np.arange(tmp1,tmp1+\
@@ -444,6 +473,7 @@ class LPU_rev(Module):
                 parse_interLPU_syn( pre_gpot, 'gpot', 'spike')
 
                 # parse synapse with spike pre-synaptic neuron
+                self.input_spike_idx_map.append({})
                 pre_spike = c.src_idx(other_lpu, self.id, src_type='spike')
                 self.num_input_spike_neurons.append(len(pre_spike))
 
@@ -452,7 +482,7 @@ class LPU_rev(Module):
                 tmp2 += self.num_input_spike_neurons[-1]
 
                 for j,pre in enumerate(pre_spike):
-                    self.input_spike_idx_map[i][pre] = j
+                    self.input_spike_idx_map[i][int(pre)] = j
 
                 parse_interLPU_syn( pre_spike, 'spike', 'gpot' )
                 parse_interLPU_syn( pre_spike, 'spike', 'spike' )
@@ -579,7 +609,7 @@ class LPU_rev(Module):
         if self.my_num_gpot_neurons>0:
             self.V = garray.zeros(int(self.my_num_gpot_neurons), np.float64)
         else:
-            self.V = garray.zeros(int(1), np.float64)
+            self.V = None
 
         if self.my_num_spike_neurons>0:
             self.spike_state = garray.zeros(int(self.my_num_spike_neurons), np.int32)
@@ -603,16 +633,22 @@ class LPU_rev(Module):
 
         """
 
-        for i, gpot_data in enumerate(in_gpot_dict.itervalues()):
+        for other_lpu, gpot_data in in_gpot_dict.iteritems():
+            i = self.other_lpu_map[other_lpu]
             if self.num_input_gpot_neurons[i] > 0:
                 cuda.memcpy_htod(int(int(self.buffer.gpot_buffer.gpudata) \
                     +(self.buffer.gpot_current * self.buffer.gpot_buffer.ld \
                     + self.my_num_gpot_neurons + self.cum_virtual_gpot_neurons[i]) \
                     * self.buffer.gpot_buffer.dtype.itemsize), gpot_data)
-
+                if self.debug:
+                    self.in_gpot_files[other_lpu].root.array.append(gpot_data.reshape(1,-1))
+            
+        if self.debug:
+            self.gpot_buffer_file.root.array.append(self.buffer.gpot_buffer.get().reshape(1,self.gpot_delay_steps,-1))
 
         #Will need to change this if only spike indexes are transmitted
-        for i, sparse_spike in enumerate(in_spike_dict.itervalues()):
+        for other_lpu, sparse_spike in in_spike_dict.iteritems():
+            i = self.other_lpu_map[other_lpu]
             if self.num_input_spike_neurons[i] > 0:
                 full_spike = np.zeros(self.num_input_spike_neurons[i],dtype=np.int32)
                 if len(sparse_spike)>0:
@@ -664,33 +700,44 @@ class LPU_rev(Module):
                 [self.spike_order].reshape((1,-1)))
 
     def _read_external_input(self):
-        if self.input_eof:
-            return
-        cuda.memcpy_dtod(int(int(self.synapse_state.gpudata) + \
-            self.total_synapses*self.synapse_state.dtype.itemsize), \
-            int(int(self.I_ext.gpudata) + self.frame_count*self.I_ext.ld*self.I_ext.dtype.itemsize), \
-            self.num_input * self.synapse_state.dtype.itemsize)
-        self.frame_count += 1
-        if self.frame_count >= self.one_time_import:
-            h_ext = self.input_h5file.root.array.read(self.file_pointer, self.file_pointer + self.one_time_import)
+        if not self.input_eof or self.frame_count<self.frames_in_buffer:
+            cuda.memcpy_dtod(int(int(self.synapse_state.gpudata) + \
+                             self.total_synapses*self.synapse_state.dtype.itemsize), \
+                             int(int(self.I_ext.gpudata) + self.frame_count*self.I_ext.ld*self.I_ext.dtype.itemsize), \
+                             self.num_input * self.synapse_state.dtype.itemsize)
+            self.frame_count += 1
+        else:
+            self.logger.info('Input end of file reached. Subsequent behaviour is undefined.')
+        if self.frame_count >= self._one_time_import and not self.input_eof:
+            input_ld = self.input_h5file.root.array.shape[0]
+            if input_ld - self.file_pointer < self._one_time_import:
+                h_ext = self.input_h5file.root.array.read(self.file_pointer, input_ld)
+            else:
+                h_ext = self.input_h5file.root.array.read(self.file_pointer, self.file_pointer + self._one_time_import)
             if h_ext.shape[0] == self.I_ext.shape[0]:
                 self.I_ext.set(h_ext)
-                self.file_pointer += self.one_time_import
+                self.file_pointer += self._one_time_import
                 self.frame_count = 0
             else:
-                if self.file_pointer == self.input_h5file.root.array.shape[0]:
-                    self.logger.info('Input end of file reached. Behaviour is ' +\
-                                    'undefined for subsequent steps')
-                    self.input_eof = True
+                pad_shape = list(h_ext.shape)
+                self.frames_in_buffer = h_ext.shape[0]
+                pad_shape[0] = self._one_time_import - h_ext.shape[0]
+                h_ext = np.concatenate(h_ext, np.zeros(pad_shape), axis=0)
+                self.I_ext.set(h_ext)
+                self.file_pointer = input_ld
+                
+            if self.file_pointer == self.input_h5file.root.array.shape[0]:
+                self.input_eof = True
+                    
 
     #TODO
     def _update_buffer(self):
-        if self.total_gpot_neurons>0:
+        if self.my_num_gpot_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.gpot_buffer.gpudata) + \
                 self.buffer.gpot_current*self.buffer.gpot_buffer.ld* \
                 self.buffer.gpot_buffer.dtype.itemsize, self.V.gpudata, \
                 self.V.nbytes)
-        if self.total_spike_neurons>0:
+        if self.my_num_spike_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.spike_buffer.gpudata) + \
                 self.buffer.spike_current*self.buffer.spike_buffer.ld* \
                 self.buffer.spike_buffer.dtype.itemsize,
@@ -756,22 +803,25 @@ class LPU_rev(Module):
             ind = self._neuron_names.index(t)
             #ind = int(t)
         except:
-            self.logger.info('Error instantiating neurons of model \'%s\'' % t)
-            return []
+            try:
+                ind = int(t)
+            except:
+                self.logger.info('Error instantiating neurons of model \'%s\'' % t)
+                return []
 
         if n['spiking'][0]:
             neuron = self._neuron_classes[ind]( n, int(int(self.spike_state.gpudata) + \
                         self.spike_state.dtype.itemsize*self.idx_start_spike[i]), \
-                        self.dt, debug=self.debug)
+                                                self.dt, debug=self.debug, LPU_id=self.id)
         else:
             neuron = self._neuron_classes[ind](n, int(self.V.gpudata) +  \
                         self.V.dtype.itemsize*self.idx_start_gpot[i], \
-                        self.dt, debug=self.debug)
+                                               self.dt, debug=self.debug)
 
         if not neuron.update_I_override:
             baseneuron.BaseNeuron.__init__(neuron, n, int(int(self.V.gpudata) +  \
                         self.V.dtype.itemsize*self.idx_start_gpot[i]), \
-                        self.dt, debug=self.debug)
+                                           self.dt, debug=self.debug, LPU_id=self.id)
 
         return neuron
 
@@ -781,8 +831,11 @@ class LPU_rev(Module):
             ind = self._synapse_names.index( t )
             # ind = int(t)
         except:
-            self.logger.info('Error instantiating synapses of model \'%s\'' % t)
-            return []
+            try:
+                ind = int(t)
+            except:
+                self.logger.info('Error instantiating synapses of model \'%s\'' % t)
+                return []
 
         return self._synapse_classes[ind](s, int(int(self.synapse_state.gpudata) + \
                 self.synapse_state.dtype.itemsize*self.idx_start_synapse[i]), \
@@ -812,13 +865,21 @@ def synapse_cmp( x, y):
     else:
         return 0
 
+@property
+def one_time_import(self):
+    return self._one_time_import
+
+@one_time_import.setter
+def one_time_import(self, value):
+    self._one_time_import = value
+
 class circular_array:
     '''
     This class implements a circular buffer to support synapses with delays.
     Please refer the documentation of the template synapse class on information
     on how to access data correctly from this buffer
     '''
-    def __init__(self, num_gpot_neurons, gpot_delay_steps,
+    def __init__(self, num_gpot_neurons, my_num_gpot_neurons, gpot_delay_steps,
                  rest, num_spike_neurons, spike_delay_steps):
 
         self.num_gpot_neurons = num_gpot_neurons
@@ -828,11 +889,12 @@ class circular_array:
             self.gpot_buffer = parray.empty((gpot_delay_steps, num_gpot_neurons),np.double)
 
             self.gpot_current = 0
-
-            for i in range(gpot_delay_steps):
-                cuda.memcpy_dtod(int(self.gpot_buffer.gpudata) + \
-                    self.gpot_buffer.ld * i * self.gpot_buffer.dtype.itemsize,\
-                    rest.gpudata, rest.nbytes)
+            
+            if my_num_gpot_neurons>0:
+                for i in range(gpot_delay_steps):
+                    cuda.memcpy_dtod(int(self.gpot_buffer.gpudata) + \
+                                     self.gpot_buffer.ld * i * self.gpot_buffer.dtype.itemsize,\
+                                     rest.gpudata, rest.nbytes)
 
         self.num_spike_neurons = num_spike_neurons
         if num_spike_neurons > 0:
@@ -853,7 +915,7 @@ class circular_array:
 
     def update_other_rest(self, gpot_data, my_num_gpot_neurons, num_virtual_gpot_neurons):
         # ??? is the second part of the below condition correct?
-        if self.num_gpot_neurons > 0 and num_virtual_gpot_neurons > 0:            
+        if num_virtual_gpot_neurons > 0:            
             d_other_rest = garray.zeros(num_virtual_gpot_neurons, np.double)
             a = 0
             for data in gpot_data.itervalues():
