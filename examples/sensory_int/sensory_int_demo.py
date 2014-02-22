@@ -78,30 +78,30 @@ lpu_al = LPU_rev(dt, n_dict_al, s_dict_al,
 man.add_mod(lpu_al)
 
 
-(n_dict_lam, s_dict_lam) = lpu_parser('./data/lamina.gexf.gz')
-lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
+(n_dict_lam, s_dict_lam) = LPU_rev.lpu_parser('./data/lamina.gexf.gz')
+lpu_lam = LPU_rev(dt, n_dict_lam, s_dict_lam,
               input_file='./data/vision_input.h5',
               output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
               port_data=man.port_data, device=args.lam_dev, id='lamina')
 man.add_mod(lpu_lam)
 
-(n_dict_med, s_dict_med) = lpu_parser('./data/medulla.gexf.gz')
-lpu_med = LPU(dt, n_dict_med, s_dict_med,
+(n_dict_med, s_dict_med) = LPU_rev.lpu_parser('./data/medulla.gexf.gz')
+lpu_med = LPU_rev(dt, n_dict_med, s_dict_med,
               output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
               port_data=man.port_data, device=args.med_dev, id='medulla')
 man.add_mod(lpu_med)
 
+g = nx.read_gexf('./data/lamina_medulla.gexf.gz', relabel=True)
+conn_lam_med = graph_tools.graph_to_conn(g)
+man.connect(lpu_lam, lpu_med, conn_lam_med)
 
-(n_dict_int, s_dict_int) = lpu_parser('./data/integrate.gexf.gz')
-s_dict_int = []
-lpu_int = LPU(dt, n_dict_int, s_dict_int,
+
+(n_dict_int, s_dict_int) = LPU_rev.lpu_parser('./data/integrate.gexf.gz')
+lpu_int = LPU_rev(dt, n_dict_int, s_dict_int,
                   output_file='integrate_output.h5', port_ctrl= man.port_ctrl,
                   port_data=man.port_data, device=args.int_dev, id='integrate')
 
 
-g = nx.read_gexf('./data/lamina_medulla.gexf.gz', relabel=True)
-conn_lam_med = graph_tools.graph_to_conn(g)
-man.connect(lpu_lam, lpu_med, conn_lam_med)
 
 
 # configure inter-LPU connection between Medulla and integration LPU,
@@ -116,9 +116,9 @@ med_id = 'medulla'
 al_id = 'antennallobe'
 
 
-alphasynapse_type_params = {0: ['reverse', 'gmax',
+alphasynapse_type_params = {'AlphaSynapse': ['reverse', 'gmax',
                                              'id', 'ar', 'ad', 'class','conductance']}
-power_gpot_type_params = {1: ['id','class','slope','threshold','power',\
+power_gpot_type_params = {'power_gpot_gpot': ['id','class','slope','threshold','power',\
                                          'saturation','delay','reverse','conductance']}
 
 conn_med_int = core.Connectivity(N_med_gpot, 0,
@@ -126,10 +126,10 @@ conn_med_int = core.Connectivity(N_med_gpot, 0,
                                  med_id, int_id, power_gpot_type_params)
 
 for id, i in enumerate(range(N_med_gpot-8,N_med_gpot)):
-    conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8] = 1
+    conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8 ] = 1
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'id'] = id
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'name'] = 'med_int_%s_%s' % (i, i)
-    conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'model'] = 1
+    conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'model'] = 'power_gpot_gpot'
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'class'] = 2
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'conductance'] = True
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'slope'] = 4e9
@@ -152,7 +152,7 @@ for id, (i, j) in enumerate(itertools.product(xrange(1501,1504),
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j] = 1
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'id'] = id
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'name'] = 'al_int_%s_%s' % (i, j*3+i-1501)
-    conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'model'] = 0
+    conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'model'] = 'AlphaSynapse'
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'class'] = 0
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'ar'] = 1.1*100
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'ad'] = 0.19*1000
@@ -163,5 +163,6 @@ for id, (i, j) in enumerate(itertools.product(xrange(1501,1504),
 man.connect(lpu_al, lpu_int, conn_al_int)
 
 # running simulation
+
 man.start(steps=args.steps)
 man.stop()
