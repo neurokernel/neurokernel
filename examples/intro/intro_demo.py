@@ -8,8 +8,11 @@ Notes
 Generate input files and LPU configurations by running
 
 cd data
-python gen_generic_lpu.py -s 0 generic_lpu_0.gexf.gz generic_input_0.h5
-python gen_generic_lpu.py -s 1 generic_lpu_1.gexf.gz generic_input_1.h5
+python gen_generic_lpu.py -s 1 generic_lpu_0.gexf.gz generic_input_0.h5
+python gen_generic_lpu.py -s 2 generic_lpu_1.gexf.gz generic_input_1.h5
+
+Other seed values may be specified, but note that some may result in a network
+that generates no meaningful responses to the input signal.
 """
 
 import argparse
