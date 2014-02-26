@@ -429,6 +429,8 @@ class LPU_rev(Module, object):
         order = self.order
         spike_shift = self.spike_shift
 
+        self.other_lpu_map = {}
+            
         if len(self._conn_dict)==0:
             self.update_flag = True
             self.update_other_rest = False
@@ -446,7 +448,6 @@ class LPU_rev(Module, object):
             self._steps += 1
             self.update_other_rest = False
 
-            self.other_lpu_map = {}
             self.num_input_gpot_neurons = []
             self.num_input_spike_neurons = []
             self.virtual_gpot_idx = []
