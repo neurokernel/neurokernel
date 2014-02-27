@@ -25,7 +25,6 @@ import neurokernel.core as core
 import neurokernel.base as base
 from neurokernel.tools.comm import get_random_port
 
-from neurokernel.LPU.lpu_parser import lpu_parser
 from neurokernel.LPU.LPU_rev import LPU_rev
 
 import neurokernel.tools.graph
