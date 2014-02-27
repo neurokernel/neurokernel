@@ -507,7 +507,7 @@ class Neuron(object):
         self.params['output'] = bool(self.params['output'])
         self.params['public'] = bool(self.params['public'])
         self.params['extern'] = bool(self.params['extern'])
-
+        self.params['model'] = str(self.params['model'])
 
 class Synapse(object):
     def __init__(self, param_dict):
@@ -555,7 +555,7 @@ class Synapse(object):
             self.params['slope'] *= self.params['scale']
             self.params['saturation'] *= self.params['scale']
             del self.params['scale']
-
+        self.params['model'] = str(self.params['model'])
 
 def append_field(rec, name, arr, dtype=None):
     arr = np.asarray(arr)
