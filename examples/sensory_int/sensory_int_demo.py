@@ -19,8 +19,6 @@ import neurokernel.base as base
 import neurokernel.tools.graph as graph_tools
 from neurokernel.tools.comm import get_random_port
 
-from neurokernel.LPU.lpu_parser import lpu_parser
-from neurokernel.LPU.LPU_rev import LPU_rev
 from neurokernel.LPU.LPU import LPU
 
 parser = argparse.ArgumentParser()
@@ -43,7 +41,6 @@ parser.add_argument('-a', '--al_dev', default=2, type=int,
                     help='GPU for antennal lobe [default:2]')
 parser.add_argument('-i', '--int_dev', default=3, type=int,
                     help='GPU for integration [default:3]')
-
 
 args = parser.parse_args()
 
@@ -69,24 +66,23 @@ else:
 man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
-# loading configuration for Lamina, Medulla and Antennal Lobe.
-(n_dict_al, s_dict_al) = LPU_rev.lpu_parser( './data/antennallobe.gexf.gz')
-lpu_al = LPU_rev(dt, n_dict_al, s_dict_al,
-                 input_file='./data/olfactory_input.h5',
-                 output_file='antennallobe_output.h5', port_ctrl=man.port_ctrl,
-                 port_data=man.port_data, device=args.al_dev, id='antennallobe')
+# Load configurations for lamina, medulla and antennal lobe models:
+(n_dict_al, s_dict_al) = LPU.lpu_parser( './data/antennallobe.gexf.gz')
+lpu_al = LPU(dt, n_dict_al, s_dict_al,
+             input_file='./data/olfactory_input.h5',
+             output_file='antennallobe_output.h5', port_ctrl=man.port_ctrl,
+             port_data=man.port_data, device=args.al_dev, id='antennallobe')
 man.add_mod(lpu_al)
 
-
-(n_dict_lam, s_dict_lam) = LPU_rev.lpu_parser('./data/lamina.gexf.gz')
-lpu_lam = LPU_rev(dt, n_dict_lam, s_dict_lam,
+(n_dict_lam, s_dict_lam) = LPU.lpu_parser('./data/lamina.gexf.gz')
+lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
               input_file='./data/vision_input.h5',
               output_file='lamina_output.h5', port_ctrl= man.port_ctrl,
               port_data=man.port_data, device=args.lam_dev, id='lamina')
 man.add_mod(lpu_lam)
 
-(n_dict_med, s_dict_med) = LPU_rev.lpu_parser('./data/medulla.gexf.gz')
-lpu_med = LPU_rev(dt, n_dict_med, s_dict_med,
+(n_dict_med, s_dict_med) = LPU.lpu_parser('./data/medulla.gexf.gz')
+lpu_med = LPU(dt, n_dict_med, s_dict_med,
               output_file='medulla_output.h5', port_ctrl= man.port_ctrl,
               port_data=man.port_data, device=args.med_dev, id='medulla')
 man.add_mod(lpu_med)
@@ -95,26 +91,21 @@ g = nx.read_gexf('./data/lamina_medulla.gexf.gz', relabel=True)
 conn_lam_med = graph_tools.graph_to_conn(g)
 man.connect(lpu_lam, lpu_med, conn_lam_med)
 
+(n_dict_int, s_dict_int) = LPU.lpu_parser('./data/integrate.gexf.gz')
+lpu_int = LPU(dt, n_dict_int, s_dict_int,
+              output_file='integrate_output.h5', port_ctrl= man.port_ctrl,
+              port_data=man.port_data, device=args.int_dev, id='integrate')
 
-(n_dict_int, s_dict_int) = LPU_rev.lpu_parser('./data/integrate.gexf.gz')
-lpu_int = LPU_rev(dt, n_dict_int, s_dict_int,
-                  output_file='integrate_output.h5', port_ctrl= man.port_ctrl,
-                  port_data=man.port_data, device=args.int_dev, id='integrate')
-
-
-
-
-# configure inter-LPU connection between Medulla and integration LPU,
-# and between Antennal Lobe and integration LPU.
+# Configure inter-LPU connections between medulla and integration LPU
+# and between the antennal lobe and integration LPU:
 N_med_gpot = 3080  # number of public graded potential medulla neurons
-N_int = 8         # number of public integration neurons
+N_int = 8          # number of public integration neurons
 N_al = 1540        # number of public antennal lobe neurons
 N_al_pn = 165      # number of antennal lobe projection neurons
 
 int_id = 'integrate'
 med_id = 'medulla'
 al_id = 'antennallobe'
-
 
 alphasynapse_type_params = {'AlphaSynapse': ['reverse', 'gmax',
                                              'id', 'ar', 'ad', 'class','conductance']}
@@ -139,9 +130,7 @@ for id, i in enumerate(range(N_med_gpot-8,N_med_gpot)):
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'delay'] = 1
     conn_med_int[med_id, 'gpot', i, int_id, 'spike', i - N_med_gpot + 8, 0, 'reverse'] = -0.015
 
-
 man.connect(lpu_med, lpu_int, conn_med_int)
-
 
 conn_al_int = core.Connectivity(0, N_al, 0, N_int, 1,
                                  al_id, int_id, alphasynapse_type_params)
@@ -161,8 +150,6 @@ for id, (i, j) in enumerate(itertools.product(xrange(1501,1504),
     conn_al_int[al_id, 'spike', i, int_id, 'spike', j, 0, 'conductance'] = True
 
 man.connect(lpu_al, lpu_int, conn_al_int)
-
-# running simulation
 
 man.start(steps=args.steps)
 man.stop()

@@ -25,7 +25,7 @@ import neurokernel.core as core
 import neurokernel.base as base
 from neurokernel.tools.comm import get_random_port
 
-from neurokernel.LPU.LPU_rev import LPU_rev
+from neurokernel.LPU.LPU import LPU
 
 import neurokernel.tools.graph
 
@@ -71,25 +71,25 @@ def run(connected):
 
     lpu_file_0 = './data/generic_lpu_0.gexf.gz'
     lpu_file_1 = './data/generic_lpu_1.gexf.gz'
-    (n_dict_0, s_dict_0) = LPU_rev.lpu_parser(lpu_file_0)
-    (n_dict_1, s_dict_1) = LPU_rev.lpu_parser(lpu_file_1)
+    (n_dict_0, s_dict_0) = LPU.lpu_parser(lpu_file_0)
+    (n_dict_1, s_dict_1) = LPU.lpu_parser(lpu_file_1)
 
     ge_0_id = 'ge_0'
-    ge_0 = LPU_rev(dt, n_dict_0, s_dict_0,
-                   input_file='./data/generic_input_0.h5',
-                   output_file='generic_output_0_%s.h5' % out_name,
-                   port_ctrl=port_ctrl, port_data=port_data,
-                   device=args.gpu_dev[0], id=ge_0_id,
-                   debug=args.debug)
+    ge_0 = LPU(dt, n_dict_0, s_dict_0,
+               input_file='./data/generic_input_0.h5',
+               output_file='generic_output_0_%s.h5' % out_name,
+               port_ctrl=port_ctrl, port_data=port_data,
+               device=args.gpu_dev[0], id=ge_0_id,
+               debug=args.debug)
     man.add_mod(ge_0)
 
     ge_1_id = 'ge_1'
-    ge_1 = LPU_rev(dt, n_dict_1, s_dict_1,
-                   input_file='./data/generic_input_1.h5',
-                   output_file='generic_output_1_%s.h5' % out_name,
-                   port_ctrl=port_ctrl, port_data=port_data,
-                   device=args.gpu_dev[1], id=ge_1_id,
-                   debug=args.debug)
+    ge_1 = LPU(dt, n_dict_1, s_dict_1,
+               input_file='./data/generic_input_1.h5',
+               output_file='generic_output_1_%s.h5' % out_name,
+               port_ctrl=port_ctrl, port_data=port_data,
+               device=args.gpu_dev[1], id=ge_1_id,
+               debug=args.debug)
     man.add_mod(ge_1)
 
     # Connect the public neurons in the two LPUs:
