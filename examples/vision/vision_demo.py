@@ -13,14 +13,15 @@ import itertools
 
 import networkx as nx
 
+nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
+                                       'true':True, 'True':True}
+
 import neurokernel.core as core
 import neurokernel.base as base
 import neurokernel.tools.graph as graph_tools
 from neurokernel.tools.comm import get_random_port
 
-from neurokernel.LPU.lpu_parser import lpu_parser
 from neurokernel.LPU.LPU_rev import LPU_rev
-from neurokernel.LPU.LPU import LPU
 
 dt = 1e-4
 dur = 1.0
@@ -63,15 +64,15 @@ else:
 man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
-(n_dict_lam, s_dict_lam) = lpu_parser('./data/lamina.gexf.gz')
-lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
+(n_dict_lam, s_dict_lam) = LPU_rev.lpu_parser('./data/lamina.gexf.gz')
+lpu_lam = LPU_rev(dt, n_dict_lam, s_dict_lam,
           input_file='./data/vision_input.h5',
           output_file='lamina_output.h5', port_ctrl=port_ctrl,
           port_data=port_data, device=args.lam_dev, id='lamina')
 man.add_mod(lpu_lam)
 
-(n_dict_med, s_dict_med) = lpu_parser('./data/medulla.gexf.gz')
-lpu_med = LPU(dt, n_dict_med, s_dict_med,
+(n_dict_med, s_dict_med) = LPU_rev.lpu_parser('./data/medulla.gexf.gz')
+lpu_med = LPU_rev(dt, n_dict_med, s_dict_med,
           output_file='medulla_output.h5', port_ctrl= port_ctrl,
           port_data=port_data, device=args.med_dev, id='medulla')
 man.add_mod(lpu_med)
