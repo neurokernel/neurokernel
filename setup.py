@@ -7,7 +7,7 @@ from glob import glob
 try:
     import setuptools
 except ImportError:
-    from distribute_setup import use_setuptools
+    from ez_setup import use_setuptools
     use_setuptools()
 
 from distutils.command.install import INSTALL_SCHEMES
@@ -16,10 +16,10 @@ from setuptools import find_packages
 from setuptools import setup
 
 NAME =               'neurokernel'
-VERSION =            '0.01'
+VERSION =            '0.1'
 AUTHOR =             'Neurokernel Development Team'
 AUTHOR_EMAIL =       'neurokernel-dev@columbia.edu'
-URL =                'http://github.com/neurokernel/neurokernel/'
+URL =                'https://github.com/neurokernel/neurokernel/'
 MAINTAINER =         AUTHOR
 MAINTAINER_EMAIL =   AUTHOR_EMAIL
 DESCRIPTION =        'An open architecture for Drosophila brain emulation'
