@@ -71,13 +71,15 @@ if __name__ == "__main__":
             'futures',
             'h5py',
             'la',
+            'matplotlib',
             'msgpack_numpy',
             'networkx',
+            'numexpr',
             'numpy',
             'pycuda >= 2012.1',
             'pyzmq',
             'scipy',
             'tables',
-            'twiggy'
+            'twiggy',
         ],
         )
