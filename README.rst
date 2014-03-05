@@ -20,7 +20,7 @@ as follows::
   pip install tables
   
 Run the following to install the remaining dependencies and the 
-latest Neurokernel code
+latest Neurokernel code::
 
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
