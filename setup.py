@@ -67,7 +67,7 @@ if __name__ == "__main__":
         include_package_data = True,
         install_requires = [
             'bidict',
-            #'bottleneck', # temporarily disable - see bottleneck issue 78
+            'bottleneck',
             'futures',
             'h5py',
             'la',
@@ -77,5 +77,7 @@ if __name__ == "__main__":
             'pycuda >= 2012.1',
             'pyzmq',
             'scipy',
-            'twiggy'],
+            'tables',
+            'twiggy'
+        ],
         )

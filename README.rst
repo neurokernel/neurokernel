@@ -11,7 +11,11 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 Quick Start
 -----------
 Make sure you have `pip <http://www.pip-installer.org>`_
-installed; once you do, run the following to install the latest code::
+installed; once you do, install `numpy` as follows::
+
+  pip install numpy
+  
+Run the following to install the latest Neurokernel code::
 
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
