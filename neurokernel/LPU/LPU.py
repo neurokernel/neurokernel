@@ -539,7 +539,7 @@ class LPU(Module, object):
                     spike_delay_steps = max_del if max_del > spike_delay_steps \
                                        else spike_delay_steps
 
-        self.total_synapses = np.sum(num_synapses)
+        self.total_synapses = int(np.sum(num_synapses))
         I_post.extend(self.input_neuron_list)
         I_pre.extend(range(self.total_synapses, self.total_synapses + \
                           len(self.input_neuron_list)))
