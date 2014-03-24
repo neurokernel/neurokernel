@@ -1,4 +1,6 @@
 import os
 import glob
 
-__all__ = ['LeakyIAF', 'MorrisLecar', 'LeakyIAF_bias', 'baseneuron']
+__all__ = [ os.path.basename(f)[:-3] for f in \
+            glob.glob(os.path.dirname(__file__)+"/*.py") if \
+            not '__init__' in os.path.basename(f)[:-3]]
