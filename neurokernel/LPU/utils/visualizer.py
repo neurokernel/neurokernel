@@ -454,4 +454,10 @@ class visualizer(object):
 
     @update_interval.setter
     def update_interval(self, value):
+        """
+        If value is 0 or None, update_interval will be set to the index of the
+        final step. As a consequence, only the final frame will be generated.
+        """
+        if not value:
+            value = self._maxt-1
         self._update_interval = value
