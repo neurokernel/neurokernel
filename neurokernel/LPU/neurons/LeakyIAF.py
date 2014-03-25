@@ -344,7 +344,7 @@ class LeakyIAF(BaseNeuron):
                if(tidy == 0)
                {
                    input[tidx][0] += input[tidx][1];
-
+                   neuron = bid*N+tidx;
                    if(neuron < NUM_NEURONS)
                    {
                        I_pre[neuron] += input[tidx][0];

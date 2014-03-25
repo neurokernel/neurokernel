@@ -114,7 +114,7 @@ class vision_LPU(object):
 #    def read_neurons(self):
         # read in csv file and turn it into a numpy structured array
         neuron_list = []
-        dtypes = [np.dtype('S10'), np.dtype(np.int32),
+        dtypes = [np.dtype('S10'), np.dtype('S32'),
                   np.dtype(np.int32), np.dtype(np.int32),
                   np.dtype(np.int32), np.dtype(np.int32),
                   np.dtype(np.int32), np.dtype(np.int32),
@@ -141,7 +141,7 @@ class vision_LPU(object):
         if self.columnar_synapse_csv is not None:
             synapse_list = []
             dtypes = [np.dtype('S10'), np.dtype('S10'),
-                      np.dtype(np.int32),
+                      np.dtype('S32'),
                       np.dtype(np.int32), np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
@@ -467,7 +467,7 @@ class Cartridge(object):
 class Neuron(object):
     def __init__(self, param_dict):
         self.params = param_dict.copy()
-        if self.params['model'] == 1:
+        if self.params['model'] == 'MorrisLecar':
             spiking = False
         else:
             spiking = True
