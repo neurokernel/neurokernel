@@ -302,14 +302,17 @@ class LeakyIAF(BaseNeuron):
 
             __syncthreads();
 
-
-            int n_den = num_den[tidy];
-            int start = den_start[tidy];
+            neuron = bid * N + tidy;
+            if(neuron < NUM_NEURONS){
+               int n_den = num_den[tidy];
+               int start = den_start[tidy];
 
                for(int i = tidx; i < n_den; i += N)
                {
                    input[tidy][tidx] += synapse[pre[start] + i];
                }
+            }
+
 
                __syncthreads();
 

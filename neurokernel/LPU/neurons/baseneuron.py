@@ -101,12 +101,12 @@ class BaseNeuron(object):
         pass
 
 
-    @abstractproperty
+    @property
     def neuron_class(self):
         '''
-        Should return zero if the
+        For future use
         '''
-        pass
+        return 0
 
 
     @property
@@ -284,16 +284,18 @@ class BaseNeuron(object):
 
             __syncthreads();
 
-
-            int n_den = num_den[tidy];
-            int start = den_start[tidy];
+            neuron = bid * N + tidy ;
+            if(neuron < NUM_NEURONS){
+            
+               int n_den = num_den[tidy];
+               int start = den_start[tidy];
 
                for(int i = tidx; i < n_den; i += N)
                {
                    input[tidy][tidx] += synapse[pre[start] + i];
                }
-
-               __syncthreads();
+             }
+             __syncthreads();
 
 
 
