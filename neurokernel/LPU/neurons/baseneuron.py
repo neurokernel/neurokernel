@@ -7,6 +7,8 @@ from pycuda.tools import dtype_to_ctype
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 
+from neurokernel.LPU.utils.simpleio import *
+
 class BaseNeuron(object):
     __metaclass__ = ABCMeta
 
@@ -86,7 +88,13 @@ class BaseNeuron(object):
         self._update_I_cond = self._get_update_I_cond_func()
         self._update_I_non_cond = self._get_update_I_non_cond_func()
         self.LPU_id = LPU_id
-
+        if self.debug:
+            if self.LPU_id is None:
+                self.LPU_id = "default_LPU"
+            self.I_file = tables.openFile(self.LPU_id + "_I.h5", mode="w")
+            self.I_file.createEArray("/","array", \
+                                     tables.Float64Atom(), (0,self.num_neurons))
+            
     @abstractmethod
     def eval(self):
         '''
@@ -140,13 +148,23 @@ class BaseNeuron(object):
                 self._cum_num_dendrite_cond.gpudata, self._num_dendrite_cond.gpudata,
                 self._cond_pre.gpudata, self.I.gpudata, int(self._neuron_state_pointer), \
                 self._V_rev.gpudata)
-
+        if self.debug:
+            self.I_file.root.array.append(self.I.get().reshape((1,-1)))
+        
 
     def post_run(self):
         '''
         This method will be called at the end of the simulation.
         '''
-        pass
+        
+    def __post_run(self):
+        '''
+        This private function is used to close the current output file
+        when baseneuron is used to compute input current to a neuron and
+        the debug flag is set.
+        '''
+        if self.debug:
+            self.I_file.close()
 
     def _get_update_I_cond_func(self):
         template = """

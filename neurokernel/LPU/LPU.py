@@ -330,7 +330,9 @@ class LPU(Module, object):
 
         for neuron in self.neurons:
             neuron.post_run()
-
+            if self.debug and not neuron.update_I_override:
+                neuron._BaseNeuron__post_run()
+                
         for synapse in self.synapses:
             synapse.post_run()
 
