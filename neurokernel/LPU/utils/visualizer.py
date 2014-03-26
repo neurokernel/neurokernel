@@ -29,12 +29,12 @@ class visualizer(object):
     config2['clim'] = [-0.55,-0.45]
     V.add_LPU('lamina_output.h5', 'lamina.gexf.gz','lamina')
     V.add_plot(config1, 'lamina', 'R1')
-    V.add_plot(config1, 'lamina', 'L1')
-    V._update_interval = 50
+    V.add_plot(config2, 'lamina', 'L1')
+    V.update_interval = 50
     V.out_filename = 'test.avi'
     V.run()
     """
-    
+
     def __init__(self):
         self._xlim = [0,1]
         self._ylim = [-1,1]
@@ -100,9 +100,18 @@ class visualizer(object):
         '''
         Starts the visualization process The final frame is saved to the specified
         file name; otherwise, the visualization is displayed in a window without being saved.
+
+        Note:
+        -----
+        If update_interval is set to 0 or None, it will be replaced by the
+        index of the final time step. As a result, the visualizer will only
+        generate the final frame.
+
         '''
 
         self._initialize()
+        if not self._update_interval:
+            self._update_interval = self._maxt - 1
         self._t = self._update_interval+1
         for i in range(self._update_interval,self._maxt, self._update_interval):
             self.update()
@@ -122,7 +131,7 @@ class visualizer(object):
                     func(value)
                 except:
                     pass
-        
+
     def _initialize(self):
 
         # Count number of plots to create:
@@ -136,7 +145,7 @@ class visualizer(object):
             self._rows = int(np.ceil(num_plots/float(self._cols)))
         self.f, self.axarr = plt.subplots(self._rows, self._cols,
                                           figsize=self._figsize)
-        
+
         # Remove unused subplots:
         for i in xrange(num_plots, self._rows*self._cols):
             plt.delaxes(self.axarr[np.unravel_index(i, (self._rows, self._cols))])
@@ -176,7 +185,7 @@ class visualizer(object):
                         config['type'] = 2
                     else:
                         config['type'] = 4
-                        
+
                 if config['type'] < 3:
                     if not 'shape' in config:
 
@@ -186,7 +195,7 @@ class visualizer(object):
                         num_neurons = len(config['ids'][0])
                         config['shape'] = [int(np.ceil(np.sqrt(num_neurons)))]
                         config['shape'].append(int(np.ceil(num_neurons/float(config['shape'][0]))))
-                        
+
                 if config['type'] == 0:
                     config['handle'] = self.axarr[ind].quiver(\
                                np.reshape(self._data[LPU][config['ids'][0],0],config['shape']),\
@@ -209,16 +218,16 @@ class visualizer(object):
                     else:
                         to_transpose = False
                         config['trans'] = False
-                    
+
                     if to_transpose:
                         temp = self.axarr[ind].imshow(np.transpose(np.reshape(\
                                 self._data[LPU][config['ids'][0],0], config['shape'])))
                     else:
                         temp = self.axarr[ind].imshow(np.reshape(\
                                 self._data[LPU][config['ids'][0],0], config['shape']))
-            
-            
-            
+
+
+
                     temp.set_clim(self._imlim)
                     temp.set_cmap(plt.cm.gist_gray)
                     config['handle'] = temp
@@ -232,7 +241,7 @@ class visualizer(object):
                         config['ydata'] = [self._data[LPU][config['ids'][0][0],0]]
                     else:
                         config['handle'] = self.axarr[ind].plot(self._data[LPU][config['ids'][0],0])[0]
-                        
+
                 elif config['type'] == 4:
                     config['handle'] = self.axarr[ind]
                     config['handle'].vlines(0, 0, 0.01)
@@ -454,10 +463,4 @@ class visualizer(object):
 
     @update_interval.setter
     def update_interval(self, value):
-        """
-        If value is 0 or None, update_interval will be set to the index of the
-        final step. As a consequence, only the final frame will be generated.
-        """
-        if not value:
-            value = self._maxt-1
         self._update_interval = value
