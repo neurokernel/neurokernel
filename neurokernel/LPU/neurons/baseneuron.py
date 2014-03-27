@@ -62,37 +62,38 @@ class BaseNeuron(object):
         debug is a boolean and is intended to be used for debugging purposes.
 
         '''
-        self._neuron_state_pointer = neuron_state_pointer
-        self._num_neurons = len(n_dict['id'])
+        self.__neuron_state_pointer = neuron_state_pointer
+        self.__num_neurons = len(n_dict['id'])
         _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i] \
-                                    for i in range(self._num_neurons)], \
+                                    for i in range(self.__num_neurons)], \
                                     dtype=np.int32).flatten()
         _num_dendrite = np.asarray([n_dict['num_dendrites_I'][i] \
-                                    for i in range(self._num_neurons)], \
+                                    for i in range(self.__num_neurons)], \
                                    dtype=np.int32).flatten()
 
-        self._cum_num_dendrite = garray.to_gpu(np.concatenate(( \
+        self.__cum_num_dendrite = garray.to_gpu(np.concatenate(( \
                                     np.asarray([0,], dtype=np.int32), \
                                     np.cumsum(_num_dendrite, dtype=np.int32))))
-        self._cum_num_dendrite_cond = garray.to_gpu(np.concatenate(( \
+        self.__cum_num_dendrite_cond = garray.to_gpu(np.concatenate(( \
                                     np.asarray([0,], dtype=np.int32), \
                                     np.cumsum(_num_dendrite_cond, dtype=np.int32))))
-        self._num_dendrite = garray.to_gpu(_num_dendrite)
-        self._num_dendrite_cond = garray.to_gpu(_num_dendrite_cond)
-        self._pre = garray.to_gpu(np.asarray(n_dict['I_pre'], dtype=np.int32))
-        self._cond_pre = garray.to_gpu(np.asarray(n_dict['cond_pre'],
+        self.__num_dendrite = garray.to_gpu(_num_dendrite)
+        self.__num_dendrite_cond = garray.to_gpu(_num_dendrite_cond)
+        self.__pre = garray.to_gpu(np.asarray(n_dict['I_pre'], dtype=np.int32))
+        self.__cond_pre = garray.to_gpu(np.asarray(n_dict['cond_pre'],
                                                   dtype=np.int32))
-        self._V_rev = garray.to_gpu(np.asarray(n_dict['reverse'],
+        self.__V_rev = garray.to_gpu(np.asarray(n_dict['reverse'],
                                                dtype=np.double))
-        self.I = garray.zeros(self.num_neurons, np.double)
-        self._update_I_cond = self._get_update_I_cond_func()
-        self._update_I_non_cond = self._get_update_I_non_cond_func()
-        self.LPU_id = LPU_id
-        if self.debug:
-            if self.LPU_id is None:
-                self.LPU_id = "default_LPU"
-            self.I_file = tables.openFile(self.LPU_id + "_I.h5", mode="w")
-            self.I_file.createEArray("/","array", \
+        self.I = garray.zeros(self.__num_neurons, np.double)
+        self.__update_I_cond = self.__get_update_I_cond_func()
+        self.__update_I_non_cond = self.__get_update_I_non_cond_func()
+        self.__LPU_id = LPU_id
+        self.__debug = debug
+        if self.__debug:
+            if self.__LPU_id is None:
+                self.__LPU_id = "default_LPU"
+            self.__I_file = tables.openFile(self.__LPU_id + "_I.h5", mode="w")
+            self.__I_file.createEArray("/","array", \
                                      tables.Float64Atom(), (0,self.num_neurons))
             
     @abstractmethod
@@ -137,19 +138,19 @@ class BaseNeuron(object):
 
         '''
         self.I.fill(0)
-        if self._pre.size>0:
-            self._update_I_non_cond.prepared_async_call(self._grid_get_input,\
-                self._block_get_input, st, int(synapse_state), \
-                self._cum_num_dendrite.gpudata, self._num_dendrite.gpudata, self._pre.gpudata,
+        if self.__pre.size>0:
+            self.__update_I_non_cond.prepared_async_call(self.__grid_get_input,\
+                self.__block_get_input, st, int(synapse_state), \
+                self.__cum_num_dendrite.gpudata, self.__num_dendrite.gpudata, self.__pre.gpudata,
                 self.I.gpudata)
-        if self._cond_pre.size>0:
-            self._update_I_cond.prepared_async_call(self._grid_get_input,\
-                self._block_get_input, st, int(synapse_state), \
-                self._cum_num_dendrite_cond.gpudata, self._num_dendrite_cond.gpudata,
-                self._cond_pre.gpudata, self.I.gpudata, int(self._neuron_state_pointer), \
-                self._V_rev.gpudata)
+        if self.__cond_pre.size>0:
+            self.__update_I_cond.prepared_async_call(self.__grid_get_input,\
+                self.__block_get_input, st, int(synapse_state), \
+                self.__cum_num_dendrite_cond.gpudata, self.__num_dendrite_cond.gpudata,
+                self.__cond_pre.gpudata, self.I.gpudata, int(self.__neuron_state_pointer), \
+                self.__V_rev.gpudata)
         if self.debug:
-            self.I_file.root.array.append(self.I.get().reshape((1,-1)))
+            self.__I_file.root.array.append(self.I.get().reshape((1,-1)))
         
 
     def post_run(self):
@@ -163,10 +164,10 @@ class BaseNeuron(object):
         when baseneuron is used to compute input current to a neuron and
         the debug flag is set.
         '''
-        if self.debug:
-            self.I_file.close()
+        if self.__debug:
+            self.__I_file.close()
 
-    def _get_update_I_cond_func(self):
+    def __get_update_I_cond_func(self):
         template = """
         #define N 32
         #define NUM_NEURONS %(num_neurons)d
@@ -258,14 +259,14 @@ class BaseNeuron(object):
         }
         //can be improved
         """
-        mod = SourceModule(template % {"num_neurons": self._num_neurons}, options = ["--ptxas-options=-v"])
+        mod = SourceModule(template % {"num_neurons": self.__num_neurons}, options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
         func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
-        self._block_get_input = (32,32,1)
-        self._grid_get_input = ((self._num_neurons - 1) / 32 + 1, 1)
+        self.__block_get_input = (32,32,1)
+        self.__grid_get_input = ((self.__num_neurons - 1) / 32 + 1, 1)
         return func
 
-    def _get_update_I_non_cond_func(self):
+    def __get_update_I_non_cond_func(self):
         template = """
         #define N 32
         #define NUM_NEURONS %(num_neurons)d
@@ -353,7 +354,7 @@ class BaseNeuron(object):
         }
         //can be improved
         """
-        mod = SourceModule(template % {"num_neurons": self._num_neurons}, options = ["--ptxas-options=-v"])
+        mod = SourceModule(template % {"num_neurons": self.__num_neurons}, options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
         func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp])
         return func
