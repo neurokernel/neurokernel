@@ -154,8 +154,34 @@ class RoutingTable(object):
             return t
 
 if __name__ == '__main__':
-    t = RoutingTable()
-    t['a', 'b'] = 1
-    t['b', 'c'] = 1
-    print t
+    from unittest import main, TestCase
+
+    class test_routingtable(TestCase):
+        def setUp(self):
+            self.coords_orig = [('a', 'b'), ('b', 'c')]
+            self.ids_orig = set([i[0] for i in self.coords_orig]+\
+                                [i[1] for i in self.coords_orig])
+            self.t = RoutingTable()
+            for c in self.coords_orig:
+                self.t[c[0], c[1]] = 1
+        def test_shape(self):
+            n = len(self.ids_orig)
+            assert self.t.shape == (n, n)
+        def test_ids(self):
+            assert set(self.t.ids) == self.ids_orig
+        def test_coords(self):
+            assert set(self.t.coords) == set(self.coords_orig)
+        def test_all_row_ids(self):
+            assert set(self.t.all_row_ids()) == \
+                set([i[0] for i in self.coords_orig])
+        def test_all_col_ids(self):
+            assert set(self.t.all_col_ids()) == \
+                set([i[1] for i in self.coords_orig])
+        def test_row_ids(self):
+            for i in self.coords_orig:
+                assert i[0] in self.t.row_ids(i[1])
+        def test_col_ids(self):
+            for i in self.coords_orig:
+                assert i[1] in self.t.col_ids(i[0])
+    main()
 
