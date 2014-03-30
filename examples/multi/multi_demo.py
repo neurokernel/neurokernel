@@ -16,7 +16,7 @@ from neurokernel.tools.graph import graph_to_df
 from neurokernel.tools.comm import get_random_port
 from neurokernel.base import setup_logger
 from neurokernel.core import Connectivity, Manager
-from neurokernel.LPU.LPU_rev import LPU_rev
+from neurokernel.LPU.LPU import LPU
 
 # Execution parameters:
 dt = 1e-4
@@ -94,17 +94,17 @@ for i, neu_num in neu_dict.iteritems():
         in_file_name = None
     lpu_file_name = 'generic_lpu_%s.gexf.gz' % i
     out_file_name = 'generic_output_%s.h5' % i
-    
+
     g.create_lpu(lpu_file_name, *neu_num)
-    (n_dict, s_dict) = LPU_rev.lpu_parser(lpu_file_name)
+    (n_dict, s_dict) = LPU.lpu_parser(lpu_file_name)
 
     id = 'lpu_%s' % i
-    lpu = LPU_rev(dt, n_dict, s_dict, input_file=in_file_name,
-                  output_file=out_file_name,
-                  port_ctrl=port_ctrl, port_data=port_data,
-                  device=i, id=id,
-                  debug=args.debug)
-        
+    lpu = LPU(dt, n_dict, s_dict, input_file=in_file_name,
+              output_file=out_file_name,
+              port_ctrl=port_ctrl, port_data=port_data,
+              device=i, id=id,
+              debug=args.debug)
+
     lpu_entry['lpu_file_name'] = lpu_file_name
     lpu_entry['in_file_name'] = in_file_name
     lpu_entry['out_file_name'] = out_file_name
@@ -112,7 +112,7 @@ for i, neu_num in neu_dict.iteritems():
     lpu_entry['id'] = id
 
     lpu_dict[i] = lpu_entry
-    
+
 syn_params = {'AlphaSynapse': ['ad', 'ar', 'gmax', 'id', 'class', 'conductance', 'reverse']}
 
 man = Manager(port_data, port_ctrl)
@@ -156,8 +156,8 @@ for lpu_0, lpu_1 in itertools.combinations(lpu_dict.keys(), 2):
             conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'id'] = id
             conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'reverse'] = 0.065
         id_start = id+1
-        
+
     man.connect(lpu_dict[lpu_0]['lpu'], lpu_dict[lpu_1]['lpu'], conn)
 
-man.start(steps=steps)        
+man.start(steps=steps)
 man.stop()

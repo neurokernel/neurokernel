@@ -11,13 +11,22 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 Quick Start
 -----------
 Make sure you have `pip <http://www.pip-installer.org>`_
-installed; once you do, run the following to install the latest code::
+installed; once you do, install the following dependencies 
+as follows::
+
+  pip install numpy
+  pip install cython
+  pip install numexpr
+  pip install tables
+  
+Run the following to install the remaining dependencies and the 
+latest Neurokernel code::
 
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
 
-If you have all of the requirements listed in ``INSTALL.rst`` installed, you can
-also install the downloaded code using the usual::
+If you have all of the requirements listed in ``INSTALL.rst`` installed, 
+you can also install the downloaded code using the usual::
 
   python setup.py install
 

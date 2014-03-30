@@ -4,10 +4,14 @@
 Visualize vision model output.
 """
 
-import matplotlib
-matplotlib.use('Agg')
 import numpy as np
+import matplotlib as mpl
+mpl.use('Agg')
+
 import neurokernel.LPU.utils.visualizer as vis
+import networkx as nx
+nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
+                                        'true':True, 'True':True}
 
 V = vis.visualizer()
 

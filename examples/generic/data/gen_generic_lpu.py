@@ -5,7 +5,6 @@ Create generic LPU and simple pulse input signal.
 """
 
 from itertools import product
-import random
 import sys
 
 import numpy as np

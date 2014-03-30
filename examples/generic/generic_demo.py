@@ -20,8 +20,7 @@ import neurokernel.core as core
 import neurokernel.base as base
 from neurokernel.tools.comm import get_random_port
 
-from neurokernel.LPU.lpu_parser import lpu_parser
-from neurokernel.LPU.LPU_rev import LPU_rev
+from neurokernel.LPU.LPU import LPU
 
 dt = 1e-4
 dur = 1.0
@@ -61,14 +60,14 @@ else:
 man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
-(n_dict, s_dict) = LPU_rev.lpu_parser('./data/generic_lpu.gexf.gz')
+(n_dict, s_dict) = LPU.lpu_parser('./data/generic_lpu.gexf.gz')
 
-ge = LPU_rev(dt, n_dict, s_dict,
-             input_file='./data/generic_input.h5',
-             output_file='generic_output.h5', port_ctrl=port_ctrl,
-             port_data=port_data,
-             device=args.gpu_dev, id='ge',
-             debug=args.debug)
+ge = LPU(dt, n_dict, s_dict,
+         input_file='./data/generic_input.h5',
+         output_file='generic_output.h5', port_ctrl=port_ctrl,
+         port_data=port_data,
+         device=args.gpu_dev, id='ge',
+         debug=args.debug)
 man.add_mod(ge)
 
 man.start(steps=args.steps)

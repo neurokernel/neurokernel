@@ -17,24 +17,26 @@ class visualizer(object):
     """
     Visualize the output produced by LPU models.
 
-    Example
-    -------
-    import neurokernel.LPU.utils.visualizer as vis
-    V = vis.visualizer()
-    config1 = {}
-    config1['type'] = 'image'
-    config1['shape'] = [32,24]
-    config1['clim'] = [-0.6,0.5]
-    config2 = config1.copy()
-    config2['clim'] = [-0.55,-0.45]
-    V.add_LPU('lamina_output.h5', 'lamina.gexf.gz','lamina')
-    V.add_plot(config1, 'lamina', 'R1')
-    V.add_plot(config1, 'lamina', 'L1')
-    V._update_interval = 50
-    V.out_filename = 'test.avi'
-    V.run()
+    Examples
+    --------
+        import neurokernel.LPU.utils.visualizer as vis
+        V = vis.visualizer()
+        config1 = {}
+        config1['type'] = 'image'
+        config1['shape'] = [32,24]
+        config1['clim'] = [-0.6,0.5]
+        config2 = config1.copy()
+        config2['clim'] = [-0.55,-0.45]
+        V.add_LPU('lamina_output.h5', 'lamina.gexf.gz','lamina')
+        V.add_plot(config1, 'lamina', 'R1')
+        V.add_plot(config2, 'lamina', 'L1')
+        V.update_interval = 50
+        V.out_filename = 'test.avi'
+        V.run()
+
+        
     """
-    
+
     def __init__(self):
         self._xlim = [0,1]
         self._ylim = [-1,1]
@@ -58,10 +60,9 @@ class visualizer(object):
     def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None):
         '''
         Add data associated with a specific LPU to a visualization.
-
         To add a plot containing neurons from a particular LPU,
         the LPU needs to be added to the visualization using this
-        function. Not that outputs from multiple neurons can
+        function. Note that outputs from multiple neurons can
         be visualized using the same visualizer object.
 
         Parameters
@@ -77,7 +78,19 @@ class visualizer(object):
 
         LPU: str
             Name of the LPU. Will be used as identifier to add plots.
-       
+            For input signals, the name of the LPU will be prepended
+            with 'input_'. For example::
+
+                V.add_LPU('vision_in.h5', LPU='vision')
+
+            will create the LPU identifier 'input_vision'.
+            Therefore, adding a plot depicting this input can be done by::
+
+                V.add_plot({''type':'image',imlim':[-0.5,0.5]},LPU='input_vision)
+
+        win: slice/list
+            Can be used to limit the visualization to a specific time window.
+        
         '''
         if gexf_file:
             self._graph[LPU] = nx.read_gexf(gexf_file)
@@ -98,18 +111,42 @@ class visualizer(object):
 
     def run(self, final_frame_name=None, dpi=300):
         '''
-        Starts the visualization process The final frame is saved to the specified
-        file name; otherwise, the visualization is displayed in a window without being saved.
+        Starts the visualization process. If the property out_filename is set,
+        the visualization is saved as a video to the disk. If it is not
+        specified, the animation will be displayed on screen.
+        Please refer to documentation of add_LPU, add_plot and
+        the properties of this class on how to configure the visualizer before call this
+        method. An example can be found in the class doc string.
+
+        Paramters
+        ----------
+
+        final_frame_name: str
+            Optional. If specified, the final frame of the animation will be saved
+            to disk.
+
+        dpi: int
+            Default(300). If final_frame_name is specified, this parameter will control
+            the resolution at which the final frame is saved to disk.
+
+        Note:
+        -----
+        If update_interval is set to 0 or None, it will be replaced by the
+        index of the final time step. As a result, the visualizer will only
+        generate the final frame.
+
         '''
 
         self._initialize()
+        if not self._update_interval:
+            self._update_interval = self._maxt - 1
         self._t = self._update_interval+1
         for i in range(self._update_interval,self._maxt, self._update_interval):
-            self.update()
+            self._update()
         if final_frame_name is not None:
             self.f.savefig(final_frame_name, dpi=dpi)
         if self.out_filename:
-            self.close()
+            self._close()
 
     def _set_wrapper(self, obj, name, value):
         name = name.lower()
@@ -122,7 +159,7 @@ class visualizer(object):
                     func(value)
                 except:
                     pass
-        
+
     def _initialize(self):
 
         # Count number of plots to create:
@@ -136,7 +173,7 @@ class visualizer(object):
             self._rows = int(np.ceil(num_plots/float(self._cols)))
         self.f, self.axarr = plt.subplots(self._rows, self._cols,
                                           figsize=self._figsize)
-        
+
         # Remove unused subplots:
         for i in xrange(num_plots, self._rows*self._cols):
             plt.delaxes(self.axarr[np.unravel_index(i, (self._rows, self._cols))])
@@ -176,7 +213,7 @@ class visualizer(object):
                         config['type'] = 2
                     else:
                         config['type'] = 4
-                        
+
                 if config['type'] < 3:
                     if not 'shape' in config:
 
@@ -186,7 +223,7 @@ class visualizer(object):
                         num_neurons = len(config['ids'][0])
                         config['shape'] = [int(np.ceil(np.sqrt(num_neurons)))]
                         config['shape'].append(int(np.ceil(num_neurons/float(config['shape'][0]))))
-                        
+
                 if config['type'] == 0:
                     config['handle'] = self.axarr[ind].quiver(\
                                np.reshape(self._data[LPU][config['ids'][0],0],config['shape']),\
@@ -209,16 +246,16 @@ class visualizer(object):
                     else:
                         to_transpose = False
                         config['trans'] = False
-                    
+
                     if to_transpose:
                         temp = self.axarr[ind].imshow(np.transpose(np.reshape(\
                                 self._data[LPU][config['ids'][0],0], config['shape'])))
                     else:
                         temp = self.axarr[ind].imshow(np.reshape(\
                                 self._data[LPU][config['ids'][0],0], config['shape']))
-            
-            
-            
+
+
+
                     temp.set_clim(self._imlim)
                     temp.set_cmap(plt.cm.gist_gray)
                     config['handle'] = temp
@@ -232,7 +269,7 @@ class visualizer(object):
                         config['ydata'] = [self._data[LPU][config['ids'][0][0],0]]
                     else:
                         config['handle'] = self.axarr[ind].plot(self._data[LPU][config['ids'][0],0])[0]
-                        
+
                 elif config['type'] == 4:
                     config['handle'] = self.axarr[ind]
                     config['handle'].vlines(0, 0, 0.01)
@@ -275,7 +312,7 @@ class visualizer(object):
         else:
             self.f.show()
 
-    def update(self):
+    def _update(self):
         dt = self._dt
         t = self._t
         for key, configs in self._config.iteritems():
@@ -329,7 +366,73 @@ class visualizer(object):
 
         self._t+=self._update_interval
             
-    def add_plot(self, config_dict, LPU=0, names=[''], shift=0):
+    def add_plot(self, config_dict, LPU, names=[''], shift=0):
+        '''
+        Add a plot to the visualizer
+
+        Parameters
+        ----------
+        config_dict: dict
+            A dictionary specifying the plot attributes. The attribute
+            names should be the keys.
+            
+            The following are the plot attributes that can be specfied using
+            this dict.
+
+            type - str
+                This specifies the type of the plot. Has to be one of
+                ['waveform', 'raster', 'image','hsv','quiver']
+            
+            ids - dict with either 1 or 2 entries
+                Specifies the neuron ids from the associated LPU.
+                The keys should be in [0,1] and the values
+                should be a list of ids.
+                For example::
+
+                    {'ids':{0:[1,2]}}
+
+                will plot neurons with ids 1 and 2.
+                Two entries in the dictionary  are needed if the plot is
+                of type 'hsv' or 'quiver'
+                For example::
+
+                     {'ids':{0:[:768],1:[768:1536]},'type':'HSV'}
+
+                can be used to generate a HSV plot where the hue channel is
+                controlled by the angle of the vector defined by the membrane
+                potentials of the neurons with ids [:768] and [768:1536] and
+                the value will be the magnitude of the same vector. 
+            
+                This parameter is optional for the following cases::
+
+                    1) The plot is associated with input signals.
+                    2) The names parameter is specified.
+
+                If the above doesn't hold, this attribute needs to be specified.
+
+            shape - list or tuple with two entries
+                This attribute specifies the dimensions for plots of type image,
+                hsv or quiver.
+  
+            title - str
+                Optional. Can be used to control the title of the plot.
+
+            
+            In addition to the above, any parameter supported by matlpotlib
+            for the particular type of plot can be specified.
+            For example - 'imlim','clim','xlim','ylim' etc.
+              
+        LPU: str
+            The name of the LPU associated to this plot.
+
+        names: list
+            Optional. A list of str specifying the neurons
+            to plot. Can be used instead of specifying ids in the
+            config_dict. The gexf file of the LPU needs to have
+            the name attribute in order for this to be used.
+
+        
+        '''
         config = config_dict.copy()
         if not isinstance(names, list):
             names = [names]
@@ -358,18 +461,38 @@ class visualizer(object):
                 else:
                     config['title'] = str(LPU)
 
-    def close(self):
+    def _close(self):
         self.writer.finish()
 
     @property
-    def xlim(self): return self._xlim
+    def xlim(self):
+        '''
+        Get or set the limits of the x-axis for all the raster and waveform plots.
+        Can be superseded for individual plots by specifying xlim in the confid_dict
+        for that plot.
+
+        See also
+        --------
+            add_plot
+        '''
+        return self._xlim
 
     @xlim.setter
     def xlim(self, value):
         self._xlim = value
 
     @property
-    def ylim(self): return self._ylim
+    def ylim(self):
+        '''
+        Get or set the limits of the y-axis for all the raster and waveform plots.
+        Can be superseded for individual plots by specifying xlim in the confid_dict
+        for that plot.
+
+        See also
+        --------
+            add_plot
+        '''
+        return self._ylim
 
     @ylim.setter
     def ylim(self, value):
@@ -377,7 +500,7 @@ class visualizer(object):
 
     @property
     def imlim(self): return self._imlim
-
+    
     @imlim.setter
     def imlim(self, value):
         self._imlim = value
@@ -450,7 +573,13 @@ class visualizer(object):
         self._title = value
 
     @property
-    def update_interval(self): return self._update_interval
+    def update_interval(self):
+        """
+        Gets or sets the update interval(in terms of time steps) for the animation.
+        If value is 0 or None, update_interval will be set to the index of the
+        final step. As a consequence, only the final frame will be generated.
+        """
+        return self._update_interval
 
     @update_interval.setter
     def update_interval(self, value):
