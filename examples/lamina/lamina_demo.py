@@ -36,7 +36,7 @@ parser.add_argument('-d', '--port_data', default=None, type=int,
                     help='Data port [default: randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
-parser.add_argument('-a', '--lam_dev', default=4, type=int,
+parser.add_argument('-a', '--lam_dev', default=0, type=int,
                     help='GPU for lamina lobe [default: 0]')
 
 args = parser.parse_args()
