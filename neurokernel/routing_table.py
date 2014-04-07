@@ -5,81 +5,66 @@ Routing table class.
 """
 
 import numpy as np
-import la
+
+import pandas as pd
 
 class RoutingTable(object):
     """
-    Routing table.
+    Routing table class.
+
+    Simple class that stores pairs of strings that can signify
+    one-hop routes between entities in a graph. Assigning a value to a
+    pair that isn't in the class instance will result in the pair and value
+    being appended to the class instance.
 
     Parameters
     ----------
-    t : la.larry
-       Labeled array to use when initializing table.
+    df : pandas.DataFrame
+        Initial table of routing data. The dataframe must have a MultiIndex
+        containing two levels `i` and `j`.
 
     Notes
     -----
-    Inserting rows or columns of values is not currently supported.
-
-    The initial array must be 2D and possess the same list labels for
-    both of its dimensions.
-
+    Assigning to a new pair will result in reallocation of the internal
+    dataframe. This shouldn't be a big concern given that expected maximum
+    number of distinct entities in the table shouldn't be more than 50.
     """
-
-    def __init__(self, t=None):
-        if t is None:
-            self._data = None
+    
+    def __init__(self, df=None):
+        if df is None:            
+            self.data = pd.DataFrame(columns=['data'],
+                                      index=pd.MultiIndex(levels=[[], []],
+                                                          labels=[[], []],
+                                                          names=['i', 'j']))
         else:
             try:
-                type(t) == la.larry
-                t.label[0] == t.label
+                type(df) == pd.DataFrame
+                len(df.index.levels) == 2
+                len(df.index.labels) == 2
             except:
                 raise ValueError('invalid initial array')
             else:
-                self._data = t.copy()
+                self.data = df.copy()
 
     def __setitem__(self, key, value):
         if type(key) == slice:
             raise ValueError('assignment by slice not supported')
         if len(key) != 2:
             raise KeyError('invalid key')
-        row, col = key
-        if not self._data:
-            label = list(set(key))
-            self._data = la.larry(np.zeros(2*(len(label),), type(value)),
-                                  [label, label])
+        try:
+            self.data.ix[key]
+        except:
+            self.data = self.data.append(pd.DataFrame({'data': value},
+                                                        index=pd.MultiIndex.from_tuples([key])))
+            self.data.sort(inplace=True)
         else:
-
-            # If either the row or column identifier isn't in the
-            # current list of labels, add it:
-            for k in key:
-
-                # Create new row:
-                if k not in self._data.label[0]:
-                    self._data = self._data.merge(la.larry([[0]*len(self._data.label[1])],
-                                                           [[k], self._data.label[1]]))
-
-                # Create new column:
-                if k not in self._data.label[1]:
-                    self._data = self._data.merge(la.larry([[0]]*len(self._data.label[0]),
-                                                           [self._data.label[0], [k]]))
-        self._data.set([row, col], int(value))
+            self.data.ix[key] = value
 
     def __getitem__(self, key):
-
-        # Index values referring to labels must be wrapped with lists:
-        reformat_slice = lambda s: slice(s.start if s.start is None else [s.start],
-                                         s.stop if s.stop is None else [s.stop],
-                                         s.step)
-        if type(key) == tuple:
-            key = tuple([reformat_slice(k) if type(k) == slice else [k] for k in key])
-        elif type(key) == slice:
-            key = reformat_slice(key)
-        else:
-            key = [key]
-        return self._data.lix[key]
+        raise NotImplementedError
 
     def __copy__(self):
-        return RoutingTable(self._data)
+        return self.__class__(self.data)
 
     copy = __copy__
 
@@ -89,7 +74,7 @@ class RoutingTable(object):
         Shape of table.
         """
 
-        return self._data.shape
+        return len(self.data.index.levels[0]), len(self.data.index.levels[1])
 
     @property
     def ids(self):
@@ -97,10 +82,7 @@ class RoutingTable(object):
         IDs currently in routing table.
         """
 
-        if self._data is None:
-            return []
-        else:
-            return self._data.label[0]
+        return list(self.data.index.levels[0]+self.data.index.levels[1])
 
     @property
     def coords(self):
@@ -108,50 +90,54 @@ class RoutingTable(object):
         List of coordinate tuples of all nonzero table entries.
         """
 
-        if self._data is None:
-            return []
-        else:
-            return [tuple(x[0:2]) for x in self._data.totuples() if x[2]]
+        return list(self.data[self.data['data'] != 0].index)
 
+    @property
+    def nnz(self):
+        """
+        Number of nonzero entries in the table.
+        """
+
+        return len(self.data[self.data['data'] != 0])
+    
     def row_ids(self, col_id):
         """
         Row IDs connected to a column ID.
         """
 
-        return [self[:, col_id].label[0][i] for i, e in \
-                enumerate(self[:, col_id]) if e != 0]
+        try:
+            return list(self.data[self.data['data'] != 0].xs(col_id, level='j').index)
+        except:
+            return []
 
     def all_row_ids(self):
         """
         All row IDs connected to column IDs.
         """
+        
+        d = self.data[self.data['data'] != 0]
+        return list(set(d.index.levels[0][d.index.labels[0]]))
 
-        return [self._data.label[0][i] for i, e in \
-                enumerate(np.sum(self._data.x, 1, np.bool)) if e]
-
-    def col_ids(self, row_id):
+    def col_ids(self, col_id):
         """
         Column IDs connected to a row ID.
         """
 
-        return [self[row_id, :].label[0][i] for i, e in \
-                enumerate(self[row_id, :]) if e != 0]
+        try:
+            return list(self.data[self.data['data'] != 0].ix[col_id].index)
+        except:
+            return []
 
     def all_col_ids(self):
         """
         All column IDs connected to row IDs.
         """
-
-        return [self._data.label[0][i] for i, e in \
-                enumerate(np.sum(self._data.x, 0, np.bool)) if e]
+        
+        d = self.data[self.data['data'] != 0]
+        return list(set(d.index.levels[1][d.index.labels[1]]))
 
     def __repr__(self):
-        if self._data is None:
-            return 'empty'
-        else:
-            t = 'ids:   ' + repr(self.ids) + '\n' + \
-              self._data.getx().__repr__()
-            return t
+        return self.data.__repr__()
 
 if __name__ == '__main__':
     from unittest import main, TestCase
@@ -160,17 +146,19 @@ if __name__ == '__main__':
         def setUp(self):
             self.coords_orig = [('a', 'b'), ('b', 'c')]
             self.ids_orig = set([i[0] for i in self.coords_orig]+\
-                                [i[1] for i in self.coords_orig])
+                                [i[1] for i in self.coords_orig])            
             self.t = RoutingTable()
             for c in self.coords_orig:
                 self.t[c[0], c[1]] = 1
+            self.shape = (2, 2)
         def test_shape(self):
-            n = len(self.ids_orig)
-            assert self.t.shape == (n, n)
+            assert self.t.shape == self.shape
         def test_ids(self):
             assert set(self.t.ids) == self.ids_orig
         def test_coords(self):
             assert set(self.t.coords) == set(self.coords_orig)
+        def test_nnz(self):
+            assert self.t.nnz == len(self.coords_orig)
         def test_all_row_ids(self):
             assert set(self.t.all_row_ids()) == \
                 set([i[0] for i in self.coords_orig])

@@ -70,7 +70,6 @@ if __name__ == "__main__":
             'bottleneck',
             'futures',
             'h5py',
-            'la',
             'matplotlib',
             'msgpack_numpy',
             'networkx',
