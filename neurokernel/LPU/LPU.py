@@ -1,13 +1,17 @@
 #!/usr/bin/env python
-import collections
 
-import numpy as np
+"""
+Local Processing Unit (LPU) draft implementation.
+"""
+
+import collections
 
 import pycuda.gpuarray as garray
 from pycuda.tools import dtype_to_ctype
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 
+import numpy as np
 import networkx as nx
 
 # Work around bug that causes networkx to choke on GEXF files with boolean
@@ -30,78 +34,102 @@ from synapses import *
 import pdb
 
 class LPU(Module, object):
+    """
+    Local Processing Unit (LPU).
+
+    Parameters
+    ----------
+    dt : double
+        Time step (s).
+    n_dict_list : list of dict
+        List of dictionaries describing the neurons in this LPU; each dictionary
+        corresponds to a single neuron model.
+    s_dict_list : list of dict
+        List of dictionaries describing the synapses in this LPU; each
+        dictionary corresponds to a single synapse model.
+    input_file : str
+        Name of input file
+    output_file : str
+        Name of output files
+    port_data : int
+        Port to use when communicating with broker.
+    port_ctrl : int
+        Port used by broker to control module.
+    device : int
+        GPU device number.
+    id : str
+        Name of the LPU
+    debug : boolean
+        Passed to all the neuron and synapse objects instantiated by this LPU
+        for debugging purposes. False by default.
+    """
 
     @staticmethod
     def lpu_parser(filename):
         """
-        GEXF-to-python LPU parser.
+        GEXF LPU specification parser.
 
-        Convert a .gexf LPU specifications into NetworkX graph type, and
-        then pack data into list of dictionaries to be passed to the LPU
-        module. The individual parameters will be represented by lists.
+        Extract LPU specification data from a GEXF file and store it
+        in a list of dictionaries. All nodes in the GEXF file are assumed to
+        correspond to neuron model instances while all edges are assumed to
+        correspond to synapse model instances.
 
         Parameters
         ----------
-        filename : String
-            Filename containing LPU specification of GEXF format.
-            See Notes for requirements to be met by the GEXF file.
+        filename : str
+            GEXF filename.
 
         Returns
         -------
         n_dict : dict of dict of neuron
-            The outer dict maps each neuron model to an inner dict which maps
-            each attibutes of such neuron, ex. V1, to a list of data.
-
-            ex. {'LeakyIAF':{'Vr':[...],'Vt':[...]},
-                'MorrisLecar':{'V1':[...],'V2':[...]}}
-
+            Each key of `n_dict` is the name of a neuron model; the values
+            are dicts that map each attribute name to a list that contains the
+            attribute values for each neuron.
         s_dict : dict of dict of synapse
-            The outer dict maps each synapse model to an inner dict which maps
-            each attribute of such synapse model to a list of data.
+            Each key of `s_dict` is the name of a synapse model; the values are
+            dicts that map each attribute name to a list that contains the
+            attribute values for each each neuron.
+
+        Example
+        -------
+        >>> n_dict = {'LeakyIAF': {'Vr': [0.5, 0.6], 'Vt': [0.3, 0.2]},
+                      'MorrisLecar': {'V1': [0.15, 0.16], 'Vt': [0.13, 0.27]}}
 
         Notes
         -----
+        All neurons must have the following attributes; any additional attributes
+        for a specific neuron model must be provided for all neurons of that
+        model type:
 
-        1. Each node (neuron) in the graph should necessarily have a boolean
-           attribute called 'spiking' indicating whether the neuron is spiking
-           or graded potential.
-        2. Each node should have an integer attribute called 'model' indicating
-           the model to be used for that neuron( Eg:- IAF, Morris-Lecar).
-           Refer the documentation of LPU.neurons.BaseNeuron to implement
-           custom neuron models.
-        3. The attributes of the nodes should be consistent across all nodes
-           of the same model. For example if a particular node of model 'IAF'
-           has attribute 'bias', all nodes of model 'IAF' must necessarily
-           have this attribute.
-        4. Each node should have an boolean attribute called 'public',
-           indicating whether that neuron either receives input or provides
-           output to other LPUs.
-        5. Each node should have an boolean attribute called 'extern' indicating
-           whether the neuron accepts external input from a file.
-        6. Each edge (synapse) in the graph should have an integer attribute
-           called 'class' which should be one of the following values.
-            0. spike-spike synapse
-            1. spike-gpot synapse
-            2. gpot-spike synapse
-            3. gpot-gpot synapse
-        7. Each edge should have an integer attribute called 'model' indicating
-           the model to be used for that synapse(e.g, alpha). Refer to the
-           documentation of LPU.synapses.BaseSynapse to implement custom
-           synapse models.
-        8. Each edge should have a boolean attribute called 'conductance'
-           representing whether its output is a conductance or current.
-        10.For all edges with the 'conductance' attribute set to True, there should
-           be an attribute called 'reverse'
+        1. spiking - True if the neuron emits spikes, False if it emits graded
+           potentials.
+        2. model - model identifier string, e.g., 'LeakyIAF', 'MorrisLecar'
+        3. public - True if the neuron emits output exposed to other LPUS.
+        4. extern - True if the neuron can receive external input from a file.
+
+        All synapses must have the following attributes:
+
+        1. class - int indicating connection class of synapse; it may assume the
+           following values:
+
+            0. spike to spike synapse
+            1. spike to graded potential synapse
+            2. graded potential to spike synapse
+            3. graded potential to graded potential synapse
+        2. model - model identifier string, e.g., 'AlphaSynapse'
+        3. conductance - True if the synapse emits conductance values, False if
+           it emits current values.
+        4. reverse - If the `conductance` attribute is True, this attribute
+           should be set to the reverse potential.
 
         TODO
         ----
-        Need to add code to assert all conditions mentioned above are met
-
+        Input data should be validated.
         """
 
         # parse the GEXF file using networkX
         graph = nx.read_gexf(filename)
-        
+
         # parse neuron data
         n_dict = {}
         neurons = graph.node.items()
@@ -142,41 +170,6 @@ class LPU(Module, object):
     def __init__(self, dt, n_dict, s_dict, input_file=None, device=0,
                  output_file=None, port_ctrl=base.PORT_CTRL,
                  port_data=base.PORT_DATA, id=None, debug=False):
-
-        """
-        Initialization of a LPU
-
-        Parameters
-        ----------
-
-        dt : double
-            one time step.
-        n_dict_list : list of dictionaries
-            a list of dictionaries describing the neurons in this LPU - one
-        dictionary for each model of neuron.
-            s_dict_list : list of dictionaries
-        a list of dictionaries describing the synapses in this LPU - one
-            for each model of synapse.
-        input_file : string
-            path and name of the input video file
-        output_file : string
-            path and name of the output files
-        port_data : int
-            Port to use when communicating with broker.
-        port_ctrl : int
-            Port used by broker to control module.
-        device : int
-            Device no to use
-        id : string
-            Name of the LPU
-        debug : boolean
-            This parameter will be passed to all the neuron and synapse
-            objects instantiated by this LPU and is intended to be used
-            for debugging purposes only.
-            Will be set to False by default
-
-        """
-
         super(LPU, self).__init__(port_data=port_data, port_ctrl=port_ctrl,
                                   device=device, id=id)
 

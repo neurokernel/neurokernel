@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+
+"""
+Base neuron class used by LPU.
+"""
+
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 import numpy as np
