@@ -54,6 +54,7 @@ class visualizer(object):
         self._dt = 1
         self._data = {}
         self._graph = {}
+        self._id_to_data_idx = {}
         self._maxt = None
         self._title = None
 
@@ -94,6 +95,11 @@ class visualizer(object):
         '''
         if gexf_file:
             self._graph[LPU] = nx.read_gexf(gexf_file)
+
+            # Map neuron ids to index into output data array:
+            self._id_to_data_idx[LPU] = {m:i for i, m in \
+                enumerate(sorted([int(n) for n, k in \
+                                  self._graph[LPU].nodes_iter(True) if k['spiking']]))}
         else:
             if LPU:
                 LPU = 'input_' + str(LPU)
@@ -277,7 +283,9 @@ class visualizer(object):
                     config['handle'].set_ylabel('Neurons',
                                                 fontsize=self._fontsize-1, weight='bold')
                     config['handle'].set_xlabel('Time (s)',fontsize=self._fontsize-1, weight='bold')
-                    config['handle'].set_xlim([0,len(self._data[LPU][config['ids'][0][0],:])*self._dt])
+                    min_id = min(self._id_to_data_idx[LPU].keys())
+                    min_idx = self._id_to_data_idx[LPU][min_id]
+                    config['handle'].set_xlim([0,len(self._data[LPU][min_idx,:])*self._dt])
                     config['handle'].axes.set_yticks([])
                     config['handle'].axes.set_xticks([])
                 for key in config.iterkeys():
@@ -330,9 +338,17 @@ class visualizer(object):
                                         data[config['ids'][0], t])
 
                 elif config['type']==4:
-                    for j,id in enumerate(config['ids'][0]):
-                        for time in np.where(data[id,max(0,t-self._update_interval):t])[0]:
-                            config['handle'].vlines(float(t-time)*self._dt,j+0.75, j+1.25)
+
+                    for j, id in enumerate(config['ids'][0]):
+
+                        # Convert neuron id to index into array of generated outputs:
+                        try:
+                            idx = self._id_to_data_idx[key][id]
+                        except:
+                            continue
+                        else:
+                            for time in np.where(data[idx, max(0,t-self._update_interval):t])[0]:
+                                config['handle'].vlines(float(t-time)*self._dt,j+0.75, j+1.25)
                 else:
                     if config['type'] == 0:
                         shape = config['shape']

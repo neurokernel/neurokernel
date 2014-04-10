@@ -30,13 +30,14 @@ def run(out_name):
 
     for i in [0, 1]:
         G = nx.read_gexf('./data/generic_lpu_%s.gexf.gz' % i)
-        neu_out = [k for k, n in G.node.items() if n['name'][:3] == 'out']
+        neu_pub = sorted([int(n) for n, d in G.nodes_iter(True) \
+                          if d['public'] == True])
 
         V.add_LPU('generic_output_%s_%s_spike.h5' % (i, out_name),
                   './data/generic_lpu_%s.gexf.gz' % i,
                   'Generic LPU %s' % i)
         V.add_plot({'type': 'raster',
-                    'ids': {0: range(len(neu_out))},
+                    'ids': {0: neu_pub},
                     #'yticks': range(1, 1+len(neu_out)),
                     #'yticklabels': range(len(neu_out))
                     },
