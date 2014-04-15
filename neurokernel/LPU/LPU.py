@@ -718,7 +718,7 @@ class LPU(Module, object):
                 pad_shape = list(h_ext.shape)
                 self.frames_in_buffer = h_ext.shape[0]
                 pad_shape[0] = self._one_time_import - h_ext.shape[0]
-                h_ext = np.concatenate(h_ext, np.zeros(pad_shape), axis=0)
+                h_ext = np.concatenate((h_ext, np.zeros(pad_shape)), axis=0)
                 self.I_ext.set(h_ext)
                 self.file_pointer = input_ld
                 
