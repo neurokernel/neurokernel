@@ -104,7 +104,6 @@ class XPathSelector(object):
                              'DataFrame index')
         def selector(row):
             for i, token in enumerate(token_list):
-                
                 if token.type == 'ASTERISK':
                     continue
                 elif token.type in ['INTEGER', 'STRING']:
@@ -120,6 +119,72 @@ class XPathSelector(object):
 
         return df.select(selector)
 
+    def _isvalidvarname(self, s):
+        """
+        Return True if the given string is a valid Python variable identifier.
+
+        Notes
+        -----
+        A valid Python variable identifier must start with an alphabetical character or '_'
+        followed by alphanumeric characters.
+        """
+
+        try:
+            result = re.match('[a-zA-Z_]\w*', s)
+        except TypeError:
+            return False
+        else:
+            if result:
+                return True
+            else:
+                return False
+
+    def query(self, df, data):
+        """
+        Select rows from DataFrame.
+
+        Notes
+        -----
+        Seems slower than the select() method.
+        """
+
+        token_list = self.parse(data)
+
+        if len(token_list) > len(df.index.names):
+            raise ValueError('Number of levels in selector exceeds that of '
+                             'DataFrame index')
+
+        # This method can only work if the MultiIndex level names can be valid
+        # Python variable identifiers:
+        assert all(map(self._isvalidvarname, df.index.names))
+
+        expr_list = []
+        for i, token in enumerate(token_list):
+            if token.type == 'ASTERISK':
+                expr_list.append(df.index.names[i] + ' == ' + df.index.names[i])
+            elif token.type == 'INTEGER':
+                expr_list.append(df.index.names[i] + ' == %i' % token.value)
+            elif token.type == 'STRING':
+                expr_list.append(df.index.names[i] + ' == \'%s\'' % token.value)
+            elif token.type == 'INTERVAL':
+                expr_list.append(df.index.names[i] + ' >= %i' % token.value[0])
+                if not np.isinf(token.value[1]):
+                    expr_list.append(df.index.names[i] + ' < %i' % token.value[1])
+            else:
+                continue
+        return df.query(' and '.join(expr_list))
+
+df = pd.DataFrame(data={'data': np.random.rand(10),
+                                 'level_0': ['foo', 'foo', 'foo', 'foo', 'foo',
+                                     'bar', 'bar', 'bar',
+                                     'baz', 'baz'],
+                                 'level_1': ['qux', 'qux', 'mof', 'mof', 'mof',
+                                     'qux', 'qux', 'qux', 'qux', 'mof'],
+                                 'level_2': [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
+df.set_index('level_0', append=False, inplace=True)
+df.set_index('level_1', append=True, inplace=True)
+df.set_index('level_2', append=True, inplace=True)
+
 if __name__ == '__main__':
     from unittest import main, TestCase
     from pandas.util.testing import assert_frame_equal
@@ -127,12 +192,12 @@ if __name__ == '__main__':
     class test_xpath_selector(TestCase):
         def setUp(self):
             self.df = pd.DataFrame(data={'data': np.random.rand(10),
-                                         0: ['foo', 'foo', 'foo', 'foo', 'foo', 
-                                             'bar', 'bar', 'bar', 
+                                         0: ['foo', 'foo', 'foo', 'foo', 'foo',
+                                             'bar', 'bar', 'bar',
                                              'baz', 'baz'],
                                          1: ['qux', 'qux', 'mof', 'mof', 'mof',
                                              'qux', 'qux', 'qux', 'qux', 'mof'],
-                                         2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})        
+                                         2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
             self.df.set_index(0, append=False, inplace=True)
             self.df.set_index(1, append=True, inplace=True)
             self.df.set_index(2, append=True, inplace=True)
@@ -145,7 +210,7 @@ if __name__ == '__main__':
                                              ('foo','mof',1),
                                              ('foo','mof',2)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
-                               
+
         def test_str_asterisk(self):
             result = self.sel.select(self.df, '/*/qux')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
@@ -163,7 +228,7 @@ if __name__ == '__main__':
 
         def test_str_interval_0(self):
             result = self.sel.select(self.df, '/foo/mof[:]')
-            idx = pd.MultiIndex.from_tuples([('foo','mof',0), 
+            idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                              ('foo','mof',1),
                                              ('foo','mof',2)],
                                             names=[0, 1, 2])
@@ -171,21 +236,21 @@ if __name__ == '__main__':
 
         def test_str_interval_1(self):
             result = self.sel.select(self.df, '/foo/mof[1:]')
-            idx = pd.MultiIndex.from_tuples([('foo','mof',1), 
+            idx = pd.MultiIndex.from_tuples([('foo','mof',1),
                                              ('foo','mof',2)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
         def test_str_interval_2(self):
             result = self.sel.select(self.df, '/foo/mof[:2]')
-            idx = pd.MultiIndex.from_tuples([('foo','mof',0), 
+            idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                              ('foo','mof',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
         def test_str_interval_3(self):
             result = self.sel.select(self.df, '/bar/qux[0:2]')
-            idx = pd.MultiIndex.from_tuples([('bar','qux',0), 
+            idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                              ('bar','qux',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
