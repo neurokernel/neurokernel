@@ -1,80 +1,79 @@
 #!/usr/bin/env python
 
 """
-Experiment with using xpath-like "keys" to access pandas data.
+XPATH-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 """
 
 import re
 import numpy as np
+
 import pandas as pd
-
-N = 10
-df1 = pd.DataFrame(data={'data': np.random.rand(N),
-                        'key': ['/foo[0]',
-                                '/foo[1]',
-                                '/foo[2]',
-                                '/foo[3]',
-                                '/foo[4]',
-                                '/bar[0]',
-                                '/bar[1]',
-                                '/bar[2]',
-                                '/baz[0]',
-                                '/baz[1]']})
-print df1[df1.key.str.contains('/foo.*')]
-print df1[df1.key.str.contains('/bar.*')]
-print df1[df1.key.str.contains('/.*[0]')]
-
-df2 = pd.DataFrame(data={'data': np.random.rand(N), 
-                         0: ['foo', 'foo', 'foo', 'foo', 'foo', 
-                             'bar', 'bar', 'bar', 
-                             'baz', 'baz'], 
-                         1: [0, 1, 2, 3, 4, 0, 1, 2, 0, 1]})
-df2.set_index(0, append=False, inplace=True)
-df2.set_index(1, append=True, inplace=True)
-
-df3 = pd.DataFrame(data={'data': np.random.rand(N),
-                         0: ['foo', 'foo', 'foo', 'foo', 'foo', 
-                             'bar', 'bar', 'bar', 
-                             'baz', 'baz'],
-                         1: ['qux', 'qux', 'mof', 'mof', 'mof',
-                             'qux', 'qux', 'qux', 'qux', 'mof'],
-                         2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
-df3.set_index(0, append=False, inplace=True)
-df3.set_index(1, append=True, inplace=True)
-df3.set_index(2, append=True, inplace=True)
-
-import re
 import ply.lex as lex
 
 class XPathSelector(object):
     """
     Class for selecting rows of a pandas DataFrame using XPATH-like selectors. 
-    Assumes that the DataFrame instance has a MultiIndex where each level
-    corresponds to part of the selector.
 
-    Examples
-    --------
+    Select rows from a pandas DataFrame using XPATH-like selectors.
+    Assumes that the DataFrame instance has a MultiIndex where each level
+    corresponds to a level of the selector; a level may either be a denoted by a
+    string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2). 
+    Examples of valid selectors include
+
     /foo
     /foo/bar
     /foo/bar[0]
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
+
+    Notes
+    -----
+    Numerical indices are assumed to be zero-based.
     """
 
-    tokens = ('LEVEL',)
+    tokens = ('ASTERISK', 'INTEGER', 'INTERVAL', 'STRING')
 
     def __init__(self):
         self.build()
 
-    def t_LEVEL(self, t):
-        r'(?:/[^/\[\]:]+)|(?:\[(?:\d+)\])|(?:\[\d*\:\d*\])'
-        if re.search('[\[\]]', t.value):
-            t.value = re.search('\[(.+)\]', t.value).group(1)
+    def _parse_interval_str(self, s):
+        """
+        Convert string representation of interval to tuple containing numerical
+        start and stop values.
+        """
+
+        start, stop = s.split(':')
+        if start == '':
+            start = 0
         else:
-            t.value = t.value.strip('/')
+            start = int(start)
+        if stop == '':
+            stop = np.inf
+        else:
+            stop = int(stop)
+        return (start, stop)
+
+    def t_ASTERISK(self, t):
+        r'/\*'
+        t.value = t.value.strip('/')
         return t
 
+    def t_INTEGER(self, t):
+        r'\[\d+\]'
+        t.value = int(re.search('\[(\d+)\]', t.value).group(1))
+        return t
+
+    def t_INTERVAL(self, t):
+        r'\[\d*\:\d*\]'
+        t.value = self._parse_interval_str(re.search('\[(.+)\]', t.value).group(1))
+        return t
+
+    def t_STRING(self, t):
+        r'/[^*/\[\]:]+'
+        t.value = t.value.strip('/')
+        return t
+            
     def t_error(self, t):
         print 'Illegal character "%s"' % t.value[0]
         raise ValueError('Cannot parse selector')
@@ -86,42 +85,110 @@ class XPathSelector(object):
         self.lexer.input(data)
         token_list = []
         while True:
-            tok = self.lexer.token()
-            if not tok: break
-            token_list.append(tok)
+            token = self.lexer.token()
+            if not token: break
+            token_list.append(token)
         return token_list
 
-    def _slice_str_to_tuple(self, slice_str):
-        """
-        Convert string representation of slice to interval containing numerical
-        start and stop values.
-        """
-        start, stop = slice_str.split(':')
-        if start == '':
-            start = 0
-        else:
-            start = int(start)
-        if stop == '':
-            stop = np.inf
-        else:
-            stop = int(stop)
-        return (start, stop)
-
     def select(self, df, data):
+        """
+        Select rows from DataFrame.
+        """
+
         token_list = self.parse(data)
 
-        # The number of levels must be equivalent to the number of levels in the
+        # The number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
         if len(token_list) > len(df.index.names):
             raise ValueError('Number of levels in selector exceeds that of '
                              'DataFrame index')
-        def select_func(row):
-            for i, x in enumerate(row):
-                if token_list[i] == '*':
+        def selector(row):
+            for i, token in enumerate(token_list):
+                
+                if token.type == 'ASTERISK':
                     continue
-                elif re.match('\d*\:\d*', token_list[i]):
-                    start, stop = self._slice_str_to_tuple(token_list[i])
+                elif token.type in ['INTEGER', 'STRING']:
+                    if row[i] != token.value:
+                        return False
+                elif token.type == 'INTERVAL':
+                    start, stop = token.value
+                    if not(row[i] >= start and row[i] < stop):
+                        return False
+                else:
+                    continue
+            return True
 
-m = XPathSelector()
-m.parse('/foo/*[0:10]/bar[0:]/*[0]')
+        return df.select(selector)
+
+if __name__ == '__main__':
+    from unittest import main, TestCase
+    from pandas.util.testing import assert_frame_equal
+
+    class test_xpath_selector(TestCase):
+        def setUp(self):
+            self.df = pd.DataFrame(data={'data': np.random.rand(10),
+                                         0: ['foo', 'foo', 'foo', 'foo', 'foo', 
+                                             'bar', 'bar', 'bar', 
+                                             'baz', 'baz'],
+                                         1: ['qux', 'qux', 'mof', 'mof', 'mof',
+                                             'qux', 'qux', 'qux', 'qux', 'mof'],
+                                         2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})        
+            self.df.set_index(0, append=False, inplace=True)
+            self.df.set_index(1, append=True, inplace=True)
+            self.df.set_index(2, append=True, inplace=True)
+            self.sel = XPathSelector()
+        def test_str_one(self):
+            result = self.sel.select(self.df, '/foo')
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1),
+                                             ('foo','mof',0),
+                                             ('foo','mof',1),
+                                             ('foo','mof',2)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+                               
+        def test_str_asterisk(self):
+            result = self.sel.select(self.df, '/*/qux')
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1),
+                                             ('bar','qux',0),
+                                             ('bar','qux',1),
+                                             ('bar','qux',2),
+                                             ('baz','qux',0)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_integer(self):
+            result = self.sel.select(self.df, '/bar/qux[1]')
+            idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_interval_0(self):
+            result = self.sel.select(self.df, '/foo/mof[:]')
+            idx = pd.MultiIndex.from_tuples([('foo','mof',0), 
+                                             ('foo','mof',1),
+                                             ('foo','mof',2)],
+                                            names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_interval_1(self):
+            result = self.sel.select(self.df, '/foo/mof[1:]')
+            idx = pd.MultiIndex.from_tuples([('foo','mof',1), 
+                                             ('foo','mof',2)],
+                                            names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_interval_2(self):
+            result = self.sel.select(self.df, '/foo/mof[:2]')
+            idx = pd.MultiIndex.from_tuples([('foo','mof',0), 
+                                             ('foo','mof',1)],
+                                            names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_interval_3(self):
+            result = self.sel.select(self.df, '/bar/qux[0:2]')
+            idx = pd.MultiIndex.from_tuples([('bar','qux',0), 
+                                             ('bar','qux',1)],
+                                            names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+    main()
 
