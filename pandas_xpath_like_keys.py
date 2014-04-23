@@ -90,6 +90,21 @@ class XPathSelector(object):
             token_list.append(token)
         return token_list
 
+    def _select_test(self, row, token_list):
+        for i, token in enumerate(token_list):
+            if token.type == 'ASTERISK':
+                continue
+            elif token.type in ['INTEGER', 'STRING']:
+                if row[i] != token.value:
+                    return False
+            elif token.type == 'INTERVAL':
+                start, stop = token.value
+                if not(row[i] >= start and row[i] < stop):
+                    return False
+            else:
+                continue
+        return True
+        
     def get_index(self, df, selector):
         """
         Return MultiIndex corresponding to rows selected by specified selector.
@@ -102,24 +117,11 @@ class XPathSelector(object):
         if len(token_list) > len(df.index.names):
             raise ValueError('Number of levels in selector exceeds that of '
                              'DataFrame index')
-        def selector(row):
-            for i, token in enumerate(token_list):
-                if token.type == 'ASTERISK':
-                    continue
-                elif token.type in ['INTEGER', 'STRING']:
-                    if row[i] != token.value:
-                        return False
-                elif token.type == 'INTERVAL':
-                    start, stop = token.value
-                    if not(row[i] >= start and row[i] < stop):
-                        return False
-                else:
-                    continue
-            return True
             
         # XXX This probably could be made faster by directly manipulating the
         # existing MultiIndex:
-        return pd.MultiIndex.from_tuples([t for t in df.index if selector(t)])
+        return pd.MultiIndex.from_tuples([t for t in df.index if \
+                                          self._select_test(t, token_list)])
         
     def select(self, df, selector):
         """
@@ -133,22 +135,8 @@ class XPathSelector(object):
         if len(token_list) > len(df.index.names):
             raise ValueError('Number of levels in selector exceeds that of '
                              'DataFrame index')
-        def selector(row):
-            for i, token in enumerate(token_list):
-                if token.type == 'ASTERISK':
-                    continue
-                elif token.type in ['INTEGER', 'STRING']:
-                    if row[i] != token.value:
-                        return False
-                elif token.type == 'INTERVAL':
-                    start, stop = token.value
-                    if not(row[i] >= start and row[i] < stop):
-                        return False
-                else:
-                    continue
-            return True
 
-        return df.select(selector)
+        return df.select(lambda row: self._select_test(row, token_list))
 
     def _isvalidvarname(self, s):
         """
