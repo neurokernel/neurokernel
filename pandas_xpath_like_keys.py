@@ -35,7 +35,7 @@ class XPathSelector(object):
     tokens = ('ASTERISK', 'INTEGER', 'INTERVAL', 'STRING')
 
     def __init__(self):
-        self.build()
+        self._build()
 
     def _parse_interval_str(self, s):
         """
@@ -78,11 +78,19 @@ class XPathSelector(object):
         print 'Illegal character "%s"' % t.value[0]
         raise ValueError('Cannot parse selector')
 
-    def build(self, **kwargs):
+    def _build(self, **kwargs):
+        """
+        Build lexer.
+        """
+
         self.lexer = lex.lex(module=self, **kwargs)
 
-    def parse(self, data):
-        self.lexer.input(data)
+    def parse(self, selector):
+        """
+        Parse a specified selector string into tokens.
+        """
+
+        self.lexer.input(selector)
         token_list = []
         while True:
             token = self.lexer.token()
