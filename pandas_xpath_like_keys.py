@@ -90,28 +90,29 @@ class XPathSelector(object):
             token_list.append(token)
         return token_list
 
-    def _select_test(self, row, token_list, offset=0):
+    def _select_test(self, row, token_list, start=None, stop=None):
         """
-        Method for checking whether the entries in a tuple of data corresponding
-        to the entries of one row in a DataFrame starting at the specified
-        offset index match the specified token values.
+        Method for checking whether the entries in a subinterval of a tuple of
+        data corresponding to the entries of one row in a DataFrame match the
+        specified token values.
         """
 
+        row_sub = row[start:stop]
         for i, token in enumerate(token_list):
             if token.type == 'ASTERISK':
                 continue
             elif token.type in ['INTEGER', 'STRING']:
-                if row[i+offset] != token.value:
+                if row_sub[i] != token.value:
                     return False
             elif token.type == 'INTERVAL':
-                start, stop = token.value
-                if not(row[i+offset] >= start and row[i+offset] < stop):
+                i_start, i_stop = token.value
+                if not(row_sub[i] >= i_start and row_sub[i] < i_stop):
                     return False
             else:
                 continue
         return True
         
-    def get_index(self, df, selector, offset=0):
+    def get_index(self, df, selector, start=None, stop=None):
         """
         Return MultiIndex corresponding to rows selected by specified selector.
         """
@@ -120,16 +121,17 @@ class XPathSelector(object):
 
         # The number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
-        if len(token_list) > len(df.index.names[offset:]):
+        if len(token_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds that of '
                              'DataFrame index')
             
         # XXX This probably could be made faster by directly manipulating the
         # existing MultiIndex:
         return pd.MultiIndex.from_tuples([t for t in df.index if \
-                                          self._select_test(t, token_list, offset)])
+                                          self._select_test(t, token_list,
+                                                            start, stop)])
         
-    def select(self, df, selector, offset=0):
+    def select(self, df, selector, start=None, stop=None):
         """
         Select rows from DataFrame.
         """
@@ -138,11 +140,10 @@ class XPathSelector(object):
 
         # The number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
-        if len(token_list) > len(df.index.names[offset:]):
-            raise ValueError('Number of levels in selector exceeds that of '
-                             'DataFrame index')
-
-        return df.select(lambda row: self._select_test(row, token_list, offset))
+        if len(token_list) > len(df.index.names[start:stop]):
+            raise ValueError('Number of levels in selector exceeds number in row subinterval')
+            
+        return df.select(lambda row: self._select_test(row, token_list, start, stop))
 
     def _isvalidvarname(self, s):
         """
@@ -199,16 +200,19 @@ class XPathSelector(object):
                 continue
         return df.query(' and '.join(expr_list))
 
-df = pd.DataFrame(data={'data': np.random.rand(10),
-                                 'level_0': ['foo', 'foo', 'foo', 'foo', 'foo',
-                                     'bar', 'bar', 'bar',
-                                     'baz', 'baz'],
-                                 'level_1': ['qux', 'qux', 'mof', 'mof', 'mof',
-                                     'qux', 'qux', 'qux', 'qux', 'mof'],
-                                 'level_2': [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
+df = pd.DataFrame(data={'data': np.random.rand(12),
+                        'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
+                                    'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],                        
+                        'level_1': ['qux', 'qux', 'qux', 'qux', 'mof', 'mof',
+                                    'qux', 'qux', 'qux', 'mof', 'mof', 'mof'],
+                        'level_2': ['xxx', 'yyy', 'yyy', 'yyy', 'zzz', 'zzz',
+                                    'xxx', 'xxx', 'yyy', 'zzz', 'yyy', 'zzz'],
+                        'level_3': [0, 0, 1, 2, 0, 1, 
+                                    0, 1, 0, 1, 0, 1]})
 df.set_index('level_0', append=False, inplace=True)
 df.set_index('level_1', append=True, inplace=True)
 df.set_index('level_2', append=True, inplace=True)
+df.set_index('level_3', append=True, inplace=True)
 
 if __name__ == '__main__':
     from unittest import main, TestCase
