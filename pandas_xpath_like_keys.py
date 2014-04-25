@@ -119,12 +119,11 @@ class XPathSelector(object):
             else:
                 continue
         return True
-        
-    def get_index(self, df, selector, start=None, stop=None):
-        """
-        Return MultiIndex corresponding to rows selected by specified selector.
-        """
 
+    def get_tuples(self, df, selector, start=None, stop=None):
+        """
+        Return tuples corresponding to rows selected by specified selector.
+        """
         token_list = self.parse(selector)
 
         # The number of tokens must not exceed the number of levels in the
@@ -132,12 +131,20 @@ class XPathSelector(object):
         if len(token_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds that of '
                              'DataFrame index')
-            
+
+        return [t for t in df.index if self._select_test(t, token_list,         
+                                                         start, stop)]
+
+    def get_index(self, df, selector, start=None, stop=None):
+        """
+        Return MultiIndex corresponding to rows selected by specified selector.
+        """
+
+        tuples = self.get_tuples(df, selector, start, stop)
+
         # XXX This probably could be made faster by directly manipulating the
         # existing MultiIndex:
-        return pd.MultiIndex.from_tuples([t for t in df.index if \
-                                          self._select_test(t, token_list,
-                                                            start, stop)])
+        return pd.MultiIndex.from_tuples(tuples)
         
     def select(self, df, selector, start=None, stop=None):
         """
