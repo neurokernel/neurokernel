@@ -22,7 +22,9 @@ class XPathSelector(object):
 
     /foo
     /foo/bar
+    /foo/[qux,bar]
     /foo/bar[0]
+    /foo/bar[0,1]
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
@@ -32,7 +34,8 @@ class XPathSelector(object):
     Numerical indices are assumed to be zero-based.
     """
 
-    tokens = ('ASTERISK', 'INTEGER', 'INTERVAL', 'STRING')
+    tokens = ('ASTERISK', 'INTEGER', 'INTEGER_SET', 
+              'INTERVAL', 'STRING', 'STRING_SET')
 
     def __init__(self):
         self._build()
@@ -60,8 +63,13 @@ class XPathSelector(object):
         return t
 
     def t_INTEGER(self, t):
-        r'\[\d+\]'
-        t.value = int(re.search('\[(\d+)\]', t.value).group(1))
+        r'/?\[\d+\]'
+        t.value = int(re.search('\[(\d+)\]', t.value.strip('/')).group(1))
+        return t
+
+    def t_INTEGER_SET(self, t):
+        r'/?\[(?:\d+,?)+\]'
+        t.value = map(int, t.value.strip('[]').split(','))
         return t
 
     def t_INTERVAL(self, t):
@@ -70,8 +78,13 @@ class XPathSelector(object):
         return t
 
     def t_STRING(self, t):
-        r'/[^*/\[\]:]+'
+        r'/[^*/\[\]:\d][^*/\[\]:]*'
         t.value = t.value.strip('/')
+        return t
+
+    def t_STRING_SET(self, t):
+        r'/\[(?:[^*/\[\]:\d][^*/\[\]:]*,?)+\]'
+        t.value = t.value.strip('/[]').split(',')
         return t
             
     def t_error(self, t):
@@ -112,6 +125,9 @@ class XPathSelector(object):
             elif token.type in ['INTEGER', 'STRING']:
                 if row_sub[i] != token.value:
                     return False
+            elif token.type in ['INTEGER_SET', 'STRING_SET']:
+                if row_sub[i] not in token.value:
+                    return False
             elif token.type == 'INTERVAL':
                 i_start, i_stop = token.value
                 if not(row_sub[i] >= i_start and row_sub[i] < i_stop):
@@ -141,11 +157,35 @@ class XPathSelector(object):
         """
 
         tuples = self.get_tuples(df, selector, start, stop)
+        if not tuples:
+            raise ValueError('no tuples matching selector found')
 
         # XXX This probably could be made faster by directly manipulating the
         # existing MultiIndex:
         return pd.MultiIndex.from_tuples(tuples)
+
+    def make_index(self, selector):
+        """
+        Create a MultiIndex from the specified selector.
+
+        Notes
+        -----
+        The selector may not contain any '*' character.
+        """
         
+        assert not re.match(r'/\*/', selector)
+        token_list = self.parse(selector)
+
+        list_list = []
+        for token in token_list:
+            if token.type == 'INTERVAL':
+                list_list.append(range(token.value[0], token.value[1]))
+            elif token.type in ['INTEGER_SET', 'STRING_SET']:
+                list_list.append(token.value)
+            else:
+                list_list.append([token.value])
+        return pd.MultiIndex.from_product(list_list)
+
     def select(self, df, selector, start=None, stop=None):
         """
         Select rows from DataFrame.
@@ -268,6 +308,23 @@ if __name__ == '__main__':
         def test_str_integer(self):
             result = self.sel.select(self.df, '/bar/qux[1]')
             idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_integer_set(self):
+            result = self.sel.select(self.df, '/foo/qux[0,1]')
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1)],
+                                            names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_string_set(self):
+            result = self.sel.select(self.df, '/foo/[qux,mof]')
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1),
+                                             ('foo','mof',0),
+                                             ('foo','mof',1),
+                                             ('foo','mof',2)],
+                                            names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
         def test_str_interval_0(self):
