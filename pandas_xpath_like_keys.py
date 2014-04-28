@@ -121,6 +121,17 @@ class XPathSelector(object):
             token_list.append(token)
         return token_list
 
+    def count_tokens(self, selector):
+        """
+        Count number of tokens in selector.
+        """
+
+        self.lexer.input(selector)
+        count = 0
+        while self.lexer.token():
+            count += 1
+        return count
+
     def _select_test(self, row, token_list, start=None, stop=None):
         """
         Check whether the entries in a subinterval of a given tuple of data 
