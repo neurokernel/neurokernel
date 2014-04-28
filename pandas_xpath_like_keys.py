@@ -257,7 +257,7 @@ class XPathSelector(object):
 
 df = pd.DataFrame(data={'data': np.random.rand(12),
                         'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
-                                    'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],                        
+                                    'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],          
                         'level_1': ['qux', 'qux', 'qux', 'qux', 'mof', 'mof',
                                     'qux', 'qux', 'qux', 'mof', 'mof', 'mof'],
                         'level_2': ['xxx', 'yyy', 'yyy', 'yyy', 'zzz', 'zzz',
