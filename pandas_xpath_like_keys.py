@@ -101,6 +101,16 @@ class XPathSelector(object):
     def parse(self, selector):
         """
         Parse a specified selector string into tokens.
+
+        Parameters
+        ----------
+        selector : str
+            Row selector.
+
+        Returns
+        -------
+        token_list : list
+            List of tokens extracted by ply.
         """
 
         self.lexer.input(selector)
@@ -113,9 +123,23 @@ class XPathSelector(object):
 
     def _select_test(self, row, token_list, start=None, stop=None):
         """
-        Method for checking whether the entries in a subinterval of a tuple of
-        data corresponding to the entries of one row in a DataFrame match the
+        Check whether the entries in a subinterval of a given tuple of data 
+        corresponding to the entries of one row in a DataFrame match the 
         specified token values.
+
+        Parameters
+        ----------
+        row : list
+            List of data corresponding to a single row of a DataFrame.
+        token_list : list
+            List of tokens extracted by ply.
+        start, stop : int
+            Start and end indices in `row` over which to test entries.
+
+        Returns
+        -------
+        result : Bool
+            True of all entries in specified subinterval of row match, False otherwise.
         """
 
         row_sub = row[start:stop]
@@ -151,7 +175,7 @@ class XPathSelector(object):
         return [t for t in df.index if self._select_test(t, token_list,         
                                                          start, stop)]
 
-    def get_index(self, df, selector, start=None, stop=None):
+    def get_index(self, df, selector, start=None, stop=None, names=[]):
         """
         Return MultiIndex corresponding to rows selected by specified selector.
         """
@@ -162,11 +186,26 @@ class XPathSelector(object):
 
         # XXX This probably could be made faster by directly manipulating the
         # existing MultiIndex:
-        return pd.MultiIndex.from_tuples(tuples)
+        if names:
+            return pd.MultiIndex.from_tuples(tuples, names=names)
+        else:
+            return pd.MultiIndex.from_tuples(tuples)
 
-    def make_index(self, selector):
+    def make_index(self, selector, names=[]):
         """
         Create a MultiIndex from the specified selector.
+
+        Parameters
+        ----------
+        selector : str
+            Row selector.
+        names : list
+            Names of levels to use in generated MultiIndex.
+
+        Returns
+        -------
+        result : pandas.MultiIndex
+            MultiIndex corresponding to the specified selector.
 
         Notes
         -----
@@ -184,7 +223,10 @@ class XPathSelector(object):
                 list_list.append(token.value)
             else:
                 list_list.append([token.value])
-        return pd.MultiIndex.from_product(list_list)
+        if names:
+            return pd.MultiIndex.from_product(list_list, names=names)
+        else:
+            return pd.MultiIndex.from_product(list_list)
 
     def select(self, df, selector, start=None, stop=None):
         """
