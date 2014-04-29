@@ -8,7 +8,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from pandas_xpath_like_keys import XPathSelector
+from plsel import PathLikeSelector
 
 def isiterable(x):
     try:
@@ -21,18 +21,26 @@ def isiterable(x):
 class Connectivity(object):
     """
     Class for representing connectivity between sets of interface ports.
+
+    This class represents connection mappings from one set of ports to another.
+    Ports are represented using path-like identifiers.
+
+    Parameters
+    ----------
+    from_levels, to_levels : int
+        Maximum mumber of levels in the source and destination port selectors.
     """
 
-    def __init__(self, num_from=1, num_to=1):        
-        self.sel = XPathSelector()
+    def __init__(self, from_levels=1, to_levels=1):        
+        self.sel = PathLikeSelector()
 
-        self.num_levels = {'from': num_from, 'to': num_to}
+        self.num_levels = {'from': from_levels, 'to': to_levels}
         names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
                 ['to_%s' %i for i in xrange(self.num_levels['to'])]
         levels = [[]]*len(names)
         labels = [[]]*len(names)
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
-        self.data = pd.DataFrame(columns=['conn', 'io', 'type'], index=idx)
+        self.data = pd.DataFrame(columns=['conn', 'from_type', 'to_type'], index=idx)
 
     def __add_level__(self, which):
         assert which in ['from', 'to']

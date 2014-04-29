@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-XPATH-like row selector for pandas DataFrames with hierarchical MultiIndexes.
+Path-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 """
 
 import re
@@ -10,11 +10,11 @@ import numpy as np
 import pandas as pd
 import ply.lex as lex
 
-class XPathSelector(object):
+class PathLikeSelector(object):
     """
-    Class for selecting rows of a pandas DataFrame using XPATH-like selectors. 
+    Class for selecting rows of a pandas DataFrame using path-like selectors. 
 
-    Select rows from a pandas DataFrame using XPATH-like selectors.
+    Select rows from a pandas DataFrame using path-like selectors.
     Assumes that the DataFrame instance has a MultiIndex where each level
     corresponds to a level of the selector; a level may either be a denoted by a
     string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2). 
@@ -326,7 +326,7 @@ if __name__ == '__main__':
     from unittest import main, TestCase
     from pandas.util.testing import assert_frame_equal
 
-    class test_xpath_selector(TestCase):
+    class test_path_like_selector(TestCase):
         def setUp(self):
             self.df = pd.DataFrame(data={'data': np.random.rand(10),
                                          0: ['foo', 'foo', 'foo', 'foo', 'foo',
@@ -338,7 +338,7 @@ if __name__ == '__main__':
             self.df.set_index(0, append=False, inplace=True)
             self.df.set_index(1, append=True, inplace=True)
             self.df.set_index(2, append=True, inplace=True)
-            self.sel = XPathSelector()
+            self.sel = PathLikeSelector()
         def test_str_one(self):
             result = self.sel.select(self.df, '/foo')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
