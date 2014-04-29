@@ -23,15 +23,15 @@ class Connectivity(object):
     Class for representing connectivity between sets of interface ports.
     """
 
-    def __init__(self):
+    def __init__(self, num_from=1, num_to=1):        
         self.sel = XPathSelector()
 
-        self.num_levels = {'from': 1, 'to': 1}
-
-        idx = pd.MultiIndex(levels=[[], []],
-                            labels=[[], []],
-                            names=['from_%s' % (self.num_levels['from']-1), 
-                                   'to_%s' % (self.num_levels['to']-1)])
+        self.num_levels = {'from': num_from, 'to': num_to}
+        names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
+                ['to_%s' %i for i in xrange(self.num_levels['to'])]
+        levels = [[]]*len(names)
+        labels = [[]]*len(names)
+        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         self.data = pd.DataFrame(columns=['conn', 'io', 'type'], index=idx)
 
     def __add_level__(self, which):
@@ -123,7 +123,35 @@ class Connectivity(object):
         return self.data.__repr__()
 
     def clear(self):
+        """
+        Clear all entries in class instance.
+        """
+
         self.data.dropna(inplace=True)
+
+    def from_csv(self, file_name, **kwargs):
+        """
+        Read connectivity data from CSV file.
+
+        Given N 'from' levels and M 'to' levels in the internal index, 
+        the method assumes that the first N+M columns in the file specify
+        the index levels.
+
+        See Also
+        --------
+        pandas.read_csv
+        """
+        
+        import ipdb; ipdb.set_trace()
+        data_names = self.data.columns
+        index_names = self.data.index.names
+        kwargs['names'] = data_names
+        kwargs['index_col'] = range(len(index_names))
+        data = pd.read_csv(file_name, **kwargs)
+        self.data = data
+
+        # Restore MultiIndex level names:
+        self.data.index.names = index_names
 
 df = pd.DataFrame(data={'conn': np.ones(6),
                         'from_0': ['foo', 'foo', 'foo', 'bar', 'bar', 'bar'],
