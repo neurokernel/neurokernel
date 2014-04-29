@@ -150,7 +150,6 @@ class Connectivity(object):
         pandas.read_csv
         """
         
-        import ipdb; ipdb.set_trace()
         data_names = self.data.columns
         index_names = self.data.index.names
         kwargs['names'] = data_names
@@ -161,14 +160,35 @@ class Connectivity(object):
         # Restore MultiIndex level names:
         self.data.index.names = index_names
 
-df = pd.DataFrame(data={'conn': np.ones(6),
-                        'from_0': ['foo', 'foo', 'foo', 'bar', 'bar', 'bar'],
-                        'from_1': [0, 0, 2, 0, 1, 2],
-                        'to_0': ['bar', 'bar', 'bar', 'foo', 'foo', 'foo'],
-                        'to_1': [0, 1, 2, 0, 1, 2]})
-df.set_index('from_0', append=False, inplace=True)
-df.set_index('from_1', append=True, inplace=True)
-df.set_index('to_0', append=True, inplace=True)
-df.set_index('to_1', append=True, inplace=True)
+if __name__ == '__main__':
+    from unittest import main, TestCase
+    from pandas.util.testing import assert_frame_equal
 
-c = Connectivity()
+    class test_connectivity(TestCase):
+        def setUp(self):
+            self.df = pd.DataFrame(data={'conn': np.ones(6, dtype=object),
+                            'from_type': ['spike', 'spike', 'spike',
+                                          'gpot', 'gpot', 'spike'],
+                            'to_type': ['spike', 'spike', 'spike',
+                                        'gpot', 'gpot', 'gpot'],
+                            'from_0': ['foo', 'foo', 'foo', 'bar', 'bar', 'bar'],
+                            'from_1': [0, 0, 2, 0, 1, 2],
+                            'to_0': ['bar', 'bar', 'bar', 'foo', 'foo', 'foo'],
+                            'to_1': [0, 1, 2, 0, 0, 1]})
+            self.df.set_index('from_0', append=False, inplace=True)
+            self.df.set_index('from_1', append=True, inplace=True)
+            self.df.set_index('to_0', append=True, inplace=True)
+            self.df.set_index('to_1', append=True, inplace=True)
+            self.df.sort(inplace=True)
+
+        def test_create_conn(self):
+            c = Connectivity(2, 2)
+            c['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
+            c['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
+            c['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
+            c['/bar[0]', '/foo[0]'] = [1, 'gpot', 'gpot']
+            c['/bar[1]', '/foo[0]'] = [1, 'gpot', 'gpot']
+            c['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
+            assert_frame_equal(c.data, self.df)
+
+    main()
