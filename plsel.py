@@ -12,12 +12,12 @@ import ply.lex as lex
 
 class PathLikeSelector(object):
     """
-    Class for selecting rows of a pandas DataFrame using path-like selectors. 
+    Class for selecting rows of a pandas DataFrame using path-like selectors.
 
     Select rows from a pandas DataFrame using path-like selectors.
     Assumes that the DataFrame instance has a MultiIndex where each level
     corresponds to a level of the selector; a level may either be a denoted by a
-    string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2). 
+    string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2).
     Examples of valid selectors include
 
     /foo
@@ -29,12 +29,16 @@ class PathLikeSelector(object):
     /foo/*/baz
     /foo/*/baz[5]
 
+    The class can also be used to create new MultiIndex instances from selectors
+    that contain no wildcards.
+
     Notes
     -----
-    Numerical indices are assumed to be zero-based.
+    Numerical indices are assumed to be zero-based. Ranges do not include the
+    end element (i.e., like numpy, not like pandas).
     """
 
-    tokens = ('ASTERISK', 'INTEGER', 'INTEGER_SET', 
+    tokens = ('ASTERISK', 'INTEGER', 'INTEGER_SET',
               'INTERVAL', 'STRING', 'STRING_SET')
 
     def __init__(self):
@@ -86,7 +90,7 @@ class PathLikeSelector(object):
         r'/\[(?:[^*/\[\]:\d][^*/\[\]:]*,?)+\]'
         t.value = t.value.strip('/[]').split(',')
         return t
-            
+
     def t_error(self, t):
         print 'Illegal character "%s"' % t.value[0]
         raise ValueError('Cannot parse selector')
@@ -124,6 +128,16 @@ class PathLikeSelector(object):
     def count_tokens(self, selector):
         """
         Count number of tokens in selector.
+
+        Parameters
+        ----------
+        selector : str
+            Row selector.
+
+        Returns
+        -------
+        count : int
+            Number of tokens in selector.
         """
 
         self.lexer.input(selector)
@@ -134,8 +148,8 @@ class PathLikeSelector(object):
 
     def _select_test(self, row, token_list, start=None, stop=None):
         """
-        Check whether the entries in a subinterval of a given tuple of data 
-        corresponding to the entries of one row in a DataFrame match the 
+        Check whether the entries in a subinterval of a given tuple of data
+        corresponding to the entries of one row in a DataFrame match the
         specified token values.
 
         Parameters
@@ -149,7 +163,7 @@ class PathLikeSelector(object):
 
         Returns
         -------
-        result : Bool
+        result : bool
             True of all entries in specified subinterval of row match, False otherwise.
         """
 
@@ -173,8 +187,23 @@ class PathLikeSelector(object):
 
     def get_tuples(self, df, selector, start=None, stop=None):
         """
-        Return tuples corresponding to rows selected by specified selector.
+        Return tuples containing MultiIndex labels selected by specified selector.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame instance on which to apply the selector.
+        selector : str
+            Row selector.
+        start, stop : int
+            Start and end indices in `row` over which to test entries.
+
+        Returns
+        -------
+        result : list
+            List of tuples containing MultiIndex labels for selected rows.
         """
+
         token_list = self.parse(selector)
 
         # The number of tokens must not exceed the number of levels in the
@@ -183,12 +212,29 @@ class PathLikeSelector(object):
             raise ValueError('Number of levels in selector exceeds that of '
                              'DataFrame index')
 
-        return [t for t in df.index if self._select_test(t, token_list,         
+        return [t for t in df.index if self._select_test(t, token_list,
                                                          start, stop)]
 
     def get_index(self, df, selector, start=None, stop=None, names=[]):
         """
         Return MultiIndex corresponding to rows selected by specified selector.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame instance on which to apply the selector.
+        selector : str
+            Row selector.
+        start, stop : int
+            Start and end indices in `row` over which to test entries.
+        names : list
+            Names of levels to use in generated MultiIndex.
+
+        Returns
+        -------
+        result : pandas.MultiIndex
+            MultiIndex that refers to the rows selected by the specified
+            selector.
         """
 
         tuples = self.get_tuples(df, selector, start, stop)
@@ -222,7 +268,7 @@ class PathLikeSelector(object):
         -----
         The selector may not contain any '*' character.
         """
-        
+
         assert not re.match(r'/\*/', selector)
         token_list = self.parse(selector)
 
@@ -242,6 +288,20 @@ class PathLikeSelector(object):
     def select(self, df, selector, start=None, stop=None):
         """
         Select rows from DataFrame.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame instance on which to apply the selector.
+        selector : str
+            Row selector.
+        start, stop : int
+            Start and end indices in `row` over which to test entries.
+
+        Returns
+        -------
+        result : pandas.DataFrame
+            DataFrame containing selected rows.
         """
 
         token_list = self.parse(selector)
@@ -250,12 +310,23 @@ class PathLikeSelector(object):
         # DataFrame's MultiIndex:        
         if len(token_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
-            
+
         return df.select(lambda row: self._select_test(row, token_list, start, stop))
 
     def _isvalidvarname(self, s):
         """
         Return True if the given string is a valid Python variable identifier.
+
+        Parameters
+        ----------
+        s : str
+            String to test.
+
+        Returns
+        -------
+        result : bool
+            True if the string can serve as a valid Python variable identifier,
+            False otherwise.
 
         Notes
         -----
@@ -279,7 +350,7 @@ class PathLikeSelector(object):
 
         Notes
         -----
-        Seems slower than the select() method.
+        Experimental version of select() method. Seems slower, however.
         """
 
         token_list = self.parse(selector)
@@ -310,12 +381,12 @@ class PathLikeSelector(object):
 
 df = pd.DataFrame(data={'data': np.random.rand(12),
                         'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
-                                    'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],          
+                                    'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],
                         'level_1': ['qux', 'qux', 'qux', 'qux', 'mof', 'mof',
                                     'qux', 'qux', 'qux', 'mof', 'mof', 'mof'],
                         'level_2': ['xxx', 'yyy', 'yyy', 'yyy', 'zzz', 'zzz',
                                     'xxx', 'xxx', 'yyy', 'zzz', 'yyy', 'zzz'],
-                        'level_3': [0, 0, 1, 2, 0, 1, 
+                        'level_3': [0, 0, 1, 2, 0, 1,
                                     0, 1, 0, 1, 0, 1]})
 df.set_index('level_0', append=False, inplace=True)
 df.set_index('level_1', append=True, inplace=True)
