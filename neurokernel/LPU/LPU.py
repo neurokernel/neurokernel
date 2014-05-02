@@ -340,6 +340,8 @@ class LPU(Module, object):
         if not self.run_on_myself:
             if (len(in_gpot_dict) +len(in_spike_dict)) != 0:
                 self._read_LPU_input(in_gpot_dict, in_spike_dict)
+        if self.debug:
+            self.gpot_buffer_file.root.array.append(self.buffer.gpot_buffer.get().reshape(1,self.gpot_delay_steps,-1))
 
         if self.update_other_rest:
             self.buffer.update_other_rest(in_gpot_dict, \
@@ -568,22 +570,22 @@ class LPU(Module, object):
         for i,(t,n) in enumerate(self.n_list):
             if n['spiking'][0]:
                 idx = np.where( (cond_post >= (self.idx_start_spike[i]+self.spike_shift)) \
-                               |(cond_post < (self.idx_start_spike[i+1]+self.spike_shift)) )
+                               &(cond_post < (self.idx_start_spike[i+1]+self.spike_shift)) )
                 n['cond_post'] = cond_post[idx] - self.idx_start_spike[i] - self.spike_shift
                 n['cond_pre'] = cond_pre[idx]
                 n['reverse'] = reverse[idx]
                 idx = np.where( (I_post >= self.idx_start_spike[i]+self.spike_shift) \
-                               |(I_post < self.idx_start_spike[i+1]+self.spike_shift) )
+                               &(I_post < self.idx_start_spike[i+1]+self.spike_shift) )
                 n['I_post'] = I_post[idx] - self.idx_start_spike[i] - spike_shift
                 n['I_pre'] = I_pre[idx]
             else:
                 idx = np.where( (cond_post >= self.idx_start_gpot[i]) \
-                               |(cond_post < self.idx_start_gpot[i+1]) )
+                               &(cond_post < self.idx_start_gpot[i+1]) )
                 n['cond_post'] = cond_post[idx] - self.idx_start_gpot[i]
                 n['cond_pre'] = cond_pre[idx]
                 n['reverse'] = reverse[idx]
                 idx =  np.where( (I_post >= self.idx_start_gpot[i]) \
-                                |(I_post < self.idx_start_gpot[i+1]) )
+                                &(I_post < self.idx_start_gpot[i+1]) )
                 n['I_post'] = I_post[idx] - self.idx_start_gpot[i]
                 n['I_pre'] = I_pre[idx]
 
@@ -639,9 +641,7 @@ class LPU(Module, object):
                 if self.debug:
                     self.in_gpot_files[other_lpu].root.array.append(gpot_data.reshape(1,-1))
             
-        if self.debug:
-            self.gpot_buffer_file.root.array.append(self.buffer.gpot_buffer.get().reshape(1,self.gpot_delay_steps,-1))
-
+        
         #Will need to change this if only spike indexes are transmitted
         for other_lpu, sparse_spike in in_spike_dict.iteritems():
             i = self.other_lpu_map[other_lpu]
