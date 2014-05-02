@@ -141,7 +141,7 @@ class vision_LPU(object):
         if self.columnar_synapse_csv is not None:
             synapse_list = []
             dtypes = [np.dtype('S10'), np.dtype('S10'),
-                      np.dtype('S32'),
+                      np.dtype(np.int32),
                       np.dtype(np.int32), np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
@@ -180,8 +180,8 @@ class vision_LPU(object):
                     tmp = [dtypes[i].type(row[i]) for i in range(n_entry)]
                     synapse_list.append(tuple(tmp))
             
-            self.num_synapse_types = len(synapse_list)
-            self.synapse_dict = np.array(
+            self.num_other_synapse_types = len(synapse_list)
+            self.other_synapse_dict = np.array(
                 synapse_list,
                 dtype = [(a, b) for a, b in zip(self.synapse_field_name, dtypes)])
         else:
