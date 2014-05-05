@@ -9,6 +9,7 @@ import numpy as np
 
 import pandas as pd
 import ply.lex as lex
+import ply.yacc as yacc
 
 class PathLikeSelector(object):
     """
@@ -20,7 +21,6 @@ class PathLikeSelector(object):
     string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2).
     Examples of valid selectors include
 
-    /foo
     /foo/bar
     /foo/[qux,bar]
     /foo/bar[0]
@@ -28,6 +28,7 @@ class PathLikeSelector(object):
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
+    /foo/bar+/baz/qux
 
     The class can also be used to create new MultiIndex instances from selectors
     that contain no wildcards.
@@ -39,10 +40,10 @@ class PathLikeSelector(object):
     """
 
     tokens = ('ASTERISK', 'INTEGER', 'INTEGER_SET',
-              'INTERVAL', 'STRING', 'STRING_SET')
+              'INTERVAL', 'STRING', 'STRING_SET', 'PLUS')
 
     def __init__(self):
-        self._build()
+        self._setup()
 
     def _parse_interval_str(self, s):
         """
@@ -60,6 +61,10 @@ class PathLikeSelector(object):
         else:
             stop = int(stop)
         return (start, stop)
+
+    def t_PLUS(self, t):
+        r'\+'
+        return t
 
     def t_ASTERISK(self, t):
         r'/\*'
@@ -82,29 +87,60 @@ class PathLikeSelector(object):
         return t
 
     def t_STRING(self, t):
-        r'/[^*/\[\]:\d][^*/\[\]:]*'
+        r'/[^*/\[\]:\d][^+*/\[\]:]*'
         t.value = t.value.strip('/')
         return t
 
     def t_STRING_SET(self, t):
-        r'/\[(?:[^*/\[\]:\d][^*/\[\]:]*,?)+\]'
+        r'/\[(?:[^+*/\[\]:\d][^+*/\[\]:]*,?)+\]'
         t.value = t.value.strip('/[]').split(',')
         return t
 
     def t_error(self, t):
         print 'Illegal character "%s"' % t.value[0]
+        raise ValueError('Cannot tokenize selector')
+
+    def p_list_plus(self, p):
+        'list : list PLUS selector'
+        p[0] = p[1]+[p[3]]
+
+    def p_list_selector(self, p):
+        'list : selector'
+        p[0] = [p[1]]
+
+    def p_selector_plus(self, p):
+        'selector : selector token'
+        p[0] = p[1]
+        p[0].append(p[2])
+
+    def p_selector_token(self, p):
+        'selector : token'
+        p[0] = [p[1]]
+
+    def p_token(self, p):
+        '''token : ASTERISK
+               | INTEGER
+               | INTEGER_SET
+               | INTERVAL
+               | STRING
+               | STRING_SET'''
+        p[0] = p[1]
+
+    def p_error(self, p):
+        print 'Syntax error'
         raise ValueError('Cannot parse selector')
 
-    def _build(self, **kwargs):
+    def _setup(self, **kwargs):
         """
-        Build lexer.
+        Build lexer and parser.
         """
 
         self.lexer = lex.lex(module=self, **kwargs)
+        self.parser = yacc.yacc(module=self, **kwargs)
 
-    def parse(self, selector):
+    def tokenize(self, selector):
         """
-        Parse a specified selector string into tokens.
+        Tokenize a selector string.
 
         Parameters
         ----------
@@ -125,9 +161,27 @@ class PathLikeSelector(object):
             token_list.append(token)
         return token_list
 
-    def count_tokens(self, selector):
+    def parse(self, selector):
         """
-        Count number of tokens in selector.
+        Parse a selector string.
+
+        Parameters
+        ----------
+        selector : str
+            Row selector.
+
+        Returns
+        -------
+        parse_list : list of list
+            List of lists containing the tokens corresponding to each individual
+            selector in the string.
+        """
+
+        return self.parser.parse(selector, lexer=self.lexer)
+
+    def max_levels(self, selector):
+        """
+        Return maximum number of token levels in selector.
 
         Parameters
         ----------
@@ -137,16 +191,12 @@ class PathLikeSelector(object):
         Returns
         -------
         count : int
-            Number of tokens in selector.
+            Maximum number of tokens in selector.
         """
 
-        self.lexer.input(selector)
-        count = 0
-        while self.lexer.token():
-            count += 1
-        return count
+        return max(map(len, self.parse(selector)))
 
-    def _select_test(self, row, token_list, start=None, stop=None):
+    def _select_test(self, row, parse_list, start=None, stop=None):
         """
         Check whether the entries in a subinterval of a given tuple of data
         corresponding to the entries of one row in a DataFrame match the
@@ -156,8 +206,8 @@ class PathLikeSelector(object):
         ----------
         row : list
             List of data corresponding to a single row of a DataFrame.
-        token_list : list
-            List of tokens extracted by ply.
+        parse_list : list
+            List of lists of token values extracted by ply.
         start, stop : int
             Start and end indices in `row` over which to test entries.
 
@@ -168,22 +218,30 @@ class PathLikeSelector(object):
         """
 
         row_sub = row[start:stop]
-        for i, token in enumerate(token_list):
-            if token.type == 'ASTERISK':
-                continue
-            elif token.type in ['INTEGER', 'STRING']:
-                if row_sub[i] != token.value:
-                    return False
-            elif token.type in ['INTEGER_SET', 'STRING_SET']:
-                if row_sub[i] not in token.value:
-                    return False
-            elif token.type == 'INTERVAL':
-                i_start, i_stop = token.value
-                if not(row_sub[i] >= i_start and row_sub[i] < i_stop):
-                    return False
+        for token_list in parse_list:
+
+            # If this loop terminates prematurely, it will not return True; this 
+            # forces checking of the subsequent token list:
+            for i, token in enumerate(token_list):
+                if token == '*':
+                    continue
+                elif type(token) in [int, str]:
+                    if row_sub[i] != token:
+                        break
+                elif type(token) == list:
+                    if row_sub[i] not in token:
+                        break
+                elif type(token) == tuple:
+                    i_start, i_stop = token
+                    if not(row_sub[i] >= i_start and row_sub[i] < i_stop):
+                        break
+                else:
+                    continue
             else:
-                continue
-        return True
+                return True
+
+        # If the function still hasn't returned, no match was found:
+        return False
 
     def get_tuples(self, df, selector, start=None, stop=None):
         """
@@ -204,15 +262,16 @@ class PathLikeSelector(object):
             List of tuples containing MultiIndex labels for selected rows.
         """
 
-        token_list = self.parse(selector)
+        parse_list = self.parse(selector)
+        max_levels = max(map(len, parse_list))
 
-        # The number of tokens must not exceed the number of levels in the
+        # The maximum number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
-        if len(token_list) > len(df.index.names[start:stop]):
-            raise ValueError('Number of levels in selector exceeds that of '
+        if max_levels > len(df.index.names[start:stop]):
+            raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
 
-        return [t for t in df.index if self._select_test(t, token_list,
+        return [t for t in df.index if self._select_test(t, parse_list,
                                                          start, stop)]
 
     def get_index(self, df, selector, start=None, stop=None, names=[]):
@@ -266,24 +325,34 @@ class PathLikeSelector(object):
 
         Notes
         -----
-        The selector may not contain any '*' character.
+        The selector may not contain any '*' character. It also must contain
+        more than one level.
         """
 
-        assert not re.match(r'/\*/', selector)
-        token_list = self.parse(selector)
+        assert not re.search(r'\*', selector)
+        parse_list = self.parse(selector)
 
-        list_list = []
-        for token in token_list:
-            if token.type == 'INTERVAL':
-                list_list.append(range(token.value[0], token.value[1]))
-            elif token.type in ['INTEGER_SET', 'STRING_SET']:
-                list_list.append(token.value)
+        idx_list = []
+        for token_list in parse_list:
+            list_list = []
+            for token in token_list:
+                if type(token) == tuple:
+                    list_list.append(range(token[0], token[1]))
+                elif type(token) == list:
+                    list_list.append(token)
+                else:
+                    list_list.append([token])
+            if names:
+                idx = pd.MultiIndex.from_product(list_list, names=names)
             else:
-                list_list.append([token.value])
-        if names:
-            return pd.MultiIndex.from_product(list_list, names=names)
-        else:
-            return pd.MultiIndex.from_product(list_list)
+                idx = pd.MultiIndex.from_product(list_list)
+
+            # XXX Attempting to run MultiIndex.from_product with an argument
+            # containing a single list results in an Index, not a MultiIndex:
+            assert type(idx) == pd.MultiIndex
+            idx_list.append(idx)
+
+        return reduce(type(idx_list[0]).append, idx_list)
 
     def select(self, df, selector, start=None, stop=None):
         """
@@ -304,80 +373,14 @@ class PathLikeSelector(object):
             DataFrame containing selected rows.
         """
 
-        token_list = self.parse(selector)
+        parse_list = self.parse(selector)
 
         # The number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
-        if len(token_list) > len(df.index.names[start:stop]):
+        if len(parse_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
-        return df.select(lambda row: self._select_test(row, token_list, start, stop))
-
-    def _isvalidvarname(self, s):
-        """
-        Return True if the given string is a valid Python variable identifier.
-
-        Parameters
-        ----------
-        s : str
-            String to test.
-
-        Returns
-        -------
-        result : bool
-            True if the string can serve as a valid Python variable identifier,
-            False otherwise.
-
-        Notes
-        -----
-        A valid Python variable identifier must start with an alphabetical character or '_'
-        followed by alphanumeric characters.
-        """
-
-        try:
-            result = re.match('[a-zA-Z_]\w*', s)
-        except TypeError:
-            return False
-        else:
-            if result:
-                return True
-            else:
-                return False
-
-    def query(self, df, selector):
-        """
-        Select rows from DataFrame.
-
-        Notes
-        -----
-        Experimental version of select() method. Seems slower, however.
-        """
-
-        token_list = self.parse(selector)
-
-        if len(token_list) > len(df.index.names):
-            raise ValueError('Number of levels in selector exceeds that of '
-                             'DataFrame index')
-
-        # This method can only work if the MultiIndex level names can be valid
-        # Python variable identifiers:
-        assert all(map(self._isvalidvarname, df.index.names))
-
-        expr_list = []
-        for i, token in enumerate(token_list):
-            if token.type == 'ASTERISK':
-                expr_list.append(df.index.names[i] + ' == ' + df.index.names[i])
-            elif token.type == 'INTEGER':
-                expr_list.append(df.index.names[i] + ' == %i' % token.value)
-            elif token.type == 'STRING':
-                expr_list.append(df.index.names[i] + ' == \'%s\'' % token.value)
-            elif token.type == 'INTERVAL':
-                expr_list.append(df.index.names[i] + ' >= %i' % token.value[0])
-                if not np.isinf(token.value[1]):
-                    expr_list.append(df.index.names[i] + ' < %i' % token.value[1])
-            else:
-                continue
-        return df.query(' and '.join(expr_list))
+        return df.select(lambda row: self._select_test(row, parse_list, start, stop))
 
 class PortMapper(object):
     """
@@ -471,8 +474,7 @@ if __name__ == '__main__':
         def setUp(self):
             self.df = pd.DataFrame(data={'data': np.random.rand(10),
                                          0: ['foo', 'foo', 'foo', 'foo', 'foo',
-                                             'bar', 'bar', 'bar',
-                                             'baz', 'baz'],
+                                             'bar', 'bar', 'bar', 'baz', 'baz'],
                                          1: ['qux', 'qux', 'mof', 'mof', 'mof',
                                              'qux', 'qux', 'qux', 'qux', 'mof'],
                                          2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
@@ -487,6 +489,13 @@ if __name__ == '__main__':
                                              ('foo','mof',0),
                                              ('foo','mof',1),
                                              ('foo','mof',2)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_plus(self):
+            result = self.sel.select(self.df, '/foo/qux+/baz/mof')
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1),
+                                             ('baz','mof',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
         def test_str_asterisk(self):
