@@ -130,13 +130,13 @@ class PathLikeSelector(object):
         print 'Syntax error'
         raise ValueError('Cannot parse selector')
 
-    def _setup(self, **kwargs):
+    def _setup(self):
         """
         Build lexer and parser.
         """
 
-        self.lexer = lex.lex(module=self, **kwargs)
-        self.parser = yacc.yacc(module=self, **kwargs)
+        self.lexer = lex.lex(module=self)
+        self.parser = yacc.yacc(module=self, debug=0)
 
     def tokenize(self, selector):
         """
