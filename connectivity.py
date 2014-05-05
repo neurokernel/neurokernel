@@ -10,14 +10,6 @@ import pandas as pd
 
 from plsel import PathLikeSelector
 
-def isiterable(x):
-    try:
-        iter(x)
-    except:
-        return False
-    else:
-        return True
-
 class Connectivity(object):
     """
     Class for representing connectivity between sets of interface ports.
@@ -113,7 +105,7 @@ class Connectivity(object):
             data = {self.data.columns[0]: value}
         elif type(value) == dict:
             data = value
-        elif isiterable(value) and len(value) <= len(self.data.columns):
+        elif np.iterable(value) and len(value) <= len(self.data.columns):
             data={k:v for k, v in zip(self.data.columns, value)}        
 
         if found:

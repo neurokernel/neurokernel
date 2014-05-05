@@ -379,6 +379,76 @@ class PathLikeSelector(object):
                 continue
         return df.query(' and '.join(expr_list))
 
+class PortMapper(object):
+    """
+    Maps a numpy array to/from path-like port identifiers.
+    
+    Parameters
+    ----------
+    data : numpy.ndarray
+        Data to map to ports.
+    selectors : str or list of str
+        Path-like selector(s) to map to `data`. If more than one selector is
+        defined, the indices corresponding to each selector are sequentially 
+        concatenated.
+    """
+
+    def __init__(self, data, selectors):
+
+        # Can currently only handle unidimensional data structures:
+        assert np.ndim(data) == 1
+        assert type(data) == np.ndarray
+
+        self.data = data
+        self.sel = PathLikeSelector()
+        self.portmap = pd.Series(data=np.arange(len(data)))
+        if np.iterable(selectors) and type(selectors) is not str:
+            idx_list = [self.sel.make_index(s) for s in selectors]
+            idx = reduce(pd.MultiIndex.append, idx_list)
+        else:
+            idx = self.sel.make_index(selectors)
+        self.portmap.index = idx
+
+    def get(self, selector):
+        """
+        Retrieve mapped data specified by given selector.
+
+        Parameters
+        ----------
+        selector : str
+            Path-like selector.
+
+        Returns
+        -------
+        result : numpy.ndarray
+            Selected data.
+        """
+        
+        return self.data[self.sel.select(self.portmap, selector).values]
+
+    def set(self, selector, data):
+        """
+        Set mapped data specified by given selector.
+
+        Parameters
+        ----------
+        selector : str
+            Path-like selector.
+        data : numpy.ndarray
+            Array of data to save.
+        """
+        
+        self.data[self.sel.select(self.portmap, selector).values] = data
+
+    def __getitem__(self, selector):
+        return self.get(selector)
+
+    def __setitem__(self, selector, data):
+        self.set(selector, data)
+
+    def __repr__(self):
+        return 'map:\n'+self.portmap.__repr__()+'\n\ndata:\n'+self.data.__repr__()
+
 df = pd.DataFrame(data={'data': np.random.rand(12),
                         'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
                                     'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],
