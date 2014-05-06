@@ -135,8 +135,9 @@ class PathLikeSelector(object):
         Build lexer and parser.
         """
 
+        # Set the option optimize=1 in the production version:
         self.lexer = lex.lex(module=self)
-        self.parser = yacc.yacc(module=self, debug=0)
+        self.parser = yacc.yacc(module=self, debug=0, write_tables=0)
 
     def tokenize(self, selector):
         """
