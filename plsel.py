@@ -400,17 +400,30 @@ class PortMapper(object):
         Path-like selector(s) to map to `data`. If more than one selector is
         defined, the indices corresponding to each selector are sequentially
         concatenated.
+    idx : sequence
+        Indices of elements in the specified array to map to ports. If no
+        indices are specified, the entire array is mapped to the ports specified
+        by the given selector.
+
+    Notes
+    -----
+    The selectors may not contain any '*' characters.
     """
 
-    def __init__(self, data, selectors):
+    def __init__(self, data, selectors, idx=None):
 
         # Can currently only handle unidimensional data structures:
         assert np.ndim(data) == 1
         assert type(data) == np.ndarray
 
+        # Save a reference to the specified array:
         self.data = data
+
         self.sel = PathLikeSelector()
-        self.portmap = pd.Series(data=np.arange(len(data)))
+        if idx is None:
+            self.portmap = pd.Series(data=np.arange(len(data)))
+        else:
+            self.portmap = pd.Series(data=np.asarray(idx))
         if np.iterable(selectors) and type(selectors) is not str:
             idx_list = [self.sel.make_index(s) for s in selectors]
             idx = reduce(pd.MultiIndex.append, idx_list)
@@ -449,44 +462,43 @@ class PortMapper(object):
 
         self.data[self.sel.select(self.portmap, selector).values] = data
 
-    def __getitem__(self, selector):
-        return self.get(selector)
-
-    def __setitem__(self, selector, data):
-        self.set(selector, data)
+    __getitem__ = get
+    __setitem__ = set
 
     def __repr__(self):
         return 'map:\n'+self.portmap.__repr__()+'\n\ndata:\n'+self.data.__repr__()
-
-df = pd.DataFrame(data={'data': np.random.rand(12),
-                        'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
-                                    'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],
-                        'level_1': ['qux', 'qux', 'qux', 'qux', 'mof', 'mof',
-                                    'qux', 'qux', 'qux', 'mof', 'mof', 'mof'],
-                        'level_2': ['xxx', 'yyy', 'yyy', 'yyy', 'zzz', 'zzz',
-                                    'xxx', 'xxx', 'yyy', 'zzz', 'yyy', 'zzz'],
-                        'level_3': [0, 0, 1, 2, 0, 1,
-                                    0, 1, 0, 1, 0, 1]})
-df.set_index('level_0', append=False, inplace=True)
-df.set_index('level_1', append=True, inplace=True)
-df.set_index('level_2', append=True, inplace=True)
-df.set_index('level_3', append=True, inplace=True)
 
 if __name__ == '__main__':
     from unittest import main, TestCase
     from pandas.util.testing import assert_frame_equal
 
+    df1 = pd.DataFrame(data={'data': np.random.rand(12),
+                       'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
+                                   'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],
+                       'level_1': ['qux', 'qux', 'qux', 'qux', 'mof', 'mof',
+                                   'qux', 'qux', 'qux', 'mof', 'mof', 'mof'],
+                       'level_2': ['xxx', 'yyy', 'yyy', 'yyy', 'zzz', 'zzz',
+                                   'xxx', 'xxx', 'yyy', 'zzz', 'yyy', 'zzz'],
+                       'level_3': [0, 0, 1, 2, 0, 1,
+                                   0, 1, 0, 1, 0, 1]})
+    df1.set_index('level_0', append=False, inplace=True)
+    df1.set_index('level_1', append=True, inplace=True)
+    df1.set_index('level_2', append=True, inplace=True)
+    df1.set_index('level_3', append=True, inplace=True)
+
+    df = pd.DataFrame(data={'data': np.random.rand(10),
+                      0: ['foo', 'foo', 'foo', 'foo', 'foo',
+                          'bar', 'bar', 'bar', 'baz', 'baz'],
+                      1: ['qux', 'qux', 'mof', 'mof', 'mof',
+                          'qux', 'qux', 'qux', 'qux', 'mof'],
+                      2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
+    df.set_index(0, append=False, inplace=True)
+    df.set_index(1, append=True, inplace=True)
+    df.set_index(2, append=True, inplace=True)
+
     class test_path_like_selector(TestCase):
         def setUp(self):
-            self.df = pd.DataFrame(data={'data': np.random.rand(10),
-                                         0: ['foo', 'foo', 'foo', 'foo', 'foo',
-                                             'bar', 'bar', 'bar', 'baz', 'baz'],
-                                         1: ['qux', 'qux', 'mof', 'mof', 'mof',
-                                             'qux', 'qux', 'qux', 'qux', 'mof'],
-                                         2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
-            self.df.set_index(0, append=False, inplace=True)
-            self.df.set_index(1, append=True, inplace=True)
-            self.df.set_index(2, append=True, inplace=True)
+            self.df = df.copy()
             self.sel = PathLikeSelector()
         def test_str_one(self):
             result = self.sel.select(self.df, '/foo')
@@ -564,6 +576,39 @@ if __name__ == '__main__':
                                              ('bar','qux',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
+
+    class test_port_mapper(TestCase):
+        def setUp(self):
+            self.data = np.random.rand(20)
+
+        def test_get(self):
+            pm = PortMapper(self.data,
+                            '/foo/bar[0:10]+/foo/baz[0:10]')
+            np.allclose(self.data[0:10], pm['/foo/bar[0:10]'])
+
+        def test_get_discontinuous(self):
+            pm = PortMapper(self.data,
+                            '/foo/bar[0:10]+/foo/baz[0:10]')
+            np.allclose(self.data[[0, 2, 4, 6]],
+                        pm['/foo/bar[0,2,4,6]'])
+
+        def test_get_sub(self):
+            pm = PortMapper(self.data,
+                            '/foo/bar[0:5]+/foo/baz[0:5]',
+                            np.arange(5, 15))
+            np.allclose(self.data[5:10], pm['/foo/bar[0:5]'])
+
+        def test_set(self):
+            pm = PortMapper(self.data,
+                            '/foo/bar[0:10]+/foo/baz[0:10]')
+            pm['/foo/baz[0:5]'] = 1.0
+            np.allclose(np.ones(5), pm['/foo/baz[0:5]'])
+
+        def test_set_discontinuous(self):
+            pm = PortMapper(self.data,
+                            '/foo/bar[0:10]+/foo/baz[0:10]')
+            pm['/foo/*[0:2]'] = 1.0
+            np.allclose(np.ones(4), pm['/foo/*[0:2]'])
 
     main()
 
