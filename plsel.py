@@ -348,12 +348,17 @@ class PathLikeSelector(object):
             else:
                 idx = pd.MultiIndex.from_product(list_list)
 
-            # XXX Attempting to run MultiIndex.from_product with an argument
+            # Attempting to run MultiIndex.from_product with an argument
             # containing a single list results in an Index, not a MultiIndex:
             assert type(idx) == pd.MultiIndex
+
             idx_list.append(idx)
 
-        return reduce(type(idx_list[0]).append, idx_list)
+        # If multiple selectors are specified with '+', all of the selectors
+        # must have the same number of levels:
+        assert len(set(map(lambda idx: len(idx.levels), idx_list))) == 1
+
+        return reduce(pd.MultiIndex.append, idx_list)
 
     def select(self, df, selector, start=None, stop=None):
         """
@@ -386,14 +391,14 @@ class PathLikeSelector(object):
 class PortMapper(object):
     """
     Maps a numpy array to/from path-like port identifiers.
-    
+
     Parameters
     ----------
     data : numpy.ndarray
         Data to map to ports.
     selectors : str or list of str
         Path-like selector(s) to map to `data`. If more than one selector is
-        defined, the indices corresponding to each selector are sequentially 
+        defined, the indices corresponding to each selector are sequentially
         concatenated.
     """
 
@@ -427,7 +432,7 @@ class PortMapper(object):
         result : numpy.ndarray
             Selected data.
         """
-        
+
         return self.data[self.sel.select(self.portmap, selector).values]
 
     def set(self, selector, data):
@@ -441,7 +446,7 @@ class PortMapper(object):
         data : numpy.ndarray
             Array of data to save.
         """
-        
+
         self.data[self.sel.select(self.portmap, selector).values] = data
 
     def __getitem__(self, selector):
