@@ -19,20 +19,40 @@ class Connectivity(object):
 
     Parameters
     ----------
-    from_levels, to_levels : int
-        Maximum mumber of levels in the source and destination port selectors.
+    data : numpy.ndarray, dict, or pandas.DataFrame
+        Data to load store in class instance.
+    from_sel, to_sel : str
+        Selectors that describe the pattern's initial index. If specified, 
+        both selectors must be set. If no selectors are set, the index is
+        initially empty.
+    columns : sequence of str
+        Data column names.    
     """
 
-    def __init__(self, from_levels=1, to_levels=1):        
+    def __init__(self, data=None, from_sel=None, to_sel=None, columns=['conn']):
         self.sel = PathLikeSelector()
 
+        if (from_sel is None and to_sel is None):
+            from_levels = 1
+            to_levels = 1
+        elif (from_sel is not None and to_sel is not None):
+            from_levels = self.sel.max_levels(from_sel)
+            to_levels = self.sel.max_levels(to_sel)
+        else:
+            raise ValueError('Both from and to selectors must either be set or unset')
+            
         self.num_levels = {'from': from_levels, 'to': to_levels}
         names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
                 ['to_%s' %i for i in xrange(self.num_levels['to'])]
-        levels = [[]]*len(names)
-        labels = [[]]*len(names)
-        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
-        self.data = pd.DataFrame(columns=['conn', 'from_type', 'to_type'], index=idx)
+
+        # Construct index from selectors if specified:
+        if (from_sel is None and to_sel is None):
+            levels = [[]]*len(names)
+            labels = [[]]*len(names)
+            idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        else:
+            idx = self.sel.make_index(self.__key_to_selector__((from_sel, to_sel)), names)
+        self.data = pd.DataFrame(data=data, columns=columns, index=idx)
 
     def __add_level__(self, which):
         assert which in ['from', 'to']
@@ -60,7 +80,7 @@ class Connectivity(object):
 
     def __key_to_selector__(self, key):
         """
-        Convert a key consisting of a tuple of strings into a single selector string.
+        Convert a key consisting of a tuple of two strings into a single selector string.
         """
 
         # Validate input:
@@ -70,7 +90,7 @@ class Connectivity(object):
         # If the number of tokens in the first selector is less than the number
         # of levels in the internal DataFrame, pad it with '*' before combining with
         # the second selector:
-        num_toks_0 = self.sel.count_tokens(key[0])
+        num_toks_0 = self.sel.max_levels(key[0])
         pad = ''.join(['/*']*(self.num_levels['from']-num_toks_0))
         return key[0]+pad+key[1]
         
@@ -78,9 +98,9 @@ class Connectivity(object):
 
         # Check whether the number of levels in the internal DataFrame's
         # MultiIndex must be increased to accommodate the specified selector:
-        for i in xrange(self.sel.count_tokens(key[0])-self.num_levels['from']):
+        for i in xrange(self.sel.max_levels(key[0])-self.num_levels['from']):
             self.__add_level__('from')
-        for i in xrange(self.sel.count_tokens(key[1])-self.num_levels['to']):
+        for i in xrange(self.sel.max_levels(key[1])-self.num_levels['to']):
             self.__add_level__('to')
 
         # Try using the selector to select data from the internal DataFrame:
@@ -173,8 +193,8 @@ if __name__ == '__main__':
             self.df.set_index('to_1', append=True, inplace=True)
             self.df.sort(inplace=True)
 
-        def test_create_conn(self):
-            c = Connectivity(2, 2)
+        def test_create_no_init_idx(self):
+            c = Connectivity(columns=['conn','from_type', 'to_type'])
             c['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
             c['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
             c['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
