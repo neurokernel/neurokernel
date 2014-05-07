@@ -97,8 +97,7 @@ class PathLikeSelector(object):
         return t
 
     def t_error(self, t):
-        print 'Illegal character "%s"' % t.value[0]
-        raise ValueError('Cannot tokenize selector')
+        raise ValueError('Cannot tokenize selector - illegal character: %s' % t.value[0])
 
     def p_list_plus(self, p):
         'list : list PLUS selector'
@@ -127,8 +126,7 @@ class PathLikeSelector(object):
         p[0] = p[1]
 
     def p_error(self, p):
-        print 'Syntax error'
-        raise ValueError('Cannot parse selector')
+        raise ValueError('Cannot parse selector - syntax error: %s' % p)
 
     def _setup(self):
         """
@@ -195,7 +193,13 @@ class PathLikeSelector(object):
             Maximum number of tokens in selector.
         """
 
-        return max(map(len, self.parse(selector)))
+        try:
+            return self.max_levels.cache[selector]
+        except:
+            count = max(map(len, self.parse(selector)))
+            self.max_levels.cache[selector] = count
+            return count
+    max_levels.cache = {}
 
     def _select_test(self, row, parse_list, start=None, stop=None):
         """
