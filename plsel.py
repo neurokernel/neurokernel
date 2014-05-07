@@ -22,13 +22,15 @@ class PathLikeSelector(object):
     Examples of valid selectors include
 
     /foo/bar
+    /foo+/bar (equivalent to /foo/bar)
     /foo/[qux,bar]
     /foo/bar[0]
     /foo/bar[0,1]
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
-    /foo/bar+/baz/qux
+    /foo/bar,/baz/qux
+    (/foo,/bar)+/baz (equivalent to /foo/baz,/bar/baz)
 
     The class can also be used to create new MultiIndex instances from selectors
     that contain no wildcards.
@@ -39,8 +41,8 @@ class PathLikeSelector(object):
     end element (i.e., like numpy, not like pandas).
     """
 
-    tokens = ('ASTERISK', 'INTEGER', 'INTEGER_SET',
-              'INTERVAL', 'STRING', 'STRING_SET', 'PLUS')
+    tokens = ('ASTERISK', 'COMMA', 'INTEGER', 'INTEGER_SET',
+              'INTERVAL', 'LPAREN', 'PLUS', 'RPAREN', 'STRING', 'STRING_SET')
 
     def __init__(self):
         self._setup()
@@ -66,6 +68,18 @@ class PathLikeSelector(object):
         r'\+'
         return t
 
+    def t_COMMA(self, t):
+        r'\,'
+        return t
+
+    def t_LPAREN(self, t):
+        r'\('
+        return t
+
+    def t_RPAREN(self, t):
+        r'\)'
+        return t
+
     def t_ASTERISK(self, t):
         r'/\*'
         t.value = t.value.strip('/')
@@ -82,47 +96,88 @@ class PathLikeSelector(object):
         return t
 
     def t_INTERVAL(self, t):
-        r'\[\d*\:\d*\]'
+        r'/?\[\d*\:\d*\]'
         t.value = self._parse_interval_str(re.search('\[(.+)\]', t.value).group(1))
         return t
 
     def t_STRING(self, t):
-        r'/[^*/\[\]:\d][^+*/\[\]:]*'
+        r'/[^*/\[\]\(\):,\d][^+*/\[\]\(\):,]*'
         t.value = t.value.strip('/')
         return t
 
     def t_STRING_SET(self, t):
-        r'/\[(?:[^+*/\[\]:\d][^+*/\[\]:]*,?)+\]'
+        r'/?\[(?:[^+*/\[\]\(\):,\d][^+*/\[\]\(\):,]*,?)+\]'
         t.value = t.value.strip('/[]').split(',')
         return t
 
     def t_error(self, t):
         raise ValueError('Cannot tokenize selector - illegal character: %s' % t.value[0])
 
-    def p_list_plus(self, p):
-        'list : list PLUS selector'
+    # The parsing functions construct a list of lists, each of the latter
+    # containing the consecutive tokens associated with a selector:
+    def p_list_paren_list(self, p):
+        'list : LPAREN list RPAREN'
+        p[0] = p[2]
+
+    def p_list_paren_selector(self, p):
+        'list : LPAREN selector RPAREN'
+        p[0] = [p[2]]
+
+    def p_list_comma_list(self, p):
+        'list : list COMMA list'
+        p[0] = p[1]+p[3]
+
+    def p_list_comma_1(self, p):
+        'list : list COMMA selector'
         p[0] = p[1]+[p[3]]
+
+    def p_list_comma_2(self, p):
+        'list : selector COMMA list'
+        p[0] = [p[1]]+p[3]
+
+    def p_list_plus_list(self, p):
+        'list : list PLUS list'
+        p[0] = []
+        for i in xrange(len(p[1])):
+            for j in xrange(len(p[3])):
+                p[0].append(p[1][i]+p[3][j])
+
+    def p_list_plus_selector_1(self, p):
+        'list : list PLUS selector'
+        p[0] = []
+        for i in xrange(len(p[1])):
+            p[0].append(p[1][i]+p[3])
+
+    def p_list_plus_selector_2(self, p):
+        'list : selector PLUS list'
+        p[0] = []
+        for i in xrange(len(p[3])):
+            p[0].append(p[1]+p[3][i])
 
     def p_list_selector(self, p):
         'list : selector'
         p[0] = [p[1]]
 
     def p_selector_plus(self, p):
-        'selector : selector token'
+        'selector : selector PLUS selector'
+        p[0] = p[1]+p[3]
+
+    def p_selector_selector(self, p):
+        'selector : selector level'
         p[0] = p[1]
         p[0].append(p[2])
 
-    def p_selector_token(self, p):
-        'selector : token'
+    def p_selector_level(self, p):
+        'selector : level'
         p[0] = [p[1]]
 
-    def p_token(self, p):
-        '''token : ASTERISK
-               | INTEGER
-               | INTEGER_SET
-               | INTERVAL
-               | STRING
-               | STRING_SET'''
+    def p_level(self, p):
+        '''level : ASTERISK
+                 | INTEGER
+                 | INTEGER_SET
+                 | INTERVAL
+                 | STRING
+                 | STRING_SET'''
         p[0] = p[1]
 
     def p_error(self, p):
@@ -504,6 +559,7 @@ if __name__ == '__main__':
         def setUp(self):
             self.df = df.copy()
             self.sel = PathLikeSelector()
+
         def test_str_one(self):
             result = self.sel.select(self.df, '/foo')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
@@ -513,10 +569,25 @@ if __name__ == '__main__':
                                              ('foo','mof',2)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_plus(self):
-            result = self.sel.select(self.df, '/foo/qux+/baz/mof')
+        def test_str_comma(self):
+            result = self.sel.select(self.df, '/foo/qux,/baz/mof')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1),
+                                             ('baz','mof',0)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_plus(self):
+            result = self.sel.select(self.df, '/foo+/qux+[0,1]')
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_paren(self):
+            result = self.sel.select(self.df, '(/bar,/baz)')
+            idx = pd.MultiIndex.from_tuples([('bar','qux',0),
+                                             ('bar','qux',1),
+                                             ('bar','qux',2),
+                                             ('baz','qux',0),
                                              ('baz','mof',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
@@ -587,30 +658,30 @@ if __name__ == '__main__':
 
         def test_get(self):
             pm = PortMapper(self.data,
-                            '/foo/bar[0:10]+/foo/baz[0:10]')
+                            '/foo/bar[0:10],/foo/baz[0:10]')
             np.allclose(self.data[0:10], pm['/foo/bar[0:10]'])
 
         def test_get_discontinuous(self):
             pm = PortMapper(self.data,
-                            '/foo/bar[0:10]+/foo/baz[0:10]')
+                            '/foo/bar[0:10],/foo/baz[0:10]')
             np.allclose(self.data[[0, 2, 4, 6]],
                         pm['/foo/bar[0,2,4,6]'])
 
         def test_get_sub(self):
             pm = PortMapper(self.data,
-                            '/foo/bar[0:5]+/foo/baz[0:5]',
+                            '/foo/bar[0:5],/foo/baz[0:5]',
                             np.arange(5, 15))
             np.allclose(self.data[5:10], pm['/foo/bar[0:5]'])
 
         def test_set(self):
             pm = PortMapper(self.data,
-                            '/foo/bar[0:10]+/foo/baz[0:10]')
+                            '/foo/bar[0:10],/foo/baz[0:10]')
             pm['/foo/baz[0:5]'] = 1.0
             np.allclose(np.ones(5), pm['/foo/baz[0:5]'])
 
         def test_set_discontinuous(self):
             pm = PortMapper(self.data,
-                            '/foo/bar[0:10]+/foo/baz[0:10]')
+                            '/foo/bar[0:10],/foo/baz[0:10]')
             pm['/foo/*[0:2]'] = 1.0
             np.allclose(np.ones(4), pm['/foo/*[0:2]'])
 
