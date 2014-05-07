@@ -45,13 +45,13 @@ class Connectivity(object):
         names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
                 ['to_%s' %i for i in xrange(self.num_levels['to'])]
 
-        # Construct index from selectors if specified:
+        # Construct index from concatenated selectors if specified:
         if (from_sel is None and to_sel is None):
             levels = [[]]*len(names)
             labels = [[]]*len(names)
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         else:
-            idx = self.sel.make_index(self.__key_to_selector__((from_sel, to_sel)), names)
+            idx = self.sel.make_index(from_sel+'+'+to_sel, names)
         self.data = pd.DataFrame(data=data, columns=columns, index=idx)
 
     def __add_level__(self, which):
@@ -77,22 +77,6 @@ class Connectivity(object):
 
         # Bump number of levels:
         self.num_levels[which] += 1
-
-    def __key_to_selector__(self, key):
-        """
-        Convert a key consisting of a tuple of two strings into a single selector string.
-        """
-
-        # Validate input:
-        if len(key) != 2 or type(key[0]) != str or type(key[1]) != str:
-            raise ValueError('invalid key')
-
-        # If the number of tokens in the first selector is less than the number
-        # of levels in the internal DataFrame, pad it with '*' before combining with
-        # the second selector:
-        num_toks_0 = self.sel.max_levels(key[0])
-        pad = ''.join(['/*']*(self.num_levels['from']-num_toks_0))
-        return key[0]+pad+key[1]
         
     def __setitem__(self, key, value):
 
@@ -104,7 +88,7 @@ class Connectivity(object):
             self.__add_level__('to')
 
         # Try using the selector to select data from the internal DataFrame:
-        selector = self.__key_to_selector__(key)
+        selector = '+'.join(key)
         try:
             idx = self.sel.get_index(self.data, selector, names=self.data.index.names)
         
@@ -136,8 +120,7 @@ class Connectivity(object):
             self.data.sort(inplace=True)
 
     def __getitem__(self, key):
-        selector = self.__key_to_selector__(key)
-        return self.sel.select(self.data, selector)
+        return self.sel.select(self.data, selector = '+'.join(key))
 
     def __repr__(self):
         return self.data.__repr__()
