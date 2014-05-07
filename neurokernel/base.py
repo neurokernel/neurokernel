@@ -9,7 +9,6 @@ import copy
 import multiprocessing as mp
 import os
 import re
-import signal
 import string
 import sys
 import threading
@@ -71,7 +70,7 @@ class BaseModule(ControlledProcess):
     run_step(data)
         Processes the specified data and returns a result for
         transmission to other modules.
-    
+
     Notes
     -----
     If the ports specified upon instantiation are None, the module
@@ -120,7 +119,7 @@ class BaseModule(ControlledProcess):
         if id is None:
             id = uid()
 
-        super(BaseModule, self).__init__(port_ctrl, signal.SIGUSR1, id)
+        super(BaseModule, self).__init__(port_ctrl, id)
 
         # Logging:
         self.logger = twiggy.log.name('module %s' % self.id)
@@ -146,7 +145,7 @@ class BaseModule(ControlledProcess):
         # from this module; must be initialized immediately before an emulation
         # begins running:
         self._out_idx_dict = {}
-        
+
     @property
     def N(self):
         """
@@ -155,11 +154,10 @@ class BaseModule(ControlledProcess):
         Notes
         -----
         Must be overwritten to return the actual number of ports.
-
         """
 
         raise NotImplementedError('N must be implemented')
-    
+
     @property
     def all_ids(self):
         """
@@ -176,13 +174,13 @@ class BaseModule(ControlledProcess):
 
         return [c.other_mod(self.id) for c in self._conn_dict.values() if \
                 c.is_connected(c.other_mod(self.id), self.id)]
-    
+
     @property
     def out_ids(self):
         """
         IDs of modules that receive data from this module.
         """
-        
+
         return [c.other_mod(self.id) for c in self._conn_dict.values() if \
                 c.is_connected(self.id, c.other_mod(self.id))]
 
@@ -199,7 +197,6 @@ class BaseModule(ControlledProcess):
         -----
         The module's ID must be one of the two IDs specified in the
         connnectivity object.
-         
         """
 
         if not isinstance(conn, BaseConnectivity):
@@ -211,12 +208,12 @@ class BaseModule(ControlledProcess):
         # The connectivity instances associated with this module are keyed by
         # the ID of the other module:
         self._conn_dict[conn.other_mod(self.id)] = conn
-        
+
         # Update internal connectivity based upon contents of connectivity
         # object. When the add_conn() method is invoked, the module's internal
         # connectivity is always upgraded to at least 'ctrl':
         if self.net == 'none':
-            self.net = 'ctrl'        
+            self.net = 'ctrl'
         if conn.is_connected(self.id, conn.other_mod(self.id)):
             old_net = self.net
             if self.net == 'ctrl':
@@ -309,20 +306,18 @@ class BaseModule(ControlledProcess):
 
         Input data received from other modules is used to populate the specified
         data structures.
-        
+
         Parameters
         ----------
         in_dict : dict of numpy.ndarray of float
             Dictionary of data from other modules keyed by source module ID.
-        
         """
 
-        self.logger.info('retrieving input')        
+        self.logger.info('retrieving input')
         for in_id in self.in_ids:
             if in_id in self._in_data.keys() and self._in_data[in_id]:
                 in_dict[in_id] = self._in_data[in_id].popleft()
 
-        
     def _put_out_data(self, out):
         """
         Put output data in outgoing transmission buffer.
@@ -335,7 +330,6 @@ class BaseModule(ControlledProcess):
         ---------
         out : numpy.ndarray of float
             Output data.
-        
         """
 
         self.logger.info('populating output buffer')
@@ -347,11 +341,11 @@ class BaseModule(ControlledProcess):
         # transmitted to each destination module:
         for out_id in self.out_ids:
             self._out_data.append((out_id, np.asarray(out)[self._out_idx_dict[out_id]]))
-        
+
     def _sync(self):
         """
         Send output data and receive input data.
-            
+
         Notes
         -----
         Assumes that the attributes used for input and output already
@@ -362,9 +356,8 @@ class BaseModule(ControlledProcess):
         for inbound messages, the ID is that of the source module.
         Data is serialized before being sent and unserialized when
         received.
-
         """
-        
+
         if self.net in ['none', 'ctrl']:
             self.logger.info('not synchronizing with network')
         else:
@@ -379,7 +372,7 @@ class BaseModule(ControlledProcess):
                     self.sock_data.send(msgpack.packb((out_id, data)))
                     send_ids.remove(out_id)
                     self.logger.info('sent to   %s: %s' % (out_id, str(data)))
-                
+
                 # Send data tuples containing None to those modules for which no
                 # actual data was generated to satisfy the barrier condition:
                 for out_id in send_ids:
@@ -411,33 +404,30 @@ class BaseModule(ControlledProcess):
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
-        
+
         Code in this method will be executed after a module's process has been
         launched and all connectivity objects made available, but before the
         main run loop begins.
-
         """
-        
+
         self.logger.info('performing pre-emulation operations')
 
     def post_run(self, *args, **kwargs):
         """
         Code to run after main module run loop.
-        
+
         Code in this method will be executed after a module's main loop has
         terminated.
-
         """
 
         self.logger.info('performing post-emulation operations')
-                
+
     def run_step(self, in_dict, out):
         """
         Perform a single step of computation.
 
         This method should be implemented to do something interesting with its
         arguments. It should not interact with any other class attributes.
-
         """
 
         self.logger.info('running execution step')
@@ -468,7 +458,7 @@ class BaseModule(ControlledProcess):
 
             # Perform any pre-emulation operations:
             self.pre_run()
-               
+
             self.running = True
             curr_steps = 0
             while curr_steps < self._steps:
@@ -478,7 +468,7 @@ class BaseModule(ControlledProcess):
                 # run_step method:
                 in_dict = {}
                 out = []
-                
+
                 # Get input data:
                 catch_exception(self._get_in_data,self.logger.info,in_dict)
 
@@ -495,13 +485,13 @@ class BaseModule(ControlledProcess):
                 if not self.running:
                     self.logger.info('run loop stopped')
                     break
-                
+
                 curr_steps += 1
 
             # Perform any post-emulation operations:
             self.post_run()
 
-            # Shut down the control handler and signal the manager that the
+            # Shut down the control handler and inform the manager that the
             # module has shut down:
             self._ctrl_stream_shutdown()
             ack = 'shutdown'
@@ -516,7 +506,7 @@ class Broker(ControlledProcess):
 
     Waits to receive data from all input modules before transmitting the
     collected data to destination modules.
-   
+
     Parameters
     ----------
     port_data : int
@@ -530,12 +520,11 @@ class Broker(ControlledProcess):
         Body of process.
     sync()
         Synchronize with network.
-
     """
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
                  routing_table=None):
-        super(Broker, self).__init__(port_ctrl, signal.SIGUSR1, uid())
+        super(Broker, self).__init__(port_ctrl, uid())
 
         # Logging:
         self.logger = twiggy.log.name('broker %s' % self.id)
@@ -554,8 +543,7 @@ class Broker(ControlledProcess):
         # A dictionary keyed by routing table coords.
         # Each value represents the difference between number of data
         # messages received for that routing relation and the current number
-        # of exectued steps.
-                   
+        # of executed steps.
 
     def _ctrl_handler(self, msg):
         """
@@ -586,7 +574,6 @@ class Broker(ControlledProcess):
         Assumes that each message contains a source module ID
         (provided by zmq) and a serialized tuple; the tuple contains
         the destination module ID and the data to be transmitted.
-
         """
 
         if len(msg) != 2:

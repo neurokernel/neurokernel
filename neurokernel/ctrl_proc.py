@@ -23,8 +23,6 @@ import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
-from ctx_managers import TryExceptionOnSignal, IgnoreKeyboardInterrupt
-
 # Use a finite linger time to prevent sockets from either hanging or
 # being uncleanly terminated when shutdown:
 LINGER_TIME = 2
@@ -41,14 +39,13 @@ class ControlledProcess(mp.Process):
         OS signal to use when quitting the proess.
     id : str
         Unique object identifier. Used for communication and logging.
-    
+
     See Also
     --------
     multiprocessing.Process
-    
     """
 
-    def __init__(self, port_ctrl, quit_sig, id, *args, **kwargs):
+    def __init__(self, port_ctrl, id, *args, **kwargs):
 
         # Unique object identifier:
         self.id = id
@@ -61,11 +58,9 @@ class ControlledProcess(mp.Process):
 
         # Flag to use when stopping the process:
         self.running = False
-        
-        # Signal to use when quitting:
-        self.quit_sig = quit_sig
+
         super(ControlledProcess, self).__init__(*args, **kwargs)
-        
+
     def _ctrl_handler(self, msg):
         """
         Control port handler.
@@ -107,7 +102,6 @@ class ControlledProcess(mp.Process):
         ----------
         event_thread : bool
             If True, start the control event loop in a new thread.
-
         """
 
         # Set up zmq context and event loop:
@@ -122,7 +116,7 @@ class ControlledProcess(mp.Process):
             th.Thread(target=self.ioloop_ctrl.start).start()
         else:
             self.ioloop_ctrl.start()
-            
+
     def run(self):
         """
         Body of process.
@@ -136,7 +130,7 @@ class ControlledProcess(mp.Process):
                 self.logger.info('stopping run loop')
                 break
         self.logger.info('done')
-        
+
 if __name__ == '__main__':
     output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
                                          stream=sys.stdout)
@@ -149,9 +143,10 @@ if __name__ == '__main__':
 
     # Protect both the child and parent processes from being clobbered by
     # Ctrl-C:
+    from ctx_managers import TryExceptionOnSignal, IgnoreKeyboardInterrupt
     with IgnoreKeyboardInterrupt():
-        p = ControlledProcess(port_ctrl, signal.SIGUSR1, 'mymod')
+        p = ControlledProcess(port_ctrl, 'mymod')
         p.start()
 
         time.sleep(3)
-        sock.send_multipart([p.id, 'quit'])   
+        sock.send_multipart([p.id, 'quit'])

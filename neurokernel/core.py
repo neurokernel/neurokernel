@@ -615,14 +615,13 @@ class Module(base.BaseModule):
         Notes
         -----
         The module's ID must be one of the two IDs specified in the
-        connnectivity object.
-        
+        connnectivity object
         """
-        
+
         if not isinstance(conn, Connectivity):
-            raise ValueError('invalid connectivity object')        
+            raise ValueError('invalid connectivity object')
         super(Module, self).add_conn(conn)
-        
+
     @property
     def N_gpot(self):
         """
@@ -671,9 +670,8 @@ class Module(base.BaseModule):
             Dictionary of graded potential neuron states from other modules.
         in_spike_dict : dict of numpy.array of int
             Dictionary of spiking neuron indices from other modules.
-                
         """
-        
+
         self.logger.info('reading input buffer')
         for in_id in self.in_ids:
             if in_id in self._in_data.keys() and self._in_data[in_id]:
@@ -695,14 +693,13 @@ class Module(base.BaseModule):
             Output neuron states.
         out_spike : numpy.ndarray of int
             Indices of spiking neurons that emitted a spike.
-            
         """
 
         self.logger.info('populating output buffer')
 
         # Clear output buffer before populating it:
         self._out_data = []
-        
+
         # Use indices of destination neurons to select which neuron
         # values or spikes need to be transmitted to each destination
         # module:
@@ -716,7 +713,7 @@ class Module(base.BaseModule):
             self._out_data.append((out_id,
                                    (np.asarray(out_gpot)[self._out_idx_dict['gpot'][out_id]],
                                     np.asarray(np.intersect1d(out_spike, self._out_idx_dict['spike'][out_id])))))
-        
+
     def run_step(self, in_gpot_dict, in_spike_dict, out_gpot, out_spike):
         """
         Perform a single step of processing.
@@ -739,16 +736,15 @@ class Module(base.BaseModule):
         The index of each array of graded potential neuron data is assumed to
         correspond to the neuron's ID; the arrays of spiking neuron data contain
         the indices of those neurons that have emitted a spike.
-        
         """
 
         self.logger.info('running execution step')
-        
-    def run(self):        
+
+    def run(self):
         """
         Body of process.
         """
-                
+
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
@@ -771,10 +767,10 @@ class Module(base.BaseModule):
             # Dict used to store the incoming data keyed by the source module id.
             # Each value is a queue buferring the received data
             self._in_data = {k:collections.deque() for k in self.in_ids}
-            
+
             # Perform any pre-emulation operations:
             self.pre_run()
-               
+
             self.running = True
             curr_steps = 0
             while curr_steps < self._steps:
@@ -795,7 +791,7 @@ class Module(base.BaseModule):
                     self._get_in_data(in_gpot_dict, in_spike_dict)
 
                     # Run the processing step:
-                    self.run_step(in_gpot_dict, in_spike_dict,     
+                    self.run_step(in_gpot_dict, in_spike_dict,
                                   out_gpot, out_spike)
 
                     # Stage generated output data for transmission to other
@@ -804,16 +800,16 @@ class Module(base.BaseModule):
 
                     # Synchronize:
                     self._sync()
-                    
+
                 else:
-                    
+
                     # Get transmitted input data for processing:
                     catch_exception(self._get_in_data, self.logger.info,
                                     in_gpot_dict, in_spike_dict)
 
                     # Run the processing step:
                     catch_exception(self.run_step, self.logger.info,
-                                    in_gpot_dict, in_spike_dict,     
+                                    in_gpot_dict, in_spike_dict,
                                     out_gpot, out_spike)
 
                     # Stage generated output data for transmission to other
@@ -834,7 +830,7 @@ class Module(base.BaseModule):
             # Perform any post-emulation operations:
             self.post_run()
 
-            # Shut down the control handler and signal the manager that the
+            # Shut down the control handler and inform the manager that the
             # module has shut down:
             self._ctrl_stream_shutdown()
             ack = 'shutdown'
@@ -952,13 +948,13 @@ if __name__ == '__main__':
     #                                               N2_gpot+N2_spike), int)
     conn1[m1.id,'all',:,m2.id,'all',:] = \
         np.ones((N1_gpot+N1_spike,
-                 N2_gpot+N2_spike))      
+                 N2_gpot+N2_spike))
     conn1[m2.id,'all',:,m1.id,'all',:] = \
         np.ones((N2_gpot+N2_spike,
                  N1_gpot+N1_spike))
-          
+
     print conn1
-    
+
     # c3to4 = Connectivity(rand_bin_matrix((N-2, N), N**2/2, int))
     # c4to1 = Connectivity(rand_bin_matrix((N, N-2), N**2/2, int)) 
     # c1to3 = Connectivity(rand_bin_matrix((N, N), N**2/2, int))    
