@@ -10,12 +10,22 @@ import pandas as pd
 
 from plsel import PathLikeSelector
 
-class Connectivity(object):
+class Pattern(object):
     """
     Class for representing connectivity between sets of interface ports.
 
     This class represents connection mappings from one set of ports to another.
-    Ports are represented using path-like identifiers.
+    Ports are represented using path-like identifiers as follows:
+
+    p = Pattern()
+    p['/x[0:3]', '/y[0:2]'] = 1
+
+    A single attribute ('conn') is created by default. Specific attributes
+    may be accessed by specifying their names after the port identifiers; if
+    a nonexistent attribute is specified when a sequential value is assigned,
+    a new column for that attribute is automatically created:
+
+    p['/x[0:3]', '/y[0:2', 'conn', 'x'] = [1, 'foo']
 
     Parameters
     ----------
@@ -26,7 +36,7 @@ class Connectivity(object):
         both selectors must be set. If no selectors are set, the index is
         initially empty.
     columns : sequence of str
-        Data column names.    
+        Data column names.
     """
 
     def __init__(self, data=None, from_sel=None, to_sel=None, columns=['conn']):
@@ -113,6 +123,8 @@ class Connectivity(object):
                 data = value
             elif np.iterable(value) and len(value) <= len(key[2:]):
                 data={k:v for k, v in zip(key[2:], value)}
+            else:
+                raise ValueError('cannot assign specified value')
         else:
             if np.isscalar(value):
                 data = {self.data.columns[0]: value}
@@ -120,6 +132,8 @@ class Connectivity(object):
                 data = value
             elif np.iterable(value) and len(value) <= len(self.data.columns):
                 data={k:v for k, v in zip(self.data.columns, value)}
+            else:
+                raise ValueError('cannot assign specified value')
 
         if found:
             for k, v in data.iteritems():
@@ -190,7 +204,7 @@ if __name__ == '__main__':
             self.df.sort(inplace=True)
 
         def test_create_no_init_idx(self):
-            c = Connectivity(columns=['conn','from_type', 'to_type'])
+            c = Pattern(columns=['conn','from_type', 'to_type'])
             c['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
             c['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
             c['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
