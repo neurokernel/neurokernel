@@ -51,7 +51,7 @@ class Connectivity(object):
             labels = [[]]*len(names)
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         else:
-            idx = self.sel.make_index(from_sel+'+'+to_sel, names)
+            idx = self.sel.make_index('(%s)+(%s)' % (from_sel, to_sel), names)
         self.data = pd.DataFrame(data=data, columns=columns, index=idx)
 
     def __add_level__(self, which):
