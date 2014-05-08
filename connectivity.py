@@ -88,9 +88,10 @@ class Connectivity(object):
             self.__add_level__('to')
 
         # Try using the selector to select data from the internal DataFrame:
-        selector = '+'.join(key)
+        selector = '+'.join(key[0:2])
         try:
-            idx = self.sel.get_index(self.data, selector, names=self.data.index.names)
+            idx = self.sel.get_index(self.data, selector,
+                                     names=self.data.index.names)
         
         # If the select fails, try to create new rows with the index specified
         # by the selector and load them with the specified data:
@@ -105,12 +106,20 @@ class Connectivity(object):
             found = True
 
         # Ensure that data to set is in dict form:
-        if np.isscalar(value):
-            data = {self.data.columns[0]: value}
-        elif type(value) == dict:
-            data = value
-        elif np.iterable(value) and len(value) <= len(self.data.columns):
-            data={k:v for k, v in zip(self.data.columns, value)}        
+        if len(key) > 2:
+            if np.isscalar(value):
+                data = {k:value for k in key[2:]}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(key[2:]):
+                data={k:v for k, v in zip(key[2:], value)}
+        else:
+            if np.isscalar(value):
+                data = {self.data.columns[0]: value}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(self.data.columns):
+                data={k:v for k, v in zip(self.data.columns, value)}
 
         if found:
             for k, v in data.iteritems():
@@ -120,7 +129,11 @@ class Connectivity(object):
             self.data.sort(inplace=True)
 
     def __getitem__(self, key):
-        return self.sel.select(self.data, selector = '+'.join(key))
+        if len(key) > 2:
+            return self.sel.select(self.data[list(key[2:])],
+                                             selector = '+'.join(key[0:2]))
+        else:
+            return self.sel.select(self.data, selector = '+'.join(key))
 
     def __repr__(self):
         return self.data.__repr__()
