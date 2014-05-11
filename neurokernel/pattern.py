@@ -25,35 +25,60 @@ class Pattern(object):
     a nonexistent attribute is specified when a sequential value is assigned,
     a new column for that attribute is automatically created:
 
-    p['/x[0:3]', '/y[0:2', 'conn', 'x'] = [1, 'foo']
+    p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
 
     Parameters
     ----------
-    data : numpy.ndarray, dict, or pandas.DataFrame
-        Data to load store in class instance.
-    from_sel, to_sel : str
-        Selectors that describe the pattern's initial index. If specified, 
-        both selectors must be set. If no selectors are set, the index is
-        initially empty.
     columns : sequence of str
         Data column names.
     """
 
-    def __init__(self, data=None, from_sel=None, to_sel=None, columns=['conn']):
+    def __init__(self, columns=['conn']):
         self.sel = PathLikeSelector()
+        self.num_levels = {'from': 1, 'to': 1}
+        idx = pd.MultiIndex(levels=[[]]*2, labels=[[]]*2, 
+                            names=['from_0', 'to_0'])
+        self.data = pd.DataFrame(index=idx, columns=columns)
 
+    @classmethod
+    def _create_from(cls, data=None, from_sel=None, to_sel=None, 
+                 columns=['conn'], comb_op='+'):
+        """
+        Create a Pattern instance from the specified selectors.
+
+        Parameters
+        ----------
+        data : numpy.ndarray, dict, or pandas.DataFrame
+            Data to load store in class instance.
+        from_sel, to_sel : str
+            Selectors that describe the pattern's initial index. If specified, 
+            both selectors must be set. If no selectors are set, the index is
+            initially empty.
+        columns : sequence of str
+            Data column names.
+        comp_op : str
+            Operator to use to combine selectors into single selector that
+            comprises both the source and destination ports in a pattern.
+        
+        Returns
+        -------
+        result : Pattern
+            Pattern instance.
+        """
+
+        p = cls()
         if (from_sel is None and to_sel is None):
             from_levels = 1
             to_levels = 1
         elif (from_sel is not None and to_sel is not None):
-            from_levels = self.sel.max_levels(from_sel)
-            to_levels = self.sel.max_levels(to_sel)
+            from_levels = p.sel.max_levels(from_sel)
+            to_levels = p.sel.max_levels(to_sel)
         else:
             raise ValueError('Both from and to selectors must either be set or unset')
             
-        self.num_levels = {'from': from_levels, 'to': to_levels}
-        names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
-                ['to_%s' %i for i in xrange(self.num_levels['to'])]
+        p.num_levels = {'from': from_levels, 'to': to_levels}
+        names = ['from_%s' % i for i in xrange(p.num_levels['from'])]+ \
+                ['to_%s' %i for i in xrange(p.num_levels['to'])]
 
         # Construct index from concatenated selectors if specified:
         if (from_sel is None and to_sel is None):
@@ -61,8 +86,71 @@ class Pattern(object):
             labels = [[]]*len(names)
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         else:
-            idx = self.sel.make_index('(%s)+(%s)' % (from_sel, to_sel), names)
-        self.data = pd.DataFrame(data=data, columns=columns, index=idx)
+            idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
+        p.data = pd.DataFrame(data=data, columns=columns, index=idx)
+        return p
+
+    @classmethod
+    def from_product(cls, data, from_sel, to_sel, columns=['conn']):
+        """
+        Create pattern from the product of identifiers comprised by two selectors.
+
+        For example, Pattern.from_product(1, '/bar[0:2]', '/foo[0:2]')
+        results in a pattern with the following connections: 
+
+        '/bar[0]' -> '/foo[0]'
+        '/bar[0]' -> '/foo[1]'
+        '/bar[1]' -> '/foo[0]'
+        '/bar[1]' -> '/foo[1]'
+
+        Parameters
+        ----------
+        data : numpy.ndarray, dict, or pandas.DataFrame
+            Data to load store in class instance.
+        from_sel, to_sel : str
+            Selectors that describe the pattern's initial index. If specified,
+            both selectors must be set. If no selectors are set, the index is
+            initially empty.
+        columns : sequence of str
+            Data column names.
+
+        Returns
+        -------
+        result : Pattern
+            Pattern instance.
+        """
+
+        return cls._create_from(data, from_sel, to_sel, columns, comb_op='+')
+
+    @classmethod
+    def from_concat(cls, data, from_sel, to_sel, columns=['conn']):
+        """
+        Create pattern from the concatenation of identifers comprised by two selectors.
+
+        For example, Pattern.from_concat(1, '/bar[0:2]', '/foo[0:2]')
+        results in a pattern with the following connections:
+
+        '/bar[0]' -> '/foo[0]'
+        '/bar[1]' -> '/foo[1]'
+
+        Parameters
+        ----------
+        data : numpy.ndarray, dict, or pandas.DataFrame
+            Data to load store in class instance.
+        from_sel, to_sel : str
+            Selectors that describe the pattern's initial index. If specified,
+            both selectors must be set. If no selectors are set, the index is
+            initially empty.
+        columns : sequence of str
+            Data column names.
+
+        Returns
+        -------
+        result : Pattern
+            Pattern instance.
+        """
+
+        return cls._create_from(data, from_sel, to_sel, columns, comb_op='.+')
 
     def __add_level__(self, which):
         assert which in ['from', 'to']
@@ -203,7 +291,7 @@ if __name__ == '__main__':
             self.df.set_index('to_1', append=True, inplace=True)
             self.df.sort(inplace=True)
 
-        def test_create_no_init_idx(self):
+        def test_create(self):
             c = Pattern(columns=['conn','from_type', 'to_type'])
             c['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
             c['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
