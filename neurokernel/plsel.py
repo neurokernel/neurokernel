@@ -4,9 +4,10 @@
 Path-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 """
 
+import itertools
 import re
-import numpy as np
 
+import numpy as np
 import pandas as pd
 import ply.lex as lex
 import ply.yacc as yacc
@@ -41,7 +42,7 @@ class PathLikeSelector(object):
     end element (i.e., like numpy, not like pandas).
     """
 
-    tokens = ('ASTERISK', 'COMMA', 'INTEGER', 'INTEGER_SET',
+    tokens = ('ASTERISK', 'COMMA', 'DOTPLUS', 'INTEGER', 'INTEGER_SET',
               'INTERVAL', 'LPAREN', 'PLUS', 'RPAREN', 'STRING', 'STRING_SET')
 
     def __init__(self):
@@ -66,6 +67,10 @@ class PathLikeSelector(object):
 
     def t_PLUS(self, t):
         r'\+'
+        return t
+
+    def t_DOTPLUS(self, t):
+        r'\.\+'
         return t
 
     def t_COMMA(self, t):
@@ -101,12 +106,12 @@ class PathLikeSelector(object):
         return t
 
     def t_STRING(self, t):
-        r'/[^*/\[\]\(\):,\d][^+*/\[\]\(\):,]*'
+        r'/[^*/\[\]\(\):,\.\d][^+*/\[\]\(\):,\.]*'
         t.value = t.value.strip('/')
         return t
 
     def t_STRING_SET(self, t):
-        r'/?\[(?:[^+*/\[\]\(\):,\d][^+*/\[\]\(\):,]*,?)+\]'
+        r'/?\[(?:[^+*/\[\]\(\):,\.\d][^+*/\[\]\(\):,\.]*,?)+\]'
         t.value = t.value.strip('/[]').split(',')
         return t
 
@@ -161,6 +166,32 @@ class PathLikeSelector(object):
     def p_selector_plus(self, p):
         'selector : selector PLUS selector'
         p[0] = p[1]+p[3]
+
+    def p_selector_dot_plus(self, p):
+        'list : selector DOTPLUS selector'
+
+        # Can only perform level-wise concatenation if the number of levels in 
+        # each selector is equivalent:
+        assert len(p[1]) == len(p[3])
+
+        # Expand ranges and wrap strings with lists:
+        for i in xrange(len(p[1])):
+            if type(p[1][i]) == str:
+                p[1][i] = list(p[1][i])
+            if type(p[3][i]) == str:
+                p[3][i] = list(p[3][i])
+            if type(p[1][i]) == tuple:
+                p[1][i] = range(p[1][i][0], p[1][i][1])
+            if type(p[3][i]) == tuple:
+                p[3][i] = range(p[3][i][0], p[3][i][1])
+
+        # Fully expand both selectors:
+        expanded_1 = [list(x) for x in itertools.product(*p[1])]
+        expanded_3 = [list(x) for x in itertools.product(*p[3])]
+        
+        # The expanded selectors must comprise the same number of identifiers:
+        assert len(expanded_1) == len(expanded_3)        
+        p[0] = [a+b for (a, b) in zip(expanded_1, expanded_3)]
 
     def p_selector_selector(self, p):
         'selector : selector level'
@@ -232,6 +263,67 @@ class PathLikeSelector(object):
         """
 
         return self.parser.parse(selector, lexer=self.lexer)
+
+    def isdisjoint_interval(self, r0, r1):
+        """
+        Check whether two integer intervals (represented as tuples) are disjoint.
+
+        Parameters
+        ----------
+        r0, r1 : tuple
+           Tuples of two integers corresponding to the starting elements and
+           upper bounds of the ranges. 
+
+        Returns
+        -------
+        result : bool
+            True if the ranges do not overlap, False otherwise.
+        """
+
+        if (r0[0] >= r1[1] and r0[1] >= r1[1]) or \
+           (r1[0] >= r0[1] and r1[1] >= r0[1]):
+            return True
+        else:
+            return False
+
+    def isdisjoint(self, s0, s1):
+        """
+        Check whether two selectors are disjoint.
+
+        Parameters
+        ----------
+        s0, s1 : str
+            Selectors to check.
+
+        Returns
+        -------
+        result : bool
+            True if none of the identifiers comprised by one selector are
+            comprised by the other.
+
+        Notes
+        -----
+        The selectors must not contain any wildcards and must both contain the
+        same maximum number of levels.
+        """
+
+        assert not re.search(r'\*', s0) and not re.search(r'\*', s1)
+
+        p0 = p.parse(s0)
+        p1 = p.parse(s1)
+        assert self.max_levels(p0) == self.max_levels(p1)
+
+        # Collect all level values for the two selectors:
+        levels_0 = [[]]*self.max_levels(p0)
+        for i in xrange(len(p0)):
+            for j, level in enumerate(p0[i]):
+                levels_0[j].append(level)
+        levels_1 = [[]]*self.max_levels(p1)
+        for i in xrange(len(p1)):
+            for j, level in enumerate(p1[i]):
+                levels_1[j].append(level)
+                
+        # unfinished
 
     def max_levels(self, selector):
         """
