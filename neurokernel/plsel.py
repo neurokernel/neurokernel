@@ -23,18 +23,22 @@ class PathLikeSelector(object):
     Examples of valid selectors include
 
     /foo/bar
-    /foo+/bar (equivalent to /foo/bar)
+    /foo+/bar          (equivalent to /foo/bar)
     /foo/[qux,bar]
     /foo/bar[0]
+    /foo/bar/[0]       (equivalent to /foo/bar[0])
+    /foo/bar/0         (equivalent to /foo/bar[0])
     /foo/bar[0,1]
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
     /foo/bar,/baz/qux
-    (/foo,/bar)+/baz (equivalent to /foo/baz,/bar/baz)
+    (/foo,/bar)+/baz   (equivalent to /foo/baz,/bar/baz)
+    /[foo,bar].+/[0:2] (equivalent to /foo[0],/bar[1])
 
     The class can also be used to create new MultiIndex instances from selectors
-    that contain no wildcards.
+    that can be fully expanded into an explicit set of identifiers (and
+    therefore contain no ambiguous symbols such as '*' or '[:]').
 
     Notes
     -----
@@ -91,13 +95,13 @@ class PathLikeSelector(object):
         return t
 
     def t_INTEGER(self, t):
-        r'/?\[\d+\]'
-        t.value = int(re.search('\[(\d+)\]', t.value.strip('/')).group(1))
+        r'/?\d+'
+        t.value = int(t.value.strip('/'))
         return t
 
     def t_INTEGER_SET(self, t):
         r'/?\[(?:\d+,?)+\]'
-        t.value = map(int, t.value.strip('[]').split(','))
+        t.value = map(int, t.value.strip('/[]').split(','))
         return t
 
     def t_INTERVAL(self, t):
@@ -118,89 +122,54 @@ class PathLikeSelector(object):
     def t_error(self, t):
         raise ValueError('Cannot tokenize selector - illegal character: %s' % t.value[0])
 
-    # The parsing functions construct a list of lists, each of the latter
-    # containing the consecutive tokens associated with a selector:
-    def p_list_paren_list(self, p):
-        'list : LPAREN list RPAREN'
+    # A selector is a list of lists of levels:
+    def p_selector_paren_selector(self, p):
+        'selector : LPAREN selector RPAREN'
         p[0] = p[2]
 
-    def p_list_paren_selector(self, p):
-        'list : LPAREN selector RPAREN'
-        p[0] = [p[2]]
-
-    def p_list_comma_list(self, p):
-        'list : list COMMA list'
+    def p_selector_comma_selector(self, p):
+        'selector : selector COMMA selector'
         p[0] = p[1]+p[3]
 
-    def p_list_comma_1(self, p):
-        'list : list COMMA selector'
-        p[0] = p[1]+[p[3]]
-
-    def p_list_comma_2(self, p):
-        'list : selector COMMA list'
-        p[0] = [p[1]]+p[3]
-
-    def p_list_plus_list(self, p):
-        'list : list PLUS list'
-        p[0] = []
-        for i in xrange(len(p[1])):
-            for j in xrange(len(p[3])):
-                p[0].append(p[1][i]+p[3][j])
-
-    def p_list_plus_selector_1(self, p):
-        'list : list PLUS selector'
-        p[0] = []
-        for i in xrange(len(p[1])):
-            p[0].append(p[1][i]+p[3])
-
-    def p_list_plus_selector_2(self, p):
-        'list : selector PLUS list'
-        p[0] = []
-        for i in xrange(len(p[3])):
-            p[0].append(p[1]+p[3][i])
-
-    def p_list_selector(self, p):
-        'list : selector'
-        p[0] = [p[1]]
-
-    def p_selector_plus(self, p):
+    def p_selector_plus_selector(self, p):
         'selector : selector PLUS selector'
-        p[0] = p[1]+p[3]
+        p[0] = [a+b for a, b in itertools.product(p[1], p[3])]
 
-    def p_selector_dot_plus(self, p):
-        'list : selector DOTPLUS selector'
-
-        # Can only perform level-wise concatenation if the number of levels in 
-        # each selector is equivalent:
-        assert len(p[1]) == len(p[3])
-
-        # Expand ranges and wrap strings with lists:
-        for i in xrange(len(p[1])):
-            if type(p[1][i]) == str:
-                p[1][i] = list(p[1][i])
-            if type(p[3][i]) == str:
-                p[3][i] = list(p[3][i])
-            if type(p[1][i]) == tuple:
-                p[1][i] = range(p[1][i][0], p[1][i][1])
-            if type(p[3][i]) == tuple:
-                p[3][i] = range(p[3][i][0], p[3][i][1])
-
-        # Fully expand both selectors:
-        expanded_1 = [list(x) for x in itertools.product(*p[1])]
-        expanded_3 = [list(x) for x in itertools.product(*p[3])]
+    def p_selector_dotplus_selector(self, p):
+        'selector : selector DOTPLUS selector'
+        # Expand ranges and wrap strings with lists in each selector:
+        for i in xrange(len(p[1])): 
+            for j in xrange(len(p[1][i])): 
+                if type(p[1][i][j]) in [int, str]:
+                    p[1][i][j] = [p[1][i][j]]
+                elif type(p[1][i][j]) == tuple:
+                    p[1][i][j] = range(p[1][i][j][0], p[1][i][j][1])
+        for i in xrange(len(p[3])):
+            for j in xrange(len(p[3][i])):
+                if type(p[3][i][j]) in [int, str]:
+                    p[3][i][j] = [p[3][i][j]]
+                if type(p[3][i][j]) == tuple:
+                    p[3][i][j] = range(p[3][i][j][0], p[3][i][j][1])
+                    
+        # Fully expand both selectors into individual identifiers
+        ids_1 = [list(x) for y in p[1] for x in itertools.product(*y)]
+        ids_3 = [list(x) for y in p[3] for x in itertools.product(*y)]
         
         # The expanded selectors must comprise the same number of identifiers:
-        assert len(expanded_1) == len(expanded_3)        
-        p[0] = [a+b for (a, b) in zip(expanded_1, expanded_3)]
+        assert len(ids_1) == len(ids_3)        
+        p[0] = [a+b for (a, b) in zip(ids_1, ids_3)]
 
-    def p_selector_selector(self, p):
+    def p_selector_selector_plus_level(self, p):
+        'selector : selector PLUS level'
+        p[0] = [x+[p[3]] for x in p[1]]
+
+    def p_selector_selector_level(self, p):
         'selector : selector level'
-        p[0] = p[1]
-        p[0].append(p[2])
+        p[0] = [x+[p[2]] for x in p[1]]
 
     def p_selector_level(self, p):
         'selector : level'
-        p[0] = [p[1]]
+        p[0] = [[p[1]]]
 
     def p_level(self, p):
         '''level : ASTERISK
@@ -213,7 +182,7 @@ class PathLikeSelector(object):
 
     def p_error(self, p):
         raise ValueError('Cannot parse selector - syntax error: %s' % p)
-
+        
     def _setup(self):
         """
         Build lexer and parser.
@@ -477,11 +446,12 @@ class PathLikeSelector(object):
 
         Notes
         -----
-        The selector may not contain any '*' character. It also must contain
-        more than one level.
+        The selector may not contain ambiguous symbols such as '*' or 
+        '[:]'. It also must contain more than one level.        
         """
 
         assert not re.search(r'\*', selector)
+        assert not re.search(r'\:\]', selector)
         parse_list = self.parse(selector)
 
         idx_list = []
@@ -505,8 +475,8 @@ class PathLikeSelector(object):
 
             idx_list.append(idx)
 
-        # If multiple selectors are specified with '+', all of the selectors
-        # must have the same number of levels:
+        # All of the token lists in the selector must have the same number of
+        # levels:
         assert len(set(map(lambda idx: len(idx.levels), idx_list))) == 1
 
         return reduce(pd.MultiIndex.append, idx_list)
@@ -642,7 +612,8 @@ if __name__ == '__main__':
                           'bar', 'bar', 'bar', 'baz', 'baz'],
                       1: ['qux', 'qux', 'mof', 'mof', 'mof',
                           'qux', 'qux', 'qux', 'qux', 'mof'],
-                      2: [0, 1, 0, 1, 2, 0, 1, 2, 0, 0]})
+                      2: [0, 1, 0, 1, 2, 
+                          0, 1, 2, 0, 0]})
     df.set_index(0, append=False, inplace=True)
     df.set_index(1, append=True, inplace=True)
     df.set_index(2, append=True, inplace=True)
@@ -652,7 +623,7 @@ if __name__ == '__main__':
             self.df = df.copy()
             self.sel = PathLikeSelector()
 
-        def test_str_one(self):
+        def test_str(self):
             result = self.sel.select(self.df, '/foo')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1),
@@ -674,6 +645,12 @@ if __name__ == '__main__':
                                              ('foo','qux',1)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
+        def test_str_dotplus(self):
+            result = self.sel.select(self.df, '/[bar,baz].+/[qux,mof].+/[0,0]')
+            idx = pd.MultiIndex.from_tuples([('bar','qux',0),
+                                             ('baz','mof',0)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
         def test_str_paren(self):
             result = self.sel.select(self.df, '(/bar,/baz)')
             idx = pd.MultiIndex.from_tuples([('bar','qux',0),
@@ -681,6 +658,14 @@ if __name__ == '__main__':
                                              ('bar','qux',2),
                                              ('baz','qux',0),
                                              ('baz','mof',0)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_paren_plus(self):
+            result = self.sel.select(self.df, '(/bar,/baz)+/qux')
+            idx = pd.MultiIndex.from_tuples([('bar','qux',0),
+                                             ('bar','qux',1),
+                                             ('bar','qux',2),
+                                             ('baz','qux',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
         def test_str_asterisk(self):
@@ -693,8 +678,13 @@ if __name__ == '__main__':
                                              ('baz','qux',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_integer(self):
+        def test_str_integer_with_brackets(self):
             result = self.sel.select(self.df, '/bar/qux[1]')
+            idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_str_integer_no_brackets(self):
+            result = self.sel.select(self.df, '/bar/qux/1')
             idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
@@ -715,7 +705,7 @@ if __name__ == '__main__':
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_0(self):
+        def test_str_interval_no_bounds(self):
             result = self.sel.select(self.df, '/foo/mof[:]')
             idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                              ('foo','mof',1),
@@ -723,21 +713,21 @@ if __name__ == '__main__':
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_1(self):
+        def test_str_interval_lower_bound(self):
             result = self.sel.select(self.df, '/foo/mof[1:]')
             idx = pd.MultiIndex.from_tuples([('foo','mof',1),
                                              ('foo','mof',2)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_2(self):
+        def test_str_interval_upper_bound(self):
             result = self.sel.select(self.df, '/foo/mof[:2]')
             idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                              ('foo','mof',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_3(self):
+        def test_str_interval_both_bounds(self):
             result = self.sel.select(self.df, '/bar/qux[0:2]')
             idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                              ('bar','qux',1)],
