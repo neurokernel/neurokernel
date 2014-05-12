@@ -301,7 +301,6 @@ class PathLikeSelector(object):
         
         assert not self.isambiguous(selector)
         p = self.parse(selector)
-        result = []
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str]:
@@ -309,6 +308,85 @@ class PathLikeSelector(object):
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
         return [list(x) for y in p for x in itertools.product(*y)]
+
+    def isexpandable(self, selector):
+        """
+        Check whether a selector can be expanded into multiple identifiers.
+
+        Parameters
+        ----------
+        selector : str
+            Selector string.
+
+        Returns
+        -------
+        result : bool
+            True if the string contains any intervals or sets of
+            strings/integers, False otherwise. Ambiguous selectors are
+            not deemed to be expandable.
+        """
+
+        if self.isambiguous(selector):
+            return False
+        p = self.parse(selector)
+
+        for i in xrange(len(p)):
+            for j in xrange(len(p[i])):
+                if type(p[i][j]) in [int, str]:
+                    p[i][j] = [p[i][j]]
+                elif type(p[i][j]) == tuple:
+                    p[i][j] = range(p[i][j][0], p[i][j][1])
+
+                    # The presence of a range containing more than 1 element
+                    # ensures expandability:
+                    if len(p[i][j]) > 1:
+                        return True
+                elif type(p[i][j]) == list:
+
+                    # The presence of a list containing more than 1 unique
+                    # element ensures expandability:
+                    if len(set(p[i][j])) > 1: return True
+
+        if len(set([tuple(x) for y in p for x in itertools.product(*y)])) > 1:
+            return True
+        else:
+            return False
+
+    def collapse(self, id_list):
+        """
+        Collapse a list of identifiers into a selector string.
+
+        Parameters
+        ----------
+        id_list : list
+            List of identifiers; each identifier is a list of tokens.
+
+        Returns
+        -------
+        selector : str
+            String that expands into the given identifier list.
+
+        Notes
+        -----
+        Expects all identifiers in the given list to have the same
+        number of levels.
+        """
+
+        # Can only collapse list identifiers that all have the same number of
+        # levels:
+        assert len(set(map(len, id_list))) == 1
+
+        # Collect all tokens for each level:
+
+        # If a level contains multiple string AND integer tokens, convert it to
+        # a list:
+
+        # If a level contains nonconsecutive integers, convert it into a list:
+
+        # If a level only contains consecutive integers, convert it into an
+        # interval:
+
+        # XXX unfinished
 
     def isdisjoint(self, s0, s1):
         """
