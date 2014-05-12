@@ -233,27 +233,54 @@ class PathLikeSelector(object):
 
         return self.parser.parse(selector, lexer=self.lexer)
 
-    def isdisjoint_interval(self, r0, r1):
+    def isambiguous(self, selector):
         """
-        Check whether two integer intervals (represented as tuples) are disjoint.
+        Check whether a selector cannot be expanded into an explicit list of identifiers.
+
+        A selector is ambiguous if it contains the symbols '*' or '[:]' (i.e., a
+        range with no upper bound).
 
         Parameters
         ----------
-        r0, r1 : tuple
-           Tuples of two integers corresponding to the starting elements and
-           upper bounds of the ranges. 
+        selector : str
+            Selector to test.
 
         Returns
         -------
         result : bool
-            True if the ranges do not overlap, False otherwise.
+            True if the selector is ambiguous, False otherwise.
         """
 
-        if (r0[0] >= r1[1] and r0[1] >= r1[1]) or \
-           (r1[0] >= r0[1] and r1[1] >= r0[1]):
+        if re.search(r'(?:\*)|(?:\:\])', selector):
             return True
         else:
             return False
+
+    def expand(self, selector):
+        """
+        Expand a nonambiguous selector into a list of identifiers.
+
+        Parameters
+        ----------
+        selector : str
+            Selector string.
+
+        Returns
+        -------
+        result : list
+            List of identifiers; each identifier is a list of tokens.
+        """
+        
+        assert not self.isambiguous(selector)
+        p = self.parse(selector)
+        result = []
+        for i in xrange(len(p)):
+            for j in xrange(len(p[i])):
+                if type(p[i][j]) in [int, str]:
+                    p[i][j] = [p[i][j]]
+                elif type(p[i][j]) == tuple:
+                    p[i][j] = range(p[i][j][0], p[i][j][1])
+        return [list(x) for y in p for x in itertools.product(*y)]
 
     def isdisjoint(self, s0, s1):
         """
@@ -272,27 +299,22 @@ class PathLikeSelector(object):
 
         Notes
         -----
-        The selectors must not contain any wildcards and must both contain the
+        The selectors must not be ambiguous and must both contain the
         same maximum number of levels.
         """
 
-        assert not re.search(r'\*', s0) and not re.search(r'\*', s1)
+        assert not self.isambiguous(s0) and not self.isambiguous(s1)
+        assert self.max_levels(s0) == self.max_levels(s1)
 
-        p0 = p.parse(s0)
-        p1 = p.parse(s1)
-        assert self.max_levels(p0) == self.max_levels(p1)
-
-        # Collect all level values for the two selectors:
-        levels_0 = [[]]*self.max_levels(p0)
-        for i in xrange(len(p0)):
-            for j, level in enumerate(p0[i]):
-                levels_0[j].append(level)
-        levels_1 = [[]]*self.max_levels(p1)
-        for i in xrange(len(p1)):
-            for j, level in enumerate(p1[i]):
-                levels_1[j].append(level)
+        # Expand selectors into sets of identifiers:
+        exp_0 = set(map(tuple, self.expand(s0)))
+        exp_1 = set(map(tuple, self.expand(s1)))
                 
-        # unfinished
+        # Check whether the two sets of identifiers are disjoint:
+        if exp_0.intersection(exp_1):
+            return False
+        else:
+            return True
 
     def max_levels(self, selector):
         """
@@ -450,8 +472,7 @@ class PathLikeSelector(object):
         '[:]'. It also must contain more than one level.        
         """
 
-        assert not re.search(r'\*', selector)
-        assert not re.search(r'\:\]', selector)
+        assert not self.isambiguous(selector)
         parse_list = self.parse(selector)
 
         idx_list = []
@@ -528,7 +549,7 @@ class PortMapper(object):
 
     Notes
     -----
-    The selectors may not contain any '*' characters.
+    The selectors may not contain any '*' or '[:]' characters.
     """
 
     def __init__(self, data, selectors, idx=None):
