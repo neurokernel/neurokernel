@@ -18,8 +18,13 @@ class PathLikeSelector(object):
 
     Select rows from a pandas DataFrame using path-like selectors.
     Assumes that the DataFrame instance has a MultiIndex where each level
-    corresponds to a level of the selector; a level may either be a denoted by a
-    string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2).
+    corresponds to a level of the selector. An index level may either be a denoted by a
+    string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2); a selector
+    level may additionally be a list of strings (e.g., '[foo,bar]') or integers
+    (e.g., '[0,2,4]') or continuous intervals (e.g., '[0:5]'). The '*' symbol
+    matches any value in a level, while a range with an open upper bound (e.g.,
+    '[5:]') will match all integers greater than or equal to the lower bound.
+    
     Examples of valid selectors include
 
     /foo/bar
@@ -40,9 +45,32 @@ class PathLikeSelector(object):
     that can be fully expanded into an explicit set of identifiers (and
     therefore contain no ambiguous symbols such as '*' or '[:]').
 
+    Methods
+    -------
+    expand(selector)
+        Expand a nonambiguous selector into a list of identifiers.
+    get_index(df, selector, start=None, stop=None, names=[])
+        Return MultiIndex corresponding to rows selected by specified selector.
+    get_tuples(df, selector, start=None, stop=None)
+        Return tuples containing MultiIndex labels selected by specified selector.
+    isambiguous(selector)
+        Check whether a selector cannot be expanded into an explicit list of identifiers.
+    isdisjoint(s0, s1)
+        Check whether two selectors are disjoint.
+    make_index(selector, names=[])
+        Create a MultiIndex from the specified selector.
+    max_levels(selector)
+        Return maximum number of token levels in selector.
+    parse(selector)
+        Parse a selector string into individual port identifiers.
+    select(df, selector, start=None, stop=None)
+        Select rows from DataFrame using a path-like selector.
+    tokenize(selector)
+        Tokenize a selector string.
+
     Notes
     -----
-    Numerical indices are assumed to be zero-based. Ranges do not include the
+    Numerical indices are assumed to be zero-based. Intervals do not include the
     end element (i.e., like numpy, not like pandas).
     """
 
@@ -217,7 +245,7 @@ class PathLikeSelector(object):
 
     def parse(self, selector):
         """
-        Parse a selector string.
+        Parse a selector string into individual port identifiers.
 
         Parameters
         ----------
@@ -504,7 +532,7 @@ class PathLikeSelector(object):
 
     def select(self, df, selector, start=None, stop=None):
         """
-        Select rows from DataFrame.
+        Select rows from DataFrame using a path-like selector.
 
         Parameters
         ----------
@@ -538,10 +566,8 @@ class PortMapper(object):
     ----------
     data : numpy.ndarray
         Data to map to ports.
-    selectors : str or list of str
-        Path-like selector(s) to map to `data`. If more than one selector is
-        defined, the indices corresponding to each selector are sequentially
-        concatenated.
+    selector : str
+        Selector to map to `data`.
     idx : sequence
         Indices of elements in the specified array to map to ports. If no
         indices are specified, the entire array is mapped to the ports specified
@@ -566,11 +592,7 @@ class PortMapper(object):
             self.portmap = pd.Series(data=np.arange(len(data)))
         else:
             self.portmap = pd.Series(data=np.asarray(idx))
-        if np.iterable(selectors) and type(selectors) is not str:
-            idx_list = [self.sel.make_index(s) for s in selectors]
-            idx = reduce(pd.MultiIndex.append, idx_list)
-        else:
-            idx = self.sel.make_index(selectors)
+        idx = self.sel.make_index(selector)
         self.portmap.index = idx
 
     def get(self, selector):
