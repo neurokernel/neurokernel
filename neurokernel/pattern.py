@@ -237,6 +237,37 @@ class Pattern(object):
         else:
             return self.sel.select(self.data, selector = '+'.join(key))
 
+    def get_port_tuples(self, n):
+        """
+        Retrieve port identifiers as tuples.
+
+        Parameters
+        ----------
+        n : 0 or 1
+            Each pattern has two sets of ports; these sets may be respectively
+            selected as 0 or 1.
+
+        Returns
+        -------
+        ports : list
+            List of tuples containing levels of each port identifier.
+        """
+        
+        assert n in [0, 1]
+        x = []
+        y = []
+        f0 = 0
+        f1 = self.num_levels['from']
+        t0 = self.num_levels['from']
+        t1 = self.num_levels['from']+self.num_levels['to']
+        for t in self.data.index.tolist():
+            if not(t[f0:f1] in x): x.append(t[f0:f1]) 
+            if not(t[t0:t1] in y): y.append(t[t0:t1])
+        if n == 0:
+            return x
+        else:
+            return y
+
     def __repr__(self):
         return self.data.__repr__()
 
