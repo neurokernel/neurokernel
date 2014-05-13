@@ -47,6 +47,8 @@ class PathLikeSelector(object):
 
     Methods
     -------
+    aredisjoint(s0, s1, ...)
+        Check whether several selectors are disjoint.
     expand(selector)
         Expand a nonambiguous selector into a list of identifiers.
     get_index(df, selector, start=None, stop=None, names=[])
@@ -55,8 +57,6 @@ class PathLikeSelector(object):
         Return tuples containing MultiIndex labels selected by specified selector.
     isambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
-    isdisjoint(s0, s1)
-        Check whether two selectors are disjoint.
     make_index(selector, names=[])
         Create a MultiIndex from the specified selector.
     max_levels(selector)
@@ -388,13 +388,13 @@ class PathLikeSelector(object):
 
         # XXX unfinished
 
-    def isdisjoint(self, s0, s1):
+    def aredisjoint(self, *selectors):
         """
-        Check whether two selectors are disjoint.
+        Check whether several selectors are disjoint.
 
         Parameters
         ----------
-        s0, s1 : str
+        s0, s1, ... : str
             Selectors to check.
 
         Returns
@@ -405,22 +405,26 @@ class PathLikeSelector(object):
 
         Notes
         -----
-        The selectors must not be ambiguous and must both contain the
-        same maximum number of levels.
+        The selectors must not be ambiguous.
         """
 
-        assert not self.isambiguous(s0) and not self.isambiguous(s1)
-        assert self.max_levels(s0) == self.max_levels(s1)
+        assert len(selectors) >= 1
+        if len(selectors) == 1:
+            return True
+        assert all(map(lambda s: not self.isambiguous(s), selectors))
 
         # Expand selectors into sets of identifiers:
-        exp_0 = set(map(tuple, self.expand(s0)))
-        exp_1 = set(map(tuple, self.expand(s1)))
-                
-        # Check whether the two sets of identifiers are disjoint:
-        if exp_0.intersection(exp_1):
-            return False
-        else:
-            return True
+        ids = set()
+        for selector in selectors:
+
+            # If some identifiers are present in both the previous expanded
+            # selectors and the current selector, the selectors cannot be disjoint:
+            ids_new = set(map(tuple, self.expand(selector)))
+            if ids.intersection(ids_new):
+                return False
+            else:
+                ids = ids.union(ids_new)
+        return True
 
     def max_levels(self, selector):
         """
