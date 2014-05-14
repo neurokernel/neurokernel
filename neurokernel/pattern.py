@@ -14,46 +14,99 @@ class Pattern(object):
     """
     Class for representing connectivity between sets of interface ports.
 
-    This class represents connection mappings from one set of ports to another.
-    Ports are represented using path-like identifiers as follows:
+    This class represents connection mappings between sets of ports. More than
+    one set of ports may be comprised by a class instance. Ports are represented 
+    using path-like identifiers as follows:
 
-    p = Pattern()
-    p['/x[0:3]', '/y[0:2]'] = 1
+    p = Pattern('/x[0:3]','/y[0:2]')
+    p['/x[0:2]', '/y[0]'] = 1
+    p['/y[0:2]', '/x[1]'] = 1
 
-    A single attribute ('conn') is created by default. Specific attributes
-    may be accessed by specifying their names after the port identifiers; if
-    a nonexistent attribute is specified when a sequential value is assigned,
-    a new column for that attribute is automatically created:
+    A single data attribute ('conn') associated with defined connections 
+    is created by default. Specific attributes may be accessed by specifying 
+    their names after the port identifiers; if a nonexistent attribute is 
+    specified when a sequential value is assigned, a new column for that 
+    attribute is automatically created:
 
     p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
 
+    Attributes
+    ----------
+    data : pandas.DataFrame
+        Attribute data associated with connections. Port identifiers are represented
+        as a MultiIndex.
+    port_ids : dict of list
+
     Parameters
     ----------
+    sel0, sel1, ...: str
+        Selectors defining the sets of ports potentially connected by the 
+        pattern. These selectors must be disjoint, i.e., no identifier comprised
+        by one selector may be in any other selector.
     columns : sequence of str
         Data column names.
+
+    See Also
+    --------
+    neurokernel.plsel
     """
 
-    def __init__(self, columns=['conn']):
+    def __init__(self, *selectors, **kwargs):
+        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         self.sel = PathLikeSelector()
-        self.num_levels = {'from': 1, 'to': 1}
-        idx = pd.MultiIndex(levels=[[]]*2, labels=[[]]*2, 
-                            names=['from_0', 'to_0'])
+
+        # Force sets of identifiers to be disjoint so that no identifier can
+        # denote a port in more than one set:
+        assert self.sel.aredisjoint(selectors)
+
+        # Expand and save the identifiers for each interface:
+        self.port_ids = {}
+        max_levels = 0
+        for i, s in enumerate(selectors):
+            e = self.sel.expand(s)
+            self.port_ids[i] = e
+
+            # Find the maximum number of levels required to accommodate all of 
+            # the identifiers:
+            m = max(map(len, e))
+            if m > max_levels:
+                max_levels = m
+
+        # Lexicographically sort lists of identifiers (ENH: it might be worth
+        # using a self-sorted data structure package such as bintrees):
+        for i in self.port_ids.keys():
+            self.port_ids[i].sort()
+
+        # Create a MultiIndex that can store mappings between identifiers in the
+        # two interfaces:
+        self.num_levels = {'from': max_levels, 'to': max_levels}
+        names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
+                ['to_%s' %i for i in xrange(self.num_levels['to'])]
+        levels = [[]]*len(names)
+        labels = [[]]*len(names)
+        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+                            
         self.data = pd.DataFrame(index=idx, columns=columns)
 
+    # XXX need to modify to require either existing Pattern instance
+    # or initial sets of selectors
     @classmethod
-    def _create_from(cls, data=None, from_sel=None, to_sel=None, 
-                 columns=['conn'], comb_op='+'):
+    def _create_from(cls, *selectors, **kwargs):
         """
         Create a Pattern instance from the specified selectors.
 
         Parameters
         ----------
-        data : numpy.ndarray, dict, or pandas.DataFrame
-            Data to load store in class instance.
+        sel0, sel1, ...: str
+            Selectors defining the sets of ports potentially connected by the 
+            pattern. These selectors must be disjoint, i.e., no identifier comprised
+            by one selector may be in any other selector.   
         from_sel, to_sel : str
             Selectors that describe the pattern's initial index. If specified, 
             both selectors must be set. If no selectors are set, the index is
             initially empty.
+        data : numpy.ndarray, dict, or pandas.DataFrame
+            Data to load store in class instance.
         columns : sequence of str
             Data column names.
         comp_op : str
@@ -66,51 +119,56 @@ class Pattern(object):
             Pattern instance.
         """
 
-        p = cls()
-        if (from_sel is None and to_sel is None):
-            from_levels = 1
-            to_levels = 1
-        elif (from_sel is not None and to_sel is not None):
-            from_levels = p.sel.max_levels(from_sel)
-            to_levels = p.sel.max_levels(to_sel)
-        else:
-            raise ValueError('Both from and to selectors must either be set or unset')
-            
-        p.num_levels = {'from': from_levels, 'to': to_levels}
-        names = ['from_%s' % i for i in xrange(p.num_levels['from'])]+ \
-                ['to_%s' %i for i in xrange(p.num_levels['to'])]
+        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
+        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
+        data = kwargs['data'] if kwargs.has_key('data') else None
+        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        comb_op = kwargs['comb_op'] if kwargs.has_key('comb_op') else '+'
+
+        # Create empty pattern:
+        p = cls(*selectors, columns=columns)
 
         # Construct index from concatenated selectors if specified:
+        names = p.data.index.names
         if (from_sel is None and to_sel is None):
             levels = [[]]*len(names)
             labels = [[]]*len(names)
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         else:
             idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
-        p.data = pd.DataFrame(data=data, columns=columns, index=idx)
+                                   
+        # Replace the pattern's DataFrame:
+        p.data = pd.DataFrame(data=data, index=idx, columns=columns)
         return p
 
     @classmethod
-    def from_product(cls, data, from_sel, to_sel, columns=['conn']):
+    def from_product(cls, *selectors, **kwargs):
         """
         Create pattern from the product of identifiers comprised by two selectors.
 
-        For example, Pattern.from_product(1, '/bar[0:2]', '/foo[0:2]')
+        For example, 
+
+        Pattern.from_product('/foo[0:2]', '/bar[0:2]',
+                             from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                             data=1)
+
         results in a pattern with the following connections: 
 
-        '/bar[0]' -> '/foo[0]'
-        '/bar[0]' -> '/foo[1]'
-        '/bar[1]' -> '/foo[0]'
-        '/bar[1]' -> '/foo[1]'
+        '/foo[0]' -> '/bar[0]'
+        '/foo[0]' -> '/bar[1]'
+        '/foo[1]' -> '/bar[0]'
+        '/foo[1]' -> '/bar[1]'
 
         Parameters
         ----------
+        sel0, sel1, ...: str
+            Selectors defining the sets of ports potentially connected by the 
+            pattern. These selectors must be disjoint, i.e., no identifier comprised
+            by one selector may be in any other selector.   
+        from_sel, to_sel : str
+            Selectors that describe the pattern's initial index.
         data : numpy.ndarray, dict, or pandas.DataFrame
             Data to load store in class instance.
-        from_sel, to_sel : str
-            Selectors that describe the pattern's initial index. If specified,
-            both selectors must be set. If no selectors are set, the index is
-            initially empty.
         columns : sequence of str
             Data column names.
 
@@ -120,18 +178,28 @@ class Pattern(object):
             Pattern instance.
         """
 
-        return cls._create_from(data, from_sel, to_sel, columns, comb_op='+')
+        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
+        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
+        data = kwargs['data'] if kwargs.has_key('data') else None
+        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
+                                data=data, columns=columns, comb_op='+')
 
     @classmethod
-    def from_concat(cls, data, from_sel, to_sel, columns=['conn']):
+    def from_concat(cls, *selectors, **kwargs):
         """
         Create pattern from the concatenation of identifers comprised by two selectors.
 
-        For example, Pattern.from_concat(1, '/bar[0:2]', '/foo[0:2]')
+        For example, 
+
+        Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
+                            from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                            data=1)
+
         results in a pattern with the following connections:
 
-        '/bar[0]' -> '/foo[0]'
-        '/bar[1]' -> '/foo[1]'
+        '/foo[0]' -> '/bar[0]'
+        '/foo[1]' -> '/bar[1]'
 
         Parameters
         ----------
@@ -150,9 +218,24 @@ class Pattern(object):
             Pattern instance.
         """
 
-        return cls._create_from(data, from_sel, to_sel, columns, comb_op='.+')
+        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
+        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
+        data = kwargs['data'] if kwargs.has_key('data') else None
+        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
+                                data=data, columns=columns, comb_op='.+')
 
     def __add_level__(self, which):
+        """
+        Add an additional level to the index of the pattern's internal
+        DataFrame.
+
+        Parameters
+        ----------
+        which : {'from', 'to'}
+            Which portion of the index to modify.
+        """
+
         assert which in ['from', 'to']
 
         # Check whether the level corresponds to the 'from' or 'to' part of the
@@ -237,15 +320,14 @@ class Pattern(object):
         else:
             return self.sel.select(self.data, selector = '+'.join(key))
 
-    def get_port_tuples(self, n):
+    def get_port_ids(self, i):
         """
-        Retrieve port identifiers as tuples.
+        Retrieve set of port identifiers as list tuples.
 
         Parameters
         ----------
-        n : 0 or 1
-            Each pattern has two sets of ports; these sets may be respectively
-            selected as 0 or 1.
+        i : int
+            Set of ports.
 
         Returns
         -------
@@ -253,20 +335,33 @@ class Pattern(object):
             List of tuples containing levels of each port identifier.
         """
         
-        assert n in [0, 1]
-        x = []
-        y = []
-        f0 = 0
-        f1 = self.num_levels['from']
-        t0 = self.num_levels['from']
-        t1 = self.num_levels['from']+self.num_levels['to']
-        for t in self.data.index.tolist():
-            if not(t[f0:f1] in x): x.append(t[f0:f1]) 
-            if not(t[t0:t1] in y): y.append(t[t0:t1])
-        if n == 0:
-            return x
+        return self.port_ids[n]
+
+    def add_port_ids(self, i, port_ids):
+        """
+        Add new port identifiers.
+
+        Parameters
+        ----------
+        i : int
+            Set of ports.
+        port_ids : tuple or list of tuples
+            An identifier (tuple) or list of identifiers (list of tuples) to
+            add.
+        """
+        
+        if not self.port_ids.has_key(i):
+            self.port_ids[i] = []
+        if type(port_ids) == tuple:
+            if not(port_ids in self.port_ids[i]):
+                self.port_ids[i].append(port_ids)
+        elif type(port_ids) == list:
+            for p in port_ids:
+                if not(p in self.port_ids[i]):
+                    self.port_ids[i].append(p)
         else:
-            return y
+            raise ValueError('Invalid port identifier data structure.')
+        self.port_ids[i].sort()
 
     def __repr__(self):
         return self.data.__repr__()
@@ -290,7 +385,9 @@ class Pattern(object):
         --------
         pandas.read_csv
         """
-        
+
+        # XXX this should refuse to load identifiers that are not in any of the
+        # sets of ports comprised by the pattern:
         data_names = self.data.columns
         index_names = self.data.index.names
         kwargs['names'] = data_names
@@ -323,7 +420,8 @@ if __name__ == '__main__':
             self.df.sort(inplace=True)
 
         def test_create(self):
-            c = Pattern(columns=['conn','from_type', 'to_type'])
+            c = Pattern('/foo[0:3]', '/bar[0:3]',
+                        columns=['conn','from_type', 'to_type'])
             c['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
             c['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
             c['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
