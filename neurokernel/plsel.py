@@ -296,7 +296,7 @@ class PathLikeSelector(object):
         Returns
         -------
         result : list
-            List of identifiers; each identifier is a list of tokens.
+            List of identifiers; each identifier is a tuple of tokens.
         """
         
         assert not self.isambiguous(selector)
@@ -307,7 +307,7 @@ class PathLikeSelector(object):
                     p[i][j] = [p[i][j]]
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
-        return [list(x) for y in p for x in itertools.product(*y)]
+        return [tuple(x) for y in p for x in itertools.product(*y)]
 
     def isexpandable(self, selector):
         """
@@ -660,7 +660,7 @@ class PortMapper(object):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, data, selectors, idx=None):
+    def __init__(self, data, selector, idx=None):
 
         # Can currently only handle unidimensional data structures:
         assert np.ndim(data) == 1
