@@ -10,6 +10,97 @@ import pandas as pd
 
 from plsel import PathLikeSelector
 
+class Interface(object):
+    def __init__(self, selector, columns=[]):
+        self.sel = PathLikeSelector()
+        assert not(self.sel.isambiguous(selector))        
+        self.num_levels = self.sel.max_levels(selector)
+        names = [str(i) for i in xrange(self.num_levels)]
+        levels = [[]]*len(names)
+        labels = [[]]*len(names)
+        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        self.data = pd.DataFrame(index=idx, columns=columns)
+
+    def __add_level__(self):
+        """
+        Add an additional level to the index of the pattern's internal
+        DataFrame.
+        """
+
+        # Check whether the level corresponds to the 'from' or 'to' part of the
+        # connectivity pattern:
+        new_level_name = str(self.num_levels)
+
+        # Add a data column corresponding to the new level:
+        self.data[new_level_name] = ''
+
+        # Convert to MultiIndex level:
+        self.data.set_index(new_level_name, append=True, inplace=True)
+
+        # Bump number of levels:
+        self.num_levels[which] += 1
+        
+    def __getitem__(self, key):
+        return self.sel.select(self.data, key)
+        
+    def __setitem__(self, key, value):
+        if type(key) == tuple:
+            selector = key[0]
+        else:
+            selector = key
+
+        # Check whether the number of levels in the internal DataFrame's
+        # MultiIndex must be increased to accommodate the specified selector:
+        for i in xrange(self.sel.max_levels(selector)-self.num_levels):
+            self.__add_level__()
+
+        # Try using the selector to select data from the internal DataFrame:
+        try:
+            idx = self.sel.get_index(self.data, selector,
+                                     names=self.data.index.names)
+
+        # If the select fails, try to create new rows with the index specified
+        # by the selector and load them with the specified data:
+        except:
+            try:
+                idx = self.sel.make_index(selector, self.data.index.names)
+            except:
+                raise ValueError('cannot create new rows for ambiguous selector %s' % selector)
+            else:
+                found = False
+        else:
+            found = True
+
+        # Ensure that data to set is in dict form:
+        if type(key) == tuple and len(key) > 1:
+            if np.isscalar(value):
+                data = {k:value for k in key[1:]}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(key[1:]):
+                data={k:v for k, v in zip(key[1:], value)}
+            else:
+                raise ValueError('cannot assign specified value')
+        else:
+            if np.isscalar(value):
+                data = {self.data.columns[0]: value}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(self.data.columns):
+                data={k:v for k, v in zip(self.data.columns, value)}
+            else:
+                raise ValueError('cannot assign specified value')
+
+        if found:
+            for k, v in data.iteritems():
+                self.data[k].ix[idx] = v
+        else:
+            self.data = self.data.append(pd.DataFrame(data=data, index=idx))
+            self.data.sort(inplace=True)
+
+    def __repr__(self):
+        return 'Interface\n---------\n'+self.data.__repr__()
+
 class Pattern(object):
     """
     Class for representing connectivity between sets of interface ports.
@@ -261,6 +352,9 @@ class Pattern(object):
         
     def __setitem__(self, key, value):
 
+        # Must pass more than one argument to the [] operators:
+        assert type(key) == tuple
+
         # Check whether the number of levels in the internal DataFrame's
         # MultiIndex must be increased to accommodate the specified selector:
         for i in xrange(self.sel.max_levels(key[0])-self.num_levels['from']):
@@ -364,7 +458,7 @@ class Pattern(object):
         self.port_ids[i].sort()
 
     def __repr__(self):
-        return self.data.__repr__()
+        return 'Pattern\n-------\n'+self.data.__repr__()
 
     def clear(self):
         """
