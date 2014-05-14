@@ -16,8 +16,8 @@ class Interface(object):
         assert not(self.sel.isambiguous(selector))        
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
-        levels = [[]]*len(names)
-        labels = [[]]*len(names)
+        levels = [[] for i in xrange(len(names))]
+        labels = [[] for i in xrange(len(names))]
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         self.data = pd.DataFrame(index=idx, columns=columns)
 
@@ -126,7 +126,8 @@ class Pattern(object):
     data : pandas.DataFrame
         Attribute data associated with connections. Port identifiers are represented
         as a MultiIndex.
-    port_ids : dict of list
+    port_ids : dict 
+        Recognized port identifiers (represented as lists of tuples).
 
     Parameters
     ----------
@@ -173,8 +174,8 @@ class Pattern(object):
         self.num_levels = {'from': max_levels, 'to': max_levels}
         names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
                 ['to_%s' %i for i in xrange(self.num_levels['to'])]
-        levels = [[]]*len(names)
-        labels = [[]]*len(names)
+        levels = [[] for i in xrange(len(names))]
+        labels = [[] for i in xrange(len(names))]
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
                             
         self.data = pd.DataFrame(index=idx, columns=columns)
@@ -222,8 +223,8 @@ class Pattern(object):
         # Construct index from concatenated selectors if specified:
         names = p.data.index.names
         if (from_sel is None and to_sel is None):
-            levels = [[]]*len(names)
-            labels = [[]]*len(names)
+            levels = [[] for i in xrange(len(names))]
+            labels = [[] for i in xrange(len(names))]
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         else:
             idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
