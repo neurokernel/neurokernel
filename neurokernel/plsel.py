@@ -352,14 +352,38 @@ class PathLikeSelector(object):
         else:
             return False
 
+    def areconsecutive(self, i_list):
+        """
+        Check whether a list of integers is consecutive.
+
+        Parameters
+        ----------
+        i_list : list of int
+            List of integers
+
+        Returns
+        -------
+        result : bool
+            True if the integers are consecutive, false otherwise.
+        
+        Notes
+        -----
+        Does not assume that the list is sorted.
+        """
+
+        if set(np.diff(i_list)) == set([1]):
+            return True
+        else:
+            return False
+
     def collapse(self, id_list):
         """
         Collapse a list of identifiers into a selector string.
 
         Parameters
         ----------
-        id_list : list
-            List of identifiers; each identifier is a list of tokens.
+        id_list : list of tuple
+            List of identifiers; each identifier is a list of token tuples.
 
         Returns
         -------
@@ -372,21 +396,63 @@ class PathLikeSelector(object):
         number of levels.
         """
 
+        # XXX doesn't collapse expanded selectors such as /foo/xxx,/bar/yyy properly
+
         # Can only collapse list identifiers that all have the same number of
         # levels:
         assert len(set(map(len, id_list))) == 1
 
         # Collect all tokens for each level:
+        levels = [[] for i in xrange(max(map(len, id_list)))]
+        for i in xrange(len(id_list)):
+            for j in xrange(len(id_list[i])):
+                if not(id_list[i][j] in levels[j]):
+                    levels[j].append(id_list[i][j])
+
+        def collapse_level(level):
+            """
+            Recursively called function to collapse all values in a single level.
+            """
+
+            type_set = set(map(type, level))
+            if type_set == set([int]):
+
+                # If a level only contains consecutive integers, convert it into an
+                # interval:
+                level.sort()
+                if self.areconsecutive(level):
+                    return ['[%s:%s]' % (min(level), max(level)+1)]
+
+                # If a level contains nonconsecutive integers, convert it into a
+                # list:
+                else:
+                    return ['['+','.join([str(i) for i in level])+']']
+            elif type_set == set([str]):
+                if len(level) == 1:
+                    return level
+                else:
+                    return ['['+','.join([s for s in level])+']']
+            else:
+                level_int = sorted([x for x in level if type(x) == int])
+                level_str = sorted([x for x in level if type(x) == str])
+                return collapse_level(level_int)+collapse_level(level_str)
 
         # If a level contains multiple string AND integer tokens, convert it to
         # a list:
 
-        # If a level contains nonconsecutive integers, convert it into a list:
-
-        # If a level only contains consecutive integers, convert it into an
-        # interval:
-
-        # XXX unfinished
+        collapsed_list = []
+        for level in levels:
+            collapsed_list.append(collapse_level(sorted(level)))
+        selector_list = []
+        for t in itertools.product(*collapsed_list):
+            selector = ''
+            for s in t:
+                if s[0] == '[':
+                    selector += s
+                else:
+                    selector = selector + '/' + s
+            selector_list.append(selector)
+        return ','.join(selector_list)
 
     def aredisjoint(self, *selectors):
         """
