@@ -15,10 +15,10 @@ class Interface(object):
     Interface comprising ports.
 
     This class contains information about a set of path-like identifiers
-    and the (optional) attributes associated with them.
+    and the (optional) attributes associated with them: ::
 
-    i = Interface('/foo[0:5],/bar[0:3]', ['x', 'y'])
-    i['/foo[0]', 'x'] = 1.0
+        i = Interface('/foo[0:5],/bar[0:3]', ['x', 'y'])
+        i['/foo[0]', 'x'] = 1.0
 
     Parameters
     ----------
@@ -144,27 +144,26 @@ class Pattern(object):
     Connectivity pattern linking sets of interface ports.
 
     This class represents connection mappings between interfaces comprising sets 
-    of ports. Ports are represented using path-like identifiers as follows:
+    of ports. Ports are represented using path-like identifiers as follows: ::
 
-    p = Pattern('/x[0:3]','/y[0:2]')
-    p['/x[0:2]', '/y[0]'] = 1
-    p['/y[0:2]', '/x[1]'] = 1
+        p = Pattern('/x[0:3]','/y[0:2]')
+        p['/x[0:2]', '/y[0]'] = 1
+        p['/y[0:2]', '/x[1]'] = 1
 
     A single data attribute ('conn') associated with defined connections 
     is created by default. Specific attributes may be accessed by specifying 
     their names after the port identifiers; if a nonexistent attribute is 
     specified when a sequential value is assigned, a new column for that 
-    attribute is automatically created:
+    attribute is automatically created: ::
 
-    p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
+        p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
 
     Attributes
     ----------
     data : pandas.DataFrame
-        Attribute data associated with connections. Port identifiers are represented
-        as a MultiIndex.
-    port_ids : dict 
-        Recognized port identifiers (represented as lists of tuples).
+        Connection attribute data.
+    interface : dict of Interface
+        Interfaces containing port identifiers and attributes.
 
     Parameters
     ----------
@@ -188,23 +187,17 @@ class Pattern(object):
         # denote a port in more than one set:
         assert self.sel.aredisjoint(selectors)
 
-        # Expand and save the identifiers for each interface:
-        self.port_ids = {}
+        # Create and save Interface instances containing the ports 
+        # comprised by each of the respective selectors:
+        self.interface = {}
         max_levels = 0
         for i, s in enumerate(selectors):
-            e = self.sel.expand(s)
-            self.port_ids[i] = e
+            self.interface[i] = Interface(s)
 
             # Find the maximum number of levels required to accommodate all of 
             # the identifiers:
-            m = max(map(len, e))
-            if m > max_levels:
-                max_levels = m
-
-        # Lexicographically sort lists of identifiers (ENH: it might be worth
-        # using a self-sorted data structure package such as bintrees):
-        for i in self.port_ids.keys():
-            self.port_ids[i].sort()
+            if self.interface[i].num_levels > max_levels:
+                max_levels = self.interface[i].num_levels
 
         # Create a MultiIndex that can store mappings between identifiers in the
         # two interfaces:
@@ -275,18 +268,18 @@ class Pattern(object):
         """
         Create pattern from the product of identifiers comprised by two selectors.
 
-        For example, 
+        For example: ::
 
-        Pattern.from_product('/foo[0:2]', '/bar[0:2]',
-                             from_sel='/foo[0:2]', to_sel='/bar[0:2]',
-                             data=1)
+            p = Pattern.from_product('/foo[0:2]', '/bar[0:2]',
+                                    from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                                    data=1)
 
-        results in a pattern with the following connections: 
+        results in a pattern with the following connections: ::
 
-        '/foo[0]' -> '/bar[0]'
-        '/foo[0]' -> '/bar[1]'
-        '/foo[1]' -> '/bar[0]'
-        '/foo[1]' -> '/bar[1]'
+            '/foo[0]' -> '/bar[0]'
+            '/foo[0]' -> '/bar[1]'
+            '/foo[1]' -> '/bar[0]'
+            '/foo[1]' -> '/bar[1]'
 
         Parameters
         ----------
@@ -319,16 +312,16 @@ class Pattern(object):
         """
         Create pattern from the concatenation of identifers comprised by two selectors.
 
-        For example, 
+        For example: ::
 
-        Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
-                            from_sel='/foo[0:2]', to_sel='/bar[0:2]',
-                            data=1)
+            p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
+                                    from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                                    data=1)
 
-        results in a pattern with the following connections:
+        results in a pattern with the following connections: ::
 
-        '/foo[0]' -> '/bar[0]'
-        '/foo[1]' -> '/bar[1]'
+            '/foo[0]' -> '/bar[0]'
+            '/foo[1]' -> '/bar[1]'
 
         Parameters
         ----------
@@ -388,10 +381,26 @@ class Pattern(object):
         # Bump number of levels:
         self.num_levels[which] += 1
         
+    def ininterfaces(self, selector):
+        """
+        Check whether a selector is supported by any of the pattern's
+        interfaces.
+        """
+
+        for interface in self.interface.values():
+            if len(interface[selector]) > 0:
+                return True
+        return False
+
     def __setitem__(self, key, value):
 
         # Must pass more than one argument to the [] operators:
         assert type(key) == tuple
+
+        # Ensure that specified selectors refer to ports in the
+        # pattern's interfaces:
+        assert self.ininterfaces(key[0])
+        assert self.ininterfaces(key[1])
 
         # Check whether the number of levels in the internal DataFrame's
         # MultiIndex must be increased to accommodate the specified selector:
@@ -451,49 +460,6 @@ class Pattern(object):
                                              selector = '+'.join(key[0:2]))
         else:
             return self.sel.select(self.data, selector = '+'.join(key))
-
-    def get_port_ids(self, i):
-        """
-        Retrieve set of port identifiers as list tuples.
-
-        Parameters
-        ----------
-        i : int
-            Set of ports.
-
-        Returns
-        -------
-        ports : list
-            List of tuples containing levels of each port identifier.
-        """
-        
-        return self.port_ids[n]
-
-    def add_port_ids(self, i, port_ids):
-        """
-        Add new port identifiers.
-
-        Parameters
-        ----------
-        i : int
-            Set of ports.
-        port_ids : tuple or list of tuples
-            An identifier (tuple) or list of identifiers (list of tuples) to
-            add.
-        """
-        
-        if not self.port_ids.has_key(i):
-            self.port_ids[i] = []
-        if type(port_ids) == tuple:
-            if not(port_ids in self.port_ids[i]):
-                self.port_ids[i].append(port_ids)
-        elif type(port_ids) == list:
-            for p in port_ids:
-                if not(p in self.port_ids[i]):
-                    self.port_ids[i].append(p)
-        else:
-            raise ValueError('Invalid port identifier data structure.')
-        self.port_ids[i].sort()
 
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
