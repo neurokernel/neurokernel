@@ -11,14 +11,29 @@ import pandas as pd
 from plsel import PathLikeSelector
 
 class Interface(object):
+    """
+    Interface comprising ports.
+
+    This class contains information about a set of path-like identifiers
+    and the (optional) attributes associated with them.
+
+    i = Interface('/foo[0:5],/bar[0:3]', ['x', 'y'])
+    i['/foo[0]', 'x'] = 1.0
+
+    Parameters
+    ----------
+    selector : str
+        Selector describing the port identifiers comprised by the interface.
+    columns : list
+        Data column names.
+    """
+
     def __init__(self, selector, columns=[]):
         self.sel = PathLikeSelector()
         assert not(self.sel.isambiguous(selector))        
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
-        levels = [[] for i in xrange(len(names))]
-        labels = [[] for i in xrange(len(names))]
-        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        idx = self.sel.make_index(selector, names)
         self.data = pd.DataFrame(index=idx, columns=columns)
 
     def __add_level__(self):
@@ -98,16 +113,38 @@ class Interface(object):
             self.data = self.data.append(pd.DataFrame(data=data, index=idx))
             self.data.sort(inplace=True)
 
+    def to_tuples(self):
+        """
+        Return list of port identifiers as tuples.
+        """
+
+        return self.data.index.tolist()
+
+    def to_selectors(self):
+        """
+        Return list of port identifiers as path-like selectors.
+        """
+
+        result = []
+        for t in self.to_tuples():
+            selector = ''
+            for s in t:
+                if type(s) == str:
+                    selector += '/'+s
+                else:
+                    selector += '[%s]' % s
+            result.append(selector)
+        return result
+
     def __repr__(self):
         return 'Interface\n---------\n'+self.data.__repr__()
 
 class Pattern(object):
     """
-    Class for representing connectivity between sets of interface ports.
+    Connectivity pattern linking sets of interface ports.
 
-    This class represents connection mappings between sets of ports. More than
-    one set of ports may be comprised by a class instance. Ports are represented 
-    using path-like identifiers as follows:
+    This class represents connection mappings between interfaces comprising sets 
+    of ports. Ports are represented using path-like identifiers as follows:
 
     p = Pattern('/x[0:3]','/y[0:2]')
     p['/x[0:2]', '/y[0]'] = 1
