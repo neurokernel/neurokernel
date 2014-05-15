@@ -14,11 +14,23 @@ class Interface(object):
     """
     Interface comprising ports.
 
-    This class contains information about a set of path-like identifiers
-    and the (optional) attributes associated with them: ::
+    This class contains information about a set of path-like identifiers [1]_
+    and the (optional) attributes associated with them. By default, each port
+    has an 'io' attribute (indicating whether it receives
+    input or emits output) and a 'type' attribute (indicating whether it
+    emits/receives spikes or graded potential values.
 
-        i = Interface('/foo[0:5],/bar[0:3]', ['x', 'y'])
-        i['/foo[0]', 'x'] = 1.0
+    Examples
+    --------
+    >>> i = Interface('/foo[0:5],/bar[0:3]')
+    >>> i['/foo[0]', 'io', 'type'] = ['in', 'spike']
+
+    Attributes
+    ----------
+    data : pandas.DataFrame
+        Port attribute data.
+    index : pandas.MultiIndex
+        Index of port identifiers.
 
     Parameters
     ----------
@@ -26,15 +38,30 @@ class Interface(object):
         Selector describing the port identifiers comprised by the interface.
     columns : list
         Data column names.
+
+    See Also
+    --------
+    .. [1] PathLikeSelector
     """
 
-    def __init__(self, selector, columns=[]):
+    def __init__(self, selector, columns=['io', 'type']):
         self.sel = PathLikeSelector()
         assert not(self.sel.isambiguous(selector))        
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
         idx = self.sel.make_index(selector, names)
         self.data = pd.DataFrame(index=idx, columns=columns)
+
+    @property
+    def index(self):
+        """
+        Interface index.
+        """
+
+        return self.data.index
+    @index.setter
+    def index(self, i):
+        self.data.index = i
 
     def __add_level__(self):
         """
@@ -144,12 +171,7 @@ class Pattern(object):
     Connectivity pattern linking sets of interface ports.
 
     This class represents connection mappings between interfaces comprising sets 
-    of ports. Ports are represented using path-like identifiers as follows: ::
-
-        p = Pattern('/x[0:3]','/y[0:2]')
-        p['/x[0:2]', '/y[0]'] = 1
-        p['/y[0:2]', '/x[1]'] = 1
-
+    of ports. Ports are represented using path-like identifiers [1]_.
     A single data attribute ('conn') associated with defined connections 
     is created by default. Specific attributes may be accessed by specifying 
     their names after the port identifiers; if a nonexistent attribute is 
@@ -158,10 +180,18 @@ class Pattern(object):
 
         p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
 
+    Examples
+    --------
+    >>> p = Pattern('/x[0:3]','/y[0:2]')
+    >>> p['/x[0:2]', '/y[0]'] = 1
+    >>> p['/y[0:2]', '/x[1]'] = 1
+
     Attributes
     ----------
     data : pandas.DataFrame
         Connection attribute data.
+    index : pandas.MultiIndex
+        Index of connections.
     interface : dict of Interface
         Interfaces containing port identifiers and attributes.
 
@@ -176,7 +206,7 @@ class Pattern(object):
 
     See Also
     --------
-    neurokernel.plsel
+    .. [1] PathLikeSelector
     """
 
     def __init__(self, *selectors, **kwargs):
@@ -210,8 +240,16 @@ class Pattern(object):
                             
         self.data = pd.DataFrame(index=idx, columns=columns)
 
-    # XXX need to modify to require either existing Pattern instance
-    # or initial sets of selectors
+    @property
+    def index(self):
+        """
+        Pattern index.
+        """
+
+        return self.data.index
+    @index.setter
+    def index(self, i):
+        self.data.index = i
     @classmethod
     def _create_from(cls, *selectors, **kwargs):
         """
@@ -466,10 +504,42 @@ class Pattern(object):
 
     def clear(self):
         """
-        Clear all entries in class instance.
+        Clear all connections in class instance.
         """
 
         self.data.dropna(inplace=True)
+
+    def isconnected(self, from_int, to_int):
+        """
+        Check whether the specified interfaces are connected.
+
+        Parameters
+        ----------
+        from_int, to_int : int
+            Interface identifiers; must be in `self.interface.keys()`.
+
+        Returns
+        -------
+        result : bool
+            True if at least one connection from `from_int` to `to_int`
+            exists.
+        """
+
+        assert from_int != to_int
+        assert from_int in self.interface
+        assert to_int in self.interface
+
+        # Get index of all defined connections:
+        idx = self.data[self.data['conn'] != 0].index
+        for t in idx.tolist():
+            
+            # Split tuple into 'from' and 'to' identifiers:
+            from_id = t[0:self.num_levels['from']]
+            to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
+            if from_id in self.interface[from_int].index and \
+               to_id in self.interface[to_int].index:
+                return True
+        return False
 
     def from_csv(self, file_name, **kwargs):
         """
