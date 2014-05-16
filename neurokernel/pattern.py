@@ -83,7 +83,10 @@ class Interface(object):
         self.num_levels[which] += 1
         
     def __getitem__(self, key):
-        return self.sel.select(self.data, key)
+        if len(key) > 1:
+            return self.sel.select(self.data[list(key[1:])], key[0])
+        else:
+            return self.sel.select(self.data, key)
         
     def __setitem__(self, key, value):
         if type(key) == tuple:
