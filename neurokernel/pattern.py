@@ -163,6 +163,9 @@ class Interface(object):
             result.append(selector)
         return result
 
+    def __len__(self):
+        return self.data.__len__()
+
     def __repr__(self):
         return 'Interface\n---------\n'+self.data.__repr__()
 
@@ -499,6 +502,9 @@ class Pattern(object):
         else:
             return self.sel.select(self.data, selector = '+'.join(key))
 
+    def __len__(self):
+        return self.data.__len__()
+
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
 
@@ -509,7 +515,7 @@ class Pattern(object):
 
         self.data.dropna(inplace=True)
 
-    def isconnected(self, from_int, to_int):
+    def is_connected(self, from_int, to_int):
         """
         Check whether the specified interfaces are connected.
 
