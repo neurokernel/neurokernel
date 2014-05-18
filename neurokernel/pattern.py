@@ -83,7 +83,7 @@ class Interface(object):
         self.num_levels[which] += 1
         
     def __getitem__(self, key):
-        if len(key) > 1:
+        if type(key) == tuple and len(key) > 1:
             return self.sel.select(self.data[list(key[1:])], key[0])
         else:
             return self.sel.select(self.data, key)
@@ -198,15 +198,15 @@ class Pattern(object):
         Connection attribute data.
     index : pandas.MultiIndex
         Index of connections.
-    interface : dict of Interface
+    interfaces : dict of Interface
         Interfaces containing port identifiers and attributes.
 
     Parameters
     ----------
     sel0, sel1, ...: str
         Selectors defining the sets of ports potentially connected by the 
-        pattern. These selectors must be disjoint, i.e., no identifier comprised
-        by one selector may be in any other selector.
+        pattern. These selectors must be disjoint, i.e., no identifier 
+        comprised by one selector may be in any other selector.
     columns : sequence of str
         Data column names.
 
@@ -225,15 +225,15 @@ class Pattern(object):
 
         # Create and save Interface instances containing the ports 
         # comprised by each of the respective selectors:
-        self.interface = {}
+        self.interfaces = {}
         max_levels = 0
         for i, s in enumerate(selectors):
-            self.interface[i] = Interface(s)
+            self.interfaces[i] = Interface(s)
 
             # Find the maximum number of levels required to accommodate all of 
             # the identifiers:
-            if self.interface[i].num_levels > max_levels:
-                max_levels = self.interface[i].num_levels
+            if self.interfaces[i].num_levels > max_levels:
+                max_levels = self.interfaces[i].num_levels
 
         # Create a MultiIndex that can store mappings between identifiers in the
         # two interfaces:
@@ -256,6 +256,7 @@ class Pattern(object):
     @index.setter
     def index(self, i):
         self.data.index = i
+
     @classmethod
     def _create_from(cls, *selectors, **kwargs):
         """
@@ -431,7 +432,7 @@ class Pattern(object):
         interfaces.
         """
 
-        for interface in self.interface.values():
+        for interface in self.interfaces.values():
             if len(interface[selector]) > 0:
                 return True
         return False
@@ -504,6 +505,94 @@ class Pattern(object):
                                              selector = '+'.join(key[0:2]))
         else:
             return self.sel.select(self.data, selector = '+'.join(key))
+
+    def src_idx(self, src_int, dest_int, dest_ports=None):
+        """
+        Retrieve source ports connected to the specified destination ports.
+
+        Examples
+        --------
+        >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
+        >>> p['/foo[0:3]', '/bar[0:3'] = 1
+        >>> p['/bar[0:3]', '/foo[0:3'] = 1
+        >>> all(p.src_idx(0, 1, '/bar[0]') == [('foo', 0), ('foo', 1), ('foo', 2)])
+
+        Parameters
+        ----------
+        src_int, dest_int : int
+            Source and destination interface identifiers.
+        dest_ports : str
+            Path-like selector corresponding to ports in destination 
+            interface. If not specified, all ports in the destination 
+            interface are considered.
+
+        Returns
+        -------
+        idx : list of tuple
+            Source ports connected to the specified destination ports.
+        """
+
+        assert src_int != dest_int
+        assert src_int in self.interfaces and dest_int in self.interfaces
+
+        from_slice = slice(0, self.num_levels['from'])
+        to_slice = slice(self.num_levels['from'],
+                         self.num_levels['from']+self.num_levels['to'])
+        if dest_ports is None:
+            idx = self.data.select(lambda x: x[from_slice] in \
+                        self.interfaces[src_int].index and \
+                        x[to_slice] in \
+                        self.interfaces[dest_int].index).index            
+        else:
+            idx = self.data.select(lambda x: x[from_slice] in \
+                        self.interfaces[src_int].index and \
+                        x[to_slice] in \
+                        self.interfaces[dest_int][dest_ports].index).index
+        return [x[from_slice] for x in idx]
+
+    def dest_idx(self, src_int, dest_int, src_ports=None):
+        """
+        Retrieve destination ports connected to the specified source ports.
+
+        Examples
+        --------
+        >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
+        >>> p['/foo[0:3]', '/bar[0:3'] = 1
+        >>> p['/bar[0:3]', '/foo[0:3'] = 1
+        >>> all(p.dest_idx(0, 1, '/foo[0]') == [('bar', 0), ('bar', 1), ('bar', 2)])
+
+        Parameters
+        ----------
+        src_int, dest_int : int
+            Source and destination interface identifiers.
+        src_ports : str
+            Path-like selector corresponding to ports in source
+            interface. If not specified, all ports in the source
+            interface are considered.
+
+        Returns
+        -------
+        idx : list of tuple
+            Destination ports connected to the specified source ports.
+        """
+
+        assert src_int != dest_int
+        assert src_int in self.interfaces and dest_int in self.interfaces
+
+        from_slice = slice(0, self.num_levels['from'])
+        to_slice = slice(self.num_levels['from'],
+                         self.num_levels['from']+self.num_levels['to'])
+        if src_ports is None:
+            idx = self.data.select(lambda x: x[from_slice] in \
+                        self.interfaces[src_int].index and \
+                        x[to_slice] in \
+                        self.interfaces[dest_int].index).index
+        else:
+            idx = self.data.select(lambda x: x[from_slice] in \
+                        self.interfaces[src_int][src_ports].index and \
+                        x[to_slice] in \
+                        self.interfaces[dest_int].index).index
+        return [x[to_slice] for x in idx]
 
     def __len__(self):
         return self.data.__len__()
