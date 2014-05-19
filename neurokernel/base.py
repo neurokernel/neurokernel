@@ -590,7 +590,8 @@ class Broker(ControlledProcess):
             # When data with source/destination IDs corresponding to
             # every entry in the routing table has been received upto
             # current time step, deliver the data in the buffer:
-            if all((c for c in self.recv_counts.values())):
+            #if all((c for c in self.recv_counts.values())):
+            if all(self.recv_counts.values()):
                 self.logger.info('recv from all modules')
                 for in_id, out_id, data in self.data_to_route:
                     self.logger.info('sent to   %s: %s' % (out_id, data))
@@ -1037,12 +1038,12 @@ class BaseConnectivity(object):
             result += key + '\n'
             result += self._format_array(self._data[key]) + '\n'
         return result
-        
+
     def _make_key(self, *args):
         """
         Create a unique key for a matrix of connection properties.
         """
-        
+
         return string.join(map(str, args), '/')
 
     def _make_matrix(self, shape, dtype=np.double):
@@ -1052,7 +1053,7 @@ class BaseConnectivity(object):
 
         # scipy.sparse doesn't support sparse arrays of strings;
         # we therefore use an ordinary ndarray of objects:
-        if np.issubdtype(dtype, str):
+        if np.issubdtype(dtype, str) or np.issubdtype(dtype, unicode):
             return np.empty(shape, dtype=np.object)
         else:
             return sp.sparse.lil_matrix(shape, dtype=dtype)
