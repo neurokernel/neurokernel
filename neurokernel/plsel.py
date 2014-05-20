@@ -515,16 +515,18 @@ class PathLikeSelector(object):
             return count
     max_levels.cache = {}
 
-    def _select_test(self, row, parse_list, start=None, stop=None):
+    def _idx_row_in(self, row, parse_list, start=None, stop=None):
         """
-        Check whether the entries in a subinterval of a given tuple of data
-        corresponding to the entries of one row in a DataFrame match the
+        Check whether index row matches a parsed selector.
+
+        Check whether the entries in a (subinterval of a) given tuple of data
+        corresponding to the entries of one row in a MultiIndex match the
         specified token values.
 
         Parameters
         ----------
-        row : list
-            List of data corresponding to a single row of a DataFrame.
+        row : sequence
+            List of data corresponding to a single row of a MultiIndex.
         parse_list : list
             List of lists of token values extracted by ply.
         start, stop : int
@@ -562,6 +564,28 @@ class PathLikeSelector(object):
         # If the function still hasn't returned, no match was found:
         return False
 
+    def isin(self, s, t):
+        """
+        Checks whether the ports in one selector are also in that of another.
+        
+        Parameters
+        ----------
+        s, t : str
+            Check whether selector `s` is in `t`.
+
+        Returns
+        -------
+        result : bool
+            True if the first selector is in the second, False otherwise.
+        """
+
+        s_parsed = set(self.expand(s))
+        t_parsed = set(self.expand(t))
+        if s_parsed.intersection(t_parsed):
+            return True
+        else:
+            return False
+
     def get_tuples(self, df, selector, start=None, stop=None):
         """
         Return tuples containing MultiIndex labels selected by specified selector.
@@ -590,8 +614,8 @@ class PathLikeSelector(object):
             raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
 
-        return [t for t in df.index if self._select_test(t, parse_list,
-                                                         start, stop)]
+        return [t for t in df.index if self._idx_row_in(t, parse_list,
+                                                        start, stop)]
 
     def get_index(self, df, selector, start=None, stop=None, names=[]):
         """
@@ -704,7 +728,7 @@ class PathLikeSelector(object):
         if len(parse_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
-        return df.select(lambda row: self._select_test(row, parse_list, start, stop))
+        return df.select(lambda row: self._idx_row_in(row, parse_list, start, stop))
 
 class PortMapper(object):
     """
