@@ -49,7 +49,7 @@ class PathLikeSelector(object):
     aredisjoint(s0, s1, ...)
         Check whether several selectors are disjoint.
     expand(selector)
-        Expand a nonambiguous selector into a list of identifiers.
+        Expand an unambiguous selector into a list of identifiers.
     get_index(df, selector, start=None, stop=None, names=[])
         Return MultiIndex corresponding to rows selected by specified selector.
     get_tuples(df, selector, start=None, stop=None)
@@ -273,7 +273,7 @@ class PathLikeSelector(object):
 
         Returns
         -------
-        parse_list : list of list
+        parse_list : list
             List of lists containing the tokens corresponding to each individual
             selector in the string.
         """
@@ -285,13 +285,14 @@ class PathLikeSelector(object):
         """
         Check whether a selector cannot be expanded into an explicit list of identifiers.
 
-        A selector is ambiguous if it contains the symbols '*' or '[:]' (i.e., a
+        A selector is ambiguous if it contains the symbols '*' or '[0:]' (i.e., a
         range with no upper bound).
 
         Parameters
         ----------
-        selector : str
-            Selector to test.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of tokens
+            (e.g., ['foo', (0, 2)]).
 
         Returns
         -------
@@ -299,29 +300,40 @@ class PathLikeSelector(object):
             True if the selector is ambiguous, False otherwise.
         """
 
-        if re.search(r'(?:\*)|(?:\:\])', selector):
-            return True
-        else:
+        if type(selector) == str:
+            if re.search(r'(?:\*)|(?:\:\])', selector):
+                return True
+            else:
+                return False
+        elif type(selector) == tuple:
+            for token in selector:
+                if token == '*' or \
+                   (type(token) == tuple and token[1] == np.inf):
+                    return True
             return False
 
     @classmethod
     def expand(cls, selector):
         """
-        Expand a nonambiguous selector into a list of identifiers.
+        Expand an unambiguous selector into a list of identifiers.
 
         Parameters
         ----------
-        selector : str
-            Selector string.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or tuple of tokens
+            (e.g., ['foo', (0, 2)]).
 
         Returns
         -------
         result : list
-            List of identifiers; each identifier is a tuple of tokens.
+            List of identifiers; each identifier is a tuple of unambiguous tokens.
         """
         
         assert not cls.isambiguous(selector)
-        p = cls.parse(selector)
+        if type(selector) == str:
+            p = cls.parse(selector)
+        else:
+            p = [selector]
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str]:
