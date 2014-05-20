@@ -13,8 +13,7 @@ import ply.lex as lex
 import ply.yacc as yacc
 
 class PathLikeSelector(object):
-    """
-    Class for selecting rows of a pandas DataFrame using path-like selectors.
+    """Class for selecting rows of a pandas DataFrame using path-like selectors.
 
     Select rows from a pandas DataFrame using path-like selectors.
     Assumes that the DataFrame instance has a MultiIndex where each level
@@ -57,6 +56,8 @@ class PathLikeSelector(object):
         Return tuples containing MultiIndex labels selected by specified selector.
     isambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
+    isin(s, t)
+        Check whether the identifiers in one selector are also in that of another.
     make_index(selector, names=[])
         Create a MultiIndex from the specified selector.
     max_levels(selector)
@@ -70,17 +71,21 @@ class PathLikeSelector(object):
 
     Notes
     -----
-    Numerical indices are assumed to be zero-based. Intervals do not include the
-    end element (i.e., like numpy, not like pandas).
+    Since there is no need to maintain multiple instances of the lexer/parser
+    used to process path-like selectors, they are associated with the class
+    rather than class instances; likewise, all of the class' methods are
+    classmethods.
+
+    Numerical indices in path-like selectors are assumed to be
+    zero-based. Intervals do not include the end element (i.e., like numpy, not
+    like pandas).
     """
 
     tokens = ('ASTERISK', 'COMMA', 'DOTPLUS', 'INTEGER', 'INTEGER_SET',
               'INTERVAL', 'LPAREN', 'PLUS', 'RPAREN', 'STRING', 'STRING_SET')
 
-    def __init__(self):
-        self._setup()
-
-    def _parse_interval_str(self, s):
+    @classmethod
+    def _parse_interval_str(cls, s):
         """
         Convert string representation of interval to tuple containing numerical
         start and stop values.
@@ -97,73 +102,89 @@ class PathLikeSelector(object):
             stop = int(stop)
         return (start, stop)
 
-    def t_PLUS(self, t):
+    @classmethod
+    def t_PLUS(cls, t):
         r'\+'
         return t
 
-    def t_DOTPLUS(self, t):
+    @classmethod
+    def t_DOTPLUS(cls, t):
         r'\.\+'
         return t
 
-    def t_COMMA(self, t):
+    @classmethod
+    def t_COMMA(cls, t):
         r'\,'
         return t
 
-    def t_LPAREN(self, t):
+    @classmethod
+    def t_LPAREN(cls, t):
         r'\('
         return t
 
-    def t_RPAREN(self, t):
+    @classmethod
+    def t_RPAREN(cls, t):
         r'\)'
         return t
 
-    def t_ASTERISK(self, t):
+    @classmethod
+    def t_ASTERISK(cls, t):
         r'/\*'
         t.value = t.value.strip('/')
         return t
 
-    def t_INTEGER(self, t):
+    @classmethod
+    def t_INTEGER(cls, t):
         r'/?\d+'
         t.value = int(t.value.strip('/'))
         return t
 
-    def t_INTEGER_SET(self, t):
+    @classmethod
+    def t_INTEGER_SET(cls, t):
         r'/?\[(?:\d+,?)+\]'
         t.value = map(int, t.value.strip('/[]').split(','))
         return t
 
-    def t_INTERVAL(self, t):
+    @classmethod
+    def t_INTERVAL(cls, t):
         r'/?\[\d*\:\d*\]'
-        t.value = self._parse_interval_str(re.search('\[(.+)\]', t.value).group(1))
+        t.value = cls._parse_interval_str(re.search('\[(.+)\]', t.value).group(1))
         return t
 
-    def t_STRING(self, t):
+    @classmethod
+    def t_STRING(cls, t):
         r'/[^*/\[\]\(\):,\.\d][^+*/\[\]\(\):,\.]*'
         t.value = t.value.strip('/')
         return t
 
-    def t_STRING_SET(self, t):
+    @classmethod
+    def t_STRING_SET(cls, t):
         r'/?\[(?:[^+*/\[\]\(\):,\.\d][^+*/\[\]\(\):,\.]*,?)+\]'
         t.value = t.value.strip('/[]').split(',')
         return t
 
-    def t_error(self, t):
+    @classmethod
+    def t_error(cls, t):
         raise ValueError('Cannot tokenize selector - illegal character: %s' % t.value[0])
 
     # A selector is a list of lists of levels:
-    def p_selector_paren_selector(self, p):
+    @classmethod
+    def p_selector_paren_selector(cls, p):
         'selector : LPAREN selector RPAREN'
         p[0] = p[2]
 
-    def p_selector_comma_selector(self, p):
+    @classmethod
+    def p_selector_comma_selector(cls, p):
         'selector : selector COMMA selector'
         p[0] = p[1]+p[3]
 
-    def p_selector_plus_selector(self, p):
+    @classmethod
+    def p_selector_plus_selector(cls, p):
         'selector : selector PLUS selector'
         p[0] = [a+b for a, b in itertools.product(p[1], p[3])]
 
-    def p_selector_dotplus_selector(self, p):
+    @classmethod
+    def p_selector_dotplus_selector(cls, p):
         'selector : selector DOTPLUS selector'
         # Expand ranges and wrap strings with lists in each selector:
         for i in xrange(len(p[1])): 
@@ -187,19 +208,23 @@ class PathLikeSelector(object):
         assert len(ids_1) == len(ids_3)        
         p[0] = [a+b for (a, b) in zip(ids_1, ids_3)]
 
-    def p_selector_selector_plus_level(self, p):
+    @classmethod
+    def p_selector_selector_plus_level(cls, p):
         'selector : selector PLUS level'
         p[0] = [x+[p[3]] for x in p[1]]
 
-    def p_selector_selector_level(self, p):
+    @classmethod
+    def p_selector_selector_level(cls, p):
         'selector : selector level'
         p[0] = [x+[p[2]] for x in p[1]]
 
-    def p_selector_level(self, p):
+    @classmethod
+    def p_selector_level(cls, p):
         'selector : level'
         p[0] = [[p[1]]]
 
-    def p_level(self, p):
+    @classmethod
+    def p_level(cls, p):
         '''level : ASTERISK
                  | INTEGER
                  | INTEGER_SET
@@ -208,19 +233,12 @@ class PathLikeSelector(object):
                  | STRING_SET'''
         p[0] = p[1]
 
-    def p_error(self, p):
+    @classmethod
+    def p_error(cls, p):
         raise ValueError('Cannot parse selector - syntax error: %s' % p)
-        
-    def _setup(self):
-        """
-        Build lexer and parser.
-        """
 
-        # Set the option optimize=1 in the production version:
-        self.lexer = lex.lex(module=self)
-        self.parser = yacc.yacc(module=self, debug=0, write_tables=0)
-
-    def tokenize(self, selector):
+    @classmethod
+    def tokenize(cls, selector):
         """
         Tokenize a selector string.
 
@@ -235,15 +253,16 @@ class PathLikeSelector(object):
             List of tokens extracted by ply.
         """
 
-        self.lexer.input(selector)
+        cls.lexer.input(selector)
         token_list = []
         while True:
-            token = self.lexer.token()
+            token = cls.lexer.token()
             if not token: break
             token_list.append(token)
         return token_list
 
-    def parse(self, selector):
+    @classmethod
+    def parse(cls, selector):
         """
         Parse a selector string into individual port identifiers.
 
@@ -259,9 +278,10 @@ class PathLikeSelector(object):
             selector in the string.
         """
 
-        return self.parser.parse(selector, lexer=self.lexer)
+        return cls.parser.parse(selector, lexer=cls.lexer)
 
-    def isambiguous(self, selector):
+    @classmethod
+    def isambiguous(cls, selector):
         """
         Check whether a selector cannot be expanded into an explicit list of identifiers.
 
@@ -284,7 +304,8 @@ class PathLikeSelector(object):
         else:
             return False
 
-    def expand(self, selector):
+    @classmethod
+    def expand(cls, selector):
         """
         Expand a nonambiguous selector into a list of identifiers.
 
@@ -299,8 +320,8 @@ class PathLikeSelector(object):
             List of identifiers; each identifier is a tuple of tokens.
         """
         
-        assert not self.isambiguous(selector)
-        p = self.parse(selector)
+        assert not cls.isambiguous(selector)
+        p = cls.parse(selector)
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str]:
@@ -309,7 +330,8 @@ class PathLikeSelector(object):
                     p[i][j] = range(p[i][j][0], p[i][j][1])
         return [tuple(x) for y in p for x in itertools.product(*y)]
 
-    def isexpandable(self, selector):
+    @classmethod
+    def isexpandable(cls, selector):
         """
         Check whether a selector can be expanded into multiple identifiers.
 
@@ -326,9 +348,9 @@ class PathLikeSelector(object):
             not deemed to be expandable.
         """
 
-        if self.isambiguous(selector):
+        if cls.isambiguous(selector):
             return False
-        p = self.parse(selector)
+        p = cls.parse(selector)
 
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
@@ -351,8 +373,9 @@ class PathLikeSelector(object):
             return True
         else:
             return False
-
-    def areconsecutive(self, i_list):
+        
+    @classmethod
+    def areconsecutive(cls, i_list):
         """
         Check whether a list of integers is consecutive.
 
@@ -376,7 +399,8 @@ class PathLikeSelector(object):
         else:
             return False
 
-    def collapse(self, id_list):
+    @classmethod
+    def collapse(cls, id_list):
         """
         Collapse a list of identifiers into a selector string.
 
@@ -420,7 +444,7 @@ class PathLikeSelector(object):
                 # If a level only contains consecutive integers, convert it into an
                 # interval:
                 level.sort()
-                if self.areconsecutive(level):
+                if cls.areconsecutive(level):
                     return ['[%s:%s]' % (min(level), max(level)+1)]
 
                 # If a level contains nonconsecutive integers, convert it into a
@@ -454,7 +478,8 @@ class PathLikeSelector(object):
             selector_list.append(selector)
         return ','.join(selector_list)
 
-    def aredisjoint(self, *selectors):
+    @classmethod
+    def aredisjoint(cls, *selectors):
         """
         Check whether several selectors are disjoint.
 
@@ -477,7 +502,7 @@ class PathLikeSelector(object):
         assert len(selectors) >= 1
         if len(selectors) == 1:
             return True
-        assert all(map(lambda s: not self.isambiguous(s), selectors))
+        assert all(map(lambda s: not cls.isambiguous(s), selectors))
 
         # Expand selectors into sets of identifiers:
         ids = set()
@@ -485,14 +510,18 @@ class PathLikeSelector(object):
 
             # If some identifiers are present in both the previous expanded
             # selectors and the current selector, the selectors cannot be disjoint:
-            ids_new = set(map(tuple, self.expand(selector)))
+            ids_new = set(map(tuple, cls.expand(selector)))
             if ids.intersection(ids_new):
                 return False
             else:
                 ids = ids.union(ids_new)
         return True
 
-    def max_levels(self, selector):
+    # Need to create cache here because one can't assign create a cache that is
+    # an attribute of the classmethod itself:
+    __max_levels_cache = {}
+    @classmethod
+    def max_levels(cls, selector):
         """
         Return maximum number of token levels in selector.
 
@@ -508,14 +537,14 @@ class PathLikeSelector(object):
         """
 
         try:
-            return self.max_levels.cache[selector]
+            return cls.__max_levels_cache[selector]
         except:
-            count = max(map(len, self.parse(selector)))
-            self.max_levels.cache[selector] = count
+            count = max(map(len, cls.parse(selector)))
+            cls.__max_levels_cache[selector] = count
             return count
-    max_levels.cache = {}
 
-    def _idx_row_in(self, row, parse_list, start=None, stop=None):
+    @classmethod
+    def _idx_row_in(cls, row, parse_list, start=None, stop=None):
         """
         Check whether index row matches a parsed selector.
 
@@ -564,9 +593,10 @@ class PathLikeSelector(object):
         # If the function still hasn't returned, no match was found:
         return False
 
-    def isin(self, s, t):
+    @classmethod
+    def isin(cls, s, t):
         """
-        Checks whether the ports in one selector are also in that of another.
+        Check whether the identifiers in one selector are also in that of another.
         
         Parameters
         ----------
@@ -579,14 +609,15 @@ class PathLikeSelector(object):
             True if the first selector is in the second, False otherwise.
         """
 
-        s_parsed = set(self.expand(s))
-        t_parsed = set(self.expand(t))
+        s_parsed = set(cls.expand(s))
+        t_parsed = set(cls.expand(t))
         if s_parsed.intersection(t_parsed):
             return True
         else:
             return False
 
-    def get_tuples(self, df, selector, start=None, stop=None):
+    @classmethod
+    def get_tuples(cls, df, selector, start=None, stop=None):
         """
         Return tuples containing MultiIndex labels selected by specified selector.
 
@@ -605,7 +636,7 @@ class PathLikeSelector(object):
             List of tuples containing MultiIndex labels for selected rows.
         """
 
-        parse_list = self.parse(selector)
+        parse_list = cls.parse(selector)
         max_levels = max(map(len, parse_list))
 
         # The maximum number of tokens must not exceed the number of levels in the
@@ -614,10 +645,11 @@ class PathLikeSelector(object):
             raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
 
-        return [t for t in df.index if self._idx_row_in(t, parse_list,
+        return [t for t in df.index if cls._idx_row_in(t, parse_list,
                                                         start, stop)]
 
-    def get_index(self, df, selector, start=None, stop=None, names=[]):
+    @classmethod
+    def get_index(cls, df, selector, start=None, stop=None, names=[]):
         """
         Return MultiIndex corresponding to rows selected by specified selector.
 
@@ -639,7 +671,7 @@ class PathLikeSelector(object):
             selector.
         """
 
-        tuples = self.get_tuples(df, selector, start, stop)
+        tuples = cls.get_tuples(df, selector, start, stop)
         if not tuples:
             raise ValueError('no tuples matching selector found')
 
@@ -650,7 +682,8 @@ class PathLikeSelector(object):
         else:
             return pd.MultiIndex.from_tuples(tuples)
 
-    def make_index(self, selector, names=[]):
+    @classmethod
+    def make_index(cls, selector, names=[]):
         """
         Create a MultiIndex from the specified selector.
 
@@ -672,8 +705,8 @@ class PathLikeSelector(object):
         '[:]'. It also must contain more than one level.        
         """
 
-        assert not self.isambiguous(selector)
-        parse_list = self.parse(selector)
+        assert not cls.isambiguous(selector)
+        parse_list = cls.parse(selector)
 
         idx_list = []
         for token_list in parse_list:
@@ -702,7 +735,8 @@ class PathLikeSelector(object):
 
         return reduce(pd.MultiIndex.append, idx_list)
 
-    def select(self, df, selector, start=None, stop=None):
+    @classmethod
+    def select(cls, df, selector, start=None, stop=None):
         """
         Select rows from DataFrame using a path-like selector.
 
@@ -721,14 +755,20 @@ class PathLikeSelector(object):
             DataFrame containing selected rows.
         """
 
-        parse_list = self.parse(selector)
+        parse_list = cls.parse(selector)
 
         # The number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
         if len(parse_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
-        return df.select(lambda row: self._idx_row_in(row, parse_list, start, stop))
+        return df.select(lambda row: cls._idx_row_in(row, parse_list, start, stop))
+
+# Set the option optimize=1 in the production version; need to perform these
+# assignments after definition of the rest of the class because the class'
+# internal namespace can't be accessed within its body definition:
+PathLikeSelector.lexer = lex.lex(module=PathLikeSelector)
+PathLikeSelector.parser = yacc.yacc(module=PathLikeSelector, debug=0, write_tables=0)
 
 class PortMapper(object):
     """
@@ -948,6 +988,18 @@ if __name__ == '__main__':
                                              ('bar','qux',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
+
+        def test_aredisjoint(self):
+            result = self.sel.aredisjoint('/foo[0:10]/baz', '/bar[10:20]/qux')
+            assert result == True
+            result = self.sel.aredisjoint('/foo[0:10]/baz', '/foo[5:15]/[baz,qux]')
+            assert result == False
+
+        def test_isin(self):
+            result = self.sel.isin('/foo/bar[5]', '/[foo,baz]/bar[0:10]')
+            assert result == True
+            result = self.sel.isin('/qux/bar[5]', '/[foo,baz]/bar[0:10]')
+            assert result == False
 
     class test_port_mapper(TestCase):
         def setUp(self):
