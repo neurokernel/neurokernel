@@ -7,6 +7,7 @@ Path-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 import itertools
 import re
 
+import msgpack
 import numpy as np
 import pandas as pd
 import ply.lex as lex
@@ -245,7 +246,7 @@ class PathLikeSelector(object):
         Parameters
         ----------
         selector : str
-            Row selector.
+            Selector string.
 
         Returns
         -------
@@ -269,7 +270,7 @@ class PathLikeSelector(object):
         Parameters
         ----------
         selector : str
-            Row selector.
+            Selector string.
 
         Returns
         -------
@@ -291,8 +292,8 @@ class PathLikeSelector(object):
         Parameters
         ----------
         selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of tokens
-            (e.g., ['foo', (0, 2)]).
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -305,12 +306,15 @@ class PathLikeSelector(object):
                 return True
             else:
                 return False
-        elif type(selector) == tuple:
-            for token in selector:
-                if token == '*' or \
-                   (type(token) == tuple and token[1] == np.inf):
-                    return True
+        elif np.iterable(selector):
+            for token_list in selector:
+                for token in token_list:
+                    if token == '*' or \
+                       (type(token) == tuple and token[1] == np.inf):
+                        return True
             return False
+        else:
+            raise ValueError('invalid selector type')
 
     @classmethod
     def expand(cls, selector):
@@ -320,8 +324,8 @@ class PathLikeSelector(object):
         Parameters
         ----------
         selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of tokens
-            (e.g., ['foo', (0, 2)]).
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -332,8 +336,10 @@ class PathLikeSelector(object):
         assert not cls.isambiguous(selector)
         if type(selector) == str:
             p = cls.parse(selector)
+        elif np.iterable(selector):
+            p = selector
         else:
-            p = [list(selector)]
+            raise ValueError('invalid selector type')
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str]:
@@ -349,21 +355,26 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str
-            Selector string.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
         result : bool
-            True if the string contains any intervals or sets of
+            True if the selector contains any intervals or sets of
             strings/integers, False otherwise. Ambiguous selectors are
             not deemed to be expandable.
         """
 
         if cls.isambiguous(selector):
             return False
-        p = cls.parse(selector)
-
+        if type(selector) == str:
+            p = cls.parse(selector)
+        elif np.iterable(selector):
+            p = selector
+        else:
+            raise ValueError('invalid selector type')
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str]:
@@ -497,8 +508,10 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        s0, s1, ... : str
-            Selectors to check.
+        s0, s1, ... : str or sequence
+            Selectors to check. Each selector is either a string (e.g., 
+            '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -539,8 +552,9 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str
-            Row selector.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -548,11 +562,25 @@ class PathLikeSelector(object):
             Maximum number of tokens in selector.
         """
 
+        # Handle unhashable selectors:
         try:
-            return cls.__max_levels_cache[selector]
+            hash(selector)
         except:
-            count = max(map(len, cls.parse(selector)))
-            cls.__max_levels_cache[selector] = count
+            h = msgpack.dumps(selector)
+        else:
+            h = selector
+
+        # Use memoization:
+        try:
+            return cls.__max_levels_cache[h]
+        except:
+            if type(selector) == str:
+                count = max(map(len, cls.parse(selector)))
+            elif np.iterable(selector):
+                count = max(map(len, selector))
+            else:
+                raise ValueError('invalid selector type')
+            cls.__max_levels_cache[h] = count
             return count
 
     @classmethod
@@ -613,7 +641,9 @@ class PathLikeSelector(object):
         Parameters
         ----------
         s, t : str or sequence
-            Check whether selector `s` is in `t`.
+            Check whether selector `s` is in `t`. Each selector is either a
+            string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -621,9 +651,9 @@ class PathLikeSelector(object):
             True if the first selector is in the second, False otherwise.
         """
 
-        s_parsed = set(cls.expand(s))
-        t_parsed = set(cls.expand(t))
-        if s_parsed.intersection(t_parsed):
+        s_exp = set(cls.expand(s))
+        t_exp = set(cls.expand(t))
+        if s_exp.intersection(t_exp):
             return True
         else:
             return False
@@ -637,8 +667,9 @@ class PathLikeSelector(object):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str
-            Row selector.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
 
@@ -648,7 +679,12 @@ class PathLikeSelector(object):
             List of tuples containing MultiIndex labels for selected rows.
         """
 
-        parse_list = cls.parse(selector)
+        if type(selector) == str:
+            parse_list = cls.parse(selector)
+        elif np.iterable(selector):
+            parse_list = selector
+        else:
+            raise ValueError('invalid selector type')
         max_levels = max(map(len, parse_list))
 
         # The maximum number of tokens must not exceed the number of levels in the
@@ -701,10 +737,13 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str
-            Row selector.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
         names : list
-            Names of levels to use in generated MultiIndex.
+            Names of levels to use in generated MultiIndex. If no names are
+            specified, the levels are assigned increasing integers starting with
+            0 as their names.
 
         Returns
         -------
@@ -718,7 +757,12 @@ class PathLikeSelector(object):
         """
 
         assert not cls.isambiguous(selector)
-        parse_list = cls.parse(selector)
+        if type(selector) == str:
+            parse_list = cls.parse(selector)
+        elif np.iterable(selector):
+            parse_list = selector
+        else:
+            raise ValueError('invalid selector type')
 
         idx_list = []
         for token_list in parse_list:
@@ -756,8 +800,9 @@ class PathLikeSelector(object):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str
-            Row selector.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).            
         start, stop : int
             Start and end indices in `row` over which to test entries.
 
@@ -767,7 +812,12 @@ class PathLikeSelector(object):
             DataFrame containing selected rows.
         """
 
-        parse_list = cls.parse(selector)
+        if type(selector) == str:
+            parse_list = cls.parse(selector)
+        elif np.iterable(selector):
+            parse_list = selector
+        else:
+            raise ValueError('invalid selector type')
 
         # The number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:        
@@ -858,7 +908,7 @@ class PortMapper(object):
 
 if __name__ == '__main__':
     from unittest import main, TestCase
-    from pandas.util.testing import assert_frame_equal
+    from pandas.util.testing import assert_frame_equal, assert_index_equal
 
     df1 = pd.DataFrame(data={'data': np.random.rand(12),
                        'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
@@ -890,7 +940,7 @@ if __name__ == '__main__':
             self.df = df.copy()
             self.sel = PathLikeSelector()
 
-        def test_str(self):
+        def test_select_str(self):
             result = self.sel.select(self.df, '/foo')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1),
@@ -899,26 +949,35 @@ if __name__ == '__main__':
                                              ('foo','mof',2)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_comma(self):
+        def test_select_list(self):
+            result = self.sel.select(self.df, [['foo']])
+            idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                             ('foo','qux',1),
+                                             ('foo','mof',0),
+                                             ('foo','mof',1),
+                                             ('foo','mof',2)], names=[0, 1, 2])
+            assert_frame_equal(result, self.df.ix[idx])
+
+        def test_select_comma(self):
             result = self.sel.select(self.df, '/foo/qux,/baz/mof')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1),
                                              ('baz','mof',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_plus(self):
+        def test_select_plus(self):
             result = self.sel.select(self.df, '/foo+/qux+[0,1]')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_dotplus(self):
+        def test_select_dotplus(self):
             result = self.sel.select(self.df, '/[bar,baz].+/[qux,mof].+/[0,0]')
             idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                              ('baz','mof',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_paren(self):
+        def test_select_paren(self):
             result = self.sel.select(self.df, '(/bar,/baz)')
             idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                              ('bar','qux',1),
@@ -927,7 +986,7 @@ if __name__ == '__main__':
                                              ('baz','mof',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_paren_plus(self):
+        def test_select_paren_plus(self):
             result = self.sel.select(self.df, '(/bar,/baz)+/qux')
             idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                              ('bar','qux',1),
@@ -935,7 +994,7 @@ if __name__ == '__main__':
                                              ('baz','qux',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_asterisk(self):
+        def test_select_asterisk(self):
             result = self.sel.select(self.df, '/*/qux')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1),
@@ -945,24 +1004,24 @@ if __name__ == '__main__':
                                              ('baz','qux',0)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_integer_with_brackets(self):
+        def test_select_integer_with_brackets(self):
             result = self.sel.select(self.df, '/bar/qux[1]')
             idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_integer_no_brackets(self):
+        def test_select_integer_no_brackets(self):
             result = self.sel.select(self.df, '/bar/qux/1')
             idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_integer_set(self):
+        def test_select_integer_set(self):
             result = self.sel.select(self.df, '/foo/qux[0,1]')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_string_set(self):
+        def test_select_string_set(self):
             result = self.sel.select(self.df, '/foo/[qux,mof]')
             idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                              ('foo','qux',1),
@@ -972,7 +1031,7 @@ if __name__ == '__main__':
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_no_bounds(self):
+        def test_select_interval_no_bounds(self):
             result = self.sel.select(self.df, '/foo/mof[:]')
             idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                              ('foo','mof',1),
@@ -980,38 +1039,131 @@ if __name__ == '__main__':
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_lower_bound(self):
+        def test_select_interval_lower_bound(self):
             result = self.sel.select(self.df, '/foo/mof[1:]')
             idx = pd.MultiIndex.from_tuples([('foo','mof',1),
                                              ('foo','mof',2)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_upper_bound(self):
+        def test_select_interval_upper_bound(self):
             result = self.sel.select(self.df, '/foo/mof[:2]')
             idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                              ('foo','mof',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_str_interval_both_bounds(self):
+        def test_select_interval_both_bounds(self):
             result = self.sel.select(self.df, '/bar/qux[0:2]')
             idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                              ('bar','qux',1)],
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_aredisjoint(self):
-            result = self.sel.aredisjoint('/foo[0:10]/baz', '/bar[10:20]/qux')
+        def test_aredisjoint_str(self):
+            assert self.sel.aredisjoint('/foo[0:10]/baz', '/bar[10:20]/qux') == True
+            assert self.sel.aredisjoint('/foo[0:10]/baz',
+                                        '/foo[5:15]/[baz,qux]') == False
+
+        def test_aredisjoint_list(self):
+            result = self.sel.aredisjoint([['foo', (0, 10), 'baz']], 
+                                          [['bar', (10, 20), 'qux']])
             assert result == True
-            result = self.sel.aredisjoint('/foo[0:10]/baz', '/foo[5:15]/[baz,qux]')
+            result = self.sel.aredisjoint([['foo', (0, 10), 'baz']], 
+                                          [['foo', (5, 15), ['baz','qux']]])
             assert result == False
 
-        def test_isin(self):
-            result = self.sel.isin('/foo/bar[5]', '/[foo,baz]/bar[0:10]')
-            assert result == True
-            result = self.sel.isin('/qux/bar[5]', '/[foo,baz]/bar[0:10]')
-            assert result == False
+        def test_expand_str(self):
+            result = self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]')
+            self.assertSequenceEqual(result,
+                                     [('foo', 'bar', 0),
+                                      ('foo', 'bar', 1),
+                                      ('moo', 'qux'), 
+                                      ('moo', 'baz')])
+
+        def test_expand_list(self):
+            result = self.sel.expand([['foo', 'bar', (0, 2)],
+                                      ['moo', ['qux', 'baz']]])
+            self.assertSequenceEqual(result,
+                                     [('foo', 'bar', 0),
+                                      ('foo', 'bar', 1),
+                                      ('moo', 'qux'), 
+                                      ('moo', 'baz')])
+
+        def test_get_index_str(self):
+            idx = self.sel.get_index(self.df, '/foo/mof/*')
+            assert_index_equal(idx, pd.MultiIndex(levels=[['foo'], ['mof'],
+                                                          [0, 1, 2]],
+                                                  labels=[[0, 0, 0],
+                                                          [0, 0, 0],
+                                                          [0, 1, 2]]))
+
+        def test_get_index_list(self):
+            idx = self.sel.get_index(self.df, [['foo', 'mof', '*']])
+            assert_index_equal(idx, pd.MultiIndex(levels=[['foo'], ['mof'],
+                                                          [0, 1, 2]],
+                                                  labels=[[0, 0, 0],
+                                                          [0, 0, 0],
+                                                          [0, 1, 2]]))
+
+        def test_get_tuples_str(self):
+            result = self.sel.get_tuples(df, '/foo/mof/*')
+            self.assertSequenceEqual(result,
+                                     [('foo', 'mof', 0),
+                                      ('foo', 'mof', 1),
+                                      ('foo', 'mof', 2)])
+
+        def test_get_tuples_list(self):
+            result = self.sel.get_tuples(df, [['foo', 'mof', '*']])
+            self.assertSequenceEqual(result,
+                                     [('foo', 'mof', 0),
+                                      ('foo', 'mof', 1),
+                                      ('foo', 'mof', 2)])
+            
+        def test_isambiguous_str(self):
+            assert self.sel.isambiguous('/foo/*') == True
+            assert self.sel.isambiguous('/foo/[5:]') == True
+            assert self.sel.isambiguous('/foo/[:10]') == False
+            assert self.sel.isambiguous('/foo/[5:10]') == False
+
+        def test_isambiguous_list(self):
+            assert self.sel.isambiguous([['foo', '*']]) == True
+            assert self.sel.isambiguous([['foo', (5, np.inf)]]) == True
+            assert self.sel.isambiguous([['foo', (0, 10)]]) == False
+            assert self.sel.isambiguous([['foo', (5, 10)]]) == False
+
+        def test_isin_str(self):
+            assert self.sel.isin('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
+            assert self.sel.isin('/qux/bar[5]', '/[foo,baz]/bar[0:10]') == False
+
+        def test_isin_list(self):
+            assert self.sel.isin([['foo', 'bar', [5]]], 
+                                   [[['foo', 'baz'], 'bar', (0, 10)]]) == True
+            assert self.sel.isin([['qux', 'bar', [5]]], 
+                                   [[['foo', 'baz'], 'bar', (0, 10)]]) == False
+
+        def test_make_index_str(self):
+            idx = self.sel.make_index('/[foo,bar]/[0:3]')
+            assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
+                                                          [0, 1, 2]],
+                                                  labels=[[1, 1, 1, 0, 0, 0],
+                                                          [0, 1, 2, 0, 1, 2]]))
+
+        def test_make_index_list(self):
+            idx = self.sel.make_index([[['foo', 'bar'], (0, 3)]])
+            assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
+                                                          [0, 1, 2]],
+                                                  labels=[[1, 1, 1, 0, 0, 0],
+                                                          [0, 1, 2, 0, 1, 2]]))
+
+        def test_max_levels_str(self):
+            assert self.sel.max_levels('/foo/bar[0:10]') == 3
+            assert self.sel.max_levels('/foo/bar[0:10],/baz/qux') == 3
+
+        def test_max_levels_list(self):
+            assert self.sel.max_levels([['foo', 'bar', (0, 10)]]) == 3
+            assert self.sel.max_levels([['foo', 'bar', (0, 10)],
+                                        ['baz', 'qux']]) == 3
 
     class test_port_mapper(TestCase):
         def setUp(self):
