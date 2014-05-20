@@ -31,6 +31,12 @@ class Interface(object):
         Port attribute data.
     index : pandas.MultiIndex
         Index of port identifiers.
+    in_ports : list of tuple
+        List of input port identifiers as tuples.
+    out_ports : list of tuple
+        List of output port identifiers as tuples.
+    ports : list of tuple
+        List of port identifiers as tuples.
 
     Parameters
     ----------
@@ -52,6 +58,29 @@ class Interface(object):
         idx = self.sel.make_index(selector, names)
         self.data = pd.DataFrame(index=idx, columns=columns)
 
+    @classmethod
+    def from_dict(cls, d):
+        """
+        Create an Interface from a dictionary of selectors and data values.
+
+        Parameters
+        ----------
+        d : dict
+            Dictionary that maps selectors to the data that should be associated
+            with the corresponding ports.
+        
+        Returns
+        -------
+        i : Interface
+            Generated interface instance.
+        """
+
+        i = cls(','.join(d.keys()))
+        for k, v in d.iteritems():
+            i[k] = v
+        i.data.sort_index(inplace=True)
+        return i
+
     @property
     def index(self):
         """
@@ -65,8 +94,7 @@ class Interface(object):
 
     def __add_level__(self):
         """
-        Add an additional level to the index of the pattern's internal
-        DataFrame.
+        Add an additional level to the index of the pattern's internal DataFrame.
         """
 
         # Check whether the level corresponds to the 'from' or 'to' part of the
@@ -81,7 +109,7 @@ class Interface(object):
 
         # Bump number of levels:
         self.num_levels[which] += 1
-        
+
     def __getitem__(self, key):
         if type(key) == tuple and len(key) > 1:
             return self.sel.select(self.data[list(key[1:])], key[0])
@@ -143,20 +171,43 @@ class Interface(object):
             self.data = self.data.append(pd.DataFrame(data=data, index=idx))
             self.data.sort(inplace=True)
 
-    def to_tuples(self):
+    @property
+    def ports(self):
         """
-        Return list of port identifiers as tuples.
+        List of port identifiers as tuples.
         """
 
         return self.data.index.tolist()
 
-    def to_selectors(self):
+    @property
+    def in_ports(self):
         """
-        Return list of port identifiers as path-like selectors.
+        List of input port identifiers as list of tuples.
+        """
+
+        self.data[self.data['io'] == 'in'].index.tolist()
+
+    @property
+    def out_ports(self):
+        """
+        List of output port identifiers as list of tuples.
+        """
+
+        self.data[self.data['io'] == 'out'].index.tolist()
+
+    @classmethod
+    def as_selectors(cls, ids):
+        """
+        Convert list of port identifiers to path-like selectors.
+
+        Parameters
+        ----------
+        ids : list of tuple
+            Port identifiers.
         """
 
         result = []
-        for t in self.to_tuples():
+        for t in ids:
             selector = ''
             for s in t:
                 if type(s) == str:
@@ -176,15 +227,19 @@ class Pattern(object):
     """
     Connectivity pattern linking sets of interface ports.
 
-    This class represents connection mappings between interfaces comprising sets 
-    of ports. Ports are represented using path-like identifiers [1]_.
-    A single data attribute ('conn') associated with defined connections 
-    is created by default. Specific attributes may be accessed by specifying 
-    their names after the port identifiers; if a nonexistent attribute is 
-    specified when a sequential value is assigned, a new column for that 
-    attribute is automatically created: ::
+    This class represents connection mappings between interfaces comprising sets
+    of ports. Ports are represented using path-like identifiers [1]_; the
+    presence of a row linking the two identifiers in the class' internal index
+    indicates the presence of a connection. A single data attribute ('conn')
+    associated with defined connections is created by default. Specific
+    attributes may be accessed by specifying their names after the port
+    identifiers; if a nonexistent attribute is specified when a sequential value
+    is assigned, a new column for that attribute is automatically created: ::
 
         p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
+
+    The direction of connections between ports in a class instance determines 
+    whether they are input or output ports.
 
     Examples
     --------
@@ -213,6 +268,7 @@ class Pattern(object):
     See Also
     --------
     .. [1] PathLikeSelector
+
     """
 
     def __init__(self, *selectors, **kwargs):
@@ -306,6 +362,13 @@ class Pattern(object):
                                    
         # Replace the pattern's DataFrame:
         p.data = pd.DataFrame(data=data, index=idx, columns=columns)
+
+        # Update the `io` attributes of the pattern's interfaces:
+        for t in p.sel.make_index(from_sel):
+            p.interfaces[p.whichint([t])][[t], 'io'] = 'in'
+        for t in p.sel.make_index(to_sel):
+            p.interfaces[p.whichint([t])][[t], 'io'] = 'out'
+
         return p
 
     @classmethod
@@ -425,11 +488,26 @@ class Pattern(object):
 
         # Bump number of levels:
         self.num_levels[which] += 1
+
+    def whichint(self, selector):
+        """
+        Return the interface containing the identifiers comprised by a selector.
+        """
         
+        # If the selector is found in more than one interface, don't return any
+        # of the interfaces:
+        i = set()
+        for k, v in self.interfaces.iteritems():
+            if len(v[selector]):
+                i.add(k)
+        if len(i) == 1:
+            return i.pop()
+        else:
+            return None
+
     def ininterfaces(self, selector):
         """
-        Check whether a selector is supported by any of the pattern's
-        interfaces.
+        Check whether a selector is supported by any of the pattern's interfaces.
         """
 
         for interface in self.interfaces.values():
@@ -453,6 +531,12 @@ class Pattern(object):
             self.__add_level__('from')
         for i in xrange(self.sel.max_levels(key[1])-self.num_levels['to']):
             self.__add_level__('to')
+
+        # Update the `io` attributes of the pattern's interfaces:
+        for t in self.sel.make_index(key[0]):
+            self.interfaces[self.whichint([t])][[t], 'io'] = 'in'
+        for t in self.sel.make_index(key[1]):
+            self.interfaces[self.whichint([t])][[t], 'io'] = 'out'
 
         # Try using the selector to select data from the internal DataFrame:
         selector = '+'.join(key[0:2])
