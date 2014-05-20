@@ -320,7 +320,7 @@ class PathLikeSelector(object):
         Parameters
         ----------
         selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or tuple of tokens
+            Selector string (e.g., '/foo[0:2]') or sequence of tokens
             (e.g., ['foo', (0, 2)]).
 
         Returns
@@ -333,7 +333,7 @@ class PathLikeSelector(object):
         if type(selector) == str:
             p = cls.parse(selector)
         else:
-            p = [selector]
+            p = [list(selector)]
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str]:
@@ -612,7 +612,7 @@ class PathLikeSelector(object):
         
         Parameters
         ----------
-        s, t : str
+        s, t : str or sequence
             Check whether selector `s` is in `t`.
 
         Returns
