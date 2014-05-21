@@ -24,24 +24,24 @@ class hex_array(object):
      |
      V
     rows (first row: 0,3,6,9,12)
-    (Y=sqrt(3)*row if col is odd else Y=sqrt(3)*(row+0.5)
+    (Y=sqrt(3)*row if col is even else Y=sqrt(3)*(row+0.5) )
     """
     def __init__(self, nrows, ncols):
         self.nrows = nrows
         self.ncols = ncols
         self.num_elements = nrows * ncols
 
-        self.X = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols))*1.5,
+        self.X = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols))*np.sqrt(3),
                          (self.nrows, 1))
-        self.Y = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1))*np.sqrt(3),
-                         (1, self.ncols))
+        self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+                         (1, self.ncols/2))
         self.col = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols)),
                            (self.nrows, 1))
         self.row = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1)),
                            (1, self.ncols))
 
-        self.Y = self.Y + np.tile(np.asarray([0, np.sqrt(3)/2]),
-                                  (self.nrows, self.ncols/2))
+        #self.Y = self.Y + np.tile(np.asarray([0, 1]),
+        #                          (self.nrows, self.ncols/2))
 
         self.col = self.col.reshape(-1)
         self.row = self.row.reshape(-1)
