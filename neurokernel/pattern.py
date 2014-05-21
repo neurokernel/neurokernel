@@ -690,7 +690,9 @@ class Pattern(object):
                         self.interfaces[src_int].index and \
                         x[to_slice] in \
                         self.interfaces[dest_int][dest_ports].index).index
-        return [x[from_slice] for x in idx]
+            
+        # Don't include duplicate tuples in output:
+        return list(set([x[from_slice] for x in idx]))
 
     def dest_idx(self, src_int, dest_int, src_ports=None):
         """
@@ -734,7 +736,9 @@ class Pattern(object):
                         self.interfaces[src_int][src_ports].index and \
                         x[to_slice] in \
                         self.interfaces[dest_int].index).index
-        return [x[to_slice] for x in idx]
+
+        # Don't include duplicate tuples in output:
+        return list(set([x[to_slice] for x in idx]))
 
     def __len__(self):
         return self.data.__len__()
@@ -876,20 +880,40 @@ if __name__ == '__main__':
             p['/bar[1]', '/foo[0]'] = [1, 'gpot', 'gpot']
             p['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
             assert_frame_equal(p.data, self.df)
-            
-        def test_src_idx(self):
+
+        def test_src_idx_all(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0:3]', '/yyy[0:3]'] = 1
             p['/xxx[0:3]', '/bbb[0:3]'] = 1
-            self.assertSequenceEqual(p.src_idx(0, 1, '/yyy[0]'),
-                                     [('aaa', 0), ('aaa', 1), ('aaa', 2)])
+            self.assertItemsEqual(p.src_idx(0, 1),
+                                  [('aaa', 0),
+                                   ('aaa', 1),
+                                   ('aaa', 2)])
             
-        def test_dest_idx(self):
+        def test_src_idx_specific(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[1:3]', '/yyy[1:3]'] = 1
+            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            self.assertItemsEqual(p.src_idx(0, 1, '/yyy[0]'),
+                                  [('aaa', 0)])
+            
+        def test_dest_idx_all(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0:3]', '/yyy[0:3]'] = 1
             p['/xxx[0:3]', '/bbb[0:3]'] = 1
-            self.assertSequenceEqual(p.dest_idx(0, 1, '/aaa[0]'),
-                                     [('yyy', 0), ('yyy', 1), ('yyy', 2)])
+            self.assertItemsEqual(p.dest_idx(0, 1, '/aaa[0]'),
+                                  [('yyy', 0),
+                                   ('yyy', 1),
+                                   ('yyy', 2)])
+
+        def test_dest_idx_specific(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[1:3]', '/yyy[1:3]'] = 1
+            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            self.assertItemsEqual(p.dest_idx(0, 1, '/aaa[0]'),
+                                  [('yyy', 0)])
 
         def test_is_connected(self):
             p = Pattern('/aaa[0:3]', '/bbb[0:3]')
