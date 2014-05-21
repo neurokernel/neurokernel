@@ -45,6 +45,13 @@ class Interface(object):
     columns : list
         Data column names.
 
+    Methods
+    -------
+    as_selectors(ids)
+        Convert list of port identifiers to path-like selectors. 
+    from_dict(d)
+        Create an Interface from a dictionary of selectors and data values.
+    
     See Also
     --------
     .. [1] PathLikeSelector
@@ -204,6 +211,11 @@ class Interface(object):
         ----------
         ids : list of tuple
             Port identifiers.
+
+        Returns
+        -------
+        selectors : list of str
+            List of selector strings corresponding to each port identifier.
         """
 
         result = []
@@ -264,6 +276,27 @@ class Pattern(object):
         comprised by one selector may be in any other selector.
     columns : sequence of str
         Data column names.
+
+    Methods
+    -------
+    clear()
+        Clear all connections in class instance.
+    dest_idx(src_int, dest_int, src_ports=None)
+        Retrieve destination ports connected to the specified source ports.
+    from_concat(*selectors, **kwargs)
+        Create pattern from the concatenation of identifers comprised by two selectors.
+    from_csv(file_name, **kwargs)
+        Read connectivity data from CSV file.
+    from_product(*selectors, **kwargs)
+        Create pattern from the product of identifiers comprised by two selectors.
+    ininterfaces(selector)
+        Check whether a selector is supported by any of the pattern's interfaces.
+    is_connected(from_int, to_int)
+        Check whether the specified interfaces are connected.
+    src_idx(src_int, dest_int, dest_ports=None)
+        Retrieve source ports connected to the specified destination ports.
+    whichint(selector)
+        Return the interface containing the identifiers comprised by a selector.
 
     See Also
     --------
@@ -597,8 +630,8 @@ class Pattern(object):
         Examples
         --------
         >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
-        >>> p['/foo[0:3]', '/bar[0:3'] = 1
-        >>> p['/bar[0:3]', '/foo[0:3'] = 1
+        >>> p['/foo[0:3]', '/bar[0:3]'] = 1
+        >>> p['/bar[0:3]', '/foo[0:3]'] = 1
         >>> all(p.src_idx(0, 1, '/bar[0]') == [('foo', 0), ('foo', 1), ('foo', 2)])
 
         Parameters
@@ -641,8 +674,8 @@ class Pattern(object):
         Examples
         --------
         >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
-        >>> p['/foo[0:3]', '/bar[0:3'] = 1
-        >>> p['/bar[0:3]', '/foo[0:3'] = 1
+        >>> p['/foo[0:3]', '/bar[0:3]'] = 1
+        >>> p['/bar[0:3]', '/foo[0:3]'] = 1
         >>> all(p.dest_idx(0, 1, '/foo[0]') == [('bar', 0), ('bar', 1), ('bar', 2)])
 
         Parameters
@@ -689,7 +722,7 @@ class Pattern(object):
         Clear all connections in class instance.
         """
 
-        self.data.dropna(inplace=True)
+        self.data.drop(self.data.index, inplace=True)
 
     def is_connected(self, from_int, to_int):
         """
@@ -708,8 +741,8 @@ class Pattern(object):
         """
 
         assert from_int != to_int
-        assert from_int in self.interface
-        assert to_int in self.interface
+        assert from_int in self.interfaces
+        assert to_int in self.interfaces
 
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
@@ -718,8 +751,8 @@ class Pattern(object):
             # Split tuple into 'from' and 'to' identifiers:
             from_id = t[0:self.num_levels['from']]
             to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
-            if from_id in self.interface[from_int].index and \
-               to_id in self.interface[to_int].index:
+            if from_id in self.interfaces[from_int].index and \
+               to_id in self.interfaces[to_int].index:
                 return True
         return False
 
@@ -754,6 +787,8 @@ if __name__ == '__main__':
 
     class test_connectivity(TestCase):
         def setUp(self):
+            # XXX not a good example; a pattern shouldn't allow a single port to
+            # both send output and receive input:
             self.df = pd.DataFrame(data={'conn': np.ones(6, dtype=object),
                             'from_type': ['spike', 'spike', 'spike',
                                           'gpot', 'gpot', 'spike'],
@@ -770,14 +805,40 @@ if __name__ == '__main__':
             self.df.sort(inplace=True)
 
         def test_create(self):
-            c = Pattern('/foo[0:3]', '/bar[0:3]',
+            p = Pattern('/foo[0:3]', '/bar[0:3]',
                         columns=['conn','from_type', 'to_type'])
-            c['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
-            c['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
-            c['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
-            c['/bar[0]', '/foo[0]'] = [1, 'gpot', 'gpot']
-            c['/bar[1]', '/foo[0]'] = [1, 'gpot', 'gpot']
-            c['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
-            assert_frame_equal(c.data, self.df)
+            p['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
+            p['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
+            p['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
+            p['/bar[0]', '/foo[0]'] = [1, 'gpot', 'gpot']
+            p['/bar[1]', '/foo[0]'] = [1, 'gpot', 'gpot']
+            p['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
+            assert_frame_equal(p.data, self.df)
+            
+        def test_src_idx(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0:3]', '/yyy[0:3]'] = 1
+            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            self.assertSequenceEqual(p.src_idx(0, 1, '/yyy[0]'),
+                                     [('aaa', 0), ('aaa', 1), ('aaa', 2)])
+            
+        def test_dest_idx(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0:3]', '/yyy[0:3]'] = 1
+            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            self.assertSequenceEqual(p.dest_idx(0, 1, '/aaa[0]'),
+                                     [('yyy', 0), ('yyy', 1), ('yyy', 2)])
+
+        def test_is_connected(self):
+            p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+            p['/aaa[0]', '/bbb[2]'] = 1
+            assert p.is_connected(0, 1) == True
+            assert p.is_connected(1, 0) == False
+
+        def test_clear(self):
+            p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+            p['/aaa[0:3]', '/bbb[0:3]'] = 1
+            p.clear()
+            assert len(p) == 0
 
     main()
