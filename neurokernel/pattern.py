@@ -186,13 +186,38 @@ class Interface(object):
 
         return self.data.index.tolist()
 
+    def is_compatible(self, other_int):
+        """
+        Check whether some Interface instance can be connected to the current instance.
+
+        Parameters
+        ----------
+        other_int : Interface
+            Interface instance to check.
+
+        Returns
+        -------
+        result : bool
+            True if both interfaces comprise the same identifiers
+            and each identifier has an 'io' attribute set to 'out' in one 
+            interface and an 'io' attribute set to 'in' in the other interface.
+        """
+
+        io_inv = self.data.applymap(lambda x: 'out' if x == 'in' else \
+                                     ('in' if x == 'out' else x))
+        if self.index.equals(other_int.index) and \
+           all(io_inv['io'] == other_int.data['io']):
+            return True
+        else:
+            return False
+
     @property
     def in_ports(self):
         """
         List of input port identifiers as list of tuples.
         """
 
-        self.data[self.data['io'] == 'in'].index.tolist()
+        return self.data[self.data['io'] == 'in'].index.tolist()
 
     @property
     def out_ports(self):
@@ -200,7 +225,7 @@ class Interface(object):
         List of output port identifiers as list of tuples.
         """
 
-        self.data[self.data['io'] == 'out'].index.tolist()
+        return self.data[self.data['io'] == 'out'].index.tolist()
 
     @classmethod
     def as_selectors(cls, ids):
@@ -783,9 +808,46 @@ class Pattern(object):
 
 if __name__ == '__main__':
     from unittest import main, TestCase
-    from pandas.util.testing import assert_frame_equal
+    from pandas.util.testing import assert_frame_equal, assert_index_equal
 
-    class test_connectivity(TestCase):
+    class test_interface(TestCase):
+        def setUp(self):
+            self.interface = Interface('/foo[0:3]')
+            self.interface['/foo[0]', 'io'] = 'in'
+            self.interface['/foo[1:3]', 'io'] = 'out'
+
+        def test_index(self):
+            assert_index_equal(self.interface.index,
+                               pd.MultiIndex(levels=[['foo'], [0, 1, 2]],
+                                             labels=[[0, 0, 0], [0, 1, 2]],
+                                             names=['0', '1']))
+
+        def test_ports(self):
+            self.assertSequenceEqual(self.interface.ports,
+                                     [('foo', 0),
+                                      ('foo', 1),
+                                      ('foo', 2)])
+
+        def test_in_ports(self):
+            self.assertSequenceEqual(self.interface.in_ports,
+                                     [('foo', 0)])
+
+        def test_out_ports(self):
+            self.assertSequenceEqual(self.interface.out_ports,
+                                     [('foo', 1), ('foo', 2)])
+
+        def test_as_selectors(self):
+            self.assertSequenceEqual(self.interface.as_selectors([('foo', 0),
+                                                                  ('foo', 1)]),
+                                     ['/foo[0]', '/foo[1]'])
+
+        def test_is_compatible(self):
+            i = Interface('/foo[0:3]')
+            i['/foo[0]', 'io'] = 'out'
+            i['/foo[1:3]', 'io'] = 'in'
+            assert self.interface.is_compatible(i)
+
+    class test_pattern(TestCase):
         def setUp(self):
             # XXX not a good example; a pattern shouldn't allow a single port to
             # both send output and receive input:

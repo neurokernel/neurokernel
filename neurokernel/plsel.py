@@ -840,8 +840,9 @@ class PortMapper(object):
     ----------
     data : numpy.ndarray
         Data to map to ports.
-    selector : str
-        Selector to map to `data`.
+    selector : str or sequence
+        Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+        (e.g., [['foo', (0, 2)]]) to map to `data`.
     idx : sequence
         Indices of elements in the specified array to map to ports. If no
         indices are specified, the entire array is mapped to the ports specified
@@ -875,8 +876,9 @@ class PortMapper(object):
 
         Parameters
         ----------
-        selector : str
-            Path-like selector.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -892,8 +894,9 @@ class PortMapper(object):
 
         Parameters
         ----------
-        selector : str
-            Path-like selector.
+        selector : str or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).            
         data : numpy.ndarray
             Array of data to save.
         """
