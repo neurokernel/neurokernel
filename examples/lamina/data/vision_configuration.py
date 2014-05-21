@@ -14,7 +14,7 @@ import networkx as nx
 class hex_array(object):
     """
        0  1  2  3   4
-     ----------------------> cols (X=cols*1.5)
+     ----------------------> cols (X=cols*sqrt(3))
     0| 0     2      4
      |    1     3
     1| 5     7      9
@@ -23,8 +23,8 @@ class hex_array(object):
      |    11    13
      |
      V
-    rows (first row: 0,3,6,9,12)
-    (Y=sqrt(3)*row if col is even else Y=sqrt(3)*(row+0.5) )
+    rows (first col: 0,2,4,6)
+    (Y=2*row if col is even else Y=2*row+1 )
     """
     def __init__(self, nrows, ncols):
         self.nrows = nrows
