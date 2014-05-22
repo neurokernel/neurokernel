@@ -774,10 +774,9 @@ class PathLikeSelector(object):
                     list_list.append(token)
                 else:
                     list_list.append([token])
-            if names:
-                idx = pd.MultiIndex.from_product(list_list, names=names)
-            else:
-                idx = pd.MultiIndex.from_product(list_list)
+            if not names:
+                names = range(len(list_list))
+            idx = pd.MultiIndex.from_product(list_list, names=names)
 
             # Attempting to run MultiIndex.from_product with an argument
             # containing a single list results in an Index, not a MultiIndex:
