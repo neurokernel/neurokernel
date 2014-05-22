@@ -423,13 +423,13 @@ class Pattern(object):
         Read connectivity data from CSV file.
     from_product(*selectors, **kwargs)
         Create pattern from the product of identifiers comprised by two selectors.
-    ininterfaces(selector)
+    in_interfaces(selector)
         Check whether a selector is supported by any of the pattern's interfaces.
     is_connected(from_int, to_int)
         Check whether the specified interfaces are connected.
     src_idx(src_int, dest_int, dest_ports=None)
         Retrieve source ports connected to the specified destination ports.
-    whichint(selector)
+    which_int(selector)
         Return the interface containing the identifiers comprised by a selector.
 
     See Also
@@ -468,6 +468,23 @@ class Pattern(object):
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
                             
         self.data = pd.DataFrame(index=idx, columns=columns)
+
+    @property
+    def from_slice(self):
+        """
+        Slice of pattern index row corresponding to source port(s).
+        """
+
+        return slice(0, self.num_levels['from'])
+
+    @property
+    def to_slice(self):
+        """
+        Slice of pattern index row corresponding to destination port(s).
+        """
+
+        return slice(self.num_levels['from'],        
+                     self.num_levels['from']+self.num_levels['to'])
 
     @property
     def index(self):
@@ -532,9 +549,9 @@ class Pattern(object):
 
         # Update the `io` attributes of the pattern's interfaces:
         for t in p.sel.make_index(from_sel):
-            p.interfaces[p.whichint([t])][[t], 'io'] = 'in'
+            p.interfaces[p.which_int([t])][[t], 'io'] = 'in'
         for t in p.sel.make_index(to_sel):
-            p.interfaces[p.whichint([t])][[t], 'io'] = 'out'
+            p.interfaces[p.which_int([t])][[t], 'io'] = 'out'
 
         return p
 
@@ -656,7 +673,7 @@ class Pattern(object):
         # Bump number of levels:
         self.num_levels[which] += 1
 
-    def whichint(self, selector):
+    def which_int(self, selector):
         """
         Return the interface containing the identifiers comprised by a selector.
         """
@@ -672,7 +689,7 @@ class Pattern(object):
         else:
             return None
 
-    def ininterfaces(self, selector):
+    def in_interfaces(self, selector):
         """
         Check whether a selector is supported by any of the pattern's interfaces.
         """
@@ -681,6 +698,19 @@ class Pattern(object):
             if len(interface[selector]) > 0:
                 return True
         return False
+
+    def get_conns(self, as_selectors=False):
+        """
+        Return connections as pairs of port identifiers.
+        """
+
+        if as_selectors:
+            return [(self.sel.to_identifier(row[self.from_slice]),
+                     self.sel.to_identifier(row[self.to_slice])) \
+                    for row in self.data.index]
+        else:
+            return [(row[self.from_slice], row[self.to_slice]) \
+                    for row in self.data.index]
 
     def __setitem__(self, key, value):
         # XXX attempting to create an index row that appears both in the 'from'
@@ -692,8 +722,8 @@ class Pattern(object):
 
         # Ensure that specified selectors refer to ports in the
         # pattern's interfaces:
-        assert self.ininterfaces(key[0])
-        assert self.ininterfaces(key[1])
+        assert self.in_interfaces(key[0])
+        assert self.in_interfaces(key[1])
 
         # Check whether the number of levels in the internal DataFrame's
         # MultiIndex must be increased to accommodate the specified selector:
@@ -704,9 +734,9 @@ class Pattern(object):
 
         # Update the `io` attributes of the pattern's interfaces:
         for t in self.sel.make_index(key[0]):
-            self.interfaces[self.whichint([t])][[t], 'io'] = 'in'
+            self.interfaces[self.which_int([t])][[t], 'io'] = 'in'
         for t in self.sel.make_index(key[1]):
-            self.interfaces[self.whichint([t])][[t], 'io'] = 'out'
+            self.interfaces[self.which_int([t])][[t], 'io'] = 'out'
 
         # Try using the selector to select data from the internal DataFrame:
         selector = '+'.join(key[0:2])
@@ -793,22 +823,19 @@ class Pattern(object):
         assert src_int != dest_int
         assert src_int in self.interfaces and dest_int in self.interfaces
 
-        from_slice = slice(0, self.num_levels['from'])
-        to_slice = slice(self.num_levels['from'],
-                         self.num_levels['from']+self.num_levels['to'])
         if dest_ports is None:
-            idx = self.data.select(lambda x: x[from_slice] in \
+            idx = self.data.select(lambda x: x[self.from_slice] in \
                         self.interfaces[src_int].index and \
-                        x[to_slice] in \
+                        x[self.to_slice] in \
                         self.interfaces[dest_int].index).index            
         else:
-            idx = self.data.select(lambda x: x[from_slice] in \
+            idx = self.data.select(lambda x: x[self.from_slice] in \
                         self.interfaces[src_int].index and \
-                        x[to_slice] in \
+                        x[self.to_slice] in \
                         self.interfaces[dest_int][dest_ports].index).index
             
         # Don't include duplicate tuples in output:
-        return list(set([x[from_slice] for x in idx]))
+        return list(set([x[self.from_slice] for x in idx]))
 
     def dest_idx(self, src_int, dest_int, src_ports=None):
         """
@@ -839,22 +866,19 @@ class Pattern(object):
         assert src_int != dest_int
         assert src_int in self.interfaces and dest_int in self.interfaces
 
-        from_slice = slice(0, self.num_levels['from'])
-        to_slice = slice(self.num_levels['from'],
-                         self.num_levels['from']+self.num_levels['to'])
         if src_ports is None:
-            idx = self.data.select(lambda x: x[from_slice] in \
+            idx = self.data.select(lambda x: x[self.from_slice] in \
                         self.interfaces[src_int].index and \
-                        x[to_slice] in \
+                        x[self.to_slice] in \
                         self.interfaces[dest_int].index).index
         else:
-            idx = self.data.select(lambda x: x[from_slice] in \
+            idx = self.data.select(lambda x: x[self.from_slice] in \
                         self.interfaces[src_int][src_ports].index and \
-                        x[to_slice] in \
+                        x[self.to_slice] in \
                         self.interfaces[dest_int].index).index
 
         # Don't include duplicate tuples in output:
-        return list(set([x[to_slice] for x in idx]))
+        return list(set([x[self.to_slice] for x in idx]))
 
     def __len__(self):
         return self.data.__len__()
@@ -1073,6 +1097,20 @@ if __name__ == '__main__':
             p['/aaa[0]', '/bbb[2]'] = 1
             assert p.is_connected(0, 1) == True
             assert p.is_connected(1, 0) == False
+
+        def test_get_conns(self):
+            p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+            p['/aaa[0]', '/bbb[2]'] = 1
+            p['/aaa[1]', '/bbb[0]'] = 1
+            p['/aaa[2]', '/bbb[1]'] = 1
+            self.assertSequenceEqual(p.get_conns(),
+                                     [(('aaa', 0), ('bbb', 2)),
+                                      (('aaa', 1), ('bbb', 0)),
+                                      (('aaa', 2), ('bbb', 1))])
+            self.assertSequenceEqual(p.get_conns(True),
+                                     [('/aaa[0]', '/bbb[2]'),
+                                      ('/aaa[1]', '/bbb[0]'),
+                                      ('/aaa[2]', '/bbb[1]')])
 
         def test_clear(self):
             p = Pattern('/aaa[0:3]', '/bbb[0:3]')
