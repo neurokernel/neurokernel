@@ -69,6 +69,8 @@ class PathLikeSelector(object):
         Parse a selector string into individual port identifiers.
     select(df, selector, start=None, stop=None)
         Select rows from DataFrame using a path-like selector.
+    to_identifier(tokens)
+        Convert a sequence of tokens into a path-like port identifier string.
     tokenize(selector)
         Tokenize a selector string.
 
@@ -282,6 +284,32 @@ class PathLikeSelector(object):
         """
 
         return cls.parser.parse(selector, lexer=cls.lexer)
+
+    @classmethod
+    def to_identifier(cls, tokens):
+        """
+        Convert a sequence of tokens into a path-like port identifier string.
+
+        Parameters
+        ----------
+        tokens : sequence
+            Sequence of string or integer tokens.
+
+        Returns
+        -------
+        s : str
+            Port identifier string.
+        """
+
+        result = ''
+        for t in tokens:
+            if type(t) == str:
+                result += '/'+t
+            elif type(t) == int:
+                result += '[%s]' % t
+            else:
+                raise ValueError('invalid token')
+        return result
 
     @classmethod
     def isambiguous(cls, selector):
