@@ -199,14 +199,21 @@ class Interface(object):
         -------
         result : bool
             True if both interfaces comprise the same identifiers
-            and each identifier has an 'io' attribute set to 'out' in one 
-            interface and an 'io' attribute set to 'in' in the other interface.
+            and each identifier with an 'io' attribute set to 'out' in one
+            interface has its 'io' attribute set to 'in' in the other interface.
+
+        Notes
+        -----
+        All ports in both interfaces must have set 'io' attributes.
         """
 
-        io_inv = self.data.applymap(lambda x: 'out' if x == 'in' else \
+        if not set(other_int.data['io']).issubset(['in', 'out']) or \
+           not set(self.data['io']).issubset(['in', 'out']):
+            raise ValueError("All ports must have their 'io' attribute set.")
+        inv = self.data.applymap(lambda x: 'out' if x == 'in' else \
                                      ('in' if x == 'out' else x))
         if self.index.equals(other_int.index) and \
-           all(io_inv['io'] == other_int.data['io']):
+           all(inv['io'] == other_int.data['io']):
             return True
         else:
             return False
@@ -574,6 +581,9 @@ class Pattern(object):
         return False
 
     def __setitem__(self, key, value):
+        # XXX attempting to create an index row that appears both in the 'from'
+        # and 'to' sections of the pattern's index should raise an exception
+        # because ports cannot both receive input and send output.
 
         # Must pass more than one argument to the [] operators:
         assert type(key) == tuple
@@ -634,9 +644,12 @@ class Pattern(object):
             else:
                 raise ValueError('cannot assign specified value')
 
+        # If the specified selectors correspond to existing entries, set their attributes:
         if found:
             for k, v in data.iteritems():
                 self.data[k].ix[idx] = v
+
+        # Otherwise, populate a new DataFrame with the specified attributes:
         else:
             self.data = self.data.append(pd.DataFrame(data=data, index=idx))
             self.data.sort(inplace=True)
@@ -845,11 +858,21 @@ if __name__ == '__main__':
                                                                   ('foo', 1)]),
                                      ['/foo[0]', '/foo[1]'])
 
-        def test_is_compatible(self):
+        def test_is_compatible_both_dirs(self):
             i = Interface('/foo[0:3]')
             i['/foo[0]', 'io'] = 'out'
             i['/foo[1:3]', 'io'] = 'in'
-            assert self.interface.is_compatible(i)
+            j = Interface('/foo[0:3]')
+            j['/foo[0]', 'io'] = 'in'
+            j['/foo[1:3]', 'io'] = 'out'
+            assert i.is_compatible(j)
+
+        def test_is_compatible_one_dir(self):
+            i = Interface('/foo[0:3]')
+            i['/foo[0:3]', 'io'] = 'out'
+            j = Interface('/foo[0:3]')
+            j['/foo[0:3]', 'io'] = 'in'
+            assert i.is_compatible(j)
 
     class test_pattern(TestCase):
         def setUp(self):
