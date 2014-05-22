@@ -49,8 +49,14 @@ class Interface(object):
     -------
     as_selectors(ids)
         Convert list of port identifiers to path-like selectors. 
+    data_mask(f, inplace=False)
+        Mask Interface data with a selection function.
+    from_df(df)
+        Create an Interface from a DataFrame with a MultiIndex.
     from_dict(d)
         Create an Interface from a dictionary of selectors and data values.
+    port_mask(f, inplace=False)
+        Mask Interface ports with a selection function.
     
     See Also
     --------
@@ -70,6 +76,11 @@ class Interface(object):
         """
         Create an Interface from a dictionary of selectors and data values.
 
+        Examples
+        --------
+        >>> d = {'/foo[0]': 'in', '/foo[1]': 'out'}
+        >>> i = Interface.from_dict(d)
+        
         Parameters
         ----------
         d : dict
@@ -86,6 +97,39 @@ class Interface(object):
         for k, v in d.iteritems():
             i[k] = v
         i.data.sort_index(inplace=True)
+        return i
+
+    @classmethod
+    def from_df(cls, df):
+        """
+        Create an Interface from a DataFrame with a MultiIndex.
+        
+        Examples
+        --------
+        >>> import plsel
+        >>> import pandas
+        >>> idx = plsel.make_index('/foo[0:3]')
+        >>> df = pandas.DataFrame(
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame with a MultiIndex.
+
+        Returns
+        -------
+        i : Interface
+            Generated Interface instance.
+
+        Notes
+        -----
+        The contents of the specified DataFrame instance are copied into the
+        new Interface instance.
+        """
+        
+        assert isinstance(df.index, pd.MultiIndex)
+        i = cls(df.index.tolist(), df.columns)
+        i.data = df.copy()
         return i
 
     @property
@@ -177,6 +221,64 @@ class Interface(object):
         else:
             self.data = self.data.append(pd.DataFrame(data=data, index=idx))
             self.data.sort(inplace=True)
+
+    def data_mask(self, f, inplace=False):
+        """
+        Mask Interface data with a selection function.
+
+        Returns an Interface instance containing only those rows
+        whose data is passed by the specified mask function.
+
+        Parameters
+        ----------
+        f : function
+            Mask function with a single dict argument whose keys
+            are the Interface's data column names.
+        inplace : bool, default=False
+            If True, update and return the given Interface instance.
+            Otherwise, return a new instance.
+
+        Returns
+        -------
+        i : Interface
+            Masked Interface instance.
+        """
+
+        assert callable(f)
+        if inplace:
+            self.data = self.data[f(self.data)]
+            return self
+        else:
+            return Interface.from_df(self.data[f(self.data)])
+
+    def port_mask(self, f, inplace=False):
+        """
+        Mask Interface ports with a selection function.
+
+        Returns an Interface instance containing only those rows
+        whose ports are passed by the specified mask function.
+
+        Parameters
+        ----------
+        f : function
+            Mask function with a single tuple argument containing
+            the various columns of the Interface instance's MultiIndex.
+        inplace : bool, default=False
+            If True, update and return the given Interface instance.
+            Otherwise, return a new instance.
+
+        Returns
+        -------
+        i : Interface
+            Masked Interface instance.
+        """
+
+        assert callable(f)
+        if inplace:
+            self.data = self.data.select(f)
+            return self
+        else:
+            return Interface.from_df(self.data.select(f))
 
     @property
     def ports(self):
@@ -644,7 +746,8 @@ class Pattern(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        # If the specified selectors correspond to existing entries, set their attributes:
+        # If the specified selectors correspond to existing entries, 
+        # set their attributes:
         if found:
             for k, v in data.iteritems():
                 self.data[k].ix[idx] = v
@@ -833,6 +936,33 @@ if __name__ == '__main__':
             self.interface['/foo[0]', 'io'] = 'in'
             self.interface['/foo[1:3]', 'io'] = 'out'
 
+        def test_data_mask(self):
+            i = self.interface.data_mask(lambda x: x['io'] >= 'out')
+            assert_index_equal(i.data.index,
+                               pd.MultiIndex.from_tuples([('foo', 1),
+                                                          ('foo', 2)]))
+
+        def test_port_mask(self):
+            i = self.interface.port_mask(lambda x: x[1] >= 1)
+            assert_index_equal(i.data.index,
+                               pd.MultiIndex.from_tuples([('foo', 1),
+                                                          ('foo', 2)]))
+                               
+        def test_from_dict(self):
+            i = Interface.from_dict({'/foo[0:3]': np.nan})
+            assert_index_equal(i.data.index,
+                               pd.MultiIndex.from_tuples([('foo', 0),
+                                                          ('foo', 1),
+                                                          ('foo', 2)]))
+
+        def test_from_df(self):
+            idx = pd.MultiIndex.from_tuples([('foo', 0),
+                                             ('foo', 1),
+                                             ('foo', 2)])
+            df = pd.DataFrame(index=idx)
+            i = Interface.from_df(df)
+            assert_index_equal(i.data.index, idx)
+                               
         def test_index(self):
             assert_index_equal(self.interface.index,
                                pd.MultiIndex(levels=[['foo'], [0, 1, 2]],

@@ -55,6 +55,8 @@ class PathLikeSelector(object):
         Return MultiIndex corresponding to rows selected by specified selector.
     get_tuples(df, selector, start=None, stop=None)
         Return tuples containing MultiIndex labels selected by specified selector.
+    index_to_selector(idx)
+        Convert a MultiIndex into an expanded port selector.
     isambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
     isin(s, t)
@@ -729,6 +731,24 @@ class PathLikeSelector(object):
             return pd.MultiIndex.from_tuples(tuples, names=names)
         else:
             return pd.MultiIndex.from_tuples(tuples)
+
+    @classmethod
+    def index_to_selector(cls, idx):
+        """
+        Convert a MultiIndex into an expanded port selector.
+
+        Parameters
+        ----------
+        idx : pandas.MultiIndex
+            MultiIndex containing port identifiers.
+        
+        Returns
+        -------
+        selector : list of tuple
+            List of tuples corresponding to individual port identifiers.        
+        """
+
+        return idx.tolist()
 
     @classmethod
     def make_index(cls, selector, names=[]):
