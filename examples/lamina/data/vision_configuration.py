@@ -33,8 +33,13 @@ class hex_array(object):
 
         self.X = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols))*np.sqrt(3),
                          (self.nrows, 1))
-        self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
-                         (1, self.ncols/2))
+        if (self.ncols % 2 == 0):
+            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+                             (1, self.ncols//2))
+        else:
+            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+                             (1, self.ncols//2+1))
+            self.Y = self.Y[:,0:-1]
         self.col = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols)),
                            (self.nrows, 1))
         self.row = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1)),
