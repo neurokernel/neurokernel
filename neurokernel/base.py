@@ -916,7 +916,7 @@ class BaseManager(object):
             
             # Send quit messages to all live modules:
             if send_quit:                
-                self.logger.info(str(recv_ids))
+                self.logger.info('live modules: '+str(recv_ids))
                 self.logger.info('sent to   %s: quit' % i)
                 self.sock_ctrl.send_multipart([i, 'quit'])
 
