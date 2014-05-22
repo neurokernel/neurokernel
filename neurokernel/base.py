@@ -998,29 +998,39 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
 if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix
 
-    np.random.seed(0)
-
     class MyModule(BaseModule):
         """
         Example of derived module class.
         """
 
-        def __init__(self, selector, columns=['io', 'type'],
+        def __init__(self, sel, sel_in, sel_out,
+                     columns=['io', 'type'],
                      port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
-            super(MyModule, self).__init__(selector, columns,
-                                           port_data, port_ctrl, id, True)
-            self.data = np.zeros(len(PathLikeSelector.expand(selector)), np.float64)
-            
+            super(MyModule, self).__init__(sel, columns, port_data, port_ctrl,
+                                           id, True)
+            if sel_in:
+                assert PathLikeSelector.isin(sel_in, sel)
+                self.interface[sel_in, 'io'] = 'in'
+            if sel_out:
+                assert PathLikeSelector.isin(sel_out, sel)
+                self.interface[sel_out, 'io'] = 'out'
+
+            self.data = np.zeros(len(self.interface.ports), np.float64)
+
         @property
         def N(self):
             return len(self.data)
-        
+
         def run_step(self, in_dict, out):
             super(MyModule, self).run_step(in_dict, out)
 
-            out[:] = np.random.rand(self.N)
+            # Output random data:
+            out[:] = np.random.rand(len(self.interface.out_ports))
 
         def run(self):
+
+            # Make every class instance generate a different pseudorandom sequence:
+            np.random.seed(id(self))
             super(MyModule, self).run()
             
     # Set up logging:
@@ -1030,36 +1040,34 @@ if __name__ == '__main__':
     man = BaseManager(get_random_port(), get_random_port())
     man.add_brok()
 
-    m1_int_sel = '/a[0:2]'
-    m2_int_sel = '/b[0:4]'
+    m1_int_sel = '/a[0:3]'; m1_int_sel_in = '/a[0]'; m1_int_sel_out = '/a[1:3]'
+    m2_int_sel = '/b[0:4]'; m2_int_sel_in = '/b[0:2]'; m2_int_sel_out = '/b[2:4]'
+    m3_int_sel = '/c[0:3]'; m3_int_sel_in = '/c[0]'; m3_int_sel_out = '/c[1:3]'
 
-    m1 = MyModule(m1_int_sel, ['io', 'type'], man.port_data, man.port_ctrl, 'm1   ')
-    m1.interface[m1_int_sel, 'io'] = 'out'
+    m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
+                  ['io', 'type'], man.port_data, man.port_ctrl, 'm1   ')
     man.add_mod(m1)
-    m2 = MyModule(m2_int_sel, ['io', 'type'], man.port_data, man.port_ctrl, 'm2   ')
-    m2.interface[m2_int_sel, 'io'] = 'in'
+    m2 = MyModule(m2_int_sel, m2_int_sel_in, m2_int_sel_out,
+                  ['io', 'type'], man.port_data, man.port_ctrl, 'm2   ')
     man.add_mod(m2)
-    # m3 = man.add_mod(MyModule(3, 'm3   ', man.port_data, man.port_ctrl))
-    # m4 = man.add_mod(MyModule(2, 'm4   ', man.port_data, man.port_ctrl))
+    m3 = MyModule(m3_int_sel, m3_int_sel_in, m3_int_sel_out,
+                  ['io', 'type'], man.port_data, man.port_ctrl, 'm3   ')
+    man.add_mod(m3)
     
     pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12[m1_int_sel, m2_int_sel] = 1
+    pat12[m1_int_sel_out, m2_int_sel_in] = 1
+    pat12[m2_int_sel_out, m1_int_sel_in] = 1
     man.connect(m1, m2, pat12, 0, 1)
-    print man.routing_table.connections
-    # conn23 = BaseConnectivity(4, 3, 1, m2.id, m3.id)
-    # conn23[m2.id, :, m3.id, :] = np.ones((4, 3))
-    # conn23[m3.id, :, m2.id, :] = np.ones((3, 4))
-    # man.connect(m2, m3, conn23)
 
-    # conn34 = BaseConnectivity(3, 2, 1, m3.id, m4.id)
-    # conn34[m3.id, :, m4.id, :] = np.ones((3, 2))
-    # conn34[m4.id, :, m3.id, :] = np.ones((2, 3))
-    # man.connect(m3, m4, conn34)
+    pat23 = Pattern(m2_int_sel, m3_int_sel)
+    pat23[m2_int_sel_out, m3_int_sel_in] = 1
+    pat23[m3_int_sel_out, m2_int_sel_in] = 1
+    man.connect(m2, m3, pat23, 0, 1)
 
-    # conn41 = BaseConnectivity(2, 2, 1, m4.id, m1.id)
-    # conn41[m4.id, :, m1.id, :] = np.ones((2, 2))
-    # conn41[m1.id, :, m4.id, :] = np.ones((2, 2))
-    # man.connect(m4, m1, conn41)
+    pat31 = Pattern(m3_int_sel, m1_int_sel)
+    pat31[m3_int_sel_out, m1_int_sel_in] = 1
+    pat31[m1_int_sel_out, m3_int_sel_in] = 1
+    man.connect(m3, m1, pat31, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting
     # down.  To set the emulation to exit after executing a fixed number of
