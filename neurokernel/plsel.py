@@ -57,7 +57,7 @@ class PathLikeSelector(object):
         Return tuples containing MultiIndex labels selected by specified selector.
     index_to_selector(idx)
         Convert a MultiIndex into an expanded port selector.
-    isambiguous(selector)
+    is_ambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
     isin(s, t)
         Check whether the identifiers in one selector are also in that of another.
@@ -194,13 +194,13 @@ class PathLikeSelector(object):
         # Expand ranges and wrap strings with lists in each selector:
         for i in xrange(len(p[1])): 
             for j in xrange(len(p[1][i])): 
-                if type(p[1][i][j]) in [int, str]:
+                if type(p[1][i][j]) in [int, str, unicode]:
                     p[1][i][j] = [p[1][i][j]]
                 elif type(p[1][i][j]) == tuple:
                     p[1][i][j] = range(p[1][i][j][0], p[1][i][j][1])
         for i in xrange(len(p[3])):
             for j in xrange(len(p[3][i])):
-                if type(p[3][i][j]) in [int, str]:
+                if type(p[3][i][j]) in [int, str, unicode]:
                     p[3][i][j] = [p[3][i][j]]
                 if type(p[3][i][j]) == tuple:
                     p[3][i][j] = range(p[3][i][j][0], p[3][i][j][1])
@@ -286,20 +286,78 @@ class PathLikeSelector(object):
         return cls.parser.parse(selector, lexer=cls.lexer)
 
     @classmethod
-    def to_identifier(cls, tokens):
+    def is_identifier(cls, s):
         """
-        Convert a sequence of tokens into a path-like port identifier string.
+        Check whether a sequence or string can identify a single port.
 
         Parameters
         ----------
-        tokens : sequence
-            Sequence of string or integer tokens.
+        s : sequence, str, or unicode
+            Selector string (e.g., '/foo[0:2]'), sequence of token sequences
+            (e.g., [['foo', (0, 2)]]), or sequence of tokens (e.g., ['foo', 0]).
+        
+        Returns
+        -------
+        result : bool
+            True for a sequence containing only strings and/or integers
+            (e.g., ['foo', 0]) or a selector string that expands into a 
+            single sequence of strings and/or integers (e.g., [['foo', 0]]).
+        """
+        
+        if np.iterable(s):
+            
+            # Try to expand string:
+            if type(s) in [str, unicode]:
+                try:
+                    s_exp = cls.expand(s)
+                except:
+                    return False
+                else:
+                    if len(s_exp) == 1:
+                        return True
+                    else:
+                        return False
+
+            # If all entries are iterable non-strings, try to expand:
+            elif all([(np.iterable(x) and type(x) not in [str, unicode]) for x in s]):
+                if len(cls.expand(s)) == 1:
+                    return True
+                else:
+                    return False
+
+            # A sequence of integers and/or strings is a valid port identifier:
+            elif set(map(type, s)).issubset([int, str, unicode]):               
+                return True
+            else:
+                return False
+
+        # A non-iterable cannot be a valid identifier:
+        else:
+            return False
+
+    @classmethod
+    def to_identifier(cls, s):
+        """
+        Convert an expanded selector or token sequence into a single port identifier string.
+
+        Parameters
+        ----------
+        s : sequence
+            Expanded selector (i.e., a sequence of sequences) or a sequence of 
+            string or integer tokens.
 
         Returns
         -------
         s : str
             Port identifier string.
         """
+
+        assert np.iterable(s) and type(s) not in [str, unicode]
+        if set(map(type, s)).issubset([int, str, unicode]):
+            tokens = s
+        else:
+            assert len(s) == 1
+            tokens = s[0]
 
         result = ''
         for t in tokens:
@@ -308,11 +366,11 @@ class PathLikeSelector(object):
             elif type(t) == int:
                 result += '[%s]' % t
             else:
-                raise ValueError('invalid token')
+                raise ValueError('Cannot convert to single port identifier.')
         return result
 
     @classmethod
-    def isambiguous(cls, selector):
+    def is_ambiguous(cls, selector):
         """
         Check whether a selector cannot be expanded into an explicit list of identifiers.
 
@@ -331,7 +389,7 @@ class PathLikeSelector(object):
             True if the selector is ambiguous, False otherwise.
         """
 
-        if type(selector) == str:
+        if type(selector) in [str, unicode]:
             if re.search(r'(?:\*)|(?:\:\])', selector):
                 return True
             else:
@@ -353,7 +411,7 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
 
@@ -363,8 +421,8 @@ class PathLikeSelector(object):
             List of identifiers; each identifier is a tuple of unambiguous tokens.
         """
         
-        assert not cls.isambiguous(selector)
-        if type(selector) == str:
+        assert not cls.is_ambiguous(selector)
+        if type(selector) in [str, unicode]:
             p = cls.parse(selector)
         elif np.iterable(selector):
             p = selector
@@ -372,7 +430,7 @@ class PathLikeSelector(object):
             raise ValueError('invalid selector type')
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
-                if type(p[i][j]) in [int, str]:
+                if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
@@ -385,7 +443,7 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
 
@@ -397,9 +455,9 @@ class PathLikeSelector(object):
             not deemed to be expandable.
         """
 
-        if cls.isambiguous(selector):
+        if cls.is_ambiguous(selector):
             return False
-        if type(selector) == str:
+        if type(selector) in [str, unicode]:
             p = cls.parse(selector)
         elif np.iterable(selector):
             p = selector
@@ -407,7 +465,7 @@ class PathLikeSelector(object):
             raise ValueError('invalid selector type')
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
-                if type(p[i][j]) in [int, str]:
+                if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
@@ -504,14 +562,14 @@ class PathLikeSelector(object):
                 # list:
                 else:
                     return ['['+','.join([str(i) for i in level])+']']
-            elif type_set == set([str]):
+            elif type_set in set([str, unicode]):
                 if len(level) == 1:
                     return level
                 else:
                     return ['['+','.join([s for s in level])+']']
             else:
                 level_int = sorted([x for x in level if type(x) == int])
-                level_str = sorted([x for x in level if type(x) == str])
+                level_str = sorted([x for x in level if type(x) in [str, unicode]])
                 return collapse_level(level_int)+collapse_level(level_str)
 
         # If a level contains multiple string AND integer tokens, convert it to
@@ -538,7 +596,7 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        s0, s1, ... : str or sequence
+        s0, s1, ... : str, unicode, or sequence
             Selectors to check. Each selector is either a string (e.g., 
             '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
@@ -557,7 +615,7 @@ class PathLikeSelector(object):
         assert len(selectors) >= 1
         if len(selectors) == 1:
             return True
-        assert all(map(lambda s: not cls.isambiguous(s), selectors))
+        assert all(map(lambda s: not cls.is_ambiguous(s), selectors))
 
         # Expand selectors into sets of identifiers:
         ids = set()
@@ -582,7 +640,7 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
 
@@ -604,7 +662,7 @@ class PathLikeSelector(object):
         try:
             return cls.__max_levels_cache[h]
         except:
-            if type(selector) == str:
+            if type(selector) in [str, unicode]:
                 count = max(map(len, cls.parse(selector)))
             elif np.iterable(selector):
                 count = max(map(len, selector))
@@ -645,7 +703,7 @@ class PathLikeSelector(object):
             for i, token in enumerate(token_list):
                 if token == '*':
                     continue
-                elif type(token) in [int, str]:
+                elif type(token) in [int, str, unicode]:
                     if row_sub[i] != token:
                         break
                 elif type(token) == list:
@@ -670,7 +728,7 @@ class PathLikeSelector(object):
         
         Parameters
         ----------
-        s, t : str or sequence
+        s, t : str, unicode, or sequence
             Check whether selector `s` is in `t`. Each selector is either a
             string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
@@ -697,7 +755,7 @@ class PathLikeSelector(object):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
         start, stop : int
@@ -709,7 +767,7 @@ class PathLikeSelector(object):
             List of tuples containing MultiIndex labels for selected rows.
         """
 
-        if type(selector) == str:
+        if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
         elif np.iterable(selector):
             parse_list = selector
@@ -735,7 +793,7 @@ class PathLikeSelector(object):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str
+        selector : str or unicode
             Row selector.
         start, stop : int
             Start and end indices in `row` over which to test entries.
@@ -804,8 +862,8 @@ class PathLikeSelector(object):
         '[:]'. It also must contain more than one level.        
         """
 
-        assert not cls.isambiguous(selector)
-        if type(selector) == str:
+        assert not cls.is_ambiguous(selector)
+        if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
         elif np.iterable(selector):
             parse_list = selector
@@ -847,7 +905,7 @@ class PathLikeSelector(object):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).            
         start, stop : int
@@ -859,7 +917,7 @@ class PathLikeSelector(object):
             DataFrame containing selected rows.
         """
 
-        if type(selector) == str:
+        if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
         elif np.iterable(selector):
             parse_list = selector
@@ -887,7 +945,7 @@ class PortMapper(object):
     ----------
     data : numpy.ndarray
         Data to map to ports.
-    selector : str or sequence
+    selector : str, unicode, or sequence
         Selector string (e.g., '/foo[0:2]') or sequence of token sequences
         (e.g., [['foo', (0, 2)]]) to map to `data`.
     idx : sequence
@@ -923,7 +981,7 @@ class PortMapper(object):
 
         Parameters
         ----------
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
 
@@ -941,7 +999,7 @@ class PortMapper(object):
 
         Parameters
         ----------
-        selector : str or sequence
+        selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).            
         data : numpy.ndarray
@@ -1170,17 +1228,38 @@ if __name__ == '__main__':
                                       ('foo', 'mof', 1),
                                       ('foo', 'mof', 2)])
             
-        def test_isambiguous_str(self):
-            assert self.sel.isambiguous('/foo/*') == True
-            assert self.sel.isambiguous('/foo/[5:]') == True
-            assert self.sel.isambiguous('/foo/[:10]') == False
-            assert self.sel.isambiguous('/foo/[5:10]') == False
+        def test_is_ambiguous_str(self):
+            assert self.sel.is_ambiguous('/foo/*') == True
+            assert self.sel.is_ambiguous('/foo/[5:]') == True
+            assert self.sel.is_ambiguous('/foo/[:10]') == False
+            assert self.sel.is_ambiguous('/foo/[5:10]') == False
 
-        def test_isambiguous_list(self):
-            assert self.sel.isambiguous([['foo', '*']]) == True
-            assert self.sel.isambiguous([['foo', (5, np.inf)]]) == True
-            assert self.sel.isambiguous([['foo', (0, 10)]]) == False
-            assert self.sel.isambiguous([['foo', (5, 10)]]) == False
+        def test_is_ambiguous_list(self):
+            assert self.sel.is_ambiguous([['foo', '*']]) == True
+            assert self.sel.is_ambiguous([['foo', (5, np.inf)]]) == True
+            assert self.sel.is_ambiguous([['foo', (0, 10)]]) == False
+            assert self.sel.is_ambiguous([['foo', (5, 10)]]) == False
+
+        def test_is_identifier(self):
+            assert self.sel.is_identifier('/foo/bar') == True
+            assert self.sel.is_identifier(0) == False
+            assert self.sel.is_identifier('foo') == False
+            #assert self.sel.is_identifier('0') == False # this doesn't work
+            assert self.sel.is_identifier(['foo', 'bar']) == True
+            assert self.sel.is_identifier(['foo', 0]) == True
+            assert self.sel.is_identifier(['foo', [0, 1]]) == False
+            assert self.sel.is_identifier([['foo', 'bar']]) == True
+            assert self.sel.is_identifier([['foo', 'bar'], ['baz']]) == False
+            assert self.sel.is_identifier([['foo', 0]]) == True
+
+        def test_to_identifier(self):
+            assert self.sel.to_identifier(['foo']) == '/foo'
+            assert self.sel.to_identifier(['foo', 0]) == '/foo[0]'
+            self.assertRaises(Exception, self.sel.to_identifier, 'foo')
+            self.assertRaises(Exception, self.sel.to_identifier, 
+                              [['foo', ['a', 'b']]])
+            self.assertRaises(Exception, self.sel.to_identifier, 
+                              ['foo', (0, 2)])
 
         def test_isin_str(self):
             assert self.sel.isin('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
