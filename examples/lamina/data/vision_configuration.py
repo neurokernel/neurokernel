@@ -31,13 +31,13 @@ class hex_array(object):
         self.ncols = ncols
         self.num_elements = nrows * ncols
 
-        self.X = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols))*np.sqrt(3),
+        self.X = np.tile(np.arange(self.ncols, dtype = np.double).reshape((1, self.ncols))*np.sqrt(3),
                          (self.nrows, 1))
         if (self.ncols % 2 == 0):
-            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.double).reshape((self.nrows, 2)),
                              (1, self.ncols//2))
         else:
-            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.double).reshape((self.nrows, 2)),
                              (1, self.ncols//2+1))
             self.Y = self.Y[:,0:-1]
         self.col = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols)),
@@ -349,7 +349,7 @@ class Lamina(vision_LPU):
         # TODO: where to put synapse from Am to Am?
         # right now all synapse are listed inside a cartridge
         # even if the replaced dummy neuron results in Am to Am synapse
-        bound = 3.5
+        bound = 4.0
         alpha_profiles = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
         fill = np.zeros((n_amacrine, self.num_cartridges), np.int32);
         count = 0
