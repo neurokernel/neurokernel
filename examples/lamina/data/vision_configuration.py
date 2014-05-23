@@ -14,7 +14,7 @@ import networkx as nx
 class hex_array(object):
     """
        0  1  2  3   4
-     ----------------------> cols (X=cols*1.5)
+     ----------------------> cols (X=cols*sqrt(3))
     0| 0     2      4
      |    1     3
     1| 5     7      9
@@ -23,25 +23,30 @@ class hex_array(object):
      |    11    13
      |
      V
-    rows (first row: 0,3,6,9,12)
-    (Y=sqrt(3)*row if col is odd else Y=sqrt(3)*(row+0.5)
+    rows (first col: 0,2,4,6)
+    (Y=2*row if col is even else Y=2*row+1 )
     """
     def __init__(self, nrows, ncols):
         self.nrows = nrows
         self.ncols = ncols
         self.num_elements = nrows * ncols
 
-        self.X = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols))*1.5,
+        self.X = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols))*np.sqrt(3),
                          (self.nrows, 1))
-        self.Y = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1))*np.sqrt(3),
-                         (1, self.ncols))
+        if (self.ncols % 2 == 0):
+            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+                             (1, self.ncols//2))
+        else:
+            self.Y = np.tile(np.arange(2*self.nrows, dtype = np.int32).reshape((self.nrows, 2)),
+                             (1, self.ncols//2+1))
+            self.Y = self.Y[:,0:-1]
         self.col = np.tile(np.arange(self.ncols, dtype = np.int32).reshape((1, self.ncols)),
                            (self.nrows, 1))
         self.row = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1)),
                            (1, self.ncols))
 
-        self.Y = self.Y + np.tile(np.asarray([0, np.sqrt(3)/2]),
-                                  (self.nrows, self.ncols/2))
+        #self.Y = self.Y + np.tile(np.asarray([0, 1]),
+        #                          (self.nrows, self.ncols/2))
 
         self.col = self.col.reshape(-1)
         self.row = self.row.reshape(-1)
@@ -194,7 +199,7 @@ class vision_LPU(object):
         self.cartridge_synapse_dict = self.synapse_dict[self.synapse_dict['cart'] == 0]
 
         self.cartridges = []
-        for i in range(self.num_cartridges):
+        for _ in range(self.num_cartridges):
             self.cartridges.append(
                 Cartridge(self.cartridge_neuron_dict,
                           self.cartridge_synapse_dict))
@@ -227,7 +232,7 @@ class vision_LPU(object):
             neuron_dict['name']: neuron_dict['columnar']
             for neuron_dict in self.non_columnar_neuron_list}
         for neuron_dict in self.non_columnar_neuron_list:
-            for i in range(neuron_dict['columnar']):
+            for _ in range(neuron_dict['columnar']):
                 self.non_columnar_neurons.append(
                     Neuron(dict(zip(dtnames, [np.asscalar(p) for p in neuron_dict]))))
 
@@ -351,16 +356,17 @@ class Lamina(vision_LPU):
         for cartridge in self.cartridges:
             xpos = cartridge.xpos
             ypos = cartridge.ypos
+            
+            #calculate distance and find amacrine cells within 
+            #distance defined by bound
+            dist = np.sqrt((xpos-am_xpos)**2 + (ypos-am_ypos)**2)
+            suitable_am = np.nonzero(dist <= bound)[0]
+            # if less than 4 neurons in the bound, get
+            # the 4 closest amacrine cells 
+            if suitable_am.size < 4:
+                suitable_am = np.argsort(dist)[0:4]
+            
             for name in alpha_profiles:
-                #calculate distance and find amacrine cells within 
-                #distance defined by bound
-                dist = np.sqrt((xpos-am_xpos)**2 + (ypos-am_ypos)**2)
-                suitable_am = np.nonzero(dist <= bound)[0]
-                # if less than 4 neurons in the bound, get
-                # the 4 closest amacrine cells 
-                if suitable_am.size < 4:
-                    suitable_am = np.argsort(dist)[0:4]
-                
                 assigned = False
                 for am_num in np.random.permutation(suitable_am):
                     if fill[am_num, count] < 3:
@@ -369,7 +375,7 @@ class Lamina(vision_LPU):
                         assigned = True
                         break
                 if not assigned:
-                    print name+' in cartridge ' + str(cartridge.num) + ' not assigned' 
+                    print name + ' in cartridge ' + str(cartridge.num) + ' not assigned' 
             count += 1
 
         self.fill = fill
