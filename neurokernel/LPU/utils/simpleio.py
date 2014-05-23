@@ -67,8 +67,8 @@ def write_memory_to_file(A, filename, mode = 'w', title='test'):
 
 def write_array(A, filename, mode = 'w', title='test'):
     """
-    write memory to a h5 file
-    h5 file contains root.arrat(A real or complex)
+    write array to a h5 file
+    h5 file contains root.array(A real or complex)
     
     A: a ndarray, GPUArray or PitchArray
     filename: name of file to store
