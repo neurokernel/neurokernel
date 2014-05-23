@@ -199,7 +199,7 @@ class vision_LPU(object):
         self.cartridge_synapse_dict = self.synapse_dict[self.synapse_dict['cart'] == 0]
 
         self.cartridges = []
-        for i in range(self.num_cartridges):
+        for _ in range(self.num_cartridges):
             self.cartridges.append(
                 Cartridge(self.cartridge_neuron_dict,
                           self.cartridge_synapse_dict))
@@ -232,7 +232,7 @@ class vision_LPU(object):
             neuron_dict['name']: neuron_dict['columnar']
             for neuron_dict in self.non_columnar_neuron_list}
         for neuron_dict in self.non_columnar_neuron_list:
-            for i in range(neuron_dict['columnar']):
+            for _ in range(neuron_dict['columnar']):
                 self.non_columnar_neurons.append(
                     Neuron(dict(zip(dtnames, [np.asscalar(p) for p in neuron_dict]))))
 
@@ -356,16 +356,17 @@ class Lamina(vision_LPU):
         for cartridge in self.cartridges:
             xpos = cartridge.xpos
             ypos = cartridge.ypos
+            
+            #calculate distance and find amacrine cells within 
+            #distance defined by bound
+            dist = np.sqrt((xpos-am_xpos)**2 + (ypos-am_ypos)**2)
+            suitable_am = np.nonzero(dist <= bound)[0]
+            # if less than 4 neurons in the bound, get
+            # the 4 closest amacrine cells 
+            if suitable_am.size < 4:
+                suitable_am = np.argsort(dist)[0:4]
+            
             for name in alpha_profiles:
-                #calculate distance and find amacrine cells within 
-                #distance defined by bound
-                dist = np.sqrt((xpos-am_xpos)**2 + (ypos-am_ypos)**2)
-                suitable_am = np.nonzero(dist <= bound)[0]
-                # if less than 4 neurons in the bound, get
-                # the 4 closest amacrine cells 
-                if suitable_am.size < 4:
-                    suitable_am = np.argsort(dist)[0:4]
-                
                 assigned = False
                 for am_num in np.random.permutation(suitable_am):
                     if fill[am_num, count] < 3:
@@ -374,7 +375,7 @@ class Lamina(vision_LPU):
                         assigned = True
                         break
                 if not assigned:
-                    print name+' in cartridge ' + str(cartridge.num) + ' not assigned' 
+                    print name + ' in cartridge ' + str(cartridge.num) + ' not assigned' 
             count += 1
 
         self.fill = fill
