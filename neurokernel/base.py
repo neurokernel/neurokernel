@@ -115,7 +115,7 @@ class BaseModule(ControlledProcess):
         self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
         self._steps = value
 
-    def __init__(self, selector, columns=['io', 'type'],
+    def __init__(self, selector, columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
                  id=None, debug=False):
         self.debug = debug
@@ -139,6 +139,9 @@ class BaseModule(ControlledProcess):
 
         # Create module interface given the specified ports:
         self.interface = Interface(selector, columns)
+
+        # Set the interface ID to 0; we assume that a module only has one interface:
+        self.interface[selector, 'interface'] = 0
 
         # Patterns connecting this module instance with other modules instances.
         # Keyed on the IDs of those modules:
@@ -171,7 +174,7 @@ class BaseModule(ControlledProcess):
         Number of ports exposed by module's interface.
         """
 
-        return len(self.interface)
+        return len(self.interface.ports())
 
     @property
     def all_ids(self):
@@ -203,7 +206,7 @@ class BaseModule(ControlledProcess):
 
     def connect(self, m, pat, int_0, int_1):
         """
-        Connect the current module instance Add the specified pattern object.
+        Connect the current module instance to another module with a pattern instance.
 
         Parameters
         ----------
@@ -218,13 +221,13 @@ class BaseModule(ControlledProcess):
 
         assert isinstance(m, BaseModule)
         assert isinstance(pat, Pattern)
-        assert int_0 in pat.interfaces and int_1 in pat.interfaces
+        assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
         self.logger.info('connecting to %s' % m.id)
 
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
-        self.interface.is_compatible(pat.interfaces[int_0])
-        m.interface.is_compatible(pat.interfaces[int_1])
+        assert self.interface.is_compatible(0, pat.interface, int_0)
+        assert m.interface.is_compatible(0, pat.interface, int_1)
 
         # The pattern instances associated with the current
         # module are keyed on the IDs of the modules to which they connect:
@@ -364,7 +367,7 @@ class BaseModule(ControlledProcess):
 
             # Create mapper to use the module's interface ports to select data from
             # the output data:
-            pm = PortMapper(np.asarray(out), self.interface.out_ports)
+            pm = PortMapper(np.asarray(out), self.interface.out_ports())
 
             # Select data that should be sent to each destination module and append
             # it to the outgoing queue:
@@ -784,12 +787,12 @@ class BaseManager(object):
     
         assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
         assert isinstance(pat, Pattern)
-        assert int_0 in pat.interfaces and int_1 in pat.interfaces
+        assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
-        assert m_0.interface.is_compatible(pat.interfaces[int_0])
-        assert m_1.interface.is_compatible(pat.interfaces[int_1])
+        assert m_0.interface.is_compatible(0, pat.interface, int_0)
+        assert m_1.interface.is_compatible(0, pat.interface, int_1)
 
         # Add the module and pattern instances to the internal dictionaries of
         # the manager instance if they are not already there:
@@ -1015,7 +1018,7 @@ if __name__ == '__main__':
                 assert PathLikeSelector.isin(sel_out, sel)
                 self.interface[sel_out, 'io'] = 'out'
 
-            self.data = np.zeros(len(self.interface.ports), np.float64)
+            self.data = np.zeros(len(self.interface.ports()), np.float64)
 
         @property
         def N(self):
@@ -1025,7 +1028,7 @@ if __name__ == '__main__':
             super(MyModule, self).run_step(in_dict, out)
 
             # Output random data:
-            out[:] = np.random.rand(len(self.interface.out_ports))
+            out[:] = np.random.rand(len(self.interface.out_ports()))
 
         def run(self):
 
@@ -1045,13 +1048,16 @@ if __name__ == '__main__':
     m3_int_sel = '/c[0:3]'; m3_int_sel_in = '/c[0]'; m3_int_sel_out = '/c[1:3]'
 
     m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
-                  ['io', 'type'], man.port_data, man.port_ctrl, 'm1   ')
+                  ['interface', 'io', 'type'],
+                  man.port_data, man.port_ctrl, 'm1   ')
     man.add_mod(m1)
     m2 = MyModule(m2_int_sel, m2_int_sel_in, m2_int_sel_out,
-                  ['io', 'type'], man.port_data, man.port_ctrl, 'm2   ')
+                  ['interface', 'io', 'type'],
+                  man.port_data, man.port_ctrl, 'm2   ')
     man.add_mod(m2)
     m3 = MyModule(m3_int_sel, m3_int_sel_in, m3_int_sel_out,
-                  ['io', 'type'], man.port_data, man.port_ctrl, 'm3   ')
+                  ['interface', 'io', 'type'], 
+                  man.port_data, man.port_ctrl, 'm3   ')
     man.add_mod(m3)
     
     pat12 = Pattern(m1_int_sel, m2_int_sel)

@@ -13,18 +13,22 @@ from plsel import PathLikeSelector
 
 class Interface(object):
     """
-    Interface comprising ports.
+    Container for set of interface comprising ports.
 
-    This class contains information about a set of path-like identifiers [1]_
-    and the (optional) attributes associated with them. By default, each port
-    has an 'io' attribute (indicating whether it receives
-    input or emits output) and a 'type' attribute (indicating whether it
-    emits/receives spikes or graded potential values.
+    This class contains information about a set of interfaces comprising 
+    path-like identifiers [1]_ and the attributes associated with them. By
+    default, each port must have at least the following attributes; other 
+    attributes may be added:
+    
+    * interface - indicates which interface a port is associated with.
+    * io - indicates whether the port receives input ('in') or emits output ('out').
+    * type - indicates whether the port emits/receives spikes or graded potentials.
 
     Examples
     --------
-    >>> i = Interface('/foo[0:5],/bar[0:3]')
-    >>> i['/foo[0]', 'io', 'type'] = ['in', 'spike']
+    >>> i = Interface('/foo[0:4],/bar[0:3]')
+    >>> i['/foo[0:2]', 'interface', 'io', 'type'] = [0, 'in', 'spike']
+    >>> i['/foo[2:4]', 'interface', 'io', 'type'] = [1, 'out', 'spike']
 
     Attributes
     ----------
@@ -32,18 +36,16 @@ class Interface(object):
         Port attribute data.
     index : pandas.MultiIndex
         Index of port identifiers.
-    in_ports : list of tuple
-        List of input port identifiers as tuples.
-    out_ports : list of tuple
-        List of output port identifiers as tuples.
-    ports : list of tuple
-        List of port identifiers as tuples.
+    interface_ids : int
+        Interface identifiers.
 
     Parameters
     ----------
-    selector : str
-        Selector describing the port identifiers comprised by the interface.
-    columns : list
+    selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]) describing the port identifiers comprised 
+            by the interface.
+    columns : list, default = ['interface', 'io', 'type']
         Data column names.
 
     Methods
@@ -53,96 +55,42 @@ class Interface(object):
     data_mask(f, inplace=False)
         Mask Interface data with a selection function.
     from_df(df)
-        Create an Interface from a DataFrame with a MultiIndex.
+        Create an Interface from a properly formatted DataFrame.
     from_dict(d)
         Create an Interface from a dictionary of selectors and data values.
+    in_interfaces(s)
+        Check whether a selector is supported by any stored interface.
+    in_ports(i)
+        List of input port identifiers as tuples comprised by an interface.
+    get_interface(i)
+        Return specified interface as an Interface instance.
+    is_compatible(a, i, b)
+        Check whether two interfaces can be connected.
+    out_ports(i)
+        List of output port identifiers as tuples comprised by an interface.
     port_mask(f, inplace=False)
         Mask Interface ports with a selection function.
-    
+    ports(i)
+        List of port identifiers as tuples comprised by an interface.
+    which_int(s)
+        Return identifier(s) of interface(s) containing specified selector.
+
     See Also
     --------
     .. [1] PathLikeSelector
     """
 
-    def __init__(self, selector, columns=['io', 'type']):
+    def __init__(self, selector, columns=['interface', 'io', 'type']):
+        
+        # All ports in an interface must contain at least the following
+        # attributes:
+        assert set(columns).issuperset(['interface', 'io', 'type'])
         self.sel = PathLikeSelector()
         assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
         idx = self.sel.make_index(selector, names)
         self.data = pd.DataFrame(index=idx, columns=columns)
-
-    @classmethod
-    def from_dict(cls, d):
-        """
-        Create an Interface from a dictionary of selectors and data values.
-
-        Examples
-        --------
-        >>> d = {'/foo[0]': 'in', '/foo[1]': 'out'}
-        >>> i = Interface.from_dict(d)
-        
-        Parameters
-        ----------
-        d : dict
-            Dictionary that maps selectors to the data that should be associated
-            with the corresponding ports.
-        
-        Returns
-        -------
-        i : Interface
-            Generated interface instance.
-        """
-
-        i = cls(','.join(d.keys()))
-        for k, v in d.iteritems():
-            i[k] = v
-        i.data.sort_index(inplace=True)
-        return i
-
-    @classmethod
-    def from_df(cls, df):
-        """
-        Create an Interface from a DataFrame with a MultiIndex.
-        
-        Examples
-        --------
-        >>> import plsel
-        >>> import pandas
-        >>> idx = plsel.make_index('/foo[0:3]')
-        >>> df = pandas.DataFrame(
-
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            DataFrame with a MultiIndex.
-
-        Returns
-        -------
-        i : Interface
-            Generated Interface instance.
-
-        Notes
-        -----
-        The contents of the specified DataFrame instance are copied into the
-        new Interface instance.
-        """
-        
-        assert isinstance(df.index, pd.MultiIndex)
-        i = cls(df.index.tolist(), df.columns)
-        i.data = df.copy()
-        return i
-
-    @property
-    def index(self):
-        """
-        Interface index.
-        """
-
-        return self.data.index
-    @index.setter
-    def index(self, i):
-        self.data.index = i
 
     def __add_level__(self):
         """
@@ -196,7 +144,7 @@ class Interface(object):
         else:
             found = True
 
-        # Ensure that data to set is in dict form:
+        # If the data specified is not a dict, convert it to a dict:
         if type(key) == tuple and len(key) > 1:
             if np.isscalar(value):
                 data = {k:value for k in key[1:]}
@@ -222,6 +170,52 @@ class Interface(object):
         else:
             self.data = self.data.append(pd.DataFrame(data=data, index=idx))
             self.data.sort(inplace=True)
+
+    @property
+    def index(self):
+        """
+        Interface index.
+        """
+
+        return self.data.index
+    @index.setter
+    def index(self, i):
+        self.data.index = i
+
+    @property
+    def interface_ids(self):
+        """
+        Interface identifiers.
+        """
+        
+        return set(self.data['interface'])
+
+    @classmethod
+    def as_selectors(cls, ids):
+        """
+        Convert list of port identifiers to path-like selectors.
+
+        Parameters
+        ----------
+        ids : list of tuple
+            Port identifiers.
+
+        Returns
+        -------
+        selectors : list of str
+            List of selector strings corresponding to each port identifier.
+        """
+
+        result = []
+        for t in ids:
+            selector = ''
+            for s in t:
+                if type(s) == str:
+                    selector += '/'+s
+                else:
+                    selector += '[%s]' % s
+            result.append(selector)
+        return result
 
     def data_mask(self, f, inplace=False):
         """
@@ -252,6 +246,201 @@ class Interface(object):
         else:
             return Interface.from_df(self.data[f(self.data)])
 
+    @classmethod
+    def from_dict(cls, d):
+        """
+        Create an Interface from a dictionary of selectors and data values.
+
+        Examples
+        --------
+        >>> d = {'/foo[0]': [0, 'in'], '/foo[1]': [1, 'out']}
+        >>> i = Interface.from_dict(d)
+        
+        Parameters
+        ----------
+        d : dict
+            Dictionary that maps selectors to the data that should be associated
+            with the corresponding ports. If a scalar, the data is assigned to
+            the first attribute; if an iterable, the data is assigned to the
+            attributes in order.;
+        
+        Returns
+        -------
+        i : Interface
+            Generated interface instance.
+        """
+
+        # XX verify that this works
+        i = cls(','.join(d.keys()))
+        for k, v in d.iteritems():
+            i[k] = v
+        i.data.sort_index(inplace=True)
+        return i
+
+    @classmethod
+    def from_df(cls, df):
+        """
+        Create an Interface from a properly formatted DataFrame.
+        
+        Examples
+        --------
+        >>> import plsel
+        >>> import pandas
+        >>> idx = plsel.make_index('/foo[0:2]')
+        >>> data = [[0, 'in', 'spike'], [1, 'out', 'gpot']]
+        >>> columns = ['interface', 'io', 'type']
+        >>> df = pandas.DataFrame(data, index=idx, columns=columns)
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame with a MultiIndex and data columns 'interface', 
+            'io', and 'type' (additional columns may also be present).
+
+        Returns
+        -------
+        i : Interface
+            Generated Interface instance.
+
+        Notes
+        -----
+        The contents of the specified DataFrame instance are copied into the
+        new Interface instance.
+        """
+        
+        assert isinstance(df.index, pd.MultiIndex)
+        assert set(df.columns).issuperset(['interface', 'io', 'type'])
+
+        i = cls(df.index.tolist(), df.columns)
+        i.data = df.copy()
+        return i
+
+    def in_interfaces(self, s):
+        """
+        Check whether ports comprised by a selector are in the stored interfaces.
+        
+        Parameters
+        ----------
+        s : str or unicode
+            Port selector.
+
+        Returns
+        -------
+        result : bool
+            True if the comprised ports are in any of the stored interfaces.
+        """
+
+        return self.sel.isin(s, self.index.tolist())
+
+    def is_compatible(self, a, i, b):
+        """
+        Check whether two interfaces can be connected.
+
+        Compares an interface in the current Interface instance with one in
+        another instance to determine whether their ports can be connected.
+
+        Parameters
+        ----------
+        a : int
+            Identifier of interface in the current instance.
+        i : Interface
+            Interface instance containing the other interface.
+        b : int
+            Identifier of interface in instance `i`.
+
+        Returns
+        -------
+        result : bool
+            True if both interfaces comprise the same identifiers
+            and each identifier with an 'io' attribute set to 'out' in one
+            interface has its 'io' attribute set to 'in' in the other interface.
+
+        Notes
+        -----
+        All ports in both interfaces must have set 'io' attributes.
+        """
+
+        assert isinstance(i, Interface)
+        if not set(self.data['io'].values).issubset(['in', 'out']) or \
+           not set(i.data['io'].values).issubset(['in', 'out']):
+            raise ValueError("All ports must have their 'io' attribute set.")
+
+        # Find inverse of this instance's 'io' attributes for interface 'a':
+        inv = self.data[self.data['interface'] == a].applymap(lambda x: 'out' \
+                        if x == 'in' else ('in' if x == 'out' else x))
+
+        # Compare:
+        idx_a = self.data[self.data['interface'] == a].index
+        idx_b = i.data[i.data['interface'] == b].index
+        # import ipdb; ipdb.set_trace()
+        # print idx_a
+        # print idx_b
+        if idx_a.equals(idx_b) and \
+           all(inv['io'] == i.data[i.data['interface'] == b]['io']):
+            return True
+        else:
+            return False
+
+    def in_ports(self, i=0):
+        """
+        List of input port identifiers as tuples comprised by an interface.
+
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        p : list
+            List of port identifiers as tuples of tokens.
+        """
+
+        try:
+            return self.data[(self.data['io'] == 'in') & \
+                             (self.data['interface'] == i)].index.tolist()
+        except:
+            return []
+
+    def get_interface(self, i=0):
+        """
+        Return specified interface as an Interface instance.
+
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        interface : Interface
+            Interface instance containing all ports and attributes in the
+            specified interface.
+        """
+
+        return self.from_df(self.data[self.data['interface'] == i])
+
+    def out_ports(self, i=0):
+        """
+        List of output port identifiers as tuples comprised by an interface.
+
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        p : list
+            List of port identifiers as tuples of tokens.
+        """
+
+        try:
+            return self.data[(self.data['io'] == 'out') & \
+                             (self.data['interface'] == i)].index.tolist()
+        except:
+            return []
+
     def port_mask(self, f, inplace=False):
         """
         Mask Interface ports with a selection function.
@@ -281,88 +470,50 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
-    @property
-    def ports(self):
+    def ports(self, i=0):
         """
-        List of port identifiers as tuples.
-        """
-
-        return self.data.index.tolist()
-
-    def is_compatible(self, other_int):
-        """
-        Check whether some Interface instance can be connected to the current instance.
+        List of port identifiers as tuples comprised by an interface.
 
         Parameters
         ----------
-        other_int : Interface
-            Interface instance to check.
+        i : int
+            Interface identifier.
 
         Returns
         -------
-        result : bool
-            True if both interfaces comprise the same identifiers
-            and each identifier with an 'io' attribute set to 'out' in one
-            interface has its 'io' attribute set to 'in' in the other interface.
-
-        Notes
-        -----
-        All ports in both interfaces must have set 'io' attributes.
+        p : list
+            List of port identifiers as tuples of tokens.
         """
 
-        if not set(other_int.data['io']).issubset(['in', 'out']) or \
-           not set(self.data['io']).issubset(['in', 'out']):
-            raise ValueError("All ports must have their 'io' attribute set.")
-        inv = self.data.applymap(lambda x: 'out' if x == 'in' else \
-                                     ('in' if x == 'out' else x))
-        if self.index.equals(other_int.index) and \
-           all(inv['io'] == other_int.data['io']):
-            return True
-        else:
-            return False
-
-    @property
-    def in_ports(self):
+        try:
+            return self.data[self.data['interface'] == i].index.tolist()
+        except:
+            return []
+    
+    def which_int(self, s):
         """
-        List of input port identifiers as list of tuples.
-        """
-
-        return self.data[self.data['io'] == 'in'].index.tolist()
-
-    @property
-    def out_ports(self):
-        """
-        List of output port identifiers as list of tuples.
-        """
-
-        return self.data[self.data['io'] == 'out'].index.tolist()
-
-    @classmethod
-    def as_selectors(cls, ids):
-        """
-        Convert list of port identifiers to path-like selectors.
+        Return the interface containing the identifiers comprised by a selector.
 
         Parameters
         ----------
-        ids : list of tuple
-            Port identifiers.
+        selector : str or unicode
+            Port selector.
 
         Returns
         -------
-        selectors : list of str
-            List of selector strings corresponding to each port identifier.
+        i : set
+            Set of identifiers for interfaces that contain ports comprised by
+            the selector.
         """
+        
+        try:
+            s = set(self[s, 'interface'].values.flatten())
 
-        result = []
-        for t in ids:
-            selector = ''
-            for s in t:
-                if type(s) == str:
-                    selector += '/'+s
-                else:
-                    selector += '[%s]' % s
-            result.append(selector)
-        return result
+            # Ignore unset entries:
+            s.discard(np.nan)
+            return s
+        except KeyError:
+            return set()
 
     def __len__(self):
         return self.data.__len__()
@@ -400,8 +551,10 @@ class Pattern(object):
         Connection attribute data.
     index : pandas.MultiIndex
         Index of connections.
-    interfaces : dict of Interface
+    interface : Interface
         Interfaces containing port identifiers and attributes.
+    interface_ids : set
+        Set of interface identifiers.
 
     Parameters
     ----------
@@ -430,8 +583,8 @@ class Pattern(object):
         Check whether the specified interfaces are connected.
     src_idx(src_int, dest_int, dest_ports=None)
         Retrieve source ports connected to the specified destination ports.
-    which_int(selector)
-        Return the interface containing the identifiers comprised by a selector.
+    which_int(s)
+        Return identifier(s) of interface(s) containing specified selector.
 
     See Also
     --------
@@ -447,21 +600,24 @@ class Pattern(object):
         # denote a port in more than one set:
         assert self.sel.aredisjoint(selectors)
 
-        # Create and save Interface instances containing the ports 
-        # comprised by each of the respective selectors:
-        self.interfaces = {}
-        max_levels = 0
-        for i, s in enumerate(selectors):
-            self.interfaces[i] = Interface(s)
+        # Collect all of the selectors:
+        selector = []
+        for s in selectors:
+            selector.extend(self.sel.parse(s))
 
-            # Find the maximum number of levels required to accommodate all of 
-            # the identifiers:
-            if self.interfaces[i].num_levels > max_levels:
-                max_levels = self.interfaces[i].num_levels
+        # Create Interface instance containing the ports comprised by all of the
+        # specified selectors:
+        self.interface = Interface(selector)
+
+        # Set the interface identifiers associated with each of the selectors
+        # consecutively:
+        for i, s in enumerate(selectors):
+            self.interface[s, 'interface'] = i
 
         # Create a MultiIndex that can store mappings between identifiers in the
         # two interfaces:
-        self.num_levels = {'from': max_levels, 'to': max_levels}
+        self.num_levels = {'from': self.interface.num_levels,
+                           'to': self.interface.num_levels}
         names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
                 ['to_%s' %i for i in xrange(self.num_levels['to'])]
         levels = [[] for i in xrange(len(names))]
@@ -497,6 +653,14 @@ class Pattern(object):
     @index.setter
     def index(self, i):
         self.data.index = i
+
+    @property
+    def interface_ids(self):
+        """
+        Interface identifiers.
+        """
+
+        return self.interface.interface_ids
 
     @classmethod
     def _create_from(cls, *selectors, **kwargs):
@@ -549,10 +713,8 @@ class Pattern(object):
         p.data = pd.DataFrame(data=data, index=idx, columns=columns)
 
         # Update the `io` attributes of the pattern's interfaces:
-        for t in p.sel.make_index(from_sel):
-            p.interfaces[p.which_int([t])][[t], 'io'] = 'in'
-        for t in p.sel.make_index(to_sel):
-            p.interfaces[p.which_int([t])][[t], 'io'] = 'out'
+        p.interface[from_sel, 'io'] = 'in'
+        p.interface[to_sel, 'io'] = 'out'
 
         return p
 
@@ -674,38 +836,32 @@ class Pattern(object):
         # Bump number of levels:
         self.num_levels[which] += 1
 
-    def which_int(self, selector):
-        """
-        Return the interface containing the identifiers comprised by a selector.
-        """
-        
-        # If the selector is found in more than one interface, don't return any
-        # of the interfaces:
-        i = set()
-        for k, v in self.interfaces.iteritems():
-            if len(v[selector]):
-                i.add(k)
-        if len(i) == 1:
-            return i.pop()
-        else:
-            return None
+    def which_int(self, s):
+        return self.interface.which_int(s)
+    which_int.__doc__ = Interface.which_int.__doc__
 
     def in_interfaces(self, selector):
         """
-        Check whether a selector is supported by any of the pattern's interfaces.
+        Check whether a selector is supported by any stored interface.
         """
 
-        for interface in self.interfaces.values():
-            if len(interface[selector]) > 0:
-                return True
-        return False
+        if len(self.interface[selector]) > 0:
+            return True
+        else:
+            return False
 
-    def get_conns(self, as_selectors=False):
+    def get_conns(self, as_str=False):
         """
         Return connections as pairs of port identifiers.
+        
+        Parameters
+        ----------
+        as_str : bool
+            If True, return connections as a list of identifier
+            string pairs. Otherwise, return them as pairs of token tuples.
         """
 
-        if as_selectors:
+        if as_str:
             return [(self.sel.to_identifier(row[self.from_slice]),
                      self.sel.to_identifier(row[self.to_slice])) \
                     for row in self.data.index]
@@ -725,6 +881,9 @@ class Pattern(object):
         # pattern's interfaces:
         assert self.in_interfaces(key[0])
         assert self.in_interfaces(key[1])
+        
+        # Ensure that the ports are in different interfaces:
+        assert self.which_int(key[0]) != self.which_int(key[1])
 
         # Check whether the number of levels in the internal DataFrame's
         # MultiIndex must be increased to accommodate the specified selector:
@@ -734,10 +893,8 @@ class Pattern(object):
             self.__add_level__('to')
 
         # Update the `io` attributes of the pattern's interfaces:
-        for t in self.sel.make_index(key[0]):
-            self.interfaces[self.which_int([t])][[t], 'io'] = 'in'
-        for t in self.sel.make_index(key[1]):
-            self.interfaces[self.which_int([t])][[t], 'io'] = 'out'
+        self.interface[key[0], 'io'] = 'in'
+        self.interface[key[1], 'io'] = 'out'
 
         # Try using the selector to select data from the internal DataFrame:
         selector = '+'.join(key[0:2])
@@ -822,18 +979,19 @@ class Pattern(object):
         """
 
         assert src_int != dest_int
-        assert src_int in self.interfaces and dest_int in self.interfaces
+        assert src_int in self.interface.interface_ids and \
+            dest_int in self.interface.interface_ids
 
         if dest_ports is None:
             idx = self.data.select(lambda x: x[self.from_slice] in \
-                        self.interfaces[src_int].index and \
-                        x[self.to_slice] in \
-                        self.interfaces[dest_int].index).index            
+                self.interface.get_interface(src_int).index and \
+                x[self.to_slice] in \
+                self.interface.get_interface(dest_int).index).index            
         else:
             idx = self.data.select(lambda x: x[self.from_slice] in \
-                        self.interfaces[src_int].index and \
-                        x[self.to_slice] in \
-                        self.interfaces[dest_int][dest_ports].index).index
+                self.interface.get_interface(src_int).index and \
+                x[self.to_slice] in \
+                self.interface.get_interface(dest_int)[dest_ports].index).index
             
         # Don't include duplicate tuples in output:
         return list(set([x[self.from_slice] for x in idx]))
@@ -865,18 +1023,19 @@ class Pattern(object):
         """
 
         assert src_int != dest_int
-        assert src_int in self.interfaces and dest_int in self.interfaces
+        assert src_int in self.interface.interface_ids and \
+            dest_int in self.interface.interface_ids
 
         if src_ports is None:
             idx = self.data.select(lambda x: x[self.from_slice] in \
-                        self.interfaces[src_int].index and \
-                        x[self.to_slice] in \
-                        self.interfaces[dest_int].index).index
+                self.interface.get_interface(src_int).index and \
+                x[self.to_slice] in \
+                self.interface.get_interface(dest_int).index).index
         else:
             idx = self.data.select(lambda x: x[self.from_slice] in \
-                        self.interfaces[src_int][src_ports].index and \
-                        x[self.to_slice] in \
-                        self.interfaces[dest_int].index).index
+                self.interface.get_interface(src_int)[src_ports].index and \
+                x[self.to_slice] in \
+                self.interface.get_interface(dest_int).index).index
 
         # Don't include duplicate tuples in output:
         return list(set([x[self.to_slice] for x in idx]))
@@ -911,8 +1070,8 @@ class Pattern(object):
         """
 
         assert from_int != to_int
-        assert from_int in self.interfaces
-        assert to_int in self.interfaces
+        assert from_int in self.interface.interface_ids
+        assert to_int in self.interface.interface_ids
 
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
@@ -921,8 +1080,8 @@ class Pattern(object):
             # Split tuple into 'from' and 'to' identifiers:
             from_id = t[0:self.num_levels['from']]
             to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
-            if from_id in self.interfaces[from_int].index and \
-               to_id in self.interfaces[to_int].index:
+            if from_id in self.interface.get_interface(from_int).index and \
+               to_id in self.interface.get_interface(to_int).index:
                 return True
         return False
 
@@ -997,19 +1156,15 @@ class Pattern(object):
         g = nx.DiGraph()
 
         # Add all of the ports as nodes:
-        for i, interface in self.interfaces.iteritems():
-            for t in interface.data.index:    
-                id = self.sel.to_identifier(t)
+        for t in self.interface.data.index:    
+            id = self.sel.to_identifier(t)
 
-                # Replace NaNs with empty strings:
-                d = {k: (v if str(v) != 'nan' else '') \
-                     for k, v in interface.data.ix[t].to_dict().iteritems()}
-                     
-                # Add the interface number to the attribute dictionary:
-                d['interface'] = i
+            # Replace NaNs with empty strings:
+            d = {k: (v if str(v) != 'nan' else '') \
+                 for k, v in self.interface.data.ix[t].to_dict().iteritems()}
 
-                # Each node's name corresponds to the port identifier string:
-                g.add_node(id, d)
+            # Each node's name corresponds to the port identifier string:
+            g.add_node(id, d)
 
         # Add all of the connections as edges:
         for t in self.data.index:
@@ -1035,8 +1190,13 @@ if __name__ == '__main__':
     class test_interface(TestCase):
         def setUp(self):
             self.interface = Interface('/foo[0:3]')
-            self.interface['/foo[0]', 'io'] = 'in'
-            self.interface['/foo[1:3]', 'io'] = 'out'
+            self.interface['/foo[0]', 'interface', 'io'] = [0, 'in']
+            self.interface['/foo[1:3]', 'interface', 'io'] = [0, 'out']
+
+        def test_as_selectors(self):
+            self.assertSequenceEqual(self.interface.as_selectors([('foo', 0),
+                                                                  ('foo', 1)]),
+                                     ['/foo[0]', '/foo[1]'])
 
         def test_data_mask(self):
             i = self.interface.data_mask(lambda x: x['io'] >= 'out')
@@ -1044,12 +1204,19 @@ if __name__ == '__main__':
                                pd.MultiIndex.from_tuples([('foo', 1),
                                                           ('foo', 2)]))
 
-        def test_port_mask(self):
-            i = self.interface.port_mask(lambda x: x[1] >= 1)
-            assert_index_equal(i.data.index,
-                               pd.MultiIndex.from_tuples([('foo', 1),
-                                                          ('foo', 2)]))
-                               
+        def test_from_df(self):
+            idx = pd.MultiIndex.from_tuples([('foo', 0),
+                                             ('foo', 1),
+                                             ('foo', 2)])
+            data = data = [(0, 'in', 'spike'),
+                           (1, 'in', 'gpot'),
+                           (1, 'out', 'gpot')]
+            columns = ['interface', 'io', 'type']
+            df = pd.DataFrame(data, index=idx, columns=columns)
+            i = Interface.from_df(df)
+            assert_index_equal(i.data.index, idx)
+            # Should also check DataFrame contents.
+
         def test_from_dict(self):
             i = Interface.from_dict({'/foo[0:3]': np.nan})
             assert_index_equal(i.data.index,
@@ -1057,54 +1224,78 @@ if __name__ == '__main__':
                                                           ('foo', 1),
                                                           ('foo', 2)]))
 
-        def test_from_df(self):
-            idx = pd.MultiIndex.from_tuples([('foo', 0),
-                                             ('foo', 1),
-                                             ('foo', 2)])
-            df = pd.DataFrame(index=idx)
-            i = Interface.from_df(df)
-            assert_index_equal(i.data.index, idx)
-                               
+        def test_in_interfaces(self):
+            assert self.interface.in_interfaces('/foo[0:3]') == True
+            assert self.interface.in_interfaces('/foo[0:4]') == False
+
+        def test_in_ports(self):
+            self.assertSequenceEqual(self.interface.in_ports(0),
+                                     [('foo', 0)])
+
+        def test_get_interface(self):
+            i = Interface('/foo[0:4]')
+            i['/foo[0:2]', 'interface'] = 0
+            i['/foo[2:4]', 'interface'] = 1
+            j = Interface('/foo[2:4]')
+            j['/foo[2:4]', 'interface'] = 1
+            assert_frame_equal(i.get_interface(1).data, j.data)
+
+        def test_out_ports(self):
+            self.assertSequenceEqual(self.interface.out_ports(0),
+                                     [('foo', 1), ('foo', 2)])
+
+        def test_port_mask(self):
+            i = self.interface.port_mask(lambda x: x[1] >= 1)
+            assert_index_equal(i.data.index,
+                               pd.MultiIndex.from_tuples([('foo', 1),
+                                                          ('foo', 2)]))
+
+        def test_ports(self):
+            self.assertSequenceEqual(self.interface.ports(0),
+                                     [('foo', 0),
+                                      ('foo', 1),
+                                      ('foo', 2)])
+                                                              
         def test_index(self):
             assert_index_equal(self.interface.index,
                                pd.MultiIndex(levels=[['foo'], [0, 1, 2]],
                                              labels=[[0, 0, 0], [0, 1, 2]],
                                              names=['0', '1']))
 
-        def test_ports(self):
-            self.assertSequenceEqual(self.interface.ports,
-                                     [('foo', 0),
-                                      ('foo', 1),
-                                      ('foo', 2)])
-
-        def test_in_ports(self):
-            self.assertSequenceEqual(self.interface.in_ports,
-                                     [('foo', 0)])
-
-        def test_out_ports(self):
-            self.assertSequenceEqual(self.interface.out_ports,
-                                     [('foo', 1), ('foo', 2)])
-
-        def test_as_selectors(self):
-            self.assertSequenceEqual(self.interface.as_selectors([('foo', 0),
-                                                                  ('foo', 1)]),
-                                     ['/foo[0]', '/foo[1]'])
+        def test_interface_ids(self):
+            i = Interface('/foo[0:4]')
+            i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
+            i['/foo[2:4]', 'interface', 'io'] = [1, 'in']
+            assert i.interface_ids == set([0, 1])
 
         def test_is_compatible_both_dirs(self):
-            i = Interface('/foo[0:3]')
-            i['/foo[0]', 'io'] = 'out'
-            i['/foo[1:3]', 'io'] = 'in'
-            j = Interface('/foo[0:3]')
-            j['/foo[0]', 'io'] = 'in'
-            j['/foo[1:3]', 'io'] = 'out'
-            assert i.is_compatible(j)
+            i = Interface('/foo[0:4]')
+            i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
+            i['/foo[2:4]', 'interface', 'io'] = [0, 'in']
+            j = Interface('/foo[0:4]')
+            j['/foo[0:2]', 'interface', 'io'] = [1, 'in']
+            j['/foo[2:4]', 'interface', 'io'] = [1, 'out']
+            assert i.is_compatible(0, j, 1)
 
         def test_is_compatible_one_dir(self):
-            i = Interface('/foo[0:3]')
-            i['/foo[0:3]', 'io'] = 'out'
-            j = Interface('/foo[0:3]')
-            j['/foo[0:3]', 'io'] = 'in'
-            assert i.is_compatible(j)
+            i = Interface('/foo[0:2]')
+            i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
+            j = Interface('/foo[0:2]')
+            j['/foo[0:2]', 'interface', 'io'] = [1, 'in']
+            assert i.is_compatible(0, j, 1)
+
+        def test_which_int_unset(self):
+            i = Interface('/foo[0:4]')
+            assert i.which_int('/foo[0:2]') == set()
+
+        def test_which_int_set(self):
+            i = Interface('/foo[0:4]')
+            i['/foo[0]', 'interface', 'io'] = [0, 'out']
+            i['/foo[1]', 'interface', 'io'] = [0, 'in']
+            i['/foo[2]', 'interface', 'io'] = [1, 'in']
+            i['/foo[3]', 'interface', 'io'] = [1, 'out']
+            assert i.which_int('/foo[0:2]') == {0}
+            assert i.which_int('/foo[0:4]') == {0, 1}
 
     class test_pattern(TestCase):
         def setUp(self):
