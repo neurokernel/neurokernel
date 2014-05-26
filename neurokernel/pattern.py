@@ -577,6 +577,8 @@ class Pattern(object):
         Read connectivity data from CSV file.
     from_product(*selectors, **kwargs)
         Create pattern from the product of identifiers comprised by two selectors.
+    get_interface(i)
+        Return specified interface as an Interface instance.
     in_interfaces(selector)
         Check whether a selector is supported by any of the pattern's interfaces.
     is_connected(from_int, to_int)
@@ -761,6 +763,10 @@ class Pattern(object):
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='+')
+
+    def get_interface(self, i=0):
+        return self.interface.get_interface(i)
+    get_interface.__doc__ = Interface.get_interface.__doc__
 
     @classmethod
     def from_concat(cls, *selectors, **kwargs):
@@ -983,16 +989,13 @@ class Pattern(object):
             dest_int in self.interface.interface_ids
 
         if dest_ports is None:
-            idx = self.data.select(lambda x: x[self.from_slice] in \
-                self.interface.get_interface(src_int).index and \
-                x[self.to_slice] in \
-                self.interface.get_interface(dest_int).index).index            
+            to_idx = self.interface.get_interface(dest_int).index
         else:
-            idx = self.data.select(lambda x: x[self.from_slice] in \
-                self.interface.get_interface(src_int).index and \
-                x[self.to_slice] in \
-                self.interface.get_interface(dest_int)[dest_ports].index).index
-            
+            to_idx = self.interface.get_interface(dest_int)[dest_ports].index
+        from_idx = self.interface.get_interface(src_int).index
+        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
+                    and x[self.to_slice] in to_idx).index
+                
         # Don't include duplicate tuples in output:
         return list(set([x[self.from_slice] for x in idx]))
 
@@ -1027,15 +1030,12 @@ class Pattern(object):
             dest_int in self.interface.interface_ids
 
         if src_ports is None:
-            idx = self.data.select(lambda x: x[self.from_slice] in \
-                self.interface.get_interface(src_int).index and \
-                x[self.to_slice] in \
-                self.interface.get_interface(dest_int).index).index
+            from_idx = self.interface.get_interface(src_int).index    
         else:
-            idx = self.data.select(lambda x: x[self.from_slice] in \
-                self.interface.get_interface(src_int)[src_ports].index and \
-                x[self.to_slice] in \
-                self.interface.get_interface(dest_int).index).index
+            from_idx = self.interface.get_interface(src_int)[src_ports].index
+        to_idx = self.interface.get_interface(dest_int).index
+        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
+                    and x[self.to_slice] in to_idx).index
 
         # Don't include duplicate tuples in output:
         return list(set([x[self.to_slice] for x in idx]))
