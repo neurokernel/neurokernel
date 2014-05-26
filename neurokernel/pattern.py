@@ -5,6 +5,7 @@ Represent connectivity pattern using pandas DataFrame.
 """
 
 import itertools
+import networkx as nx
 import numpy as np
 import pandas as pd
 
@@ -65,7 +66,7 @@ class Interface(object):
 
     def __init__(self, selector, columns=['io', 'type']):
         self.sel = PathLikeSelector()
-        assert not(self.sel.isambiguous(selector))        
+        assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
         idx = self.sel.make_index(selector, names)
@@ -950,6 +951,83 @@ class Pattern(object):
         # Restore MultiIndex level names:
         self.data.index.names = index_names
 
+    @classmethod
+    def from_graph(self, g):
+        """
+        Convert a networkx directed graph into a Pattern instance.
+
+        Parameters
+        ----------
+        g : networkx.DiGraph
+            Graph to convert.
+
+        Returns
+        -------
+        Must contain node labels that at least contain 'interface'
+        and 'io' attributes.
+        """
+
+        assert type(g) == nx.DiGraph
+
+        nodes = []
+        for n in g.nodes(data=True):
+            assert PathLikeSelector.is_identifier(n[0])
+
+        # unfinished
+
+    def to_graph(self):
+        """
+        Convert the pattern to a networkx directed graph.
+        
+        Returns
+        -------
+        g : networkx.DiGraph
+            Graph whose nodes are the pattern's ports 
+            and whose edges are the pattern's connections.
+
+        Notes
+        -----
+        The 'conn' attribute of the connections is not transferred to the graph
+        edges.
+
+        This method relies upon the assumption that the sets of 
+        port identifiers comprised by the pattern's interfaces are disjoint.
+        """
+
+        g = nx.DiGraph()
+
+        # Add all of the ports as nodes:
+        for i, interface in self.interfaces.iteritems():
+            for t in interface.data.index:    
+                id = self.sel.to_identifier(t)
+
+                # Replace NaNs with empty strings:
+                d = {k: (v if str(v) != 'nan' else '') \
+                     for k, v in interface.data.ix[t].to_dict().iteritems()}
+                     
+                # Add the interface number to the attribute dictionary:
+                d['interface'] = i
+
+                # Each node's name corresponds to the port identifier string:
+                g.add_node(id, d)
+
+        # Add all of the connections as edges:
+        for t in self.data.index:
+            t_from = t[self.from_slice]
+            t_to = t[self.to_slice]
+            id_from = self.sel.to_identifier(t_from)
+            id_to = self.sel.to_identifier(t_to)
+            d = self.data.ix[t].to_dict()
+
+            # Discard the 'conn' attribute because the existence of the edge
+            # indicates that the connection exists:
+            if d.has_key('conn'):
+                d.pop('conn')
+
+            g.add_edge(id_from, id_to, d)
+
+        return g
+
 if __name__ == '__main__':
     from unittest import main, TestCase
     from pandas.util.testing import assert_frame_equal, assert_index_equal
@@ -1111,6 +1189,29 @@ if __name__ == '__main__':
                                      [('/aaa[0]', '/bbb[2]'),
                                       ('/aaa[1]', '/bbb[0]'),
                                       ('/aaa[2]', '/bbb[1]')])
+
+        def test_to_graph(self):
+            p = Pattern('/foo[0:3]', '/bar[0:3]')
+            p['/foo[0:3]', '/bar[0:3]'] = 1
+            g = p.to_graph()
+
+            self.assertItemsEqual(g.nodes(data=True), 
+                                  [('/bar[0]', {'interface': 1, 'io': 'out', 'type': ''}),
+                                   ('/bar[2]', {'interface': 1, 'io': 'out', 'type': ''}),
+                                   ('/bar[1]', {'interface': 1, 'io': 'out', 'type': ''}),
+                                   ('/foo[1]', {'interface': 0, 'io': 'in', 'type': ''}),                                  
+                                   ('/foo[2]', {'interface': 0, 'io': 'in', 'type': ''}),
+                                   ('/foo[0]', {'interface': 0, 'io': 'in', 'type': ''})])
+            self.assertItemsEqual(g.edges(data=True),
+                                  [('/foo[2]', '/bar[2]', {}),
+                                   ('/foo[2]', '/bar[0]', {}),
+                                   ('/foo[2]', '/bar[1]', {}),
+                                   ('/foo[1]', '/bar[2]', {}),
+                                   ('/foo[1]', '/bar[0]', {}),
+                                   ('/foo[1]', '/bar[1]', {}),
+                                   ('/foo[0]', '/bar[2]', {}),
+                                   ('/foo[0]', '/bar[0]', {}),
+                                   ('/foo[0]', '/bar[1]', {})])
 
         def test_clear(self):
             p = Pattern('/aaa[0:3]', '/bbb[0:3]')
