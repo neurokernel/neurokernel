@@ -60,7 +60,7 @@ class PathLikeSelector(object):
     is_ambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
     isin(s, t)
-        Check whether the identifiers in one selector are also in that of another.
+        Check whether all of the identifiers in one selector are comprised by another.
     make_index(selector, names=[])
         Create a MultiIndex from the specified selector.
     max_levels(selector)
@@ -429,6 +429,10 @@ class PathLikeSelector(object):
         else:
             raise ValueError('invalid selector type')
         for i in xrange(len(p)):
+
+            # p[i] needs to be mutable:
+            p[i] = list(p[i])
+
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
@@ -724,7 +728,7 @@ class PathLikeSelector(object):
     @classmethod
     def isin(cls, s, t):
         """
-        Check whether the identifiers in one selector are also in that of another.
+        Check whether all of the identifiers in one selector are comprised by another.
         
         Parameters
         ----------
@@ -741,7 +745,7 @@ class PathLikeSelector(object):
 
         s_exp = set(cls.expand(s))
         t_exp = set(cls.expand(t))
-        if s_exp.intersection(t_exp):
+        if s_exp.issubset(t_exp):
             return True
         else:
             return False
