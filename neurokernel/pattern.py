@@ -52,8 +52,8 @@ class Interface(object):
     -------
     as_selectors(ids)
         Convert list of port identifiers to path-like selectors. 
-    data_mask(f, inplace=False)
-        Mask Interface data with a selection function.
+    data_select(f, inplace=False)
+        Restrict Interface data with a selection function.
     from_df(df)
         Create an Interface from a properly formatted DataFrame.
     from_dict(d)
@@ -68,8 +68,8 @@ class Interface(object):
         Check whether two interfaces can be connected.
     out_ports(i)
         List of output port identifiers as tuples comprised by an interface.
-    port_mask(f, inplace=False)
-        Mask Interface ports with a selection function.
+    port_select(f, inplace=False)
+        Restrict Interface ports with a selection function.
     ports(i)
         List of port identifiers as tuples comprised by an interface.
     which_int(s)
@@ -217,9 +217,9 @@ class Interface(object):
             result.append(selector)
         return result
 
-    def data_mask(self, f, inplace=False):
+    def data_select(self, f, inplace=False):
         """
-        Mask Interface data with a selection function.
+        Restrict Interface data with a selection function.
 
         Returns an Interface instance containing only those rows
         whose data is passed by the specified mask function.
@@ -227,7 +227,7 @@ class Interface(object):
         Parameters
         ----------
         f : function
-            Mask function with a single dict argument whose keys
+            Selection function with a single dict argument whose keys
             are the Interface's data column names.
         inplace : bool, default=False
             If True, update and return the given Interface instance.
@@ -236,7 +236,7 @@ class Interface(object):
         Returns
         -------
         i : Interface
-            Masked Interface instance.
+            Interface instance containing data selected by `f`.
         """
 
         assert callable(f)
@@ -441,9 +441,9 @@ class Interface(object):
         except:
             return []
 
-    def port_mask(self, f, inplace=False):
+    def port_select(self, f, inplace=False):
         """
-        Mask Interface ports with a selection function.
+        Restrict Interface ports with a selection function.
 
         Returns an Interface instance containing only those rows
         whose ports are passed by the specified mask function.
@@ -451,7 +451,7 @@ class Interface(object):
         Parameters
         ----------
         f : function
-            Mask function with a single tuple argument containing
+            Selection function with a single tuple argument containing
             the various columns of the Interface instance's MultiIndex.
         inplace : bool, default=False
             If True, update and return the given Interface instance.
@@ -460,7 +460,7 @@ class Interface(object):
         Returns
         -------
         i : Interface
-            Masked Interface instance.
+            Interface instance containing ports selected by `f`.
         """
 
         assert callable(f)
@@ -1051,6 +1051,7 @@ class Pattern(object):
         Clear all connections in class instance.
         """
 
+        # XXX need to also clear the interface data structure:
         self.data.drop(self.data.index, inplace=True)
 
     def is_connected(self, from_int, to_int):
@@ -1198,8 +1199,8 @@ if __name__ == '__main__':
                                                                   ('foo', 1)]),
                                      ['/foo[0]', '/foo[1]'])
 
-        def test_data_mask(self):
-            i = self.interface.data_mask(lambda x: x['io'] >= 'out')
+        def test_data_select(self):
+            i = self.interface.data_select(lambda x: x['io'] >= 'out')
             assert_index_equal(i.data.index,
                                pd.MultiIndex.from_tuples([('foo', 1),
                                                           ('foo', 2)]))
@@ -1244,8 +1245,8 @@ if __name__ == '__main__':
             self.assertSequenceEqual(self.interface.out_ports(0),
                                      [('foo', 1), ('foo', 2)])
 
-        def test_port_mask(self):
-            i = self.interface.port_mask(lambda x: x[1] >= 1)
+        def test_port_select(self):
+            i = self.interface.port_select(lambda x: x[1] >= 1)
             assert_index_equal(i.data.index,
                                pd.MultiIndex.from_tuples([('foo', 1),
                                                           ('foo', 2)]))
