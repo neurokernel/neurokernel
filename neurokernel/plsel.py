@@ -18,13 +18,14 @@ class PathLikeSelector(object):
 
     Select rows from a pandas DataFrame using path-like selectors.
     Assumes that the DataFrame instance has a MultiIndex where each level
-    corresponds to a level of the selector. An index level may either be a denoted by a
-    string label (e.g., 'foo') or a numerical index (e.g., 0, 1, 2); a selector
-    level may additionally be a list of strings (e.g., '[foo,bar]') or integers
-    (e.g., '[0,2,4]') or continuous intervals (e.g., '[0:5]'). The '*' symbol
-    matches any value in a level, while a range with an open upper bound (e.g.,
-    '[5:]') will match all integers greater than or equal to the lower bound.
-    
+    corresponds to a level of the selector. An index level may either be a
+    denoted by a string label (e.g., 'foo') or a numerical index (e.g., 0, 1,
+    2); a selector level may additionally be a list of strings (e.g.,
+    '[foo,bar]') or integers (e.g., '[0,2,4]') or continuous intervals 
+    (e.g., '[0:5]'). The '*' symbol matches any value in a level, while a 
+    range with an open upper bound (e.g., '[5:]') will match all integers
+    greater than or equal to the lower bound.
+        
     Examples of valid selectors include
 
     /foo/bar
@@ -41,13 +42,17 @@ class PathLikeSelector(object):
     (/foo,/bar)+/baz   (equivalent to /foo/baz,/bar/baz)
     /[foo,bar].+/[0:2] (equivalent to /foo[0],/bar[1])
 
+    An empty string is deemed to be a valid selector.
+
     The class can also be used to create new MultiIndex instances from selectors
     that can be fully expanded into an explicit set of identifiers (and
     therefore contain no ambiguous symbols such as '*' or '[:]').
 
     Methods
     -------
-    aredisjoint(s0, s1, ...)
+    are_consecutive(int_list)
+        Check whether a list of integers is consecutive.
+    are_disjoint(s0, s1, ...)
         Check whether several selectors are disjoint.
     expand(selector)
         Expand an unambiguous selector into a list of identifiers.
@@ -59,7 +64,13 @@ class PathLikeSelector(object):
         Convert a MultiIndex into an expanded port selector.
     is_ambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
-    isin(s, t)
+    is_expandable(selector)
+        Check whether a selector can be expanded into multiple identifiers.
+    is_identifier(s)
+        Check whether a selector or token sequence can identify a single port.
+    is_selector(selector)
+        Check whether a string or sequence is a valid selector.
+    is_in(s, t)
         Check whether all of the identifiers in one selector are comprised by another.
     make_index(selector, names=[])
         Create a MultiIndex from the specified selector.
@@ -283,12 +294,15 @@ class PathLikeSelector(object):
             selector in the string.
         """
 
-        return cls.parser.parse(selector, lexer=cls.lexer)
+        if re.search('^\s*$', selector):
+            return [[]]
+        else:
+            return cls.parser.parse(selector, lexer=cls.lexer)
 
     @classmethod
     def is_identifier(cls, s):
         """
-        Check whether a sequence or string can identify a single port.
+        Check whether a selector or token sequence can identify a single port.
 
         Parameters
         ----------
@@ -302,6 +316,11 @@ class PathLikeSelector(object):
             True for a sequence containing only strings and/or integers
             (e.g., ['foo', 0]) or a selector string that expands into a 
             single sequence of strings and/or integers (e.g., [['foo', 0]]).
+
+        Notes
+        -----
+        Can check sequences of tokens (even though a sequence of tokens is not a
+        valid selector).
         """
         
         if np.iterable(s):
@@ -350,6 +369,11 @@ class PathLikeSelector(object):
         -------
         s : str
             Port identifier string.
+
+        Notes
+        -----
+        Accepts sequences of tokens as well as expanded selectors (even though 
+        a sequence of tokens is not a valid selector).
         """
 
         assert np.iterable(s) and type(s) not in [str, unicode]
@@ -395,14 +419,141 @@ class PathLikeSelector(object):
             else:
                 return False
         elif np.iterable(selector):
-            for token_list in selector:
-                for token in token_list:
+            for tokens in selector:
+                for token in tokens:
                     if token == '*' or \
                        (type(token) == tuple and token[1] == np.inf):
                         return True
             return False
         else:
             raise ValueError('invalid selector type')
+
+    @classmethod
+    def is_selector_empty(cls, s):
+        """
+        Check whether a string or sequence is an empty selector.
+
+        Parameters
+        ----------
+        s : str, unicode, or sequence
+            String or sequence to test.
+        
+        Returns
+        -------
+        result : bool
+            True if `s` is a sequence containing empty sequences or a null
+            string, False otherwise.
+        """
+        
+        if type(s) in [str, unicode]:
+            if re.search('^\s*$', s):
+                return True
+            else:
+                return False
+        elif np.iterable(s):
+            if all(map(np.iterable, s)) and \
+               all(map(lambda e: len(e) == 0, s)):
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    @classmethod
+    def is_selector_seq(cls, s):
+        """
+        Check whether a sequence is a valid selector.
+
+        Parameters
+        ----------
+        s : sequence
+            Sequence to test.
+
+        Returns
+        -------
+        result : bool
+            True if a sequence of valid token sequences
+            (e.g., [['foo', (0, 2)]], [['bar', 'baz'], ['qux', 0]]),
+            False otherwise.
+
+        Note
+        ----
+        An empty sequence (e.g., []) is deemed to be a valid selector.
+        """
+
+        assert np.iterable(s)
+        for tokens in s:
+
+            # The selector must contain sequences of tokens:
+            if not np.iterable(tokens):
+                return False
+
+            # Each token must either be a string, integer, 2-element tuple,
+            # list of strings, or list of integers:
+            for token in tokens:
+                if type(token) == tuple:
+                    if len(token) != 2:
+                        return False
+                elif type(token) == list:
+                    token_types = set(map(type, token))
+                    if not (token_types.issubset([str, unicode]) or \
+                            token_types == set([int])):
+                        return False
+                elif type(token) not in [str, unicode, int]:
+                    return False
+
+        # All tokens are valid:
+        return True
+        
+    @classmethod
+    def is_selector_str(cls, s):
+        """
+        Check whether a string is a valid selector.
+
+        Parameters
+        ----------
+        s : str, unicode
+            String to test.
+
+        Returns
+        -------
+        result : bool
+            True if the specified selector is a parseable string 
+            (e.g., '/foo[0:2]'), False otherwise.
+        """
+
+        assert type(s) in [str, unicode]
+        try:
+            cls.parse(s)
+        except:
+            return False
+        else:
+            return True
+
+    @classmethod
+    def is_selector(cls, s):
+        """
+        Check whether a string or sequence is a valid selector.
+
+        Parameters
+        ----------
+        s : str, unicode, or sequence
+            String or sequence to test.
+
+        Returns
+        -------
+        result : bool
+            True if the specified selector is a parseable string (e.g.,
+            '/foo[0:2]') or a sequence of valid token sequences.
+            (e.g., [['foo', (0, 2)]], [['bar', 'baz'], ['qux', 0]]).
+        """
+
+        if type(s) in [str, unicode]:
+            return cls.is_selector_str(s)
+        elif np.iterable(s):
+            return cls.is_selector_seq(s)
+        else:
+            return False
 
     @classmethod
     def expand(cls, selector):
@@ -421,7 +572,9 @@ class PathLikeSelector(object):
             List of identifiers; each identifier is a tuple of unambiguous tokens.
         """
         
+        assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
+
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
         elif np.iterable(selector):
@@ -441,7 +594,7 @@ class PathLikeSelector(object):
         return [tuple(x) for y in p for x in itertools.product(*y)]
 
     @classmethod
-    def isexpandable(cls, selector):
+    def is_expandable(cls, selector):
         """
         Check whether a selector can be expanded into multiple identifiers.
 
@@ -456,8 +609,10 @@ class PathLikeSelector(object):
         result : bool
             True if the selector contains any intervals or sets of
             strings/integers, False otherwise. Ambiguous selectors are
-            not deemed to be expandable.
+            not deemed to be expandable, nor are fully expanded selectors.
         """
+
+        assert cls.is_selector(selector)
 
         if cls.is_ambiguous(selector):
             return False
@@ -471,32 +626,35 @@ class PathLikeSelector(object):
             for j in xrange(len(p[i])):
                 if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
-                elif type(p[i][j]) == tuple:
+
+                # Tuples must only contain 2 elements:
+                elif type(p[i][j]) == tuple and len(p[i][j]) == 2:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
 
                     # The presence of a range containing more than 1 element
-                    # ensures expandability:
-                    if len(p[i][j]) > 1:
-                        return True
+                    # implies expandability:
+                    if len(p[i][j]) > 1: return True                        
                 elif type(p[i][j]) == list:
 
                     # The presence of a list containing more than 1 unique
-                    # element ensures expandability:
+                    # element implies expandability:
                     if len(set(p[i][j])) > 1: return True
+                else:
+                    raise ValueError('invalid selector contents')
 
         if len(set([tuple(x) for y in p for x in itertools.product(*y)])) > 1:
             return True
         else:
             return False
         
-    @classmethod
-    def areconsecutive(cls, i_list):
+    @staticmethod
+    def are_consecutive(int_list):
         """
         Check whether a list of integers is consecutive.
 
         Parameters
         ----------
-        i_list : list of int
+        int_list : list of int
             List of integers
 
         Returns
@@ -509,7 +667,7 @@ class PathLikeSelector(object):
         Does not assume that the list is sorted.
         """
 
-        if set(np.diff(i_list)) == set([1]):
+        if set(np.diff(int_list)) == set([1]):
             return True
         else:
             return False
@@ -559,7 +717,7 @@ class PathLikeSelector(object):
                 # If a level only contains consecutive integers, convert it into an
                 # interval:
                 level.sort()
-                if cls.areconsecutive(level):
+                if cls.are_consecutive(level):
                     return ['[%s:%s]' % (min(level), max(level)+1)]
 
                 # If a level contains nonconsecutive integers, convert it into a
@@ -594,7 +752,7 @@ class PathLikeSelector(object):
         return ','.join(selector_list)
 
     @classmethod
-    def aredisjoint(cls, *selectors):
+    def are_disjoint(cls, *selectors):
         """
         Check whether several selectors are disjoint.
 
@@ -617,8 +775,8 @@ class PathLikeSelector(object):
         """
 
         assert len(selectors) >= 1
-        if len(selectors) == 1:
-            return True
+        assert all(map(cls.is_selector, selectors))
+        if len(selectors) == 1: return True            
         assert all(map(lambda s: not cls.is_ambiguous(s), selectors))
 
         # Expand selectors into sets of identifiers:
@@ -654,6 +812,8 @@ class PathLikeSelector(object):
             Maximum number of tokens in selector.
         """
 
+        assert cls.is_selector(selector)
+
         # Handle unhashable selectors:
         try:
             hash(selector)
@@ -667,9 +827,15 @@ class PathLikeSelector(object):
             return cls.__max_levels_cache[h]
         except:
             if type(selector) in [str, unicode]:
-                count = max(map(len, cls.parse(selector)))
+                try:
+                    count = max(map(len, cls.parse(selector)))
+                except:
+                    count = 0
             elif np.iterable(selector):
-                count = max(map(len, selector))
+                try:
+                    count = max(map(len, selector))
+                except:
+                    count = 0
             else:
                 raise ValueError('invalid selector type')
             cls.__max_levels_cache[h] = count
@@ -700,11 +866,15 @@ class PathLikeSelector(object):
         """
 
         row_sub = row[start:stop]
-        for token_list in parse_list:
+        for tokens in parse_list:
+
+            # A single row will never match an empty token list:
+            if not tokens:
+                continue
 
             # If this loop terminates prematurely, it will not return True; this 
             # forces checking of the subsequent token list:
-            for i, token in enumerate(token_list):
+            for i, token in enumerate(tokens):
                 if token == '*':
                     continue
                 elif type(token) in [int, str, unicode]:
@@ -726,7 +896,7 @@ class PathLikeSelector(object):
         return False
 
     @classmethod
-    def isin(cls, s, t):
+    def is_in(cls, s, t):
         """
         Check whether all of the identifiers in one selector are comprised by another.
         
@@ -742,6 +912,9 @@ class PathLikeSelector(object):
         result : bool
             True if the first selector is in the second, False otherwise.
         """
+
+        assert cls.is_selector(s)
+        assert cls.is_selector(t)
 
         s_exp = set(cls.expand(s))
         t_exp = set(cls.expand(t))
@@ -770,6 +943,8 @@ class PathLikeSelector(object):
         result : list
             List of tuples containing MultiIndex labels for selected rows.
         """
+
+        assert cls.is_selector(selector)
 
         if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
@@ -810,6 +985,8 @@ class PathLikeSelector(object):
             MultiIndex that refers to the rows selected by the specified
             selector.
         """
+
+        assert cls.is_selector(selector)
 
         tuples = cls.get_tuples(df, selector, start, stop)
         if not tuples:
@@ -866,18 +1043,22 @@ class PathLikeSelector(object):
         '[:]'. It also must contain more than one level.        
         """
 
+        assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
+
         if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
-        elif np.iterable(selector):
+
+        # An empty sequence is not a valid selector:
+        elif np.iterable(selector) and selector:
             parse_list = selector
         else:
             raise ValueError('invalid selector type')
 
         idx_list = []
-        for token_list in parse_list:
+        for tokens in parse_list:
             list_list = []
-            for token in token_list:
+            for token in tokens:
                 if type(token) == tuple:
                     list_list.append(range(token[0], token[1]))
                 elif type(token) == list:
@@ -920,6 +1101,8 @@ class PathLikeSelector(object):
         result : pandas.DataFrame
             DataFrame containing selected rows.
         """
+
+        assert cls.is_selector(selector)
 
         if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
@@ -975,9 +1158,8 @@ class PortMapper(object):
         if idx is None:
             self.portmap = pd.Series(data=np.arange(len(data)))
         else:
-            self.portmap = pd.Series(data=np.asarray(idx))
-        idx = self.sel.make_index(selector)
-        self.portmap.index = idx
+            self.portmap = pd.Series(data=np.asarray(idx))        
+        self.portmap.index = self.sel.make_index(selector)
 
     def get(self, selector):
         """
@@ -1172,17 +1354,18 @@ if __name__ == '__main__':
                                             names=[0, 1, 2])
             assert_frame_equal(result, self.df.ix[idx])
 
-        def test_aredisjoint_str(self):
-            assert self.sel.aredisjoint('/foo[0:10]/baz', '/bar[10:20]/qux') == True
-            assert self.sel.aredisjoint('/foo[0:10]/baz',
-                                        '/foo[5:15]/[baz,qux]') == False
+        def test_are_disjoint_str(self):
+            assert self.sel.are_disjoint('/foo[0:10]/baz',
+                                         '/bar[10:20]/qux') == True
+            assert self.sel.are_disjoint('/foo[0:10]/baz',
+                                         '/foo[5:15]/[baz,qux]') == False
 
-        def test_aredisjoint_list(self):
-            result = self.sel.aredisjoint([['foo', (0, 10), 'baz']], 
-                                          [['bar', (10, 20), 'qux']])
+        def test_are_disjoint_list(self):
+            result = self.sel.are_disjoint([['foo', (0, 10), 'baz']], 
+                                           [['bar', (10, 20), 'qux']])
             assert result == True
-            result = self.sel.aredisjoint([['foo', (0, 10), 'baz']], 
-                                          [['foo', (5, 15), ['baz','qux']]])
+            result = self.sel.are_disjoint([['foo', (0, 10), 'baz']], 
+                                           [['foo', (5, 15), ['baz','qux']]])
             assert result == False
 
         def test_expand_str(self):
@@ -1265,15 +1448,59 @@ if __name__ == '__main__':
             self.assertRaises(Exception, self.sel.to_identifier, 
                               ['foo', (0, 2)])
 
-        def test_isin_str(self):
-            assert self.sel.isin('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
-            assert self.sel.isin('/qux/bar[5]', '/[foo,baz]/bar[0:10]') == False
+        def test_is_in_str(self):
+            assert self.sel.is_in('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
+            assert self.sel.is_in('/qux/bar[5]', '/[foo,baz]/bar[0:10]') == False
 
-        def test_isin_list(self):
-            assert self.sel.isin([['foo', 'bar', [5]]], 
+        def test_is_in_list(self):
+            assert self.sel.is_in([['foo', 'bar', [5]]], 
                                    [[['foo', 'baz'], 'bar', (0, 10)]]) == True
-            assert self.sel.isin([['qux', 'bar', [5]]], 
+            assert self.sel.is_in([['qux', 'bar', [5]]], 
                                    [[['foo', 'baz'], 'bar', (0, 10)]]) == False
+
+        def test_is_selector_empty(self):
+            assert self.sel.is_selector_empty('') == True            
+            assert self.sel.is_selector_empty([[]]) == True
+            assert self.sel.is_selector_empty([()]) == True
+            assert self.sel.is_selector_empty([[], []]) == True
+            assert self.sel.is_selector_empty([(), []]) == True
+
+            assert self.sel.is_selector_empty('/foo') == False
+            assert self.sel.is_selector_empty([['foo', 'bar']]) == False
+            assert self.sel.is_selector_empty([['']]) == False # is this correct?
+
+        def test_is_selector_str(self):
+            assert self.sel.is_selector('') == True
+            assert self.sel.is_selector('/foo/bar') == True
+            assert self.sel.is_selector('/foo!?') == True
+            assert self.sel.is_selector('/foo[0]') == True
+            assert self.sel.is_selector('/foo[0:2]') == True
+            assert self.sel.is_selector('/foo[0:]') == True
+            assert self.sel.is_selector('/foo[:2]') == True
+            assert self.sel.is_selector('/foo/*') == True
+            assert self.sel.is_selector('/foo,/bar') == True
+            assert self.sel.is_selector('/foo+/bar') == True
+            assert self.sel.is_selector('/foo[0:2].+/bar[0:2]') == True
+
+            assert self.sel.is_selector('/foo[') == False
+            assert self.sel.is_selector('foo[0]') == False
+
+        def test_is_selector_list(self):
+            assert self.sel.is_selector([[]]) == True
+            assert self.sel.is_selector([['foo', 'bar']]) == True
+            assert self.sel.is_selector([('foo', 'bar')]) == True
+            assert self.sel.is_selector([('foo', '*')]) == True
+            assert self.sel.is_selector([('foo', 'bar'), ('bar', 'qux')]) == True
+            assert self.sel.is_selector([('foo', 0)]) == True
+            assert self.sel.is_selector([('foo', (0, 2))]) == True
+            assert self.sel.is_selector([('foo', (0, np.inf))]) == True
+            assert self.sel.is_selector([('foo', [0, 1])]) == True
+            assert self.sel.is_selector([('foo', ['a', 'b'])]) == True
+
+            assert self.sel.is_selector([('foo', (0, 1, 2))]) == False
+            assert self.sel.is_selector([('foo', 'bar'),
+                                         ((0, 1, 2), 0)]) == False
+            assert self.sel.is_selector([('foo', ['a', 0])]) == False
 
         def test_make_index_str(self):
             idx = self.sel.make_index('/[foo,bar]/[0:3]')
@@ -1288,6 +1515,10 @@ if __name__ == '__main__':
                                                           [0, 1, 2]],
                                                   labels=[[1, 1, 1, 0, 0, 0],
                                                           [0, 1, 2, 0, 1, 2]]))
+
+        def test_make_index_invalid(self):
+            self.assertRaises(Exception, self.sel.make_index,
+                              'foo/bar[')
 
         def test_max_levels_str(self):
             assert self.sel.max_levels('/foo/bar[0:10]') == 3
