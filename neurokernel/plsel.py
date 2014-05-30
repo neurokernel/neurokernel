@@ -1008,7 +1008,7 @@ class PathLikeSelector(object):
             raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
 
-        if type(df.index) == pd.MultiIndex:
+        if isinstance(df.index, pd.MultiIndex):
             return [t for t in df.index \
                     if cls._multiindex_row_in(t, parse_list, start, stop)]
         else:
@@ -1144,9 +1144,9 @@ class PathLikeSelector(object):
         # Attempting to create a MultiIndex with a single level results in
         # an Index; therefore, all created indices must either be Index
         # instances or all be MultiIndex instances:        
-        if all(map(lambda idx: type(idx) == pd.Index, idx_list)):
+        if all(map(lambda idx: isinstance(idx, pd.Index), idx_list)):
             return reduce(pd.Index.append, idx_list)
-        elif all(map(lambda idx: type(idx) == pd.MultiIndex, idx_list)):
+        elif all(map(lambda idx: isinstance(idx, pd.MultiIndex), idx_list)):
 
             # All of the token lists in the selector must have the same number of
             # levels:
@@ -1552,6 +1552,7 @@ if __name__ == '__main__':
 
         def test_is_selector_str(self):
             assert self.sel.is_selector('') == True
+            assert self.sel.is_selector('/foo') == True
             assert self.sel.is_selector('/foo/bar') == True
             assert self.sel.is_selector('/foo!?') == True
             assert self.sel.is_selector('/foo[0]') == True
