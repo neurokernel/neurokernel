@@ -1112,9 +1112,11 @@ class PathLikeSelector(object):
 
         if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
+        elif np.iterable(selector):
 
-        # An empty sequence is not a valid selector:
-        elif np.iterable(selector) and selector:
+            # Treat empty sequence as a valid selector:
+            if not selector:
+                selector = [[]]
             parse_list = selector
         else:
             raise ValueError('invalid selector type')
