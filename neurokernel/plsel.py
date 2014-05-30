@@ -1144,9 +1144,7 @@ class PathLikeSelector(object):
         # Attempting to create a MultiIndex with a single level results in
         # an Index; therefore, all created indices must either be Index
         # instances or all be MultiIndex instances:        
-        if all(map(lambda idx: isinstance(idx, pd.Index), idx_list)):
-            return reduce(pd.Index.append, idx_list)
-        elif all(map(lambda idx: isinstance(idx, pd.MultiIndex), idx_list)):
+        if all(map(lambda idx: isinstance(idx, pd.MultiIndex), idx_list)):
 
             # All of the token lists in the selector must have the same number of
             # levels:
@@ -1154,6 +1152,9 @@ class PathLikeSelector(object):
         
             # Combine all of the created indices into a single index:
             return reduce(pd.MultiIndex.append, idx_list)
+        if all(map(lambda idx: isinstance(idx, pd.Index) and \
+                   not isinstance(idx, pd.MultiIndex), idx_list)):
+            return reduce(pd.Index.append, idx_list)
         else:
             raise ValueError('All identifiers must contain same number of levels.')
 
@@ -1584,14 +1585,26 @@ if __name__ == '__main__':
                                          ((0, 1, 2), 0)]) == False
             assert self.sel.is_selector([('foo', ['a', 0])]) == False
 
-        def test_make_index_str(self):
+        def test_make_index_str_single_level(self):
+            idx = self.sel.make_index('/foo')
+            assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
+            idx = self.sel.make_index('/foo,/bar')
+            assert_index_equal(idx, pd.Index(['foo', 'bar'], dtype='object'))
+
+        def test_make_index_str_multiple_levels(self):
             idx = self.sel.make_index('/[foo,bar]/[0:3]')
             assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                           [0, 1, 2]],
                                                   labels=[[1, 1, 1, 0, 0, 0],
                                                           [0, 1, 2, 0, 1, 2]]))
 
-        def test_make_index_list(self):
+        def test_make_index_list_single_level(self):
+            idx = self.sel.make_index([['foo']])
+            assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
+            idx = self.sel.make_index([['foo'], ['bar']])
+            assert_index_equal(idx, pd.Index(['foo', 'bar'], dtype='object'))
+
+        def test_make_index_list_multiple_levels(self):
             idx = self.sel.make_index([[['foo', 'bar'], (0, 3)]])
             assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                           [0, 1, 2]],
@@ -1599,8 +1612,11 @@ if __name__ == '__main__':
                                                           [0, 1, 2, 0, 1, 2]]))
 
         def test_make_index_invalid(self):
-            self.assertRaises(Exception, self.sel.make_index,
-                              'foo/bar[')
+            self.assertRaises(Exception, self.sel.make_index, 'foo/bar[')
+            self.assertRaises(Exception, self.sel.make_index, 
+                              [['foo', 'bar'], ['baz']])
+            self.assertRaises(Exception, self.sel.make_index, 
+                              [['foo', 'bar', (0, 2)], ['baz', 'qux']])
 
         def test_max_levels_str(self):
             assert self.sel.max_levels('/foo/bar[0:10]') == 3
