@@ -842,9 +842,9 @@ class PathLikeSelector(object):
             return count
 
     @classmethod
-    def _idx_row_in(cls, row, parse_list, start=None, stop=None):
+    def _multiindex_row_in(cls, row, parse_list, start=None, stop=None):
         """
-        Check whether index row matches a parsed selector.
+        Check whether a row in a MultiIndex matches a parsed selector.
 
         Check whether the entries in a (subinterval of a) given tuple of data
         corresponding to the entries of one row in a MultiIndex match the
@@ -853,16 +853,18 @@ class PathLikeSelector(object):
         Parameters
         ----------
         row : sequence
-            List of data corresponding to a single row of a MultiIndex.
+            Data corresponding to a single row of a MultiIndex.
         parse_list : list
             List of lists of token values extracted by ply.
         start, stop : int
-            Start and end indices in `row` over which to test entries.
+            Start and end indices in `row` over which to test entries. If
+            the 
 
         Returns
         -------
         result : bool
-            True of all entries in specified subinterval of row match, False otherwise.
+            True of all entries in specified subinterval of row match, 
+            False otherwise.
         """
 
         row_sub = row[start:stop]
@@ -872,8 +874,8 @@ class PathLikeSelector(object):
             if not tokens:
                 continue
 
-            # If this loop terminates prematurely, it will not return True; this 
-            # forces checking of the subsequent token list:
+            # If this loop terminates prematurely, it will not return True;
+            # this forces checking of the subsequent token list:
             for i, token in enumerate(tokens):
                 if token == '*':
                     continue
@@ -894,6 +896,50 @@ class PathLikeSelector(object):
 
         # If the function still hasn't returned, no match was found:
         return False
+
+    @classmethod
+    def _index_row_in(cls, row, parse_list):
+        """
+        Check whether a row in an Index matches a parsed selector.
+
+        Check whether a row label in a MultiIndex matches the
+        specified token values.
+
+        Parameters
+        ----------
+        row : scalar
+            Data corresponding to a single row of an Index.
+        parse_list : list
+            List of lists of token values extracted by ply.
+
+        Returns
+        -------
+        result : bool
+            True of all entries in specified subinterval of row match, 
+            False otherwise.
+        """
+
+        for tokens in parse_list:
+            if not tokens:
+                continue
+            if len(tokens) > 1:
+                raise ValueError('index row only is scalar')
+            if tokens[0] == '*':
+                continue
+            elif type(tokens[0]) in [int, str, unicode]:
+                if row != token:
+                    break
+            elif type(tokens[0]) == list:
+                if row not in tokens[0]:
+                    break
+            elif type(tokens[0]) == tuple:
+                i_start, i_stop = tokens[0]
+                if not(row >= i_start and row < i_stop):
+                    break
+            else:
+                continue
+        else:
+            return True
 
     @classmethod
     def is_in(cls, s, t):
@@ -926,7 +972,7 @@ class PathLikeSelector(object):
     @classmethod
     def get_tuples(cls, df, selector, start=None, stop=None):
         """
-        Return tuples containing MultiIndex labels selected by specified selector.
+        Return tuples containing index labels selected by specified selector.
 
         Parameters
         ----------
@@ -937,11 +983,13 @@ class PathLikeSelector(object):
             (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
+            If the index of `df` is an Index, these are ignored.
 
         Returns
         -------
         result : list
-            List of tuples containing MultiIndex labels for selected rows.
+            List of tuples containing index labels for selected rows. If 
+            `df.index` is an Index, the result is a list of labels.
         """
 
         assert cls.is_selector(selector)
@@ -960,13 +1008,17 @@ class PathLikeSelector(object):
             raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
 
-        return [t for t in df.index if cls._idx_row_in(t, parse_list,
-                                                        start, stop)]
+        if type(df.index) == pd.MultiIndex:
+            return [t for t in df.index \
+                    if cls._multiindex_row_in(t, parse_list, start, stop)]
+        else:
+            return [t for t in df.index \
+                    if cls._index_row_in(t, parse_list)]
 
     @classmethod
     def get_index(cls, df, selector, start=None, stop=None, names=[]):
         """
-        Return MultiIndex corresponding to rows selected by specified selector.
+        Return index corresponding to rows selected by specified selector.
 
         Parameters
         ----------
@@ -976,13 +1028,13 @@ class PathLikeSelector(object):
             Row selector.
         start, stop : int
             Start and end indices in `row` over which to test entries.
-        names : list
-            Names of levels to use in generated MultiIndex.
+        names : scalar or list
+            Name or names of levels to use in generated index.
 
         Returns
         -------
-        result : pandas.MultiIndex
-            MultiIndex that refers to the rows selected by the specified
+        result : pandas.Index or pandas.MultiIndex
+            Index that refers to the rows selected by the specified
             selector.
         """
 
@@ -994,10 +1046,20 @@ class PathLikeSelector(object):
 
         # XXX This probably could be made faster by directly manipulating the
         # existing MultiIndex:
-        if names:
-            return pd.MultiIndex.from_tuples(tuples, names=names)
+        if all(map(np.iterable, tuples)):
+            if np.iterable(names) and names:
+                return pd.MultiIndex.from_tuples(tuples, names=names)
+            elif names:
+                return pd.MultiIndex.from_tuples(tuples, names=[names])
+            else:
+                return pd.MultiIndex.from_tuples(tuples)
         else:
-            return pd.MultiIndex.from_tuples(tuples)
+            if np.iterable(names) and names:
+                return pd.Index(tuples, name=names[0])
+            elif names:
+                return pd.Index(tuples, name=names)
+            else:
+                return pd.Index(tuples)
 
     @classmethod
     def index_to_selector(cls, idx):
@@ -1020,13 +1082,13 @@ class PathLikeSelector(object):
     @classmethod
     def make_index(cls, selector, names=[]):
         """
-        Create a MultiIndex from the specified selector.
+        Create a pandas index from the specified selector.
 
         Parameters
         ----------
         selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+            Selector string (e.g., '/foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]).            
         names : list
             Names of levels to use in generated MultiIndex. If no names are
             specified, the levels are assigned increasing integers starting with
@@ -1034,13 +1096,15 @@ class PathLikeSelector(object):
 
         Returns
         -------
-        result : pandas.MultiIndex
-            MultiIndex corresponding to the specified selector.
+        result : pandas.Index or pandas.MultiIndex
+            MultiIndex corresponding to the specified selector. If the selector
+            only contains a single level, an Index is returned (this is due to a
+            pecularity of pandas).
 
         Notes
         -----
         The selector may not contain ambiguous symbols such as '*' or 
-        '[:]'. It also must contain more than one level.        
+        '[:]'. 
         """
 
         assert cls.is_selector(selector)
@@ -1057,6 +1121,8 @@ class PathLikeSelector(object):
 
         idx_list = []
         for tokens in parse_list:
+
+            # Accumulate lists of tokens for each level:
             list_list = []
             for token in tokens:
                 if type(token) == tuple:
@@ -1066,20 +1132,30 @@ class PathLikeSelector(object):
                 else:
                     list_list.append([token])
             if not names:
-                names = range(len(list_list))
-            idx = pd.MultiIndex.from_product(list_list, names=names)
-
-            # Attempting to run MultiIndex.from_product with an argument
-            # containing a single list results in an Index, not a MultiIndex:
-            assert type(idx) == pd.MultiIndex
-
+                idx_names = range(len(list_list))
+            else:
+                idx_names = names
+            if list_list:
+                idx = pd.MultiIndex.from_product(list_list, names=idx_names)
+            else:
+                idx = pd.Index([])
             idx_list.append(idx)
 
-        # All of the token lists in the selector must have the same number of
-        # levels:
-        assert len(set(map(lambda idx: len(idx.levels), idx_list))) == 1
+        # Attempting to create a MultiIndex with a single level results in
+        # an Index; therefore, all created indices must either be Index
+        # instances or all be MultiIndex instances:        
+        if all(map(lambda idx: type(idx) == pd.Index, idx_list)):
+            return reduce(pd.Index.append, idx_list)
+        elif all(map(lambda idx: type(idx) == pd.MultiIndex, idx_list)):
 
-        return reduce(pd.MultiIndex.append, idx_list)
+            # All of the token lists in the selector must have the same number of
+            # levels:
+            assert len(set(map(lambda idx: len(idx.levels), idx_list))) == 1
+        
+            # Combine all of the created indices into a single index:
+            return reduce(pd.MultiIndex.append, idx_list)
+        else:
+            raise ValueError('All identifiers must contain same number of levels.')
 
     @classmethod
     def select(cls, df, selector, start=None, stop=None):
@@ -1116,13 +1192,18 @@ class PathLikeSelector(object):
         if len(parse_list) > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
-        return df.select(lambda row: cls._idx_row_in(row, parse_list, start, stop))
+        if type(df.index) == pd.MultiIndex:
+            return df.select(lambda row: cls._multiindex_row_in(row, parse_list, 
+                                                                start, stop))
+        else:
+            return df.select(lambda row: cls._index_row_in(row, parse_list))
 
 # Set the option optimize=1 in the production version; need to perform these
 # assignments after definition of the rest of the class because the class'
 # internal namespace can't be accessed within its body definition:
 PathLikeSelector.lexer = lex.lex(module=PathLikeSelector)
-PathLikeSelector.parser = yacc.yacc(module=PathLikeSelector, debug=0, write_tables=0)
+PathLikeSelector.parser = yacc.yacc(module=PathLikeSelector, 
+                                    debug=0, write_tables=0)
 
 class PortMapper(object):
     """
