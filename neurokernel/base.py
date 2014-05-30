@@ -1012,10 +1012,10 @@ if __name__ == '__main__':
             super(MyModule, self).__init__(sel, columns, port_data, port_ctrl,
                                            id, True)
             if sel_in:
-                assert PathLikeSelector.isin(sel_in, sel)
+                assert PathLikeSelector.is_in(sel_in, sel)
                 self.interface[sel_in, 'io'] = 'in'
             if sel_out:
-                assert PathLikeSelector.isin(sel_out, sel)
+                assert PathLikeSelector.is_in(sel_out, sel)
                 self.interface[sel_out, 'io'] = 'out'
 
             self.data = np.zeros(len(self.interface.ports()), np.float64)
