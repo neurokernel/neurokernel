@@ -57,11 +57,11 @@ class PathLikeSelector(object):
     expand(selector)
         Expand an unambiguous selector into a list of identifiers.
     get_index(df, selector, start=None, stop=None, names=[])
-        Return MultiIndex corresponding to rows selected by specified selector.
+        Return index corresponding to rows selected by specified selector.
     get_tuples(df, selector, start=None, stop=None)
-        Return tuples containing MultiIndex labels selected by specified selector.
+        Return tuples containing index labels selected by specified selector.
     index_to_selector(idx)
-        Convert a MultiIndex into an expanded port selector.
+        Convert an index into an expanded port selector.
     is_ambiguous(selector)
         Check whether a selector cannot be expanded into an explicit list of identifiers.
     is_expandable(selector)
@@ -73,7 +73,7 @@ class PathLikeSelector(object):
     is_in(s, t)
         Check whether all of the identifiers in one selector are comprised by another.
     make_index(selector, names=[])
-        Create a MultiIndex from the specified selector.
+        Create an index from the specified selector.
     max_levels(selector)
         Return maximum number of token levels in selector.
     parse(selector)
@@ -1064,12 +1064,12 @@ class PathLikeSelector(object):
     @classmethod
     def index_to_selector(cls, idx):
         """
-        Convert a MultiIndex into an expanded port selector.
+        Convert an index into an expanded port selector.
 
         Parameters
         ----------
-        idx : pandas.MultiIndex
-            MultiIndex containing port identifiers.
+        idx : pandas.Index or pandas.MultiIndex
+            Index containing port identifiers.
         
         Returns
         -------
@@ -1077,12 +1077,15 @@ class PathLikeSelector(object):
             List of tuples corresponding to individual port identifiers.        
         """
 
-        return idx.tolist()
+        if isinstance(idx, pd.MultiIndex):
+            return idx.tolist()
+        else:
+            return [(i,) for i in idx.tolist()]
 
     @classmethod
     def make_index(cls, selector, names=[]):
         """
-        Create a pandas index from the specified selector.
+        Create an index from the specified selector.
 
         Parameters
         ----------
@@ -1531,6 +1534,14 @@ if __name__ == '__main__':
                               [['foo', ['a', 'b']]])
             self.assertRaises(Exception, self.sel.to_identifier, 
                               ['foo', (0, 2)])
+
+        def test_index_to_selector(self):
+            idx = self.sel.make_index('/foo,/bar')
+            self.assertSequenceEqual(self.sel.index_to_selector(idx),
+                                     [('foo',), ('bar',)])
+            idx = self.sel.make_index('/foo[0:2]')
+            self.assertSequenceEqual(self.sel.index_to_selector(idx),
+                                     [('foo', 0), ('foo', 1)])
 
         def test_is_in_str(self):
             assert self.sel.is_in('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
