@@ -4,6 +4,7 @@
 Represent connectivity pattern using pandas DataFrame.
 """
 
+from collections import OrderedDict
 import itertools
 import networkx as nx
 import numpy as np
@@ -80,7 +81,7 @@ class Interface(object):
     .. [1] PathLikeSelector
     """
 
-    def __init__(self, selector, columns=['interface', 'io', 'type']):
+    def __init__(self, selector='', columns=['interface', 'io', 'type']):
         
         # All ports in an interface must contain at least the following
         # attributes:
@@ -97,18 +98,15 @@ class Interface(object):
         Add an additional level to the index of the pattern's internal DataFrame.
         """
 
-        # Check whether the level corresponds to the 'from' or 'to' part of the
-        # connectivity pattern:
-        new_level_name = str(self.num_levels)
-
         # Add a data column corresponding to the new level:
+        new_level_name = str(self.num_levels)
         self.data[new_level_name] = ''
 
         # Convert to MultiIndex level:
         self.data.set_index(new_level_name, append=True, inplace=True)
 
         # Bump number of levels:
-        self.num_levels[which] += 1
+        self.num_levels += 1
 
     def __getitem__(self, key):
         if type(key) == tuple and len(key) > 1:
@@ -124,6 +122,8 @@ class Interface(object):
 
         # Check whether the number of levels in the internal DataFrame's
         # MultiIndex must be increased to accommodate the specified selector:
+        # XXX this will create null level values in the index that can't be
+        # selected - do we really want that to happen?:
         for i in xrange(self.sel.max_levels(selector)-self.num_levels):
             self.__add_level__()
 
@@ -240,11 +240,12 @@ class Interface(object):
         """
 
         assert callable(f)
+        result = self.data[f(self.data)]
         if inplace:
-            self.data = self.data[f(self.data)]
+            self.data = result
             return self
         else:
-            return Interface.from_df(self.data[f(self.data)])
+            return Interface.from_df(result)
 
     @classmethod
     def from_dict(cls, d):
@@ -330,7 +331,7 @@ class Interface(object):
             True if the comprised ports are in any of the stored interfaces.
         """
 
-        return self.sel.isin(s, self.index.tolist())
+        return self.sel.is_in(s, self.index.tolist())
 
     def is_compatible(self, a, i, b):
         """
@@ -600,7 +601,7 @@ class Pattern(object):
 
         # Force sets of identifiers to be disjoint so that no identifier can
         # denote a port in more than one set:
-        assert self.sel.aredisjoint(selectors)
+        assert self.sel.are_disjoint(selectors)
 
         # Collect all of the selectors:
         selector = []
@@ -958,7 +959,8 @@ class Pattern(object):
         else:
             return self.sel.select(self.data, selector = '+'.join(key))
 
-    def src_idx(self, src_int, dest_int, dest_ports=None):
+    def src_idx(self, src_int, dest_int, 
+                src_type=None, dest_type=None, dest_ports=None):                
         """
         Retrieve source ports connected to the specified destination ports.
 
@@ -967,7 +969,7 @@ class Pattern(object):
         >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
         >>> p['/foo[0:3]', '/bar[0:3]'] = 1
         >>> p['/bar[0:3]', '/foo[0:3]'] = 1
-        >>> all(p.src_idx(0, 1, '/bar[0]') == [('foo', 0), ('foo', 1), ('foo', 2)])
+        >>> all(p.src_idx(0, 1, dest_ports='/bar[0]') == [('foo', 0), ('foo', 1), ('foo', 2)])
 
         Parameters
         ----------
@@ -977,6 +979,9 @@ class Pattern(object):
             Path-like selector corresponding to ports in destination 
             interface. If not specified, all ports in the destination 
             interface are considered.
+        src_type, dest_type : str
+            Types of source and destination ports as listed in their respective 
+            interfaces.
 
         Returns
         -------
@@ -988,18 +993,39 @@ class Pattern(object):
         assert src_int in self.interface.interface_ids and \
             dest_int in self.interface.interface_ids
 
-        if dest_ports is None:
-            to_idx = self.interface.get_interface(dest_int).index
+        # Filter destination ports by specified type:
+        if dest_type is None:
+            to_int = self.interface.get_interface(dest_int)
         else:
-            to_idx = self.interface.get_interface(dest_int)[dest_ports].index
-        from_idx = self.interface.get_interface(src_int).index
-        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
-                    and x[self.to_slice] in to_idx).index
-                
-        # Don't include duplicate tuples in output:
-        return list(set([x[self.from_slice] for x in idx]))
+            to_f = lambda x: x['type'] == dest_type
+            to_int = self.interface.get_interface(dest_int).data_select(to_f)
 
-    def dest_idx(self, src_int, dest_int, src_ports=None):
+        # Filter destination ports by specified ports:
+        if dest_ports is None:
+            to_idx = to_int.index
+        else:
+            to_idx = to_int[dest_ports].index
+
+        # Filter source ports by specified type:
+        if src_type is None:
+            from_int = self.interface.get_interface(src_int)
+        else:
+            from_f = lambda x: x['type'] == src_type
+            from_int = self.interface.get_interface(src_int).data_select(from_f)
+
+        from_idx = from_int.index
+
+        # Construct index from those rows in the pattern whose ports have been
+        # selected by the above code:
+        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
+                               and x[self.to_slice] in to_idx).index
+                
+        # Remove duplicate tuples from output without perturbing the order
+        # of the remaining tuples:
+        return OrderedDict.fromkeys([x[self.from_slice] for x in idx]).keys()
+
+    def dest_idx(self, src_int, dest_int, 
+                 src_type=None, dest_type=None, src_ports=None):
         """
         Retrieve destination ports connected to the specified source ports.
 
@@ -1008,7 +1034,7 @@ class Pattern(object):
         >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
         >>> p['/foo[0:3]', '/bar[0:3]'] = 1
         >>> p['/bar[0:3]', '/foo[0:3]'] = 1
-        >>> all(p.dest_idx(0, 1, '/foo[0]') == [('bar', 0), ('bar', 1), ('bar', 2)])
+        >>> all(p.dest_idx(0, 1, src_ports='/foo[0]') == [('bar', 0), ('bar', 1), ('bar', 2)])
 
         Parameters
         ----------
@@ -1018,6 +1044,9 @@ class Pattern(object):
             Path-like selector corresponding to ports in source
             interface. If not specified, all ports in the source
             interface are considered.
+        src_type, dest_type : str
+            Types of source and destination ports as listed in their respective 
+            interfaces.
 
         Returns
         -------
@@ -1029,16 +1058,36 @@ class Pattern(object):
         assert src_int in self.interface.interface_ids and \
             dest_int in self.interface.interface_ids
 
-        if src_ports is None:
-            from_idx = self.interface.get_interface(src_int).index    
+        # Filter source ports by specified type:
+        if src_type is None:
+            from_int = self.interface.get_interface(src_int)
         else:
-            from_idx = self.interface.get_interface(src_int)[src_ports].index
-        to_idx = self.interface.get_interface(dest_int).index
-        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
-                    and x[self.to_slice] in to_idx).index
+            from_f = lambda x: x['type'] == src_type
+            from_int = self.interface.get_interface(src_int).data_select(from_f)
 
-        # Don't include duplicate tuples in output:
-        return list(set([x[self.to_slice] for x in idx]))
+        # Filter source ports by specified ports:
+        if src_ports is None:
+            from_idx = from_int.index    
+        else:
+            from_idx = from_int[src_ports].index
+
+        # Filter destination ports by specified type:
+        if dest_type is None:
+            to_int = self.interface.get_interface(dest_int)
+        else:
+            to_f = lambda x: x['type'] == dest_type
+            to_int = self.interface.get_interface(dest_int).data_select(to_f)
+
+        to_idx = to_int.index
+
+        # Construct index from those rows in the pattern whose ports have been
+        # selected by the above code:
+        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
+                               and x[self.to_slice] in to_idx).index
+
+        # Remove duplicate tuples from output without perturbing the order
+        # of the remaining tuples:
+        return OrderedDict.fromkeys([x[self.to_slice] for x in idx]).keys()
 
     def __len__(self):
         return self.data.__len__()
@@ -1194,6 +1243,10 @@ if __name__ == '__main__':
             self.interface['/foo[0]', 'interface', 'io'] = [0, 'in']
             self.interface['/foo[1:3]', 'interface', 'io'] = [0, 'out']
 
+        def test_create_empty(self):
+            i = Interface('')
+            assert len(i) == 0
+
         def test_as_selectors(self):
             self.assertSequenceEqual(self.interface.as_selectors([('foo', 0),
                                                                   ('foo', 1)]),
@@ -1328,7 +1381,7 @@ if __name__ == '__main__':
             p['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
             assert_frame_equal(p.data, self.df)
 
-        def test_src_idx_all(self):
+        def test_src_idx(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0:3]', '/yyy[0:3]'] = 1
             p['/xxx[0:3]', '/bbb[0:3]'] = 1
@@ -1337,30 +1390,78 @@ if __name__ == '__main__':
                                    ('aaa', 1),
                                    ('aaa', 2)])
             
-        def test_src_idx_specific(self):
+        def test_src_idx_dest_ports(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0]', '/yyy[0]'] = 1
             p['/aaa[1:3]', '/yyy[1:3]'] = 1
             p['/xxx[0:3]', '/bbb[0:3]'] = 1
-            self.assertItemsEqual(p.src_idx(0, 1, '/yyy[0]'),
+            self.assertItemsEqual(p.src_idx(0, 1, dest_ports='/yyy[0]'),
                                   [('aaa', 0)])
+
+        def test_src_idx_src_type(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0:3]', '/xxx[0:3]'] = 1
+            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p.interface['/aaa[0:3]'] = [0, 'in', 'spike']
+            p.interface['/xxx[0:3]'] = [1, 'out', 'spike']
+            self.assertItemsEqual(p.src_idx(0, 1, src_type='spike'), 
+                                  [('aaa', 0),
+                                   ('aaa', 1),
+                                   ('aaa', 2)])
+            self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
+
+        def test_src_idx_dest_type(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0:3]', '/xxx[0:3]'] = 1
+            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p.interface['/aaa[0:3]', 'type'] = 'spike'
+            p.interface['/xxx[0:3]', 'type'] = 'spike'
+            self.assertItemsEqual(p.src_idx(0, 1, dest_type='spike'), 
+                                  [('aaa', 0),
+                                   ('aaa', 1),
+                                   ('aaa', 2)])
+            self.assertItemsEqual(p.src_idx(0, 1, dest_type='gpot'), [])
             
-        def test_dest_idx_all(self):
+        def test_dest_idx(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0:3]', '/yyy[0:3]'] = 1
             p['/xxx[0:3]', '/bbb[0:3]'] = 1
-            self.assertItemsEqual(p.dest_idx(0, 1, '/aaa[0]'),
+            self.assertItemsEqual(p.dest_idx(0, 1, src_ports='/aaa[0]'),
                                   [('yyy', 0),
                                    ('yyy', 1),
                                    ('yyy', 2)])
 
-        def test_dest_idx_specific(self):
+        def test_dest_idx_src_ports(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0]', '/yyy[0]'] = 1
             p['/aaa[1:3]', '/yyy[1:3]'] = 1
             p['/xxx[0:3]', '/bbb[0:3]'] = 1
-            self.assertItemsEqual(p.dest_idx(0, 1, '/aaa[0]'),
+            self.assertItemsEqual(p.dest_idx(0, 1, src_ports='/aaa[0]'),
                                   [('yyy', 0)])
+
+        def test_dest_idx_src_type(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0:3]', '/xxx[0:3]'] = 1
+            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p.interface['/aaa[0:3]', 'type'] = 'spike'
+            p.interface['/xxx[0:3]', 'type'] = 'spike'
+            self.assertItemsEqual(p.dest_idx(0, 1, src_type='spike'), 
+                                  [('xxx', 0),
+                                   ('xxx', 1),
+                                   ('xxx', 2)])
+            self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
+
+        def test_dest_idx_dest_type(self):
+            p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+            p['/aaa[0:3]', '/xxx[0:3]'] = 1
+            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p.interface['/aaa[0:3]', 'type'] = 'spike'
+            p.interface['/xxx[0:3]', 'type'] = 'spike'
+            self.assertItemsEqual(p.dest_idx(0, 1, dest_type='spike'), 
+                                  [('xxx', 0),
+                                   ('xxx', 1),
+                                   ('xxx', 2)])
+            self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
 
         def test_is_connected(self):
             p = Pattern('/aaa[0:3]', '/bbb[0:3]')
