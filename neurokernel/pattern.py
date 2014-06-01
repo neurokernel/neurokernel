@@ -91,7 +91,18 @@ class Interface(object):
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
         idx = self.sel.make_index(selector, names)
+        self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns)
+
+    @classmethod
+    def __validate_index__(cls, idx):
+        """
+        Raise an exception if the specified index will result in an invalid interface.
+        """
+        
+        if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
+           len(idx.unique()) < len(idx):
+            raise ValueError('Duplicate interface index entries detected.')
 
     def __add_level__(self):
         """
@@ -143,6 +154,9 @@ class Interface(object):
                 found = False
         else:
             found = True
+
+        # Reject invalid indices:
+        self.__validate_index__(idx)
 
         # If the data specified is not a dict, convert it to a dict:
         if type(key) == tuple and len(key) > 1:
@@ -222,7 +236,7 @@ class Interface(object):
         Restrict Interface data with a selection function.
 
         Returns an Interface instance containing only those rows
-        whose data is passed by the specified mask function.
+        whose data is passed by the specified selection function.
 
         Parameters
         ----------
@@ -311,6 +325,7 @@ class Interface(object):
         
         assert isinstance(df.index, pd.MultiIndex)
         assert set(df.columns).issuperset(['interface', 'io', 'type'])
+        cls.__validate_index__(df.index)
 
         i = cls(df.index.tolist(), df.columns)
         i.data = df.copy()
@@ -370,12 +385,9 @@ class Interface(object):
         inv = self.data[self.data['interface'] == a].applymap(lambda x: 'out' \
                         if x == 'in' else ('in' if x == 'out' else x))
 
-        # Compare:
+        # Compare indices:
         idx_a = self.data[self.data['interface'] == a].index
         idx_b = i.data[i.data['interface'] == b].index
-        # import ipdb; ipdb.set_trace()
-        # print idx_a
-        # print idx_b
         if idx_a.equals(idx_b) and \
            all(inv['io'] == i.data[i.data['interface'] == b]['io']):
             return True
@@ -447,7 +459,7 @@ class Interface(object):
         Restrict Interface ports with a selection function.
 
         Returns an Interface instance containing only those rows
-        whose ports are passed by the specified mask function.
+        whose ports are passed by the specified selection function.
 
         Parameters
         ----------
@@ -809,6 +821,16 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='.+')
 
+    @classmethod
+    def __validate_index__(cls, idx):
+        """
+        Raise an exception if the specified index will result in an invalid pattern.
+        """
+
+        if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
+           len(idx.unique()) < len(idx):
+            raise ValueError('Duplicate pattern entries detected.')
+
     def __add_level__(self, which):
         """
         Add an additional level to the index of the pattern's internal
@@ -880,6 +902,11 @@ class Pattern(object):
         # XXX attempting to create an index row that appears both in the 'from'
         # and 'to' sections of the pattern's index should raise an exception
         # because ports cannot both receive input and send output.
+        
+        # XXX attempting to create an index row that causes multiple source
+        # ports to map to a single destination port should raise an exception
+        # because Neurokernel's patterns should only permit fan-out but not
+        # fan-in.
 
         # Must pass more than one argument to the [] operators:
         assert type(key) == tuple
@@ -891,17 +918,6 @@ class Pattern(object):
         
         # Ensure that the ports are in different interfaces:
         assert self.which_int(key[0]) != self.which_int(key[1])
-
-        # Check whether the number of levels in the internal DataFrame's
-        # MultiIndex must be increased to accommodate the specified selector:
-        for i in xrange(self.sel.max_levels(key[0])-self.num_levels['from']):
-            self.__add_level__('from')
-        for i in xrange(self.sel.max_levels(key[1])-self.num_levels['to']):
-            self.__add_level__('to')
-
-        # Update the `io` attributes of the pattern's interfaces:
-        self.interface[key[0], 'io'] = 'in'
-        self.interface[key[1], 'io'] = 'out'
 
         # Try using the selector to select data from the internal DataFrame:
         selector = '+'.join(key[0:2])
@@ -920,6 +936,20 @@ class Pattern(object):
                 found = False
         else:
             found = True
+
+        # Reject invalid indices:
+        self.__validate_index__(idx)
+
+        # Check whether the number of levels in the internal DataFrame's
+        # MultiIndex must be increased to accommodate the specified selector:
+        for i in xrange(self.sel.max_levels(key[0])-self.num_levels['from']):
+            self.__add_level__('from')
+        for i in xrange(self.sel.max_levels(key[1])-self.num_levels['to']):
+            self.__add_level__('to')
+
+        # Update the `io` attributes of the pattern's interfaces:
+        self.interface[key[0], 'io'] = 'in'
+        self.interface[key[1], 'io'] = 'out'
 
         # Ensure that data to set is in dict form:
         if len(key) > 2:
@@ -1247,6 +1277,9 @@ if __name__ == '__main__':
             i = Interface('')
             assert len(i) == 0
 
+        def test_create_dup_identifiers(self):
+            self.assertRaises(Exception, Interface, '/foo[0],/foo[0]')
+
         def test_as_selectors(self):
             self.assertSequenceEqual(self.interface.as_selectors([('foo', 0),
                                                                   ('foo', 1)]),
@@ -1270,6 +1303,17 @@ if __name__ == '__main__':
             i = Interface.from_df(df)
             assert_index_equal(i.data.index, idx)
             # Should also check DataFrame contents.
+
+        def test_from_df_dup(self):
+            idx = pd.MultiIndex.from_tuples([('foo', 0),
+                                             ('foo', 0),
+                                             ('foo', 2)])
+            data = data = [(0, 'in', 'spike'),
+                           (1, 'in', 'gpot'),
+                           (1, 'out', 'gpot')]
+            columns = ['interface', 'io', 'type']
+            df = pd.DataFrame(data, index=idx, columns=columns)
+            self.assertRaises(Exception, Interface.from_df, df)
 
         def test_from_dict(self):
             i = Interface.from_dict({'/foo[0:3]': np.nan})
@@ -1380,6 +1424,10 @@ if __name__ == '__main__':
             p['/bar[1]', '/foo[0]'] = [1, 'gpot', 'gpot']
             p['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
             assert_frame_equal(p.data, self.df)
+
+        def test_create_dup_identifiers(self):
+            self.assertRaises(Exception,  Pattern,
+                              '/foo[0],/foo[0]', '/bar[0:2]')
 
         def test_src_idx(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
