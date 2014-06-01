@@ -348,7 +348,7 @@ class BaseModule(ControlledProcess):
         Put output data in outgoing transmission buffer.
 
         Using the indices of the ports in destination modules that receive input
-        from this module instance, data extracted from the module's neurons is
+        from this module instance, data extracted from the module's ports is
         staged for output transmission.
 
         Parameter
@@ -367,6 +367,8 @@ class BaseModule(ControlledProcess):
 
             # Create mapper to use the module's interface ports to select data from
             # the output data:
+            # XXX it would be more efficient to do allocate an array and mapper
+            # only once:        
             pm = PortMapper(np.asarray(out), self.interface.out_ports())
 
             # Select data that should be sent to each destination module and append
