@@ -94,8 +94,7 @@ class Interface(object):
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns)
 
-    @classmethod
-    def __validate_index__(cls, idx):
+    def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
         """
@@ -103,21 +102,6 @@ class Interface(object):
         if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
            len(idx.unique()) < len(idx):
             raise ValueError('Duplicate interface index entries detected.')
-
-    def __add_level__(self):
-        """
-        Add an additional level to the index of the pattern's internal DataFrame.
-        """
-
-        # Add a data column corresponding to the new level:
-        new_level_name = str(self.num_levels)
-        self.data[new_level_name] = ''
-
-        # Convert to MultiIndex level:
-        self.data.set_index(new_level_name, append=True, inplace=True)
-
-        # Bump number of levels:
-        self.num_levels += 1
 
     def __getitem__(self, key):
         if type(key) == tuple and len(key) > 1:
@@ -130,13 +114,6 @@ class Interface(object):
             selector = key[0]
         else:
             selector = key
-
-        # Check whether the number of levels in the internal DataFrame's
-        # MultiIndex must be increased to accommodate the specified selector:
-        # XXX this will create null level values in the index that can't be
-        # selected - do we really want that to happen?:
-        for i in xrange(self.sel.max_levels(selector)-self.num_levels):
-            self.__add_level__()
 
         # Try using the selector to select data from the internal DataFrame:
         try:
@@ -154,9 +131,6 @@ class Interface(object):
                 found = False
         else:
             found = True
-
-        # Reject invalid indices:
-        self.__validate_index__(idx)
 
         # If the data specified is not a dict, convert it to a dict:
         if type(key) == tuple and len(key) > 1:
@@ -821,49 +795,23 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='.+')
 
-    @classmethod
-    def __validate_index__(cls, idx):
+    def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid pattern.
         """
 
+        # Prohibit duplicate connections:
         if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
            len(idx.unique()) < len(idx):
             raise ValueError('Duplicate pattern entries detected.')
-
-    def __add_level__(self, which):
-        """
-        Add an additional level to the index of the pattern's internal
-        DataFrame.
-
-        Parameters
-        ----------
-        which : {'from', 'to'}
-            Which portion of the index to modify.
-        """
-
-        assert which in ['from', 'to']
-
-        # Check whether the level corresponds to the 'from' or 'to' part of the
-        # connectivity pattern:
-        new_level_name = '%s_%s' % (which, self.num_levels[which])
-
-        # Add a data column corresponding to the new level:
-        self.data[new_level_name] = ''
-
-        # Convert to MultiIndex level:
-        self.data.set_index(new_level_name, append=True, inplace=True)
-
-        # Rearrange the MultiIndex levels so that the 'from' and 'to' levels
-        # remain grouped together: 
-        if which == 'from':
-            order = range(self.num_levels['from'])+\
-                    [self.num_levels['from']+self.num_levels['to']]+\
-                    range(self.num_levels['from'], self.num_levels['from']+self.num_levels['to'])
-            self.data.index = self.data.index.reorder_levels(order)
-
-        # Bump number of levels:
-        self.num_levels[which] += 1
+            
+        # Prohibit fan-in connections (i.e., patterns whose index has duplicate
+        # 'from' port identifiers):
+        from_idx, to_idx = self.split_multiindex(idx, 
+                                                 self.from_slice, self.to_slice)
+        if (hasattr(to_idx, 'has_duplicates') and to_idx.has_duplicates) or \
+           len(to_idx.unique()) < len(to_idx):
+            raise ValueError('Fan-in pattern entries detected.')
 
     def which_int(self, s):
         return self.interface.which_int(s)
@@ -936,16 +884,6 @@ class Pattern(object):
                 found = False
         else:
             found = True
-
-        # Reject invalid indices:
-        self.__validate_index__(idx)
-
-        # Check whether the number of levels in the internal DataFrame's
-        # MultiIndex must be increased to accommodate the specified selector:
-        for i in xrange(self.sel.max_levels(key[0])-self.num_levels['from']):
-            self.__add_level__('from')
-        for i in xrange(self.sel.max_levels(key[1])-self.num_levels['to']):
-            self.__add_level__('to')
 
         # Update the `io` attributes of the pattern's interfaces:
         self.interface[key[0], 'io'] = 'in'
@@ -1213,6 +1151,29 @@ class Pattern(object):
             assert PathLikeSelector.is_identifier(n[0])
 
         # unfinished
+
+    @classmethod
+    def split_multiindex(cls, idx, a, b):
+        """
+        Split a single MultiIndex into two instances.
+
+        Parameters
+        ----------
+        idx : pandas.MultiIndex
+            MultiIndex to split.
+        a, b : slice
+            Ranges of index columns to include in the two resulting instances.
+
+        Returns
+        -------
+        idx_a, idx_b : pandas.MultiIndex
+            Resulting MultiIndex instances.
+        """
+
+        t_list = idx.tolist()
+        idx_a = pd.MultiIndex.from_tuples([t[a] for t in t_list])
+        idx_b = pd.MultiIndex.from_tuples([t[b] for t in t_list])
+        return idx_a, idx_b
 
     def to_graph(self):
         """
