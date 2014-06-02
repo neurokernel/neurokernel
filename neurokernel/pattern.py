@@ -92,7 +92,7 @@ class Interface(object):
         names = [str(i) for i in xrange(self.num_levels)]
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
-        self.data = pd.DataFrame(index=idx, columns=columns)
+        self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
 
     def __validate_index__(self, idx):
         """
@@ -156,7 +156,13 @@ class Interface(object):
             for k, v in data.iteritems():
                 self.data[k].ix[idx] = v
         else:
-            self.data = self.data.append(pd.DataFrame(data=data, index=idx))
+            new_data = self.data.append(pd.DataFrame(data=data, index=idx, 
+                                                     dtype=object))
+
+            # Validate updated DataFrame's index before updating the instance's
+            # data attribute:
+            self.__validate_index__(new_data.index)
+            self.data = new_data
             self.data.sort(inplace=True)
 
     @property
@@ -299,10 +305,9 @@ class Interface(object):
         
         assert isinstance(df.index, pd.MultiIndex)
         assert set(df.columns).issuperset(['interface', 'io', 'type'])
-        cls.__validate_index__(df.index)
-
         i = cls(df.index.tolist(), df.columns)
         i.data = df.copy()
+        i.__validate_index__(i.index)
         return i
 
     def in_interfaces(self, s):
@@ -613,7 +618,7 @@ class Pattern(object):
         labels = [[] for i in xrange(len(names))]
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
                             
-        self.data = pd.DataFrame(index=idx, columns=columns)
+        self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
 
     @property
     def from_slice(self):
@@ -885,10 +890,6 @@ class Pattern(object):
         else:
             found = True
 
-        # Update the `io` attributes of the pattern's interfaces:
-        self.interface[key[0], 'io'] = 'in'
-        self.interface[key[1], 'io'] = 'out'
-
         # Ensure that data to set is in dict form:
         if len(key) > 2:
             if np.isscalar(value):
@@ -917,8 +918,18 @@ class Pattern(object):
 
         # Otherwise, populate a new DataFrame with the specified attributes:
         else:
-            self.data = self.data.append(pd.DataFrame(data=data, index=idx))
+            new_data = self.data.append(pd.DataFrame(data=data, index=idx,
+                                                     dtype=object))
+
+            # Validate updated DataFrame's index before updating the instance's
+            # data attribute:
+            self.__validate_index__(new_data.index)
+            self.data = new_data
             self.data.sort(inplace=True)
+
+        # Update the `io` attributes of the pattern's interfaces:
+        self.interface[key[0], 'io'] = 'in'
+        self.interface[key[1], 'io'] = 'out'
 
     def __getitem__(self, key):
         if len(key) > 2:
@@ -1358,33 +1369,44 @@ if __name__ == '__main__':
 
     class test_pattern(TestCase):
         def setUp(self):
-            # XXX not a good example; a pattern shouldn't allow a single port to
-            # both send output and receive input:
-            self.df = pd.DataFrame(data={'conn': np.ones(6, dtype=object),
-                            'from_type': ['spike', 'spike', 'spike',
-                                          'gpot', 'gpot', 'spike'],
-                            'to_type': ['spike', 'spike', 'spike',
-                                        'gpot', 'gpot', 'gpot'],
-                            'from_0': ['foo', 'foo', 'foo', 'bar', 'bar', 'bar'],
-                            'from_1': [0, 0, 2, 0, 1, 2],
-                            'to_0': ['bar', 'bar', 'bar', 'foo', 'foo', 'foo'],
-                            'to_1': [0, 1, 2, 0, 0, 1]})
-            self.df.set_index('from_0', append=False, inplace=True)
-            self.df.set_index('from_1', append=True, inplace=True)
-            self.df.set_index('to_0', append=True, inplace=True)
-            self.df.set_index('to_1', append=True, inplace=True)
-            self.df.sort(inplace=True)
+            self.df_p = pd.DataFrame(data={'conn': np.ones(6, dtype='object'),
+                            'from_0': ['bar', 'bar', 'bar', 'foo', 'foo', 'foo'],
+                            'from_1': [3, 3, 4, 0, 1, 1],
+                            'to_0': ['foo', 'foo', 'foo', 'bar', 'bar', 'bar'],
+                            'to_1': [2, 3, 4, 0, 1, 2]})
+            self.df_p.set_index('from_0', append=False, inplace=True)
+            self.df_p.set_index('from_1', append=True, inplace=True)
+            self.df_p.set_index('to_0', append=True, inplace=True)
+            self.df_p.set_index('to_1', append=True, inplace=True)
+            self.df_p.sort(inplace=True)
+
+            self.df_i = \
+                pd.DataFrame(data={'interface': np.array([0, 0, 0, 0, 0, 
+                                                          1, 1, 1, 1, 1], dtype=object),
+                                   'io': ['in', 'in', 'out', 'out', 'out', 
+                                          'out', 'out', 'out', 'in', 'in'],
+                                   'type': ['spike', 'spike', 'gpot', 'gpot', 'gpot',
+                                            'spike', 'spike', np.nan, 'gpot', 'gpot'],
+                                   '0': ['foo', 'foo', 'foo', 'foo', 'foo',
+                                       'bar', 'bar', 'bar', 'bar', 'bar'],
+                                   '1': [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]})
+            self.df_i.set_index('0', append=False, inplace=True)
+            self.df_i.set_index('1', append=True, inplace=True)
 
         def test_create(self):
-            p = Pattern('/foo[0:3]', '/bar[0:3]',
-                        columns=['conn','from_type', 'to_type'])
-            p['/foo[0]', '/bar[0]'] = [1, 'spike', 'spike']
-            p['/foo[0]', '/bar[1]'] = [1, 'spike', 'spike']
-            p['/foo[2]', '/bar[2]'] = [1, 'spike', 'spike']
-            p['/bar[0]', '/foo[0]'] = [1, 'gpot', 'gpot']
-            p['/bar[1]', '/foo[0]'] = [1, 'gpot', 'gpot']
-            p['/bar[2]', '/foo[1]'] = [1, 'spike', 'gpot']
-            assert_frame_equal(p.data, self.df)
+            p = Pattern('/foo[0:5]', '/bar[0:5]')
+            p['/foo[0]', '/bar[0]'] = 1
+            p['/foo[1]', '/bar[1]'] = 1
+            p['/foo[1]', '/bar[2]'] = 1
+            p['/bar[3]', '/foo[2]'] = 1
+            p['/bar[3]', '/foo[3]'] = 1
+            p['/bar[4]', '/foo[4]'] = 1
+            assert_frame_equal(p.data, self.df_p)
+            p.interface['/foo[0:2]', 'type'] = 'spike'
+            p.interface['/bar[0:2]', 'type'] = 'spike'
+            p.interface['/foo[2:5]', 'type'] = 'gpot'
+            p.interface['/bar[3:5]', 'type'] = 'gpot'
+            assert_frame_equal(p.interface.data, self.df_i)
 
         def test_create_dup_identifiers(self):
             self.assertRaises(Exception,  Pattern,
@@ -1392,8 +1414,12 @@ if __name__ == '__main__':
 
         def test_src_idx(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
-            p['/aaa[0:3]', '/yyy[0:3]'] = 1
-            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[1]', '/yyy[1]'] = 1
+            p['/aaa[2]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
             self.assertItemsEqual(p.src_idx(0, 1),
                                   [('aaa', 0),
                                    ('aaa', 1),
@@ -1402,40 +1428,51 @@ if __name__ == '__main__':
         def test_src_idx_dest_ports(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0]', '/yyy[0]'] = 1
-            p['/aaa[1:3]', '/yyy[1:3]'] = 1
-            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            p['/aaa[0]', '/yyy[1]'] = 1
+            p['/aaa[0]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
             self.assertItemsEqual(p.src_idx(0, 1, dest_ports='/yyy[0]'),
                                   [('aaa', 0)])
 
         def test_src_idx_src_type(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
-            p['/aaa[0:3]', '/xxx[0:3]'] = 1
-            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[0]', '/yyy[1]'] = 1
+            p['/aaa[0]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
             p.interface['/aaa[0:3]'] = [0, 'in', 'spike']
-            p.interface['/xxx[0:3]'] = [1, 'out', 'spike']
+            p.interface['/yyy[0:3]'] = [1, 'out', 'spike']
             self.assertItemsEqual(p.src_idx(0, 1, src_type='spike'), 
-                                  [('aaa', 0),
-                                   ('aaa', 1),
-                                   ('aaa', 2)])
+                                  [('aaa', 0)])
             self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
 
         def test_src_idx_dest_type(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
-            p['/aaa[0:3]', '/xxx[0:3]'] = 1
-            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[0]', '/yyy[1]'] = 1
+            p['/aaa[0]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
             p.interface['/aaa[0:3]', 'type'] = 'spike'
-            p.interface['/xxx[0:3]', 'type'] = 'spike'
+            p.interface['/yyy[0:3]', 'type'] = 'spike'
             self.assertItemsEqual(p.src_idx(0, 1, dest_type='spike'), 
-                                  [('aaa', 0),
-                                   ('aaa', 1),
-                                   ('aaa', 2)])
+                                  [('aaa', 0)])
             self.assertItemsEqual(p.src_idx(0, 1, dest_type='gpot'), [])
             
         def test_dest_idx(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
-            p['/aaa[0:3]', '/yyy[0:3]'] = 1
-            p['/xxx[0:3]', '/bbb[0:3]'] = 1
-            self.assertItemsEqual(p.dest_idx(0, 1, src_ports='/aaa[0]'),
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[1]', '/yyy[1]'] = 1
+            p['/aaa[2]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
+            self.assertItemsEqual(p.dest_idx(0, 1),
                                   [('yyy', 0),
                                    ('yyy', 1),
                                    ('yyy', 2)])
@@ -1443,33 +1480,46 @@ if __name__ == '__main__':
         def test_dest_idx_src_ports(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
             p['/aaa[0]', '/yyy[0]'] = 1
-            p['/aaa[1:3]', '/yyy[1:3]'] = 1
-            p['/xxx[0:3]', '/bbb[0:3]'] = 1
+            p['/aaa[0]', '/yyy[1]'] = 1
+            p['/aaa[0]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
             self.assertItemsEqual(p.dest_idx(0, 1, src_ports='/aaa[0]'),
-                                  [('yyy', 0)])
+                                  [('yyy', 0),
+                                   ('yyy', 1),
+                                   ('yyy', 2)])
 
         def test_dest_idx_src_type(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
-            p['/aaa[0:3]', '/xxx[0:3]'] = 1
-            p['/bbb[0:3]', '/yyy[0:3]'] = 1
-            p.interface['/aaa[0:3]', 'type'] = 'spike'
-            p.interface['/xxx[0:3]', 'type'] = 'spike'
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[0]', '/yyy[1]'] = 1
+            p['/aaa[0]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
+            p.interface['/aaa[0:3]'] = [0, 'in', 'spike']
+            p.interface['/yyy[0:3]'] = [1, 'out', 'spike']
             self.assertItemsEqual(p.dest_idx(0, 1, src_type='spike'), 
-                                  [('xxx', 0),
-                                   ('xxx', 1),
-                                   ('xxx', 2)])
+                                  [('yyy', 0),
+                                   ('yyy', 1),
+                                   ('yyy', 2)])
             self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
 
         def test_dest_idx_dest_type(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
-            p['/aaa[0:3]', '/xxx[0:3]'] = 1
-            p['/bbb[0:3]', '/yyy[0:3]'] = 1
+            p['/aaa[0]', '/yyy[0]'] = 1
+            p['/aaa[0]', '/yyy[1]'] = 1
+            p['/aaa[0]', '/yyy[2]'] = 1
+            p['/xxx[0]', '/bbb[0]'] = 1
+            p['/xxx[1]', '/bbb[1]'] = 1
+            p['/xxx[2]', '/bbb[2]'] = 1
             p.interface['/aaa[0:3]', 'type'] = 'spike'
-            p.interface['/xxx[0:3]', 'type'] = 'spike'
+            p.interface['/yyy[0:3]', 'type'] = 'spike'
             self.assertItemsEqual(p.dest_idx(0, 1, dest_type='spike'), 
-                                  [('xxx', 0),
-                                   ('xxx', 1),
-                                   ('xxx', 2)])
+                                  [('yyy', 0),
+                                   ('yyy', 1),
+                                   ('yyy', 2)])
             self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
 
         def test_is_connected(self):
@@ -1493,31 +1543,35 @@ if __name__ == '__main__':
                                       ('/aaa[2]', '/bbb[1]')])
 
         def test_to_graph(self):
-            p = Pattern('/foo[0:3]', '/bar[0:3]')
-            p['/foo[0:3]', '/bar[0:3]'] = 1
+            p = Pattern('/foo[0:4]', '/bar[0:4]')
+            p['/foo[0]', '/bar[0]'] = 1
+            p['/foo[0]', '/bar[1]'] = 1
+            p['/foo[1]', '/bar[2]'] = 1
+            p['/bar[3]', '/foo[2]'] = 1
+            p['/bar[3]', '/foo[3]'] = 1
             g = p.to_graph()
 
             self.assertItemsEqual(g.nodes(data=True), 
                                   [('/bar[0]', {'interface': 1, 'io': 'out', 'type': ''}),
-                                   ('/bar[2]', {'interface': 1, 'io': 'out', 'type': ''}),
                                    ('/bar[1]', {'interface': 1, 'io': 'out', 'type': ''}),
-                                   ('/foo[1]', {'interface': 0, 'io': 'in', 'type': ''}),                                  
-                                   ('/foo[2]', {'interface': 0, 'io': 'in', 'type': ''}),
-                                   ('/foo[0]', {'interface': 0, 'io': 'in', 'type': ''})])
+                                   ('/bar[2]', {'interface': 1, 'io': 'out', 'type': ''}),
+                                   ('/bar[3]', {'interface': 1, 'io': 'in', 'type': ''}),
+                                   ('/foo[0]', {'interface': 0, 'io': 'in', 'type': ''}),
+                                   ('/foo[1]', {'interface': 0, 'io': 'in', 'type': ''}),
+                                   ('/foo[2]', {'interface': 0, 'io': 'out', 'type': ''}),
+                                   ('/foo[3]', {'interface': 0, 'io': 'out', 'type': ''})])
             self.assertItemsEqual(g.edges(data=True),
-                                  [('/foo[2]', '/bar[2]', {}),
-                                   ('/foo[2]', '/bar[0]', {}),
-                                   ('/foo[2]', '/bar[1]', {}),
+                                  [('/foo[0]', '/bar[0]', {}),
+                                   ('/foo[0]', '/bar[1]', {}),
                                    ('/foo[1]', '/bar[2]', {}),
-                                   ('/foo[1]', '/bar[0]', {}),
-                                   ('/foo[1]', '/bar[1]', {}),
-                                   ('/foo[0]', '/bar[2]', {}),
-                                   ('/foo[0]', '/bar[0]', {}),
-                                   ('/foo[0]', '/bar[1]', {})])
+                                   ('/bar[3]', '/foo[2]', {}),
+                                   ('/bar[3]', '/foo[3]', {})])
 
         def test_clear(self):
             p = Pattern('/aaa[0:3]', '/bbb[0:3]')
-            p['/aaa[0:3]', '/bbb[0:3]'] = 1
+            p['/aaa[0]', '/bbb[0]'] = 1
+            p['/aaa[1]', '/bbb[1]'] = 1
+            p['/aaa[2]', '/bbb[2]'] = 1
             p.clear()
             assert len(p) == 0
 
