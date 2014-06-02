@@ -818,6 +818,10 @@ class Pattern(object):
            len(to_idx.unique()) < len(to_idx):
             raise ValueError('Fan-in pattern entries detected.')
 
+        # Prohibit ports that both receive input and send output:
+        if set(from_idx).intersection(to_idx):
+            raise ValueError('Ports cannot both receive input and send output.')
+
     def which_int(self, s):
         return self.interface.which_int(s)
     which_int.__doc__ = Interface.which_int.__doc__
@@ -852,15 +856,6 @@ class Pattern(object):
                     for row in self.data.index]
 
     def __setitem__(self, key, value):
-        # XXX attempting to create an index row that appears both in the 'from'
-        # and 'to' sections of the pattern's index should raise an exception
-        # because ports cannot both receive input and send output.
-        
-        # XXX attempting to create an index row that causes multiple source
-        # ports to map to a single destination port should raise an exception
-        # because Neurokernel's patterns should only permit fan-out but not
-        # fan-in.
-
         # Must pass more than one argument to the [] operators:
         assert type(key) == tuple
 
@@ -1411,6 +1406,10 @@ if __name__ == '__main__':
         def test_create_dup_identifiers(self):
             self.assertRaises(Exception,  Pattern,
                               '/foo[0],/foo[0]', '/bar[0:2]')
+
+        def test_create_port_in_out(self):
+            self.assertRaises(Exception,  Pattern,
+                              '/[foo,bar][0]', '/bar[0:2]')
 
         def test_src_idx(self):
             p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
