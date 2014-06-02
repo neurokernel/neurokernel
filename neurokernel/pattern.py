@@ -25,6 +25,8 @@ class Interface(object):
     * io - indicates whether the port receives input ('in') or emits output ('out').
     * type - indicates whether the port emits/receives spikes or graded potentials.
 
+    All port identifiers in an interface must be unique.
+
     Examples
     --------
     >>> i = Interface('/foo[0:4],/bar[0:3]')
@@ -526,16 +528,20 @@ class Pattern(object):
     identifiers; if a nonexistent attribute is specified when a sequential value
     is assigned, a new column for that attribute is automatically created: ::
 
-        p['/x[0:3]', '/y[0:2]', 'conn', 'x'] = [1, 'foo']
+        p['/x[0]', '/y[0]', 'conn', 'x'] = [1, 'foo']
 
     The direction of connections between ports in a class instance determines 
-    whether they are input or output ports.
+    whether they are input or output ports. Ports may not both receive input or 
+    emit output. Patterns may contain fan-out connections, i.e., one source port
+    connected to multiple destination ports, but not fan-in connections, i.e.,
+    multiple source ports connected to a single destination port.
 
     Examples
     --------
-    >>> p = Pattern('/x[0:3]','/y[0:2]')
-    >>> p['/x[0:2]', '/y[0]'] = 1
-    >>> p['/y[0:2]', '/x[1]'] = 1
+    >>> p = Pattern('/x[0:3]','/y[0:4]')
+    >>> p['/x[0]', '/y[0:2]'] = 1
+    >>> p['/y[2]', '/x[1]'] = 1
+    >>> p['/y[3]', '/x[2]'] = 1
 
     Attributes
     ----------
