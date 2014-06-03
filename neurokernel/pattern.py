@@ -372,26 +372,26 @@ class Interface(object):
             and each identifier with an 'io' attribute set to 'out' in one
             interface has its 'io' attribute set to 'in' in the other interface.
 
-        Notes
-        -----
-        All ports in both interfaces must have set 'io' attributes.
         """
 
         assert isinstance(i, Interface)
-        if not set(self.data['io'].values).issubset(['in', 'out']) or \
-           not set(i.data['io'].values).issubset(['in', 'out']):
-            raise ValueError("All ports must have their 'io' attribute set.")
 
-        # Find inverse of this instance's 'io' attributes for interface 'a':
+        # Find inverse of this instance's 'io' attributes 
+        # for interface 'a':
         f = lambda x: 'out' if x == 'in' else \
             ('in' if x == 'out' else x)
-        inv = self.data[self.data['interface'] == a]['io'].apply(f)
+        io_a_inv = self.data[self.data['interface'] == a]['io'].apply(f)
 
-        # Compare indices:
+        # Exclude null entries from inverted and original 'io' attribs:
+        io_a_inv = io_a_inv[io_a_inv.notnull()]
+        io_b = i.data[i.data['interface'] == b]['io']
+        io_b = io_b[io_b.notnull()]
+        print len(io_a_inv), len(io_b)
+
+        # Compare indices and nonull 'io' values:
         idx_a = self.data[self.data['interface'] == a].index
         idx_b = i.data[i.data['interface'] == b].index
-        if idx_a.equals(idx_b) and \
-           all(inv == i.data[i.data['interface'] == b]['io']):
+        if idx_a.equals(idx_b) and all(io_a_inv==io_b):
             return True
         else:
             return False
@@ -1396,6 +1396,15 @@ if __name__ == '__main__':
             i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
             j = Interface('/foo[0:2]')
             j['/foo[0:2]', 'interface', 'io'] = [1, 'in']
+            assert i.is_compatible(0, j, 1)
+
+        def test_is_compatible_with_nulls(self):
+            i = Interface('/foo[0:3]')
+            i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
+            i['/foo[2]', 'interface'] = 0
+            j = Interface('/foo[0:3]')
+            j['/foo[0:2]', 'interface', 'io'] = [1, 'in']
+            j['/foo[2]', 'interface'] = 0
             assert i.is_compatible(0, j, 1)
 
         def test_which_int_unset(self):
