@@ -128,7 +128,9 @@ class Interface(object):
             try:
                 idx = self.sel.make_index(selector, self.data.index.names)
             except:
-                raise ValueError('cannot create new rows for ambiguous selector %s' % selector)
+                raise ValueError('cannot create index with '
+                                 'selector %s and column names %s' \
+                                 % (selector, str(self.data.index.names)))
             else:
                 found = False
         else:
@@ -185,6 +187,24 @@ class Interface(object):
         """
         
         return set(self.data['interface'])
+
+    @property
+    def io_inv(self):
+        """
+        Returns new Interface instance with inverse input-output attributes.
+
+        Returns
+        -------
+        i : Interface
+            Interface instance whose 'io' attributes are the inverse of those of
+        the current instance.
+        """
+        
+        data_inv = self.data.copy()
+        f = lambda x: 'out' if x == 'in' else \
+            ('in' if x == 'out' else x)
+        data_inv['io'] = data_inv['io'].apply(f)
+        return self.from_df(data_inv)
 
     @classmethod
     def as_selectors(cls, ids):
@@ -363,14 +383,15 @@ class Interface(object):
             raise ValueError("All ports must have their 'io' attribute set.")
 
         # Find inverse of this instance's 'io' attributes for interface 'a':
-        inv = self.data[self.data['interface'] == a].applymap(lambda x: 'out' \
-                        if x == 'in' else ('in' if x == 'out' else x))
+        f = lambda x: 'out' if x == 'in' else \
+            ('in' if x == 'out' else x)
+        inv = self.data[self.data['interface'] == a]['io'].apply(f)
 
         # Compare indices:
         idx_a = self.data[self.data['interface'] == a].index
         idx_b = i.data[i.data['interface'] == b].index
         if idx_a.equals(idx_b) and \
-           all(inv['io'] == i.data[i.data['interface'] == b]['io']):
+           all(inv == i.data[i.data['interface'] == b]['io']):
             return True
         else:
             return False
@@ -509,6 +530,14 @@ class Interface(object):
         except KeyError:
             return set()
 
+    def __copy__(self):
+        """
+        Make a copy of this object.
+        """
+
+        return self.from_df(self.data)
+    copy = __copy__
+
     def __len__(self):
         return self.data.__len__()
 
@@ -556,7 +585,7 @@ class Pattern(object):
 
     Parameters
     ----------
-    sel0, sel1, ...: str
+    sel0, sel1, ...: str, unicode, or sequence
         Selectors defining the sets of ports potentially connected by the 
         pattern. These selectors must be disjoint, i.e., no identifier 
         comprised by one selector may be in any other selector.
@@ -598,12 +627,17 @@ class Pattern(object):
 
         # Force sets of identifiers to be disjoint so that no identifier can
         # denote a port in more than one set:
-        assert self.sel.are_disjoint(selectors)
+        assert self.sel.are_disjoint(*selectors)
 
         # Collect all of the selectors:
         selector = []
         for s in selectors:
-            selector.extend(self.sel.parse(s))
+            if type(s) in [str, unicode]:
+                selector.extend(self.sel.parse(s))
+            elif np.iterable(s):
+                selector.extend(s)
+            else:
+                raise ValueError('invalid selector type')
 
         # Create Interface instance containing the ports comprised by all of the
         # specified selectors:
@@ -1338,6 +1372,15 @@ if __name__ == '__main__':
             i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
             i['/foo[2:4]', 'interface', 'io'] = [1, 'in']
             assert i.interface_ids == set([0, 1])
+            
+        def test_io_inv(self):
+            i = Interface('/foo[0:4]')
+            i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
+            i['/foo[2:4]', 'interface', 'io'] = [1, 'in']
+            j = Interface('/foo[0:4]')
+            j['/foo[0:2]', 'interface', 'io'] = [0, 'in']
+            j['/foo[2:4]', 'interface', 'io'] = [1, 'out']
+            assert_frame_equal(i.data, j.io_inv.data)
 
         def test_is_compatible_both_dirs(self):
             i = Interface('/foo[0:4]')
