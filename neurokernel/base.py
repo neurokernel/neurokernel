@@ -1045,9 +1045,9 @@ if __name__ == '__main__':
     man = BaseManager(get_random_port(), get_random_port())
     man.add_brok()
 
-    m1_int_sel = '/a[0:3]'; m1_int_sel_in = '/a[0]'; m1_int_sel_out = '/a[1:3]'
-    m2_int_sel = '/b[0:4]'; m2_int_sel_in = '/b[0:2]'; m2_int_sel_out = '/b[2:4]'
-    m3_int_sel = '/c[0:3]'; m3_int_sel_in = '/c[0]'; m3_int_sel_out = '/c[1:3]'
+    m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0,3,4]'; m1_int_sel_out = '/a[1,2]'
+    m2_int_sel = '/b[0:5]'; m2_int_sel_in = '/b[0,1,4]'; m2_int_sel_out = '/b[2:4]'
+    m3_int_sel = '/c[0:4]'; m3_int_sel_in = '/c[0:2]'; m3_int_sel_out = '/c[2:4]'
 
     m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
                   ['interface', 'io', 'type'],
@@ -1061,20 +1061,36 @@ if __name__ == '__main__':
                   ['interface', 'io', 'type'], 
                   man.port_data, man.port_ctrl, 'm3   ')
     man.add_mod(m3)
-    
+
+    # Make sure that all ports in the patterns' interfaces are set so 
+    # that they match those of the modules:
     pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12[m1_int_sel_out, m2_int_sel_in] = 1
-    pat12[m2_int_sel_out, m1_int_sel_in] = 1
+    pat12.interface[m1_int_sel_out, 'io'] = 'in'
+    pat12.interface[m1_int_sel_in, 'io'] = 'out'
+    pat12.interface[m2_int_sel_in, 'io'] = 'out'
+    pat12.interface[m2_int_sel_out, 'io'] = 'in'
+    pat12['/a[1]', '/b[0]'] = 1
+    pat12['/a[2]', '/b[1]'] = 1
+    pat12['/b[2]', '/a[0]'] = 1
     man.connect(m1, m2, pat12, 0, 1)
 
     pat23 = Pattern(m2_int_sel, m3_int_sel)
-    pat23[m2_int_sel_out, m3_int_sel_in] = 1
-    pat23[m3_int_sel_out, m2_int_sel_in] = 1
+    pat23.interface[m2_int_sel_out, 'io'] = 'in'
+    pat23.interface[m2_int_sel_in, 'io'] = 'out'
+    pat23.interface[m3_int_sel_in, 'io'] = 'out'
+    pat23.interface[m3_int_sel_out, 'io'] = 'in'
+    pat23['/b[3]', '/c[0]'] = 1
+    pat23['/b[3]', '/c[1]'] = 1
+    pat23['/c[2]', '/b[4]'] = 1
     man.connect(m2, m3, pat23, 0, 1)
 
     pat31 = Pattern(m3_int_sel, m1_int_sel)
-    pat31[m3_int_sel_out, m1_int_sel_in] = 1
-    pat31[m1_int_sel_out, m3_int_sel_in] = 1
+    pat31.interface[m3_int_sel_out, 'io'] = 'in'
+    pat31.interface[m1_int_sel_in, 'io'] = 'out'
+    pat31.interface[m3_int_sel_in, 'io'] = 'out'
+    pat31.interface[m1_int_sel_out, 'io'] = 'in'
+    pat31['/c[3]', '/a[3]'] = 1
+    pat31['/c[3]', '/a[4]'] = 1
     man.connect(m3, m1, pat31, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting

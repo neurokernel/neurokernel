@@ -371,7 +371,6 @@ class Interface(object):
             True if both interfaces comprise the same identifiers
             and each identifier with an 'io' attribute set to 'out' in one
             interface has its 'io' attribute set to 'in' in the other interface.
-
         """
 
         assert isinstance(i, Interface)
