@@ -25,7 +25,11 @@ class Interface(object):
     * io - indicates whether the port receives input ('in') or emits output ('out').
     * type - indicates whether the port emits/receives spikes or graded potentials.
 
-    All port identifiers in an interface must be unique.
+    All port identifiers in an interface must be unique. For two interfaces to
+    be deemed compatible, they must contain the same port identifiers and their
+    identifiers' 'io' attributes must be the inverse of each other (i.e., every
+    'in' port in one interface must be mirrored by an 'out' port in the other
+    interface.
 
     Examples
     --------
@@ -81,6 +85,7 @@ class Interface(object):
     See Also
     --------
     .. [1] PathLikeSelector
+
     """
 
     def __init__(self, selector='', columns=['interface', 'io', 'type']):
