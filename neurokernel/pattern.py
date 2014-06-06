@@ -373,29 +373,43 @@ class Interface(object):
         Returns
         -------
         result : bool
-            True if both interfaces comprise the same identifiers
-            and each identifier with an 'io' attribute set to 'out' in one
+            True if both interfaces comprise the same identifiers, the set 'type'
+            attributes for each matching pair of identifiers in the two
+            interfaces match, and each identifier with an 'io' attribute set to 'out' in one
             interface has its 'io' attribute set to 'in' in the other interface.
+
+        Notes
+        -----
+        Assumes that the port identifiers in both interfaces are sorted in the
+        same order.
         """
 
         assert isinstance(i, Interface)
 
+        # Find 'type' attributes for specified interfaces:
+        type_a = self.data[self.data['interface'] == a]['type']
+        type_b = i.data[i.data['interface'] == b]['type']
+        
+        # Exclude null entries from 'type' attribs:
+        type_a = type_a[type_a.notnull()]
+        type_b = type_b[type_b.notnull()]
+
         # Find inverse of this instance's 'io' attributes 
-        # for interface 'a':
+        # for interface 'a' and 'io' attributes for interface 'b':
         f = lambda x: 'out' if x == 'in' else \
             ('in' if x == 'out' else x)
         io_a_inv = self.data[self.data['interface'] == a]['io'].apply(f)
+        io_b = i.data[i.data['interface'] == b]['io']
 
         # Exclude null entries from inverted and original 'io' attribs:
         io_a_inv = io_a_inv[io_a_inv.notnull()]
-        io_b = i.data[i.data['interface'] == b]['io']
         io_b = io_b[io_b.notnull()]
-        print len(io_a_inv), len(io_b)
 
-        # Compare indices and nonull 'io' values:
+        # Compare indices, non-null 'io' attribs, and non-null 'type' attribs:
         idx_a = self.data[self.data['interface'] == a].index
         idx_b = i.data[i.data['interface'] == b].index
-        if idx_a.equals(idx_b) and all(io_a_inv==io_b):
+        if idx_a.equals(idx_b) and all(io_a_inv==io_b) \
+           and all(type_a==type_b):
             return True
         else:
             return False
@@ -1395,11 +1409,27 @@ if __name__ == '__main__':
             j['/foo[2:4]', 'interface', 'io'] = [1, 'out']
             assert i.is_compatible(0, j, 1)
 
+        def test_is_compatible_both_dirs_types(self):
+            i = Interface('/foo[0:4]')
+            i['/foo[0:2]'] = [0, 'out', 'gpot']
+            i['/foo[2:4]'] = [0, 'in', 'spike']
+            j = Interface('/foo[0:4]')
+            j['/foo[0:2]'] = [1, 'in', 'gpot']
+            j['/foo[2:4]'] = [1, 'out', 'spike']
+            assert i.is_compatible(0, j, 1)
+
         def test_is_compatible_one_dir(self):
             i = Interface('/foo[0:2]')
             i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
             j = Interface('/foo[0:2]')
             j['/foo[0:2]', 'interface', 'io'] = [1, 'in']
+            assert i.is_compatible(0, j, 1)
+
+        def test_is_compatible_one_dir_types(self):
+            i = Interface('/foo[0:2]')
+            i['/foo[0:2]'] = [0, 'out', 'spike']
+            j = Interface('/foo[0:2]')
+            j['/foo[0:2]'] = [1, 'in', 'spike']
             assert i.is_compatible(0, j, 1)
 
         def test_is_compatible_with_nulls(self):
@@ -1408,7 +1438,16 @@ if __name__ == '__main__':
             i['/foo[2]', 'interface'] = 0
             j = Interface('/foo[0:3]')
             j['/foo[0:2]', 'interface', 'io'] = [1, 'in']
-            j['/foo[2]', 'interface'] = 0
+            j['/foo[2]', 'interface'] = 1
+            assert i.is_compatible(0, j, 1)
+
+        def test_is_compatible_with_nulls_types(self):
+            i = Interface('/foo[0:3]')
+            i['/foo[0:2]'] = [0, 'out', 'gpot']
+            i['/foo[2]', 'interface'] = 0
+            j = Interface('/foo[0:3]')
+            j['/foo[0:2]'] = [1, 'in', 'gpot']
+            j['/foo[2]', 'interface'] = 1
             assert i.is_compatible(0, j, 1)
 
         def test_which_int_unset(self):
