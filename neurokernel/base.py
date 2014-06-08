@@ -377,7 +377,7 @@ class BaseModule(ControlledProcess):
             # the output data:
             # XXX it would be more efficient to do allocate an array and mapper
             # only once:        
-            pm = PortMapper(np.asarray(out), self.interface.out_ports())
+            pm = PortMapper(np.asarray(out), self.interface.out_ports().to_tuples())
 
             # Select data that should be sent to each destination module and append
             # it to the outgoing queue:
@@ -1028,7 +1028,7 @@ if __name__ == '__main__':
                 assert PathLikeSelector.is_in(sel_out, sel)
                 self.interface[sel_out, 'io'] = 'out'
 
-            self.data = np.zeros(len(self.interface.ports()), np.float64)
+            self.data = np.zeros(len(self.interface.interface_ports()), np.float64)
 
         def run_step(self, in_dict, out):
             super(MyModule, self).run_step(in_dict, out)
