@@ -46,6 +46,11 @@ class BaseModule(ControlledProcess):
 
     Parameters
     ----------
+    selector : str, unicode, or sequence
+        Path-like selector describing the module's interface of 
+        exposed ports.
+    columns : list of str
+        Interface port attributes.
     port_data : int
         Network port to use when communicating with broker.
     port_ctrl : int
@@ -53,6 +58,9 @@ class BaseModule(ControlledProcess):
     id : str
         Module identifier. If no identifier is specified, a unique 
         identifier is automatically generated.
+    debug : bool
+        Debug flag. When True, exceptions raised during the work method
+        are not be suppressed.
 
     Attributes
     ----------
@@ -65,7 +73,7 @@ class BaseModule(ControlledProcess):
     patterns : dict of Pattern
         Pattern objects connecting the module instance with other module
         instances. Keyed on the ID of the other module instances.
-    pat_ints : dict of int
+    pat_ints : dict of tuple of int
         Interface of each pattern that is connected to the module instance.
         Keyed on the ID of the other module instances.
 
