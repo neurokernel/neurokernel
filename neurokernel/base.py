@@ -1030,10 +1030,6 @@ if __name__ == '__main__':
 
             self.data = np.zeros(len(self.interface.ports()), np.float64)
 
-        @property
-        def N(self):
-            return len(self.data)
-
         def run_step(self, in_dict, out):
             super(MyModule, self).run_step(in_dict, out)
 

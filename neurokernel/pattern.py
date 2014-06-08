@@ -71,6 +71,8 @@ class Interface(object):
         List of input port identifiers as tuples comprised by an interface.
     get_interface(i)
         Return specified interface as an Interface instance.
+    gpot_ports(i)
+        List of graded potential port identifiers as tuples comprised by an interface.
     is_compatible(a, i, b)
         Check whether two interfaces can be connected.
     out_ports(i)
@@ -79,6 +81,8 @@ class Interface(object):
         Restrict Interface ports with a selection function.
     ports(i)
         List of port identifiers as tuples comprised by an interface.
+    spike_ports(i)
+        List of spiking port identifiers as tuples comprised by an interface.
     which_int(s)
         Return identifier(s) of interface(s) containing specified selector.
 
@@ -470,6 +474,48 @@ class Interface(object):
 
         try:
             return self.data[(self.data['io'] == 'out') & \
+                             (self.data['interface'] == i)].index.tolist()
+        except:
+            return []
+
+    def gpot_ports(self, i=0):
+        """
+        List of graded potential port identifiers as tuples comprised by an interface.
+
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        p : list
+            List of port identifiers as tuples of tokens.
+        """
+
+        try:
+            return self.data[(self.data['type'] == 'gpot') & \
+                             (self.data['interface'] == i)].index.tolist()
+        except:
+            return []
+
+    def spike_ports(self, i=0):
+        """
+        List of spiking port identifiers as tuples comprised by an interface.
+
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        p : list
+            List of port identifiers as tuples of tokens.
+        """
+
+        try:
+            return self.data[(self.data['type'] == 'spike') & \
                              (self.data['interface'] == i)].index.tolist()
         except:
             return []
@@ -1366,6 +1412,28 @@ if __name__ == '__main__':
         def test_out_ports(self):
             self.assertSequenceEqual(self.interface.out_ports(0),
                                      [('foo', 1), ('foo', 2)])
+
+        def test_gpot_ports(self):
+            i = Interface('/foo[0:6]')
+            i['/foo[0]'] = [0, 'in', 'spike']
+            i['/foo[1:3]'] = [0, 'out', 'spike']
+            i['/foo[3]'] = [0, 'in', 'gpot']
+            i['/foo[4:6]'] = [0, 'out', 'gpot']
+            self.assertSequenceEqual(i.gpot_ports(0),
+                                     [('foo', 3), 
+                                      ('foo', 4), 
+                                      ('foo', 5)])
+
+        def test_spike_ports(self):
+            i = Interface('/foo[0:6]')
+            i['/foo[0]'] = [0, 'in', 'spike']
+            i['/foo[1:3]'] = [0, 'out', 'spike']
+            i['/foo[3]'] = [0, 'in', 'gpot']
+            i['/foo[4:6]'] = [0, 'out', 'gpot']
+            self.assertSequenceEqual(i.spike_ports(0),
+                                     [('foo', 0), 
+                                      ('foo', 1), 
+                                      ('foo', 2)])
 
         def test_port_select(self):
             i = self.interface.port_select(lambda x: x[1] >= 1)
