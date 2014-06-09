@@ -1084,10 +1084,13 @@ class Pattern(object):
 
         Examples
         --------
-        >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
-        >>> p['/foo[0:3]', '/bar[0:3]'] = 1
-        >>> p['/bar[0:3]', '/foo[0:3]'] = 1
-        >>> all(p.src_idx(0, 1, dest_ports='/bar[0]') == [('foo', 0), ('foo', 1), ('foo', 2)])
+        >>> p = Pattern('/foo[0:4]', '/bar[0:4]')
+        >>> p['/foo[0]', '/bar[0]'] = 1
+        >>> p['/foo[1]', '/bar[1]'] = 1
+        >>> p['/foo[2]', '/bar[2]'] = 1
+        >>> p['/bar[3]', '/foo[3]'] = 1
+        >>> all(p.src_idx(0, 1, dest_ports='/bar[0,1]') == [('foo', 0), ('foo', 1)])
+        True
 
         Parameters
         ----------
@@ -1149,10 +1152,13 @@ class Pattern(object):
 
         Examples
         --------
-        >>> p = Pattern('/foo[0:3]', '/bar[0:3]')
-        >>> p['/foo[0:3]', '/bar[0:3]'] = 1
-        >>> p['/bar[0:3]', '/foo[0:3]'] = 1
-        >>> all(p.dest_idx(0, 1, src_ports='/foo[0]') == [('bar', 0), ('bar', 1), ('bar', 2)])
+        >>> p = Pattern('/foo[0:4]', '/bar[0:4]')
+        >>> p['/foo[0]', '/bar[0]'] = 1
+        >>> p['/foo[1]', '/bar[1]'] = 1
+        >>> p['/foo[2]', '/bar[2]'] = 1
+        >>> p['/bar[3]', '/foo[3]'] = 1
+        >>> all(p.dest_idx(0, 1, src_ports='/foo[0,1]') == [('bar', 0), ('bar', 1)])
+        True
 
         Parameters
         ----------
