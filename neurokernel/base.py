@@ -1017,7 +1017,7 @@ if __name__ == '__main__':
         """
 
         def __init__(self, sel, sel_in, sel_out,
-                     columns=['io', 'type'],
+                     columns=['interface', 'io', 'type'],
                      port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
             super(MyModule, self).__init__(sel, columns, port_data, port_ctrl,
                                            id, True)

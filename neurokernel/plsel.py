@@ -1074,7 +1074,7 @@ class PathLikeSelector(object):
         Returns
         -------
         selector : list of tuple
-            List of tuples corresponding to individual port identifiers.        
+            List of tuples corresponding to individual port identifiers.
         """
 
         if isinstance(idx, pd.MultiIndex):
@@ -1215,6 +1215,15 @@ class PortMapper(object):
     """
     Maps a numpy array to/from path-like port identifiers.
 
+    Attributes
+    ----------
+    data : numpy.ndarray
+        Data that has been mapped to ports.
+    index : pandas.MultiIndex
+        Index of port identifiers.
+    portmap : pandas.Series
+        Map of port identifiers to integer indices into `data`.
+
     Parameters
     ----------
     data : numpy.ndarray
@@ -1224,8 +1233,13 @@ class PortMapper(object):
         (e.g., [['foo', (0, 2)]]) to map to `data`.
     idx : sequence
         Indices of elements in the specified array to map to ports. If no
-        indices are specified, the entire array is mapped to the ports specified
-        by the given selector.
+        indices are specified, the entire array is mapped to the ports 
+        specified by the given selector.
+
+    Methods
+    -------
+    get_ports(f)
+        Select ports in map.
 
     Notes
     -----
@@ -1248,6 +1262,17 @@ class PortMapper(object):
             self.portmap = pd.Series(data=np.asarray(idx))        
         self.portmap.index = self.sel.make_index(selector)
 
+    @property
+    def index(self):
+        """
+        PortMapper index.
+        """
+        
+        return self.portmap.index
+    @index.setter
+    def index(self, i):
+        self.portmap.index = i
+
     def get(self, selector):
         """
         Retrieve mapped data specified by given selector.
@@ -1265,6 +1290,31 @@ class PortMapper(object):
         """
 
         return self.data[self.sel.select(self.portmap, selector).values]
+
+    def get_ports(self, f):
+        """
+        Select ports in map.
+
+        Parameters
+        ----------
+        f : callable or sequence
+            If callable, treat as elementwise selection function to apply to 
+            the mapped data array. If a sequence, treat as an index into the
+            mapped data array.
+        
+        Returns
+        -------
+        s : list of tuple
+            Expanded port identifiers selected by the specified function
+            or boolean array.
+        """
+
+        assert callable(f) or (np.iterable(f) and len(f) == len(self.data))
+        if callable(f):
+            idx = self.portmap[f(self.data)].index
+        else:
+            idx = self.portmap[f].index
+        return self.sel.index_to_selector(idx)
 
     def set(self, selector, data):
         """
@@ -1661,6 +1711,22 @@ if __name__ == '__main__':
                             np.arange(5, 15))
             np.allclose(self.data[5:10], pm['/foo/bar[0:5]'])
 
+        def test_get_ports(self):
+            pm = PortMapper(np.arange(10), '/foo/bar[0:10]')
+            self.assertSequenceEqual(pm.get_ports(lambda x: x < 5),
+                                     [('foo', 'bar', 0),
+                                      ('foo', 'bar', 1),
+                                      ('foo', 'bar', 2),
+                                      ('foo', 'bar', 3),
+                                      ('foo', 'bar', 4)])
+            i = np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 0], dtype=np.bool)
+            self.assertSequenceEqual(pm.get_ports(i),
+                                     [('foo', 'bar', 0),
+                                      ('foo', 'bar', 1),
+                                      ('foo', 'bar', 2),
+                                      ('foo', 'bar', 3),
+                                      ('foo', 'bar', 4)])
+                                  
         def test_set(self):
             pm = PortMapper(self.data,
                             '/foo/bar[0:10],/foo/baz[0:10]')
