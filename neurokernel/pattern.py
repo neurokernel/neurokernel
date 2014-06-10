@@ -57,6 +57,8 @@ class Interface(object):
 
     Methods
     -------
+    clear()
+        Clear all ports in class instance.
     data_select(f, inplace=False)
         Restrict Interface data with a selection function.
     from_df(df)
@@ -213,6 +215,13 @@ class Interface(object):
             ('in' if x == 'out' else x)
         data_inv['io'] = data_inv['io'].apply(f)
         return self.from_df(data_inv)
+
+    def clear(self):
+        """
+        Clear all ports in class instance.
+        """
+
+        self.data.drop(self.data.index, inplace=True)
 
     def data_select(self, f, inplace=False):
         """
@@ -710,10 +719,10 @@ class Pattern(object):
         Create pattern from the product of identifiers comprised by two selectors.
     interface_ports(i)
         Return specified interface as an Interface instance.
-    is_in_interfaces(selector)
-        Check whether a selector is supported by any of the pattern's interfaces.
     is_connected(from_int, to_int)
         Check whether the specified interfaces are connected.
+    is_in_interfaces(selector)
+        Check whether a selector is supported by any of the pattern's interfaces.
     src_idx(src_int, dest_int, dest_ports=None)
         Retrieve source ports connected to the specified destination ports.
     which_int(s)
@@ -855,6 +864,14 @@ class Pattern(object):
         p.interface[to_sel, 'io'] = 'out'
 
         return p
+
+    def clear(self):
+        """
+        Clear all connections in class instance.
+        """
+
+        self.interface.clear()
+        self.data.drop(self.data.index, inplace=True)
 
     @classmethod
     def from_product(cls, *selectors, **kwargs):
@@ -1219,14 +1236,6 @@ class Pattern(object):
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
 
-    def clear(self):
-        """
-        Clear all connections in class instance.
-        """
-
-        # XXX need to also clear the interface data structure:
-        self.data.drop(self.data.index, inplace=True)
-
     def is_connected(self, from_int, to_int):
         """
         Check whether the specified interfaces are connected.
@@ -1389,6 +1398,11 @@ if __name__ == '__main__':
             self.interface = Interface('/foo[0:3]')
             self.interface['/foo[0]', 'interface', 'io'] = [0, 'in']
             self.interface['/foo[1:3]', 'interface', 'io'] = [0, 'out']
+
+        def test_clear(self):
+            i = Interface('/foo[0:4]')
+            i.clear()
+            assert len(i) == 0
 
         def test_create_empty(self):
             i = Interface('')
@@ -1810,5 +1824,6 @@ if __name__ == '__main__':
             p['/aaa[2]', '/bbb[2]'] = 1
             p.clear()
             assert len(p) == 0
+            assert len(p.interface) == 0
 
     main()
