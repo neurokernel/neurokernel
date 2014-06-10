@@ -39,10 +39,11 @@ PORT_DATA = 5000
 PORT_CTRL = 5001
 
 class BaseModule(ControlledProcess):
-    """Processing module.
+    """
+    Processing module.
 
     This class repeatedly executes a work method until it receives a
-    quit message via its control port.
+    quit message via its control network port. 
 
     Parameters
     ----------
@@ -52,9 +53,9 @@ class BaseModule(ControlledProcess):
     columns : list of str
         Interface port attributes.
     port_data : int
-        Network port to use when communicating with broker.
+        Network port for transmitting data.
     port_ctrl : int
-        Port used by broker to control module.
+        Network port for controlling the module instance.
     id : str
         Module identifier. If no identifier is specified, a unique 
         identifier is automatically generated.
@@ -163,13 +164,20 @@ class BaseModule(ControlledProcess):
 
         # Dict for storing incoming data; each entry (corresponding to each
         # module that sends input to the current module) is a deque containing
-        # incoming data, which in turn contains transmitted data arrays:
+        # incoming data, which in turn contains transmitted data arrays. Deques
+        # are used here to accommodate situations when multiple data from a
+        # single source arrive:
         self._in_data = {}
 
         # List for storing outgoing data; each entry is a tuple whose first
         # entry is the source or destination module ID and whose second entry is
         # the data to transmit:
         self._out_data = []
+
+        # Dictionary containing ports of source modules that
+        # send output to this module. Must be initialized immediately before
+        # an emulation begins running. Keyed on source module ID:
+        self._in_port_dict = {}
 
         # Dictionary containing ports of destination modules that
         # receive input from this module. Must be initialized immediately before
@@ -237,6 +245,16 @@ class BaseModule(ControlledProcess):
         assert self.interface.is_compatible(0, pat.interface, int_0)
         assert m.interface.is_compatible(0, pat.interface, int_1)
 
+        # Check that no fan-in from different source modules occurs as a result
+        # of the new connection by getting the union of all input ports for the
+        # interfaces of all existing patterns connected to the current module
+        # and ensuring that the input ports from the new pattern don't overlap:
+        if self.patterns:
+            curr_in_ports = reduce(set.union, 
+                [set(self.patterns[i].in_ports(self.pat_ints[i][0]).to_tuples()) \
+                 for i in self.patterns.keys()])
+            assert curr_in_ports.intersection(pat.in_ports(int_0).to_tuples())
+            
         # The pattern instances associated with the current
         # module are keyed on the IDs of the modules to which they connect:
         self.patterns[m.id] = pat
@@ -333,25 +351,50 @@ class BaseModule(ControlledProcess):
                 self.data_poller = zmq.Poller()
                 self.data_poller.register(self.sock_data, zmq.POLLIN)
 
-    def _get_in_data(self, in_dict):
+    def _get_in_data(self, in_data):
         """
         Get input data from incoming transmission buffer.
 
         Input data received from other modules is used to populate the specified
-        data structures.
+        data structure.
 
         Parameters
         ----------
-        in_dict : dict of numpy.ndarray of float
-            Dictionary of data from other modules keyed by source module ID.
+        in_data : numpy.ndarray of float
+            Array of data to populate with received input data.
         """
 
-        self.logger.info('retrieving input')
-        for in_id in self.in_ids:
-            if in_id in self._in_data.keys() and self._in_data[in_id]:
-                in_dict[in_id] = self._in_data[in_id].popleft()
- 
-    def _put_out_data(self, out):
+        self.logger.info('retrieving from input buffer')
+
+        # Create mapper to use the module's interface ports to select data from
+        # the output data; notice that the length of the array must equal
+        # the total number of ports in the module's interface:
+        # XXX it would be more efficient to do allocate an array and mapper
+        # only once:
+        try:
+            pm = PortMapper(np.asarray(in_data),
+                            self.interface.to_tuples())
+        except:
+            self.logger.info('unable to map ports to data - '
+                             'not retrieving any input data')
+
+        else:
+            # Since fan-in is not permitted, the data from all source modules
+            # must necessarily map to different ports; we can therefore write each
+            # of the received data to the array associated with the module's ports
+            # here without worry of overwriting the data from each source module:
+            for in_id in self.in_ids:
+
+                # Check for exceptions so as to not fail on the first emulation
+                # step when there is no input data to retrieve:
+                try:
+                    pm[self._in_port_dict[in_id]] = self._in_data[in_id].popleft()
+                except:
+                    self.logger.info('no input data from [%s] retrieved' % in_id)
+                else:
+                    self.logger.info('input data from [%s] retrieved' % in_id)
+
+    def _put_out_data(self, out_data):
         """
         Put output data in outgoing transmission buffer.
 
@@ -361,29 +404,37 @@ class BaseModule(ControlledProcess):
 
         Parameter
         ---------
-        out : numpy.ndarray of float
-            Output data.
+        out_data : numpy.ndarray of float
+            Array of data to output.
         """
 
         self.logger.info('populating output buffer')
 
         # Clear output buffer before populating it:
         self._out_data = []
-        
-        # If there are destination models to which to transmit output..
-        if self.out_ids:
 
-            # Create mapper to use the module's interface ports to select data from
-            # the output data:
-            # XXX it would be more efficient to do allocate an array and mapper
-            # only once:        
-            pm = PortMapper(np.asarray(out), self.interface.out_ports().to_tuples())
-
+        # Create mapper to use the module's interface ports to select data from
+        # the output data; notice that the length of the array must equal
+        # the total number of ports in the module's interface:
+        # XXX it would be more efficient to do allocate an array and mapper
+        # only once:
+        try:
+            pm = PortMapper(np.asarray(out_data),
+                            self.interface.to_tuples())
+        except:
+            self.logger.info('unable to map ports to data - '
+                             'not sending any output data')
+        else:
             # Select data that should be sent to each destination module and append
             # it to the outgoing queue:
-            for out_id in self.out_ids:    
-                self._out_data.append((out_id, pm[self._out_port_dict[out_id]]))
-            
+            for out_id in self.out_ids:
+                try:
+                    self._out_data.append((out_id, pm[self._out_port_dict[out_id]]))
+                except:
+                    self.logger.info('no output data to [%s] sent' % out_id)
+                else:
+                    self.logger.info('output data to [%s] sent' % out_id)
+
     def _sync(self):
         """
         Send output data and receive input data.
@@ -426,8 +477,10 @@ class BaseModule(ControlledProcess):
 
             # Receive inbound data:
             if self.net in ['in', 'full']:
+
                 # Wait until inbound data is received from all source modules:  
                 while not all((q for q in self._in_data.itervalues())):
+
                     # Use poller to avoid blocking:
                     if is_poll_in(self.sock_data, self.data_poller):
                         in_id, data = msgpack.unpackb(self.sock_data.recv())
@@ -464,7 +517,7 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('performing post-emulation operations')
 
-    def run_step(self, in_dict, out):
+    def run_step(self, in_data, out_data):
         """
         Perform a single step of computation.
 
@@ -473,6 +526,43 @@ class BaseModule(ControlledProcess):
         """
 
         self.logger.info('running execution step')
+
+    def _init_port_dicts(self):
+        """
+        Initial dictionaries of source/destination ports in current module.
+        """
+
+        # Extract identifiers of source ports in the current module's interface
+        # for all modules receiving output from the current module:
+        self._out_port_dict = {}
+        for out_id in self.out_ids:
+            self.logger.info('extracting output ports for %s' % out_id)
+
+            # Get interfaces of pattern connecting the current module to
+            # destination module `out_id`; `from_int` is connected to the
+            # current module, `to_int` is connected to the other module:
+            from_int, to_int = self.pat_ints[out_id]
+
+            # Get ports in interface (`from_int`) connected to the current
+            # module that are connected to the other module via the pattern:
+            self._out_port_dict[out_id] = \
+                self.patterns[out_id].src_idx(from_int, to_int)
+
+        # Extract identifiers of destination ports in the current module's
+        # interface for all modules sending input to the current module:
+        self._in_port_dict = {}
+        for in_id in self.in_ids:
+            self.logger.info('extracting input ports for %s' % in_id)
+
+            # Get interfaces of pattern connecting the current module to
+            # source module `out_id`; `to_int` is connected to the current
+            # module, `from_int` is connected to the other module:
+            to_int, from_int = self.pat_ints[in_id]
+
+            # Get ports in interface (`to_int`) connected to the current
+            # module that are connected to the other module via the pattern:
+            self._in_port_dict[in_id] = \
+                self.patterns[in_id].dest_idx(from_int, to_int)
 
     def run(self):
         """
@@ -491,14 +581,8 @@ class BaseModule(ControlledProcess):
             # queue buffering the received data:
             self._in_data = {k: collections.deque() for k in self.in_ids}
 
-            # Extract identifiers of source ports for all modules receiving
-            # output from the current module so that they don't need to be
-            # repeatedly extracted during emulation execution:            
-            self._out_port_dict = {}
-            for out_id in self.out_ids:
-                from_int, to_int = self.pat_ints[out_id]
-                self._out_port_dict[out_id] = \
-                    self.patterns[out_id].src_idx(from_int, to_int)
+            # Initialize _out_port_dict and _in_port_dict attributes:
+            self._init_port_dicts()
 
             # Perform any pre-emulation operations:
             self.pre_run()
@@ -510,31 +594,31 @@ class BaseModule(ControlledProcess):
 
                 # Clear data structures for passing data to and from the
                 # run_step method:
-                in_dict = {}
-                out = []
+                in_data = np.zeros(len(self.interface), dtype=np.float)
+                out_data = np.zeros(len(self.interface), dtype=np.float)
 
                 if self.debug:
 
                     # Get input data:
-                    self._get_in_data(in_dict)
+                    self._get_in_data(in_data)
 
                     # Run the processing step:
-                    self.run_step(in_dict, out)
+                    self.run_step(in_data, out_data)
 
                     # Prepare the generated data for output:
-                    self._put_out_data(out)
+                    self._put_out_data(out_data)
 
                     # Synchronize:
                     self._sync()
                 else:
                     # Get input data:
-                    catch_exception(self._get_in_data, self.logger.info, in_dict)
+                    catch_exception(self._get_in_data, self.logger.info, in_data)
 
                     # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info, in_dict, out)
+                    catch_exception(self.run_step, self.logger.info, in_data, out_data)
 
                     # Prepare the generated data for output:
-                    catch_exception(self._put_out_data, self.logger.info, out)
+                    catch_exception(self._put_out_data, self.logger.info, out_data)
 
                     # Synchronize:
                     catch_exception(self._sync, self.logger.info)
@@ -1030,11 +1114,15 @@ if __name__ == '__main__':
 
             self.data = np.zeros(len(self.interface.interface_ports()), np.float64)
 
-        def run_step(self, in_dict, out):
-            super(MyModule, self).run_step(in_dict, out)
+        def run_step(self, in_data, out_data):
+            super(MyModule, self).run_step(in_data, out_data)
+
+            # Do something with input data:
+            self.logger.info('processing input: '+str(in_data))
 
             # Output random data:
-            out[:] = np.random.rand(len(self.interface.out_ports()))
+            out_data[:] = np.random.rand(len(self.interface))
+            self.logger.info('producing output: '+str(out_data))
 
         def run(self):
 
@@ -1049,8 +1137,8 @@ if __name__ == '__main__':
     man = BaseManager(get_random_port(), get_random_port())
     man.add_brok()
 
-    m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0,3,4]'; m1_int_sel_out = '/a[1,2]'
-    m2_int_sel = '/b[0:5]'; m2_int_sel_in = '/b[0,1,4]'; m2_int_sel_out = '/b[2:4]'
+    m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0:2]'; m1_int_sel_out = '/a[2:5]'
+    m2_int_sel = '/b[0:5]'; m2_int_sel_in = '/b[0:3]'; m2_int_sel_out = '/b[3:5]'
     m3_int_sel = '/c[0:4]'; m3_int_sel_in = '/c[0:2]'; m3_int_sel_out = '/c[2:4]'
 
     m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
@@ -1073,9 +1161,9 @@ if __name__ == '__main__':
     pat12.interface[m1_int_sel_in, 'io'] = 'out'
     pat12.interface[m2_int_sel_in, 'io'] = 'out'
     pat12.interface[m2_int_sel_out, 'io'] = 'in'
-    pat12['/a[1]', '/b[0]'] = 1
-    pat12['/a[2]', '/b[1]'] = 1
-    pat12['/b[2]', '/a[0]'] = 1
+    pat12['/a[2]', '/b[0]'] = 1
+    pat12['/a[3]', '/b[1]'] = 1
+    pat12['/b[3]', '/a[0]'] = 1
     man.connect(m1, m2, pat12, 0, 1)
 
     pat23 = Pattern(m2_int_sel, m3_int_sel)
@@ -1083,9 +1171,8 @@ if __name__ == '__main__':
     pat23.interface[m2_int_sel_in, 'io'] = 'out'
     pat23.interface[m3_int_sel_in, 'io'] = 'out'
     pat23.interface[m3_int_sel_out, 'io'] = 'in'
-    pat23['/b[3]', '/c[0]'] = 1
-    pat23['/b[3]', '/c[1]'] = 1
-    pat23['/c[2]', '/b[4]'] = 1
+    pat23['/b[4]', '/c[0]'] = 1
+    pat23['/c[2]', '/b[2]'] = 1
     man.connect(m2, m3, pat23, 0, 1)
 
     pat31 = Pattern(m3_int_sel, m1_int_sel)
@@ -1093,8 +1180,8 @@ if __name__ == '__main__':
     pat31.interface[m1_int_sel_in, 'io'] = 'out'
     pat31.interface[m3_int_sel_in, 'io'] = 'out'
     pat31.interface[m1_int_sel_out, 'io'] = 'in'
-    pat31['/c[3]', '/a[3]'] = 1
-    pat31['/c[3]', '/a[4]'] = 1
+    pat31['/c[3]', '/a[1]'] = 1
+    pat31['/a[4]', '/c[1]'] = 1
     man.connect(m3, m1, pat31, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting
