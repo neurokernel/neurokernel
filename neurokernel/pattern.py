@@ -712,17 +712,23 @@ class Pattern(object):
     dest_idx(src_int, dest_int, src_ports=None)
         Retrieve destination ports connected to the specified source ports.
     from_concat(*selectors, **kwargs)
-        Create pattern from the concatenation of identifers comprised by two selectors.
+        Create pattern from the concatenation of identifers in two selectors.
     from_csv(file_name, **kwargs)
         Read connectivity data from CSV file.
     from_product(*selectors, **kwargs)
         Create pattern from the product of identifiers comprised by two selectors.
+    in_ports(i)
+        Restrict Interface ports to input ports.
     interface_ports(i)
-        Return specified interface as an Interface instance.
+        Restrict Interface ports to specific interface.
     is_connected(from_int, to_int)
         Check whether the specified interfaces are connected.
     is_in_interfaces(selector)
         Check whether a selector is supported by any of the pattern's interfaces.
+    out_ports(i)
+        Restrict Interface ports to output ports.
+    spike_ports(i)
+        Restrict Interface ports to spiking ports.
     src_idx(src_int, dest_int, dest_ports=None)
         Retrieve source ports connected to the specified destination ports.
     which_int(s)
@@ -917,14 +923,30 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='+')
 
-    def interface_ports(self, i=0):
+    def gpot_ports(self, i=None):
+        return self.interface.gpot_ports(i)
+    gpot_ports.__doc__ = Interface.gpot_ports.__doc__
+
+    def in_ports(self, i=None):
+        return self.interface.in_ports(i)
+    in_ports.__doc__ = Interface.in_ports.__doc__
+
+    def interface_ports(self, i=None):
         return self.interface.interface_ports(i)
     interface_ports.__doc__ = Interface.interface_ports.__doc__
+
+    def out_ports(self, i=None):
+        return self.interface.out_ports(i)
+    out_ports.__doc__ = Interface.out_ports.__doc__
+
+    def spike_ports(self, i=None):
+        return self.interface.spike_ports(i)
+    spike_ports.__doc__ = Interface.spike_ports.__doc__
 
     @classmethod
     def from_concat(cls, *selectors, **kwargs):
         """
-        Create pattern from the concatenation of identifers comprised by two selectors.
+        Create pattern from the concatenation of identifers in two selectors.
 
         For example: ::
 
@@ -1816,6 +1838,57 @@ if __name__ == '__main__':
                                    ('/foo[1]', '/bar[2]', {}),
                                    ('/bar[3]', '/foo[2]', {}),
                                    ('/bar[3]', '/foo[3]', {})])
+            
+        def test_gpot_ports(self):
+            p = Pattern('/foo[0:3]', '/bar[0:3]')
+            p.interface['/foo[0]', 'io', 'type'] = ['in', 'spike']
+            p.interface['/foo[1:3]', 'io', 'type'] = ['out', 'gpot']
+            p.interface['/bar[0:2]', 'io', 'type'] = ['out', 'spike']
+            p.interface['/bar[2]', 'io', 'type'] = ['in', 'gpot']
+            self.assertItemsEqual(p.gpot_ports(0).to_tuples(),
+                                  [('foo', 1),
+                                   ('foo', 2)])
+            self.assertItemsEqual(p.gpot_ports(1).to_tuples(),
+                                  [('bar', 2)])
+                                   
+        def test_in_ports(self):
+            p = Pattern('/foo[0:3]', '/bar[0:3]')
+            p.interface['/foo[0]', 'io', 'type'] = ['in', 'spike']
+            p.interface['/foo[1:3]', 'io', 'type'] = ['out', 'gpot']
+            p.interface['/bar[0:2]', 'io', 'type'] = ['out', 'spike']
+            p.interface['/bar[2]', 'io', 'type'] = ['in', 'gpot']
+            self.assertItemsEqual(p.in_ports(0).to_tuples(),
+                                  [('foo', 0)])
+            self.assertItemsEqual(p.in_ports(1).to_tuples(),
+                                  [('bar', 2)])
+
+        def test_interface_ports(self):
+            p = Pattern('/foo[0:3]', '/bar[0:3]')
+            p.interface['/foo[0]', 'io', 'type'] = ['in', 'spike']
+            p.interface['/foo[1:3]', 'io', 'type'] = ['out', 'gpot']
+            p.interface['/bar[0:2]', 'io', 'type'] = ['out', 'spike']
+            p.interface['/bar[2]', 'io', 'type'] = ['in', 'gpot']
+            self.assertItemsEqual(p.interface_ports(0).to_tuples(),
+                                  [('foo', 0),
+                                   ('foo', 1),
+                                   ('foo', 2)])
+            self.assertItemsEqual(p.interface_ports(1).to_tuples(),
+                                  [('bar', 0),
+                                   ('bar', 1),
+                                   ('bar', 2)])
+
+        def test_out_ports(self): ###
+            p = Pattern('/foo[0:3]', '/bar[0:3]')
+            p.interface['/foo[0]', 'io', 'type'] = ['in', 'spike']
+            p.interface['/foo[1:3]', 'io', 'type'] = ['out', 'gpot']
+            p.interface['/bar[0:2]', 'io', 'type'] = ['out', 'spike']
+            p.interface['/bar[2]', 'io', 'type'] = ['in', 'gpot']
+            self.assertItemsEqual(p.out_ports(0).to_tuples(),
+                                  [('foo', 1),
+                                   ('foo', 2)])
+            self.assertItemsEqual(p.out_ports(1).to_tuples(),
+                                  [('bar', 0),
+                                   ('bar', 1)])
 
         def test_clear(self):
             p = Pattern('/aaa[0:3]', '/bbb[0:3]')
