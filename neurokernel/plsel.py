@@ -1364,6 +1364,30 @@ class PortMapper(object):
             v = self.portmap[f].values
         return v
 
+    def inds_to_ports(self, inds):
+        """
+        Convert list of integer indices to port identifiers.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> pm = PortMapper(np.random.rand(10), '/a[0:5],/b[0:5]')
+        >>> pm.inds_to_ports([4, 5])
+        [('a', 4), ('b', 0)]
+
+        Parameters
+        ----------
+        inds : array_like of int
+            Integer indices of ports.
+
+        Returns
+        -------
+        t : list of tuple
+            Expanded port identifiers.
+        """
+
+        return self.portmap[self.portmap.isin(inds)].index.tolist()
+
     def ports_to_inds(self, selector):
         """
         Convert port selector to list of integer indices.
@@ -1372,7 +1396,7 @@ class PortMapper(object):
         --------
         >>> import numpy as np
         >>> pm = PortMapper(np.random.rand(10), '/a[0:5],/b[0:5]')
-        >>> pm.ports_to_ints('/a[4],/b[0]')
+        >>> pm.ports_to_inds('/a[4],/b[0]')
         array([4, 5])
 
         Parameters
@@ -1810,6 +1834,11 @@ if __name__ == '__main__':
             self.assertSequenceEqual(pm.get_ports_nonzero(),
                                      [('foo', 1),
                                       ('foo', 3)])
+
+        def test_inds_to_ports(self):
+            pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
+            self.assertSequenceEqual(pm.inds_to_ports([4, 5]),
+                                     [('foo', 4), ('bar', 0)])
 
         def test_ports_to_inds(self):
             pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
