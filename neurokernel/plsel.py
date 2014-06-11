@@ -1241,9 +1241,11 @@ class PortMapper(object):
     ports_to_inds(selector)
         Convert port selector to list of integer indices.
     get_ports(f)
-        Select ports in map.
+        Select ports using a data selection function.
     get_ports_as_inds(f)
         Select integer indices corresponding to ports in map.
+    get_ports_nonzero()
+        Select ports with nonzero data.
 
     Notes
     -----
@@ -1297,7 +1299,7 @@ class PortMapper(object):
 
     def get_ports(self, f):
         """
-        Select ports in map.
+        Select ports using a data selection function.
 
         Parameters
         ----------
@@ -1319,6 +1321,17 @@ class PortMapper(object):
         else:
             idx = self.portmap[f].index
         return self.sel.index_to_selector(idx)
+
+    def get_ports_nonzero(self):
+        """
+        Select ports with nonzero data.
+
+        Returns
+        -------
+        s : list of tuple
+            Expanded port identifiers whose corresponding data is nonzero.
+        """
+        return self.get_ports(lambda x: np.nonzero(x)[0])
 
     def get_ports_as_inds(self, f):
         """
@@ -1791,6 +1804,12 @@ if __name__ == '__main__':
             pm = PortMapper(np.array([0, 1, 0, 1, 0]), '/foo[0:5]')
             np.allclose(pm.get_ports_as_inds(lambda x: np.asarray(x, dtype=np.bool)), 
                         [1, 3])
+
+        def test_get_ports_nonzero(self):
+            pm = PortMapper(np.array([0, 1, 0, 1, 0]), '/foo[0:5]')
+            self.assertSequenceEqual(pm.get_ports_nonzero(),
+                                     [('foo', 1),
+                                      ('foo', 3)])
 
         def test_ports_to_inds(self):
             pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
