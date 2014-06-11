@@ -1238,6 +1238,8 @@ class PortMapper(object):
 
     Methods
     -------
+    get_port_inds(selector)
+        Convert port selector to list of integer indices.
     get_ports(f)
         Select ports in map.
 
@@ -1315,6 +1317,31 @@ class PortMapper(object):
         else:
             idx = self.portmap[f].index
         return self.sel.index_to_selector(idx)
+
+    def get_port_inds(self, selector):
+        """
+        Convert port selector to list of integer indices.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> pm = PortMapper(np.random.rand(10), '/a[0:5],/b[0:5]')
+        >>> pm.ports_to_ints('/a[4],/b[0]')
+        array([4, 5])
+
+        Parameters
+        ----------
+        selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
+
+        Returns
+        -------
+        inds : list of int
+            Integer indices of ports comprised by selector. 
+        """
+
+        return self.sel.select(self.portmap, selector).values
 
     def set(self, selector, data):
         """
@@ -1726,7 +1753,11 @@ if __name__ == '__main__':
                                       ('foo', 'bar', 2),
                                       ('foo', 'bar', 3),
                                       ('foo', 'bar', 4)])
-                                  
+
+        def test_get_port_inds(self):
+            pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
+            np.allclose(pm.get_port_inds('/foo[4],/bar[0]'), [4, 5])
+
         def test_set(self):
             pm = PortMapper(self.data,
                             '/foo/bar[0:10],/foo/baz[0:10]')
