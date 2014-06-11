@@ -50,6 +50,9 @@ class BaseModule(ControlledProcess):
     selector : str, unicode, or sequence
         Path-like selector describing the module's interface of 
         exposed ports.
+    data : numpy.ndarray
+        Data array to associate with ports. Array length must equal the number
+        of ports in a module's interface.    
     columns : list of str
         Interface port attributes.
     port_data : int
@@ -76,7 +79,11 @@ class BaseModule(ControlledProcess):
         instances. Keyed on the ID of the other module instances.
     pat_ints : dict of tuple of int
         Interface of each pattern that is connected to the module instance.
-        Keyed on the ID of the other module instances.
+        Keyed on the ID of the other module instances.   
+    pm : plsel.PortMapper
+        Map between a module's ports and the contents of the `data` attribute.
+    data : numpy.ndarray
+        Array of data associated with a module's ports.
 
     Methods
     -------
@@ -124,7 +131,7 @@ class BaseModule(ControlledProcess):
         self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
         self._steps = value
 
-    def __init__(self, selector, columns=['interface', 'io', 'type'],
+    def __init__(self, selector, data, columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
                  id=None, debug=False):
         self.debug = debug
@@ -151,6 +158,11 @@ class BaseModule(ControlledProcess):
 
         # Set the interface ID to 0; we assume that a module only has one interface:
         self.interface[selector, 'interface'] = 0
+
+        # Set up mapper between port identifiers and their associated data:
+        assert len(data) == len(self.interface)
+        self.data = data
+        self.pm = PortMapper(self.data, selector)
 
         # Patterns connecting this module instance with other modules instances.
         # Keyed on the IDs of those modules:
@@ -351,61 +363,37 @@ class BaseModule(ControlledProcess):
                 self.data_poller = zmq.Poller()
                 self.data_poller.register(self.sock_data, zmq.POLLIN)
 
-    def _get_in_data(self, in_data):
+    def _get_in_data(self):
         """
         Get input data from incoming transmission buffer.
 
-        Input data received from other modules is used to populate the specified
-        data structure.
-
-        Parameters
-        ----------
-        in_data : numpy.ndarray of float
-            Array of data to populate with received input data.
+        Populate the data array associated with a module's ports using input
+        data received from other modules.
         """
 
         self.logger.info('retrieving from input buffer')
 
-        # Create mapper to use the module's interface ports to select data from
-        # the output data; notice that the length of the array must equal
-        # the total number of ports in the module's interface:
-        # XXX it would be more efficient to do allocate an array and mapper
-        # only once:
-        try:
-            pm = PortMapper(np.asarray(in_data),
-                            self.interface.to_tuples())
-        except:
-            self.logger.info('unable to map ports to data - '
-                             'not retrieving any input data')
+        # Since fan-in is not permitted, the data from all source modules
+        # must necessarily map to different ports; we can therefore write each
+        # of the received data to the array associated with the module's ports
+        # here without worry of overwriting the data from each source module:
+        for in_id in self.in_ids:
 
-        else:
-            # Since fan-in is not permitted, the data from all source modules
-            # must necessarily map to different ports; we can therefore write each
-            # of the received data to the array associated with the module's ports
-            # here without worry of overwriting the data from each source module:
-            for in_id in self.in_ids:
+            # Check for exceptions so as to not fail on the first emulation
+            # step when there is no input data to retrieve:
+            try:
+                self.pm[self._in_port_dict[in_id]] = self._in_data[in_id].popleft()
+            except:
+                self.logger.info('no input data from [%s] retrieved' % in_id)
+            else:
+                self.logger.info('input data from [%s] retrieved' % in_id)
 
-                # Check for exceptions so as to not fail on the first emulation
-                # step when there is no input data to retrieve:
-                try:
-                    pm[self._in_port_dict[in_id]] = self._in_data[in_id].popleft()
-                except:
-                    self.logger.info('no input data from [%s] retrieved' % in_id)
-                else:
-                    self.logger.info('input data from [%s] retrieved' % in_id)
-
-    def _put_out_data(self, out_data):
+    def _put_out_data(self):
         """
         Put output data in outgoing transmission buffer.
 
-        Using the indices of the ports in destination modules that receive input
-        from this module instance, data extracted from the module's ports is
-        staged for output transmission.
-
-        Parameter
-        ---------
-        out_data : numpy.ndarray of float
-            Array of data to output.
+        Stage data from the data array associated with a module's ports for
+        output to other modules.
         """
 
         self.logger.info('populating output buffer')
@@ -413,27 +401,15 @@ class BaseModule(ControlledProcess):
         # Clear output buffer before populating it:
         self._out_data = []
 
-        # Create mapper to use the module's interface ports to select data from
-        # the output data; notice that the length of the array must equal
-        # the total number of ports in the module's interface:
-        # XXX it would be more efficient to do allocate an array and mapper
-        # only once:
-        try:
-            pm = PortMapper(np.asarray(out_data),
-                            self.interface.to_tuples())
-        except:
-            self.logger.info('unable to map ports to data - '
-                             'not sending any output data')
-        else:
-            # Select data that should be sent to each destination module and append
-            # it to the outgoing queue:
-            for out_id in self.out_ids:
-                try:
-                    self._out_data.append((out_id, pm[self._out_port_dict[out_id]]))
-                except:
-                    self.logger.info('no output data to [%s] sent' % out_id)
-                else:
-                    self.logger.info('output data to [%s] sent' % out_id)
+        # Select data that should be sent to each destination module and append
+        # it to the outgoing queue:
+        for out_id in self.out_ids:
+            try:
+                self._out_data.append((out_id, self.pm[self._out_port_dict[out_id]]))
+            except:
+                self.logger.info('no output data to [%s] sent' % out_id)
+            else:
+                self.logger.info('output data to [%s] sent' % out_id)
 
     def _sync(self):
         """
@@ -517,12 +493,13 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('performing post-emulation operations')
 
-    def run_step(self, in_data, out_data):
+    def run_step(self, data):
         """
         Perform a single step of computation.
 
-        This method should be implemented to do something interesting with its
-        arguments. It should not interact with any other class attributes.
+        This method should be implemented to do something interesting with new input
+        data in the specified array and update it if necessary. It should not
+        interact with any other class attributes.
         """
 
         self.logger.info('running execution step')
@@ -592,33 +569,28 @@ class BaseModule(ControlledProcess):
             while curr_steps < self._steps:
                 self.logger.info('execution step: %s' % curr_steps)
 
-                # Clear data structures for passing data to and from the
-                # run_step method:
-                in_data = np.zeros(len(self.interface), dtype=np.float)
-                out_data = np.zeros(len(self.interface), dtype=np.float)
-
                 if self.debug:
 
                     # Get input data:
-                    self._get_in_data(in_data)
+                    self._get_in_data()
 
                     # Run the processing step:
-                    self.run_step(in_data, out_data)
+                    self.run_step(self.data)
 
                     # Prepare the generated data for output:
-                    self._put_out_data(out_data)
+                    self._put_out_data()
 
                     # Synchronize:
                     self._sync()
                 else:
                     # Get input data:
-                    catch_exception(self._get_in_data, self.logger.info, in_data)
+                    catch_exception(self._get_in_data, self.logger.info)
 
                     # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info, in_data, out_data)
+                    catch_exception(self.run_step, self.logger.info, self.data)
 
                     # Prepare the generated data for output:
-                    catch_exception(self._put_out_data, self.logger.info, out_data)
+                    catch_exception(self._put_out_data, self.logger.info)
 
                     # Synchronize:
                     catch_exception(self._sync, self.logger.info)
@@ -1100,10 +1072,10 @@ if __name__ == '__main__':
         Example of derived module class.
         """
 
-        def __init__(self, sel, sel_in, sel_out,
+        def __init__(self, sel, sel_in, sel_out, data,
                      columns=['interface', 'io', 'type'],
                      port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
-            super(MyModule, self).__init__(sel, columns, port_data, port_ctrl,
+            super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
                                            id, True)
             if sel_in:
                 assert PathLikeSelector.is_in(sel_in, sel)
@@ -1112,17 +1084,15 @@ if __name__ == '__main__':
                 assert PathLikeSelector.is_in(sel_out, sel)
                 self.interface[sel_out, 'io'] = 'out'
 
-            self.data = np.zeros(len(self.interface.interface_ports()), np.float64)
-
-        def run_step(self, in_data, out_data):
-            super(MyModule, self).run_step(in_data, out_data)
+        def run_step(self, data):
+            super(MyModule, self).run_step(data)
 
             # Do something with input data:
-            self.logger.info('processing input: '+str(in_data))
+            self.logger.info('port data after reading input: '+str(data))
 
             # Output random data:
-            out_data[:] = np.random.rand(len(self.interface))
-            self.logger.info('producing output: '+str(out_data))
+            data[:] = np.random.rand(len(data))
+            self.logger.info('port data before sending output: '+str(data))
 
         def run(self):
 
@@ -1142,14 +1112,17 @@ if __name__ == '__main__':
     m3_int_sel = '/c[0:4]'; m3_int_sel_in = '/c[0:2]'; m3_int_sel_out = '/c[2:4]'
 
     m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
+                  np.zeros(5, dtype=np.float),
                   ['interface', 'io', 'type'],
                   man.port_data, man.port_ctrl, 'm1   ')
     man.add_mod(m1)
     m2 = MyModule(m2_int_sel, m2_int_sel_in, m2_int_sel_out,
+                  np.zeros(5, dtype=np.float),
                   ['interface', 'io', 'type'],
                   man.port_data, man.port_ctrl, 'm2   ')
     man.add_mod(m2)
     m3 = MyModule(m3_int_sel, m3_int_sel_in, m3_int_sel_out,
+                  np.zeros(4, dtype=np.float),
                   ['interface', 'io', 'type'], 
                   man.port_data, man.port_ctrl, 'm3   ')
     man.add_mod(m3)
