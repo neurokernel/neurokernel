@@ -1238,10 +1238,12 @@ class PortMapper(object):
 
     Methods
     -------
-    get_port_inds(selector)
+    ports_to_inds(selector)
         Convert port selector to list of integer indices.
     get_ports(f)
         Select ports in map.
+    get_ports_as_inds(f)
+        Select integer indices corresponding to ports in map.
 
     Notes
     -----
@@ -1318,7 +1320,38 @@ class PortMapper(object):
             idx = self.portmap[f].index
         return self.sel.index_to_selector(idx)
 
-    def get_port_inds(self, selector):
+    def get_ports_as_inds(self, f):
+        """
+        Select integer indices corresponding to ports in map.
+        
+        Examples
+        --------
+        >>> import numpy as np
+        >>> pm = PortMapper(np.array([0, 1, 0, 1, 0]), '/a[0:5]')
+        >>> pm.get_ports_as_inds(lambda x: np.asarray(x, dtype=np.bool))
+        array([1, 3])
+
+        Parameters
+        ----------
+        f : callable or sequence
+            If callable, treat as elementwise selection function to apply to 
+            the mapped data array. If a sequence, treat as an index into the
+            mapped data array.
+
+        Returns
+        -------
+        inds : numpy.ndarray of int
+            Integer indices of selected ports. 
+        """
+
+        assert callable(f) or (np.iterable(f) and len(f) == len(self.data))
+        if callable(f):
+            v = self.portmap[f(self.data)].values
+        else:
+            v = self.portmap[f].values
+        return v
+
+    def ports_to_inds(self, selector):
         """
         Convert port selector to list of integer indices.
 
@@ -1337,7 +1370,7 @@ class PortMapper(object):
 
         Returns
         -------
-        inds : list of int
+        inds : numpy.ndarray of int
             Integer indices of ports comprised by selector. 
         """
 
@@ -1754,9 +1787,14 @@ if __name__ == '__main__':
                                       ('foo', 'bar', 3),
                                       ('foo', 'bar', 4)])
 
-        def test_get_port_inds(self):
+        def test_get_ports_as_inds(self):
+            pm = PortMapper(np.array([0, 1, 0, 1, 0]), '/foo[0:5]')
+            np.allclose(pm.get_ports_as_inds(lambda x: np.asarray(x, dtype=np.bool)), 
+                        [1, 3])
+
+        def test_ports_to_inds(self):
             pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
-            np.allclose(pm.get_port_inds('/foo[4],/bar[0]'), [4, 5])
+            np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [4, 5])
 
         def test_set(self):
             pm = PortMapper(self.data,
