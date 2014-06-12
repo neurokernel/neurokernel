@@ -54,6 +54,8 @@ class PathLikeSelector(object):
         Check whether a list of integers is consecutive.
     are_disjoint(s0, s1, ...)
         Check whether several selectors are disjoint.
+    count_ports(selector)
+        Count number of distinct port identifiers in unambigious selector.
     expand(selector)
         Expand an unambiguous selector into a list of identifiers.
     get_index(df, selector, start=None, stop=None, names=[])
@@ -791,6 +793,25 @@ class PathLikeSelector(object):
             else:
                 ids = ids.union(ids_new)
         return True
+
+    @classmethod
+    def count_ports(cls, selector):
+        """
+        Count number of distinct port identifiers in unambigious selector.
+
+        Parameters
+        ----------
+        selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
+
+        Returns
+        -------
+        count : int
+            Number of identifiers comprised by selector.
+        """
+        
+        return len(cls.expand(selector))
 
     # Need to create cache here because one can't assign create a cache that is
     # an attribute of the classmethod itself:
@@ -1601,6 +1622,10 @@ if __name__ == '__main__':
             result = self.sel.are_disjoint([['foo', (0, 10), 'baz']], 
                                            [['foo', (5, 15), ['baz','qux']]])
             assert result == False
+
+        def test_count_ports(self):
+            result = self.sel.count_ports('/foo/bar[0:2],/moo/[qux,baz]')
+            assert result == 4
 
         def test_expand_str(self):
             result = self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]')
