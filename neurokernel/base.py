@@ -89,9 +89,8 @@ class BaseModule(ControlledProcess):
     -------
     run()
         Body of process.
-    run_step(data)
-        Processes the specified data and returns a result for
-        transmission to other modules.
+    run_step()
+        Module work method.
 
     Notes
     -----
@@ -493,13 +492,14 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('performing post-emulation operations')
 
-    def run_step(self, data):
+    def run_step(self):
         """
-        Perform a single step of computation.
-
-        This method should be implemented to do something interesting with new input
-        data in the specified array and update it if necessary. It should not
-        interact with any other class attributes.
+        Module work method.
+    
+        This method should be implemented to do something interesting with new 
+        input port data in the module's `pm` attribute and update the attribute's
+        output port data if necessary. It should not interact with any other 
+        class attributes.
         """
 
         self.logger.info('running execution step')
@@ -575,7 +575,7 @@ class BaseModule(ControlledProcess):
                     self._get_in_data()
 
                     # Run the processing step:
-                    self.run_step(self.data)
+                    self.run_step()
 
                     # Prepare the generated data for output:
                     self._put_out_data()
@@ -587,7 +587,7 @@ class BaseModule(ControlledProcess):
                     catch_exception(self._get_in_data, self.logger.info)
 
                     # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info, self.data)
+                    catch_exception(self.run_step, self.logger.info)
 
                     # Prepare the generated data for output:
                     catch_exception(self._put_out_data, self.logger.info)
@@ -781,7 +781,7 @@ class Broker(ControlledProcess):
             self._init_net()
         self.logger.info('exiting')
         
-class BaseManager(object):
+class Manager(object):
     """
     Module manager.
 
@@ -801,6 +801,8 @@ class BaseManager(object):
         Communication brokers. Keyed by broker object ID.
     modules : dict
         Module instances. Keyed by module object ID.
+    routing_table : routing_table.RoutingTable
+        Table of data transmission connections between modules.
     """ 
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
@@ -1084,15 +1086,17 @@ if __name__ == '__main__':
                 assert PathLikeSelector.is_in(sel_out, sel)
                 self.interface[sel_out, 'io'] = 'out'
 
-        def run_step(self, data):
-            super(MyModule, self).run_step(data)
+        def run_step(self):
+            super(MyModule, self).run_step()
 
             # Do something with input data:
-            self.logger.info('port data after reading input: '+str(data))
+            in_ports = self.interface.in_ports().to_tuples()
+            self.logger.info('input port data: '+str(self.pm[in_ports]))
 
             # Output random data:
-            data[:] = np.random.rand(len(data))
-            self.logger.info('port data before sending output: '+str(data))
+            out_ports = self.interface.out_ports().to_tuples()
+            self.pm[out_ports] = np.random.rand(len(out_ports))
+            self.logger.info('output port data: '+str(self.pm[out_ports]))
 
         def run(self):
 
@@ -1104,7 +1108,7 @@ if __name__ == '__main__':
     logger = setup_logger()
 
     # Set up emulation:
-    man = BaseManager(get_random_port(), get_random_port())
+    man = Manager(get_random_port(), get_random_port())
     man.add_brok()
 
     m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0:2]'; m1_int_sel_out = '/a[2:5]'
