@@ -132,9 +132,6 @@ def read_file(filename):
     if n == 1:
         a = h5file.root.real.read()
     elif n == 2:
-        r = h5file.root.real.read()
-        i = h5file.root.imag.read()
-        cl = r.dtype
         a = h5file.root.real.read() + (np.array(1j).astype(np.complex64))*h5file.root.imag.read()
     
     h5file.close()
@@ -147,7 +144,6 @@ def read_array(filename):
     returns a ndarray
     """
     h5file = tables.openFile(filename, "r")
-    n = h5file.root._v_nchildren
 
     a = h5file.root.array.read()
     h5file.close()
