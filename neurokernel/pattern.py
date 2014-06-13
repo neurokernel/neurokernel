@@ -558,7 +558,7 @@ class Interface(object):
 
         if i is None:
             try:
-                return self.from_df(self.data[self.data['io'] == 'out'])
+                return self.from_df(self.data[self.data['type'] == 'spike'])
             except:
                 return Interface()
         else:
