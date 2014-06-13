@@ -1215,8 +1215,9 @@ class PathLikeSelector(object):
             raise ValueError('invalid selector type')
 
         # The number of tokens must not exceed the number of levels in the
-        # DataFrame's MultiIndex:
-        max_levels = max(map(len, parse_list))
+        # DataFrame's MultiIndex; the maximum number of levels in a selector
+        # containing no identifiers is obviously 0:
+        max_levels = max(map(len, parse_list)) if len(parse_list) else 0
         if max_levels > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 

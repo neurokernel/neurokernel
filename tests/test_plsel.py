@@ -38,6 +38,10 @@ class test_path_like_selector(TestCase):
         self.df = df.copy()
         self.sel = PathLikeSelector()
 
+    def test_select_empty(self):
+        result = self.sel.select(self.df, [[]])
+        assert_frame_equal(result, self.df.drop(self.df.index))
+
     def test_select_str(self):
         result = self.sel.select(self.df, '/foo')
         idx = pd.MultiIndex.from_tuples([('foo','qux',0),
