@@ -1020,11 +1020,11 @@ class PathLikeSelector(object):
         elif np.iterable(selector):
             parse_list = selector
         else:
-            raise ValueError('invalid selector type')
-        max_levels = max(map(len, parse_list))
+            raise ValueError('invalid selector type')        
 
         # The maximum number of tokens must not exceed the number of levels in the
-        # DataFrame's MultiIndex:        
+        # DataFrame's MultiIndex:
+        max_levels = max(map(len, parse_list))
         if max_levels > len(df.index.names[start:stop]):
             raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
@@ -1215,8 +1215,9 @@ class PathLikeSelector(object):
             raise ValueError('invalid selector type')
 
         # The number of tokens must not exceed the number of levels in the
-        # DataFrame's MultiIndex:        
-        if len(parse_list) > len(df.index.names[start:stop]):
+        # DataFrame's MultiIndex:
+        max_levels = max(map(len, parse_list))
+        if max_levels > len(df.index.names[start:stop]):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
         if type(df.index) == pd.MultiIndex:
