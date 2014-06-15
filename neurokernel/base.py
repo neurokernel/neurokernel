@@ -569,6 +569,8 @@ class BaseModule(ControlledProcess):
             while curr_steps < self._steps:
                 self.logger.info('execution step: %s' % curr_steps)
 
+                # If the debug flag is set, don't catch exceptions so that
+                # errors will lead to visible failures:
                 if self.debug:
 
                     # Get input data:
@@ -1079,12 +1081,13 @@ if __name__ == '__main__':
                      port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
             super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
                                            id, True)
-            if sel_in:
-                assert PathLikeSelector.is_in(sel_in, sel)
-                self.interface[sel_in, 'io'] = 'in'
-            if sel_out:
-                assert PathLikeSelector.is_in(sel_out, sel)
-                self.interface[sel_out, 'io'] = 'out'
+
+            assert PathLikeSelector.is_in(sel_in, sel)
+            assert PathLikeSelector.is_in(sel_out, sel)
+            assert PathLikeSelector.are_disjoint(sel_in, sel_out)
+
+            self.interface[sel_in, 'io'] = 'in'            
+            self.interface[sel_out, 'io'] = 'out'
 
         def run_step(self):
             super(MyModule, self).run_step()

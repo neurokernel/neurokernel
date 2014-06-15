@@ -1135,13 +1135,13 @@ class Pattern(object):
         ----------
         src_int, dest_int : int
             Source and destination interface identifiers.
+        src_type, dest_type : str
+            Types of source and destination ports as listed in their respective 
+            interfaces.
         dest_ports : str
             Path-like selector corresponding to ports in destination 
             interface. If not specified, all ports in the destination 
             interface are considered.
-        src_type, dest_type : str
-            Types of source and destination ports as listed in their respective 
-            interfaces.
 
         Returns
         -------
@@ -1203,13 +1203,13 @@ class Pattern(object):
         ----------
         src_int, dest_int : int
             Source and destination interface identifiers.
+        src_type, dest_type : str
+            Types of source and destination ports as listed in their respective 
+            interfaces.
         src_ports : str
             Path-like selector corresponding to ports in source
             interface. If not specified, all ports in the source
             interface are considered.
-        src_type, dest_type : str
-            Types of source and destination ports as listed in their respective 
-            interfaces.
 
         Returns
         -------
@@ -1233,7 +1233,7 @@ class Pattern(object):
             from_idx = from_int.index    
         else:
             from_idx = from_int[src_ports].index
-
+            
         # Filter destination ports by specified type:
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
