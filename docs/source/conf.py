@@ -32,13 +32,6 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.viewcode',
               'numpydoc']
 
-try:
-    import matplotlib.sphinxext.plot_directive
-except ImportError:
-    extensions.append('plot_directive')
-else:
-    extensions.append('matplotlib.sphinxext.plot_directive')
-
 # Generate autosummary stubs:
 autosummary_generate = True
 
