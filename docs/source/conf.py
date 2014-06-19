@@ -37,9 +37,12 @@ class Mock(object):
     def __getitem__(self, v):
         return Mock()
 
-MOCK_MODULES = ['numpy', 'pycuda', 'pycuda.compiler', 'pycuda.driver', 
+MOCK_MODULES = ['bidict', 'msgpack_numpy', 'numpy', 'pandas',
+                'pycuda', 'pycuda.compiler', 'pycuda.driver',                
                 'pycuda.elementwise', 'pycuda.gpuarray',
-                'pycuda.reduction', 'pycuda.scan', 'pycuda.tools', 'pytools']
+                'pycuda.reduction', 'pycuda.scan', 'pycuda.tools', 'pytools', 
+                'scipy', 'scipy.sparse', 'twiggy', 'zmq', 'zmq.eventloop', 
+                'zmq.eventloop.ioloop', 'zmq.eventloop.zmqstream']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = Mock()
 
