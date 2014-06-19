@@ -13,10 +13,47 @@
 
 import sys, os, re
 
+# Prevent project dependencies from interfering with autodoc:
+class Mock(object):
+    __all__ = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        return Mock()
+
+    @classmethod
+    def __getattr__(cls, name):
+        if name in ('__file__', '__path__'):
+            return '/dev/null'
+        elif name[0] == name[0].upper():
+            mockType = type(name, (), {})
+            mockType.__module__ = __name__
+            return mockType
+        else:
+            return Mock()
+
+    def __getitem__(self, v):
+        return Mock()
+
+MOCK_MODULES = ['numpy', 'pycuda', 'pycuda.compiler', 'pycuda.driver', 
+                'pycuda.elementwise', 'pycuda.gpuarray',
+                'pycuda.reduction', 'pycuda.scan', 'pycuda.tools', 'pytools']
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = Mock()
+
+# Prevent pkg_resources requirements checking from raising exceptions due to
+# missing dependencies:
+import pkg_resources
+pkg_resources.require = Mock()
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.append(os.path.abspath('../sphinxext'))
+sys.path.append(os.path.abspath('../../neurokernel'))
+sys.path.append(os.path.abspath('../../'))
 
 # -- General configuration -----------------------------------------------------
 

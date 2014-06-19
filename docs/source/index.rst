@@ -9,6 +9,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   introduction
    install
    design
    reference
@@ -19,5 +20,4 @@ Index
 -----
 
 * :ref:`genindex`
-* :ref:`search`
 
