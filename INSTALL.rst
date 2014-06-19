@@ -3,9 +3,27 @@
 Installation
 ============
 
+Quick Start
+-----------
+Make sure you have `pip <http://pip.pypa.io>`_ installed (preferably
+in a `virtualenv <http://virtualenv.pypa.io>`_); once you do, install the
+following dependencies as follows::
+
+  pip install numpy
+  pip install cython
+  pip install numexpr
+  pip install tables
+  
+Run the following to install the remaining dependencies and the 
+latest Neurokernel code::
+
+  git clone https://github.com/neurokernel/neurokernel.git
+  pip install -e git+./neurokernel#egg=neurokernel
+
 Installation Dependencies
 -------------------------
-In addition to Python 2.7, Neurokernel currently requires the following packages:
+In addition to Python 2.7, Neurokernel currently requires the following
+packages:
 
 * `bidict <http://pypi.python.org/pypi/bidict/>`_ 0.1.0 or later.
 * `bottleneck <http://pypi.python.org/pypi/bottleneck/>`_ 0.7.0 or later.
@@ -21,3 +39,15 @@ In addition to Python 2.7, Neurokernel currently requires the following packages
 * `scipy <http://www.scipy.org>`_ 0.11.0 or later.
 * `tables <http://www.pytables.org>`_ 2.4.0 or later.
 * `twiggy <http://twiggy.readthedocs.org/>`_ 0.4.0 or later.
+
+If you have all of the above requirements installed, you can install 
+the downloaded code using::
+
+  cd neurokernel/
+  python setup.py install
+
+or (if you want to tinker with the code without having to repeatedly reinstall
+it)::
+
+  cd neurokernel/
+  python setup.py develop
