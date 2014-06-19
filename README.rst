@@ -46,6 +46,8 @@ More Information
 More information about Neurokernel can be obtained from
 the project website at `<https://neurokernel.github.io>`_.
 
+Neurokernel's documentation is available at `<http://neurokernel.rtfd.org>`_.
+
 Authors & Acknowledgements
 --------------------------
 See the included AUTHORS file for more information.
