@@ -28,19 +28,23 @@ class PathLikeSelector(object):
         
     Examples of valid selectors include
 
+    ==================  =================================
+    Selector            Comments
+    ==================  =================================
     /foo/bar
-    /foo+/bar          (equivalent to /foo/bar)
+    /foo+/bar           equivalent to /foo/bar
     /foo/[qux,bar]
     /foo/bar[0]
-    /foo/bar/[0]       (equivalent to /foo/bar[0])
-    /foo/bar/0         (equivalent to /foo/bar[0])
+    /foo/bar/[0]        equivalent to /foo/bar[0]
+    /foo/bar/0          equivalent to /foo/bar[0]
     /foo/bar[0,1]
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
     /foo/bar,/baz/qux
-    (/foo,/bar)+/baz   (equivalent to /foo/baz,/bar/baz)
-    /[foo,bar].+/[0:2] (equivalent to /foo[0],/bar[1])
+    (/foo,/bar)+/baz    equivalent to /foo/baz,/bar/baz
+    /[foo,bar].+/[0:2]  equivalent to /foo[0],/bar[1]
+    ==================  =================================
 
     An empty string is deemed to be a valid selector.
 
@@ -1238,14 +1242,14 @@ class PortMapper(object):
     """
     Maps a numpy array to/from path-like port identifiers.
 
-    Attributes
-    ----------
-    data : numpy.ndarray
-        Data that has been mapped to ports.
-    index : pandas.MultiIndex
-        Index of port identifiers.
-    portmap : pandas.Series
-        Map of port identifiers to integer indices into `data`.
+    Examples
+    --------
+    >>> data = np.array([1, 0, 3, 2, 5, 2])
+    >>> pm = PortMapper(data, '/d[0:5]')
+    >>> print pm['/d[1]']
+    array([0])
+    >>> print pm['/d[2:4]']
+    array([3, 2])
 
     Parameters
     ----------
@@ -1269,6 +1273,15 @@ class PortMapper(object):
         Select integer indices corresponding to ports in map.
     get_ports_nonzero()
         Select ports with nonzero data.
+
+    Attributes
+    ----------
+    data : numpy.ndarray
+        Data that has been mapped to ports.
+    index : pandas.MultiIndex
+        Index of port identifiers.
+    portmap : pandas.Series
+        Map of port identifiers to integer indices into `data`.
 
     Notes
     -----
