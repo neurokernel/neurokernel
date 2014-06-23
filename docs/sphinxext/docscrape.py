@@ -1,13 +1,16 @@
 """Extract reference documentation from the NumPy source tree.
 
 """
+from __future__ import division, absolute_import, print_function
 
 import inspect
 import textwrap
 import re
 import pydoc
-from StringIO import StringIO
 from warnings import warn
+import collections
+import sys
+
 
 class Reader(object):
     """A line-based string reader.
@@ -113,7 +116,7 @@ class NumpyDocString(object):
         return self._parsed_data[key]
 
     def __setitem__(self,key,val):
-        if not self._parsed_data.has_key(key):
+        if key not in self._parsed_data:
             warn("Unknown section %s" % key)
         else:
             self._parsed_data[key] = val
@@ -265,13 +268,17 @@ class NumpyDocString(object):
         if self._is_at_section():
             return
 
-        summary = self._doc.read_to_next_empty_line()
-        summary_str = " ".join([s.strip() for s in summary]).strip()
-        if re.compile('^([\w., ]+=)?\s*[\w\.]+\(.*\)$').match(summary_str):
-            self['Signature'] = summary_str
-            if not self._is_at_section():
-                self['Summary'] = self._doc.read_to_next_empty_line()
-        else:
+        # If several signatures present, take the last one
+        while True:
+            summary = self._doc.read_to_next_empty_line()
+            summary_str = " ".join([s.strip() for s in summary]).strip()
+            if re.compile('^([\w., ]+=)?\s*[\w\.]+\(.*\)$').match(summary_str):
+                self['Signature'] = summary_str
+                if not self._is_at_section():
+                    continue
+            break
+
+        if summary is not None:
             self['Summary'] = summary
 
         if not self._is_at_section():
@@ -328,7 +335,10 @@ class NumpyDocString(object):
         if self[name]:
             out += self._str_header(name)
             for param,param_type,desc in self[name]:
-                out += ['%s : %s' % (param, param_type)]
+                if param_type:
+                    out += ['%s : %s' % (param, param_type)]
+                else:
+                    out += [param]
                 out += self._str_indent(desc)
             out += ['']
         return out
@@ -370,7 +380,7 @@ class NumpyDocString(object):
         idx = self['index']
         out = []
         out += ['.. index:: %s' % idx.get('default','')]
-        for section, references in idx.iteritems():
+        for section, references in idx.items():
             if section == 'default':
                 continue
             out += ['   :%s: %s' % (section, ', '.join(references))]
@@ -424,11 +434,14 @@ class FunctionDoc(NumpyDocString):
             func, func_name = self.get_func()
             try:
                 # try to read signature
-                argspec = inspect.getargspec(func)
+                if sys.version_info[0] >= 3:
+                    argspec = inspect.getfullargspec(func)
+                else:
+                    argspec = inspect.getargspec(func)
                 argspec = inspect.formatargspec(*argspec)
                 argspec = argspec.replace('*','\*')
                 signature = '%s%s' % (func_name, argspec)
-            except TypeError, e:
+            except TypeError as e:
                 signature = '%s()' % func_name
             self['Signature'] = signature
 
@@ -450,8 +463,8 @@ class FunctionDoc(NumpyDocString):
                  'meth': 'method'}
 
         if self._role:
-            if not roles.has_key(self._role):
-                print "Warning: invalid role %s" % self._role
+            if self._role not in roles:
+                print("Warning: invalid role %s" % self._role)
             out += '.. %s:: %s\n    \n\n' % (roles.get(self._role,''),
                                              func_name)
 
@@ -481,12 +494,23 @@ class ClassDoc(NumpyDocString):
         NumpyDocString.__init__(self, doc)
 
         if config.get('show_class_members', True):
-            if not self['Methods']:
-                self['Methods'] = [(name, '', '')
-                                   for name in sorted(self.methods)]
-            if not self['Attributes']:
-                self['Attributes'] = [(name, '', '')
-                                      for name in sorted(self.properties)]
+            def splitlines_x(s):
+                if not s:
+                    return []
+                else:
+                    return s.splitlines()
+
+            for field, items in [('Methods', self.methods),
+                                 ('Attributes', self.properties)]:
+                if not self[field]:
+                    doc_list = []
+                    for name in sorted(items):
+                         try:
+                            doc_item = pydoc.getdoc(getattr(self._cls, name))
+                            doc_list.append((name, '', splitlines_x(doc_item)))
+                         except AttributeError:
+                            pass # method doesn't exist
+                    self[field] = doc_list
 
     @property
     def methods(self):
@@ -495,11 +519,13 @@ class ClassDoc(NumpyDocString):
         return [name for name,func in inspect.getmembers(self._cls)
                 if ((not name.startswith('_')
                      or name in self.extra_public_methods)
-                    and callable(func))]
+                    and isinstance(func, collections.Callable))]
 
     @property
     def properties(self):
         if self._cls is None:
             return []
         return [name for name,func in inspect.getmembers(self._cls)
-                if not name.startswith('_') and func is None]
+                if not name.startswith('_') and
+                (func is None or isinstance(func, property) or
+                 inspect.isgetsetdescriptor(func))]
