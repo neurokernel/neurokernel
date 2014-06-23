@@ -71,7 +71,7 @@ if __name__ == "__main__":
             'futures',
             'h5py',
             'matplotlib',
-            'msgpack_numpy',
+            'msgpack-numpy',
             'networkx',
             'numexpr',
             'numpy',
