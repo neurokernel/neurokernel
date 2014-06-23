@@ -70,10 +70,6 @@ class BaseModule(ControlledProcess):
     ----------
     interface : Interface
         Object containing information about a module's ports.    
-    in_ids : list of int
-        List of source module IDs.
-    out_ids : list of int
-        List of destination module IDs.
     patterns : dict of Pattern
         Pattern objects connecting the module instance with 
         other module instances. Keyed on the ID of the other module 
@@ -85,13 +81,6 @@ class BaseModule(ControlledProcess):
         Map between a module's ports and the contents of the `data` attribute.
     data : numpy.ndarray
         Array of data associated with a module's ports.
-
-    Methods
-    -------
-    run()
-        Body of process.
-    run_step()
-        Module work method.
 
     Notes
     -----
@@ -633,13 +622,6 @@ class Broker(ControlledProcess):
     routing_table : routing_table.RoutingTable
         Directed graph of network connections between modules comprised by an
         emulation.
-
-    Methods
-    -------
-    run()
-        Body of process.
-    sync()
-        Synchronize with network.
     """
 
     def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,

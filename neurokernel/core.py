@@ -68,8 +68,7 @@ class Module(BaseModule):
     A module instance connected to other module instances contains a list of the
     connectivity objects that describe incoming connects and a list of
     masks that select for the neurons whose data must be transmitted to
-    destination modules.    
-
+    destination modules.
     """
 
     def __init__(self, selector, sel_gpot, sel_spike, data_gpot, data_spike,

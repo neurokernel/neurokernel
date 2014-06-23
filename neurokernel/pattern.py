@@ -45,8 +45,6 @@ class Interface(object):
         Port attribute data.
     index : pandas.MultiIndex
         Index of port identifiers.
-    interface_ids : int
-        Interface identifiers.
 
     Parameters
     ----------
@@ -56,39 +54,6 @@ class Interface(object):
             identifiers comprised by the interface.
     columns : list, default = ['interface', 'io', 'type']
         Data column names.
-
-    Methods
-    -------
-    clear()
-        Clear all ports in class instance.
-    data_select(f, inplace=False)
-        Restrict Interface data with a selection function.
-    from_df(df)
-        Create an Interface from a properly formatted DataFrame.
-    from_dict(d)
-        Create an Interface from a dictionary of selectors and data values.
-    gpot_ports(i)
-        Restrict Interface ports to graded potential ports.
-    in_ports(i)
-        Restrict Interface ports to input ports.
-    interface_ports(i)
-        Restrict Interface ports to specific interface.
-    is_compatible(a, i, b)
-        Check whether two interfaces can be connected.
-    is_in_interfaces(s)
-        Check whether a selector is supported by any stored interface.
-    out_ports(i)
-        Restrict Interface ports to output ports.
-    port_select(f, inplace=False)
-        Restrict Interface ports with a selection function.
-    spike_ports(i)
-        Restrict Interface ports to spiking ports.
-    to_selectors(i)
-        Retrieve Interface's port identifiers as list of path-like selectors.
-    to_tuples(i)
-        Retrieve Interface's port identifiers as list of tuples.
-    which_int(s)
-        Return identifier(s) of interface(s) containing specified selector.
 
     See Also
     --------
@@ -697,8 +662,6 @@ class Pattern(object):
         Index of connections.
     interface : Interface
         Interfaces containing port identifiers and attributes.
-    interface_ids : set
-        Set of interface identifiers.
 
     Parameters
     ----------
@@ -708,35 +671,6 @@ class Pattern(object):
         comprised by one selector may be in any other selector.
     columns : sequence of str
         Data column names.
-
-    Methods
-    -------
-    clear()
-        Clear all connections in class instance.
-    dest_idx(src_int, dest_int, src_ports=None)
-        Retrieve destination ports connected to the specified source ports.
-    from_concat(*selectors, **kwargs)
-        Create pattern from the concatenation of identifers in two selectors.
-    from_csv(file_name, **kwargs)
-        Read connectivity data from CSV file.
-    from_product(*selectors, **kwargs)
-        Create pattern from the product of identifiers comprised by two selectors.
-    in_ports(i)
-        Restrict Interface ports to input ports.
-    interface_ports(i)
-        Restrict Interface ports to specific interface.
-    is_connected(from_int, to_int)
-        Check whether the specified interfaces are connected.
-    is_in_interfaces(selector)
-        Check whether a selector is supported by any of the pattern's interfaces.
-    out_ports(i)
-        Restrict Interface ports to output ports.
-    spike_ports(i)
-        Restrict Interface ports to spiking ports.
-    src_idx(src_int, dest_int, dest_ports=None)
-        Retrieve source ports connected to the specified destination ports.
-    which_int(s)
-        Return identifier(s) of interface(s) containing specified selector.
 
     See Also
     --------
