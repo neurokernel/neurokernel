@@ -37,9 +37,18 @@ class Module(BaseModule):
     selector : str, unicode, or sequence
         Path-like selector describing the module's interface of 
         exposed ports.
-    data : numpy.ndarray
-        Data array to associate with ports. Array length must equal the number
-        of ports in a module's interface.    
+    sel_gpot : str, unicode, or sequence
+        Path-like selector describing the graded potential ports in the module's
+        interface.
+    sel_spike : str, unicode, or sequence
+        Path-like selector describing the spiking ports in the module's
+        interface.
+    data_gpot : numpy.ndarray
+        Data array to associate with graded potential ports. Array length
+        must equal the number of graded potential ports in the module's interface.
+    data_spike : numpy.ndarray
+        Data array to associate with spiking ports. Array length
+        must equal the number of spiking ports in the module's interface.
     columns : list of str
         Interface port attributes.
     port_data : int
