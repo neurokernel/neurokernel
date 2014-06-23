@@ -3,6 +3,16 @@
 Support Classes and Functions
 =============================
 
+Path-Like Port Identifier Handling
+----------------------------------
+.. currentmodule:: neurokernel.plsel
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   PathLikeSelector
+   PortMapper
+
 Context Managers
 ----------------
 .. currentmodule:: neurokernel.ctx_managers
