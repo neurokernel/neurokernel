@@ -16,20 +16,22 @@ class Interface(object):
     """
     Container for set of interface comprising ports.
 
-    This class contains information about a set of interfaces comprising 
-    path-like identifiers [1]_ and the attributes associated with them. By
-    default, each port must have at least the following attributes; other 
-    attributes may be added:
-    
-    * interface - indicates which interface a port is associated with.
-    * io - indicates whether the port receives input ('in') or emits output ('out').
-    * type - indicates whether the port emits/receives spikes or graded potentials.
+    This class contains information about a set of interfaces comprising
+    path-like identifiers and the attributes associated with them. 
+    By default, each port must have at least the following attributes; 
+    other attributes may be added:
 
-    All port identifiers in an interface must be unique. For two interfaces to
-    be deemed compatible, they must contain the same port identifiers and their
-    identifiers' 'io' attributes must be the inverse of each other (i.e., every
-    'in' port in one interface must be mirrored by an 'out' port in the other
-    interface.
+    - interface - indicates which interface a port is associated with.
+    - io - indicates whether the port receives input ('in') or 
+      emits output ('out').
+    - type - indicates whether the port emits/receives spikes or 
+      graded potentials.
+
+    All port identifiers in an interface must be unique. For two interfaces 
+    to be deemed compatible, they must contain the same port identifiers and
+    their identifiers' 'io' attributes must be the inverse of each other 
+    (i.e., every 'in' port in one interface must be mirrored by an 'out' port
+    in the other interface.
 
     Examples
     --------
@@ -49,9 +51,9 @@ class Interface(object):
     Parameters
     ----------
     selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]) describing the port identifiers comprised 
-            by the interface.
+            Selector string (e.g., 'foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]) describing the port 
+            identifiers comprised by the interface.
     columns : list, default = ['interface', 'io', 'type']
         Data column names.
 
@@ -90,11 +92,11 @@ class Interface(object):
 
     See Also
     --------
-    .. [1] PathLikeSelector
+    plsel.PathLikeSelector
     """
 
     def __init__(self, selector='', columns=['interface', 'io', 'type']):
-        
+
         # All ports in an interface must contain at least the following
         # attributes:
         assert set(columns).issuperset(['interface', 'io', 'type'])
@@ -110,7 +112,7 @@ class Interface(object):
         """
         Raise an exception if the specified index will result in an invalid interface.
         """
-        
+
         if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
            len(idx.unique()) < len(idx):
             raise ValueError('Duplicate interface index entries detected.')
@@ -120,7 +122,7 @@ class Interface(object):
             return self.sel.select(self.data[list(key[1:])], key[0])
         else:
             return self.sel.select(self.data, key)
-        
+
     def __setitem__(self, key, value):
         if type(key) == tuple:
             selector = key[0]
@@ -425,8 +427,9 @@ class Interface(object):
         result : bool
             True if both interfaces comprise the same identifiers, the set 'type'
             attributes for each matching pair of identifiers in the two
-            interfaces match, and each identifier with an 'io' attribute set to 'out' in one
-            interface has its 'io' attribute set to 'in' in the other interface.
+            interfaces match, and each identifier with an 'io' attribute set 
+            to 'out' in one interface has its 'io' attribute set to 'in' in the 
+            other interface.
 
         Notes
         -----
@@ -661,14 +664,15 @@ class Pattern(object):
     """
     Connectivity pattern linking sets of interface ports.
 
-    This class represents connection mappings between interfaces comprising sets
-    of ports. Ports are represented using path-like identifiers [1]_; the
-    presence of a row linking the two identifiers in the class' internal index
-    indicates the presence of a connection. A single data attribute ('conn')
-    associated with defined connections is created by default. Specific
-    attributes may be accessed by specifying their names after the port
-    identifiers; if a nonexistent attribute is specified when a sequential value
-    is assigned, a new column for that attribute is automatically created: ::
+    This class represents connection mappings between interfaces comprising 
+    sets of ports. Ports are represented using path-like identifiers; 
+    the presence of a row linking the two identifiers in the class' internal 
+    index indicates the presence of a connection. A single data attribute 
+    ('conn') associated with defined connections is created by default. 
+    Specific attributes may be accessed by specifying their names after the 
+    port identifiers; if a nonexistent attribute is specified when a sequential 
+    value is assigned, a new column for that attribute is automatically 
+    created: ::
 
         p['/x[0]', '/y[0]', 'conn', 'x'] = [1, 'foo']
 
@@ -736,8 +740,7 @@ class Pattern(object):
 
     See Also
     --------
-    .. [1] PathLikeSelector
-
+    plsel.PathLikeSelector
     """
 
     def __init__(self, *selectors, **kwargs):

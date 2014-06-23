@@ -75,8 +75,9 @@ class BaseModule(ControlledProcess):
     out_ids : list of int
         List of destination module IDs.
     patterns : dict of Pattern
-        Pattern objects connecting the module instance with other module
-        instances. Keyed on the ID of the other module instances.
+        Pattern objects connecting the module instance with 
+        other module instances. Keyed on the ID of the other module 
+        instances.
     pat_ints : dict of tuple of int
         Interface of each pattern that is connected to the module instance.
         Keyed on the ID of the other module instances.   
