@@ -351,3 +351,6 @@ intersphinx_mapping = {
     'http://docs.scipy.org/doc/numpy/': None,
     'http://documen.tician.de/pycuda/': None,
 }
+
+# Prevent methods/class attributes from automatically being added twice:
+numpydoc_show_class_members = False
