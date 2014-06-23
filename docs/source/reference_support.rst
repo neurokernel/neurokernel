@@ -37,17 +37,17 @@ Communication Tools
    is_poll_in
    ZMQOutput
 
-Graph Tools
------------
-.. currentmodule:: neurokernel.tools.graph
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
+.. reenable after these are rewritten to use the new Interface/Pattern classes
+   Graph Tools
+   -----------
+   .. currentmodule:: neurokernel.tools.graph
+   .. autosummary::
+      :toctree: generated/
+      :nosignatures:
 
-   conn_to_graph
-   graph_to_conn
-   graph_to_df
-   load_conn_all
+      graph_to_conn
+      graph_to_df
+      load_conn_all
 
 Visualization Tools
 -------------------
