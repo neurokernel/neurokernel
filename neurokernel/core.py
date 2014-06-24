@@ -50,7 +50,8 @@ class Module(BaseModule):
         Data array to associate with spiking ports. Array length
         must equal the number of spiking ports in the module's interface.
     columns : list of str
-        Interface port attributes.
+        Interface port attributes. This list must at least contain
+        'interface', 'io', and 'type'.
     port_data : int
         Network port for transmitting data.
     port_ctrl : int
@@ -75,8 +76,14 @@ class Module(BaseModule):
                  columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL,
                  id=None, device=None, debug=False):
+
         self.debug = debug
         self.device = device
+        
+        # Require several necessary attribute columns:
+        assert 'interface' in columns
+        assert 'io' in columns
+        assert 'type' in columns
 
         # Generate a unique ID if none is specified:
         if id is None:
