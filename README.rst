@@ -10,9 +10,9 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
 Quick Start
 -----------
-Make sure you have `pip <http://www.pip-installer.org>`_
-installed; once you do, install the following dependencies 
-as follows::
+Make sure you have `pip <http://pip.pypa.io>`_ installed (preferably
+in a `virtualenv <http://virtualenv.pypa.io>`_); once you do, install the
+following dependencies as follows::
 
   pip install numpy
   pip install cython
@@ -26,9 +26,16 @@ latest Neurokernel code::
   pip install -e git+./neurokernel#egg=neurokernel
 
 If you have all of the requirements listed in ``INSTALL.rst`` installed, 
-you can also install the downloaded code using the usual::
+you can also install the downloaded code using::
 
+  cd neurokernel/
   python setup.py install
+
+or (if you want to tinker with the code without having to repeatedly reinstall
+it)::
+
+  cd neurokernel/
+  python setup.py develop
 
 Check out the demos in ``neurokernel/examples`` subdirectory and 
 their corresponding `IPython notebooks <http://ipython.org/notebook.html>`_ 
@@ -38,6 +45,8 @@ More Information
 ----------------
 More information about Neurokernel can be obtained from
 the project website at `<https://neurokernel.github.io>`_.
+
+Neurokernel's documentation is available at `<http://neurokernel.rtfd.org>`_.
 
 Authors & Acknowledgements
 --------------------------

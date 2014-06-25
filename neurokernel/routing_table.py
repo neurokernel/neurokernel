@@ -30,7 +30,7 @@ class RoutingTable(object):
         Identifiers currently in routing table.
 
     Methods
-    ----------
+    -------
     copy()
         Return a copy of the routing table.
     dest_ids(src_id)

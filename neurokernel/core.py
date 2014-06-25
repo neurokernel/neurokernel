@@ -37,11 +37,21 @@ class Module(BaseModule):
     selector : str, unicode, or sequence
         Path-like selector describing the module's interface of 
         exposed ports.
-    data : numpy.ndarray
-        Data array to associate with ports. Array length must equal the number
-        of ports in a module's interface.    
+    sel_gpot : str, unicode, or sequence
+        Path-like selector describing the graded potential ports in the module's
+        interface.
+    sel_spike : str, unicode, or sequence
+        Path-like selector describing the spiking ports in the module's
+        interface.
+    data_gpot : numpy.ndarray
+        Data array to associate with graded potential ports. Array length
+        must equal the number of graded potential ports in the module's interface.
+    data_spike : numpy.ndarray
+        Data array to associate with spiking ports. Array length
+        must equal the number of spiking ports in the module's interface.
     columns : list of str
-        Interface port attributes.
+        Interface port attributes. This list must at least contain
+        'interface', 'io', and 'type'.
     port_data : int
         Network port for transmitting data.
     port_ctrl : int
@@ -59,16 +69,21 @@ class Module(BaseModule):
     A module instance connected to other module instances contains a list of the
     connectivity objects that describe incoming connects and a list of
     masks that select for the neurons whose data must be transmitted to
-    destination modules.    
-
+    destination modules.
     """
 
     def __init__(self, selector, sel_gpot, sel_spike, data_gpot, data_spike,
                  columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL,
                  id=None, device=None, debug=False):
+
         self.debug = debug
         self.device = device
+        
+        # Require several necessary attribute columns:
+        assert 'interface' in columns
+        assert 'io' in columns
+        assert 'type' in columns
 
         # Generate a unique ID if none is specified:
         if id is None:

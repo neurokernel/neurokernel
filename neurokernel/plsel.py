@@ -28,64 +28,29 @@ class PathLikeSelector(object):
         
     Examples of valid selectors include
 
+    ==================  =================================
+    Selector            Comments
+    ==================  =================================
     /foo/bar
-    /foo+/bar          (equivalent to /foo/bar)
+    /foo+/bar           equivalent to /foo/bar
     /foo/[qux,bar]
     /foo/bar[0]
-    /foo/bar/[0]       (equivalent to /foo/bar[0])
-    /foo/bar/0         (equivalent to /foo/bar[0])
+    /foo/bar/[0]        equivalent to /foo/bar[0]
+    /foo/bar/0          equivalent to /foo/bar[0]
     /foo/bar[0,1]
     /foo/bar[0:5]
     /foo/*/baz
     /foo/*/baz[5]
     /foo/bar,/baz/qux
-    (/foo,/bar)+/baz   (equivalent to /foo/baz,/bar/baz)
-    /[foo,bar].+/[0:2] (equivalent to /foo[0],/bar[1])
+    (/foo,/bar)+/baz    equivalent to /foo/baz,/bar/baz
+    /[foo,bar].+/[0:2]  equivalent to /foo[0],/bar[1]
+    ==================  =================================
 
     An empty string is deemed to be a valid selector.
 
     The class can also be used to create new MultiIndex instances from selectors
     that can be fully expanded into an explicit set of identifiers (and
     therefore contain no ambiguous symbols such as '*' or '[:]').
-
-    Methods
-    -------
-    are_consecutive(int_list)
-        Check whether a list of integers is consecutive.
-    are_disjoint(s0, s1, ...)
-        Check whether several selectors are disjoint.
-    count_ports(selector)
-        Count number of distinct port identifiers in unambigious selector.
-    expand(selector)
-        Expand an unambiguous selector into a list of identifiers.
-    get_index(df, selector, start=None, stop=None, names=[])
-        Return index corresponding to rows selected by specified selector.
-    get_tuples(df, selector, start=None, stop=None)
-        Return tuples containing index labels selected by specified selector.
-    index_to_selector(idx)
-        Convert an index into an expanded port selector.
-    is_ambiguous(selector)
-        Check whether a selector cannot be expanded into an explicit list of identifiers.
-    is_expandable(selector)
-        Check whether a selector can be expanded into multiple identifiers.
-    is_identifier(s)
-        Check whether a selector or token sequence can identify a single port.
-    is_selector(selector)
-        Check whether a string or sequence is a valid selector.
-    is_in(s, t)
-        Check whether all of the identifiers in one selector are comprised by another.
-    make_index(selector, names=[])
-        Create an index from the specified selector.
-    max_levels(selector)
-        Return maximum number of token levels in selector.
-    parse(selector)
-        Parse a selector string into individual port identifiers.
-    select(df, selector, start=None, stop=None)
-        Select rows from DataFrame using a path-like selector.
-    to_identifier(tokens)
-        Convert a sequence of tokens into a path-like port identifier string.
-    tokenize(selector)
-        Tokenize a selector string.
 
     Notes
     -----
@@ -1238,14 +1203,14 @@ class PortMapper(object):
     """
     Maps a numpy array to/from path-like port identifiers.
 
-    Attributes
-    ----------
-    data : numpy.ndarray
-        Data that has been mapped to ports.
-    index : pandas.MultiIndex
-        Index of port identifiers.
-    portmap : pandas.Series
-        Map of port identifiers to integer indices into `data`.
+    Examples
+    --------
+    >>> data = np.array([1, 0, 3, 2, 5, 2])
+    >>> pm = PortMapper(data, '/d[0:5]')
+    >>> print pm['/d[1]']
+    array([0])
+    >>> print pm['/d[2:4]']
+    array([3, 2])
 
     Parameters
     ----------
@@ -1259,16 +1224,14 @@ class PortMapper(object):
         indices are specified, the entire array is mapped to the ports 
         specified by the given selector.
 
-    Methods
-    -------
-    ports_to_inds(selector)
-        Convert port selector to list of integer indices.
-    get_ports(f)
-        Select ports using a data selection function.
-    get_ports_as_inds(f)
-        Select integer indices corresponding to ports in map.
-    get_ports_nonzero()
-        Select ports with nonzero data.
+    Attributes
+    ----------
+    data : numpy.ndarray
+        Data that has been mapped to ports.
+    index : pandas.MultiIndex
+        Index of port identifiers.
+    portmap : pandas.Series
+        Map of port identifiers to integer indices into `data`.
 
     Notes
     -----

@@ -16,20 +16,22 @@ class Interface(object):
     """
     Container for set of interface comprising ports.
 
-    This class contains information about a set of interfaces comprising 
-    path-like identifiers [1]_ and the attributes associated with them. By
-    default, each port must have at least the following attributes; other 
-    attributes may be added:
-    
-    * interface - indicates which interface a port is associated with.
-    * io - indicates whether the port receives input ('in') or emits output ('out').
-    * type - indicates whether the port emits/receives spikes or graded potentials.
+    This class contains information about a set of interfaces comprising
+    path-like identifiers and the attributes associated with them. 
+    By default, each port must have at least the following attributes; 
+    other attributes may be added:
 
-    All port identifiers in an interface must be unique. For two interfaces to
-    be deemed compatible, they must contain the same port identifiers and their
-    identifiers' 'io' attributes must be the inverse of each other (i.e., every
-    'in' port in one interface must be mirrored by an 'out' port in the other
-    interface.
+    - interface - indicates which interface a port is associated with.
+    - io - indicates whether the port receives input ('in') or 
+      emits output ('out').
+    - type - indicates whether the port emits/receives spikes or 
+      graded potentials.
+
+    All port identifiers in an interface must be unique. For two interfaces 
+    to be deemed compatible, they must contain the same port identifiers and
+    their identifiers' 'io' attributes must be the inverse of each other 
+    (i.e., every 'in' port in one interface must be mirrored by an 'out' port
+    in the other interface.
 
     Examples
     --------
@@ -43,58 +45,23 @@ class Interface(object):
         Port attribute data.
     index : pandas.MultiIndex
         Index of port identifiers.
-    interface_ids : int
-        Interface identifiers.
 
     Parameters
     ----------
     selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]) describing the port identifiers comprised 
-            by the interface.
+            Selector string (e.g., 'foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]) describing the port 
+            identifiers comprised by the interface.
     columns : list, default = ['interface', 'io', 'type']
         Data column names.
 
-    Methods
-    -------
-    clear()
-        Clear all ports in class instance.
-    data_select(f, inplace=False)
-        Restrict Interface data with a selection function.
-    from_df(df)
-        Create an Interface from a properly formatted DataFrame.
-    from_dict(d)
-        Create an Interface from a dictionary of selectors and data values.
-    gpot_ports(i)
-        Restrict Interface ports to graded potential ports.
-    in_ports(i)
-        Restrict Interface ports to input ports.
-    interface_ports(i)
-        Restrict Interface ports to specific interface.
-    is_compatible(a, i, b)
-        Check whether two interfaces can be connected.
-    is_in_interfaces(s)
-        Check whether a selector is supported by any stored interface.
-    out_ports(i)
-        Restrict Interface ports to output ports.
-    port_select(f, inplace=False)
-        Restrict Interface ports with a selection function.
-    spike_ports(i)
-        Restrict Interface ports to spiking ports.
-    to_selectors(i)
-        Retrieve Interface's port identifiers as list of path-like selectors.
-    to_tuples(i)
-        Retrieve Interface's port identifiers as list of tuples.
-    which_int(s)
-        Return identifier(s) of interface(s) containing specified selector.
-
     See Also
     --------
-    .. [1] PathLikeSelector
+    plsel.PathLikeSelector
     """
 
     def __init__(self, selector='', columns=['interface', 'io', 'type']):
-        
+
         # All ports in an interface must contain at least the following
         # attributes:
         assert set(columns).issuperset(['interface', 'io', 'type'])
@@ -110,7 +77,7 @@ class Interface(object):
         """
         Raise an exception if the specified index will result in an invalid interface.
         """
-        
+
         if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
            len(idx.unique()) < len(idx):
             raise ValueError('Duplicate interface index entries detected.')
@@ -120,7 +87,7 @@ class Interface(object):
             return self.sel.select(self.data[list(key[1:])], key[0])
         else:
             return self.sel.select(self.data, key)
-        
+
     def __setitem__(self, key, value):
         if type(key) == tuple:
             selector = key[0]
@@ -425,8 +392,9 @@ class Interface(object):
         result : bool
             True if both interfaces comprise the same identifiers, the set 'type'
             attributes for each matching pair of identifiers in the two
-            interfaces match, and each identifier with an 'io' attribute set to 'out' in one
-            interface has its 'io' attribute set to 'in' in the other interface.
+            interfaces match, and each identifier with an 'io' attribute set 
+            to 'out' in one interface has its 'io' attribute set to 'in' in the 
+            other interface.
 
         Notes
         -----
@@ -661,14 +629,15 @@ class Pattern(object):
     """
     Connectivity pattern linking sets of interface ports.
 
-    This class represents connection mappings between interfaces comprising sets
-    of ports. Ports are represented using path-like identifiers [1]_; the
-    presence of a row linking the two identifiers in the class' internal index
-    indicates the presence of a connection. A single data attribute ('conn')
-    associated with defined connections is created by default. Specific
-    attributes may be accessed by specifying their names after the port
-    identifiers; if a nonexistent attribute is specified when a sequential value
-    is assigned, a new column for that attribute is automatically created: ::
+    This class represents connection mappings between interfaces comprising 
+    sets of ports. Ports are represented using path-like identifiers; 
+    the presence of a row linking the two identifiers in the class' internal 
+    index indicates the presence of a connection. A single data attribute 
+    ('conn') associated with defined connections is created by default. 
+    Specific attributes may be accessed by specifying their names after the 
+    port identifiers; if a nonexistent attribute is specified when a sequential 
+    value is assigned, a new column for that attribute is automatically 
+    created: ::
 
         p['/x[0]', '/y[0]', 'conn', 'x'] = [1, 'foo']
 
@@ -693,8 +662,6 @@ class Pattern(object):
         Index of connections.
     interface : Interface
         Interfaces containing port identifiers and attributes.
-    interface_ids : set
-        Set of interface identifiers.
 
     Parameters
     ----------
@@ -705,39 +672,9 @@ class Pattern(object):
     columns : sequence of str
         Data column names.
 
-    Methods
-    -------
-    clear()
-        Clear all connections in class instance.
-    dest_idx(src_int, dest_int, src_ports=None)
-        Retrieve destination ports connected to the specified source ports.
-    from_concat(*selectors, **kwargs)
-        Create pattern from the concatenation of identifers in two selectors.
-    from_csv(file_name, **kwargs)
-        Read connectivity data from CSV file.
-    from_product(*selectors, **kwargs)
-        Create pattern from the product of identifiers comprised by two selectors.
-    in_ports(i)
-        Restrict Interface ports to input ports.
-    interface_ports(i)
-        Restrict Interface ports to specific interface.
-    is_connected(from_int, to_int)
-        Check whether the specified interfaces are connected.
-    is_in_interfaces(selector)
-        Check whether a selector is supported by any of the pattern's interfaces.
-    out_ports(i)
-        Restrict Interface ports to output ports.
-    spike_ports(i)
-        Restrict Interface ports to spiking ports.
-    src_idx(src_int, dest_int, dest_ports=None)
-        Retrieve source ports connected to the specified destination ports.
-    which_int(s)
-        Return identifier(s) of interface(s) containing specified selector.
-
     See Also
     --------
-    .. [1] PathLikeSelector
-
+    plsel.PathLikeSelector
     """
 
     def __init__(self, *selectors, **kwargs):
