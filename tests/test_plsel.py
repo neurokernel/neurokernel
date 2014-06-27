@@ -269,13 +269,15 @@ class test_path_like_selector(TestCase):
                                  [('foo', 0), ('foo', 1)])
 
     def test_is_in_str(self):
+        assert self.sel.is_in('', '/foo[0:5]') == True
         assert self.sel.is_in('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
         assert self.sel.is_in('/qux/bar[5]', '/[foo,baz]/bar[0:10]') == False
 
     def test_is_in_list(self):
-        assert self.sel.is_in([['foo', 'bar', [5]]], 
+        assert self.sel.is_in([()], [('foo', 0), ('foo', 1)])
+        assert self.sel.is_in([['foo', 'bar', [5]]],
                                [[['foo', 'baz'], 'bar', (0, 10)]]) == True
-        assert self.sel.is_in([['qux', 'bar', [5]]], 
+        assert self.sel.is_in([['qux', 'bar', [5]]],
                                [[['foo', 'baz'], 'bar', (0, 10)]]) == False
 
     def test_is_selector_empty(self):

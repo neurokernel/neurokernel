@@ -931,7 +931,7 @@ class PathLikeSelector(object):
     def is_in(cls, s, t):
         """
         Check whether all of the identifiers in one selector are comprised by another.
-        
+
         Parameters
         ----------
         s, t : str, unicode, or sequence
@@ -942,13 +942,16 @@ class PathLikeSelector(object):
         Returns
         -------
         result : bool
-            True if the first selector is in the second, False otherwise.
+            True if the first selector is in the second, False otherwise. If `s`
+            is an empty selector, this method always returns True.
         """
 
         assert cls.is_selector(s)
         assert cls.is_selector(t)
 
         s_exp = set(cls.expand(s))
+        if s_exp == set([()]):
+            return True
         t_exp = set(cls.expand(t))
         if s_exp.issubset(t_exp):
             return True
