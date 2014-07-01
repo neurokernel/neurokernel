@@ -136,9 +136,6 @@ class LPU(Module, object):
         neurons.sort( cmp=neuron_cmp  )
         for id, neu in neurons:
             model = neu['model']
-            # if the neuron model does not appear before, add it into n_dict
-            if model not in n_dict:
-                n_dict[model] = { k:[] for k in neu.keys()+['id'] }
             # if an input_port, make sure selector is specified
             if model == 'port_in_gpot' or model == 'port_in_spk':
                 assert('selector' in neu.keys())
@@ -154,10 +151,15 @@ class LPU(Module, object):
                     assert('selector' in neu.keys())
             else:
                 neu['public'] = False
+            if 'selector' not in neu.keys():
+                neu['selector'] = ''
+            # if the neuron model does not appear before, add it into n_dict
+            if model not in n_dict:
+                n_dict[model] = { k:[] for k in neu.keys()+['id'] }
             # add neuron data into the subdictionary of n_dict
             for key in neu.iterkeys():
                 n_dict[model][key].append( neu[key] )
-            n_dict[model]['id'].append( id )
+            n_dict[model]['id'].append( int(id) )
         # remove duplicate model information
         for val in n_dict.itervalues(): val.pop('model')
         if not n_dict: n_dict = None
@@ -187,8 +189,8 @@ class LPU(Module, object):
                  id=None, debug=False, columns = [ 'io', 'type']):
         assert('io' in columns)
         assert('type' in columns)
-        columns.extend('interface')
-        
+        columns.append('interface')
+        self.LPU_id = id
         self.dt = dt
         self.debug = debug
         self.device = device
@@ -222,17 +224,17 @@ class LPU(Module, object):
             if sel_in_gpot and sel_in_gpot[0] == ',': sel_in_gpot = sel_in_gpot[1:]
             if sel_in_spk[-1] == ',' : sel_in_spk = sel_in_spk[:-1]
             if sel_in_spk and sel_in_spk[0] == ',': sel_in_spk = sel_in_spk[1:]
-            self.in_port_ids_gpot = np.array([id for id in n_dict['port_in_gpot']['id'] ])
-            self.in_port_ids_spk = np.array([id for id in n_dict['port_in_spk']['id'] ])
-            self.port_in_gpot_mem_ind = zip(*self.n_list)[0].index('port_in_gpot')
-            self.port_in_spk_mem_ind = zip(*self.n_list)[0].index('port_in_spk')
+            self.in_ports_ids_gpot = np.array([id for id in n_dict['port_in_gpot']['id'] ])
+            self.in_ports_ids_spk = np.array([id for id in n_dict['port_in_spk']['id'] ])
+            self.ports_in_gpot_mem_ind = zip(*self.n_list)[0].index('port_in_gpot')
+            self.ports_in_spk_mem_ind = zip(*self.n_list)[0].index('port_in_spk')
         else:
             sel_in_gpot = ''
             sel_in_spk = ''
-            self.in_port_ids_spk = np.array( [] )
-            self.in_port_ids_gpot = np.array( [] )
-            self.port_in_gpot_mem_ind = None
-            self.port_in_spk_mem_ind = None
+            self.in_ports_ids_spk = np.array( [] )
+            self.in_ports_ids_gpot = np.array( [] )
+            self.ports_in_gpot_mem_ind = None
+            self.ports_in_spk_mem_ind = None
             
         sel_in = ','.join([sel_in_gpot, sel_in_spk])
         if sel_in[-1] == ',' : sel_in = sel_in[:-1]
@@ -250,25 +252,31 @@ class LPU(Module, object):
         self.out_ports_ids_spk = np.array( [ id for t,n in self.n_list for id, pub, spk in
                                              zip(n['id'],n['public'],n['spiking'])
                                              if pub and spk ] )
-        if sel_out_gpot[-1] == ',' : sel_out_gpot = sel_out_gpot[:-1]
-        if sel_out_gpot and sel_out_gpot[0] == ',': sel_out_gpot = sel_out_gpot[1:]
-        if sel_out_spk[-1] == ',' : sel_out_spk = sel_out_spk[:-1]
-        if sel_out_spk and sel_out_spk[0] == ',': sel_out_spk = sel_out_spk[1:]
+        if sel_out_gpot:
+            if sel_out_gpot[-1] == ',' : sel_out_gpot = sel_out_gpot[:-1]
+            if sel_out_gpot and sel_out_gpot[0] == ',': sel_out_gpot = sel_out_gpot[1:]
+        if sel_out_spk:
+            if sel_out_spk[-1] == ',' : sel_out_spk = sel_out_spk[:-1]
+            if sel_out_spk and sel_out_spk[0] == ',': sel_out_spk = sel_out_spk[1:]
         
         sel_out = ','.join([sel_out_gpot, sel_out_spk])
-        if sel_out[-1] == ',' : sel_out = sel_out[:-1]
-        if sel_out and sel_out[0] == ',': sel_out = sel_out[1:]
+        if sel_out:
+            if sel_out[-1] == ',' : sel_out = sel_out[:-1]
+            if sel_out and sel_out[0] == ',': sel_out = sel_out[1:]
 
         sel_gpot = ','.join([sel_in_gpot, sel_out_gpot])
         sel_spk = ','.join([sel_in_spk, sel_out_spk])
-        if sel_gpot[-1] == ',' : sel_gpot = sel_gpot[:-1]
-        if sel_gpot and sel_gpot[0] == ',': sel_gpot = sel_gpot[1:]
-        if sel_spk[-1] == ',' : sel_spk = sel_spk[:-1]
-        if sel_spk and sel_spk[0] == ',': sel_spk = sel_spk[1:]
+        if sel_gpot:
+            if sel_gpot[-1] == ',' : sel_gpot = sel_gpot[:-1]
+            if sel_gpot and sel_gpot[0] == ',': sel_gpot = sel_gpot[1:]
+        if sel_spk:
+            if sel_spk[-1] == ',' : sel_spk = sel_spk[:-1]
+            if sel_spk and sel_spk[0] == ',': sel_spk = sel_spk[1:]
 
         sel = ','.join( [sel_gpot,sel_spk] )
-        if sel[-1] == ',' : sel = sel[:-1]
-        if sel and sel[0] == ',': sel = sel[1:]
+        if sel:
+            if sel[-1] == ',' : sel = sel[:-1]
+            if sel and sel[0] == ',': sel = sel[1:]
 
         self.sel_in_spk = sel_in_spk
         self.sel_out_spk = sel_out_spk
@@ -298,10 +306,14 @@ class LPU(Module, object):
         self.num_public_gpot = len( self.public_gpot_list )
         self.num_public_spike = len( self.public_spike_list )
         self.num_input = len( self.input_neuron_list )
-        self.in_ports_ids_gpot = self.order[self.in_ports_ids_gpot]
-        self.in_ports_ids_spk = self.order[self.in_ports_ids_spk]
-        self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
-        self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
+        if len(self.in_ports_ids_gpot)>0:
+            self.in_ports_ids_gpot = self.order[self.in_ports_ids_gpot]
+        if len(self.in_ports_ids_spk)>0:
+            self.in_ports_ids_spk = self.order[self.in_ports_ids_spk]
+        if len(self.out_ports_ids_gpot)>0:
+            self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
+        if len(self.out_ports_ids_spk)>0:
+            self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
         
         #TODO: comment
         self.s_dict = s_dict
@@ -310,7 +322,7 @@ class LPU(Module, object):
                 shift = self.spike_shift if s['class'][0] == 0 or s['class'][0] == 1 else 0
                 s['pre'] = [ self.order[int(neu_id)]-shift for neu_id in s['pre'] ]
                 s['post'] = [ self.order[int(neu_id)] for neu_id in s['post'] ]
-
+                
         gpot_delay_steps = 0
         spike_delay_steps = 0
 
@@ -331,7 +343,8 @@ class LPU(Module, object):
         for (t,s) in self.s_list:
             order = np.argsort(s['post']).astype(np.int32)
             for k,v in s.items():
-                v = np.asarray(v)[order]
+                s[k] = np.asarray(v)[order]
+            
             if s['conductance'][0]:
                 cond_post.extend(s['post'])
                 reverse.extend(s['reverse'])
@@ -349,7 +362,7 @@ class LPU(Module, object):
                     max_del = np.max( s['delay'] )
                     spike_delay_steps = max_del if max_del > spike_delay_steps \
                                        else spike_delay_steps
-
+        
         self.total_synapses = int(np.sum(num_synapses))
         I_post.extend(self.input_neuron_list)
         I_pre.extend(range(self.total_synapses, self.total_synapses + \
@@ -411,10 +424,9 @@ class LPU(Module, object):
 
 
         data_gpot = np.zeros(self.num_public_gpot, np.double)
-        data_spike = np.zeros(self.num_public_spike, np.bool))
-        
+        data_spike = np.zeros(self.num_public_spike, np.bool)
         super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl, id, device, debug)
+                                  columns, port_data, port_ctrl, self.LPU_id, device, debug)
 
         self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
         self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
@@ -427,10 +439,70 @@ class LPU(Module, object):
         super(LPU, self).pre_run()
         self._initialize_gpu_ds()
         self._init_objects()
+        
+        
+    def post_run(self):
+        super(LPU, self).post_run()
+        if self.output:
+            if self.my_num_gpot_neurons > 0:
+                self.output_gpot_file.close()
+            if self.my_num_spike_neurons > 0:
+                self.output_spike_file.close()
+        if self.debug:
+            # for file in self.in_gpot_files.itervalues():
+            #     file.close()
+            self.gpot_buffer_file.close()
+            self.synapse_state_file.close()
+        for neuron in self.neurons:
+            neuron.post_run()
+            if self.debug and not neuron.update_I_override:
+                neuron._BaseNeuron__post_run()
+                
+        for synapse in self.synapses:
+            synapse.post_run()
+
+
+
+    def run_step(self):
+        super(LPU, self).run_step()
+
+        self._read_LPU_input()
+        
+        
+        if self.input_file is not None:
+            self._read_external_input()
+
+        for neuron in self.neurons:
+            neuron.update_I(self.synapse_state.gpudata)
+            neuron.eval()
+
+        self._update_buffer()
+        for synapse in self.synapses:
+            synapse.update_state(self.buffer)
+
+        if self.debug:
+            self.gpot_buffer_file.root.array.append( \
+                self.buffer.gpot_buffer.get().reshape(1,self.gpot_delay_steps,-1) )
+            self.synapse_state_file.root.array.append( \
+                self.synapse_state.get().reshape(1,-1))
+        
+        self.buffer.step()
+
+        self._extract_output()
+
+        # Save output data to disk:
+        if self.output:
+            self._write_output()
+
+        
+    def _init_objects(self):
+        self.neurons = [ self._instantiate_neuron(i,t,n) for i,(t,n) in enumerate(self.n_list) \
+                         if t != 'port_in_got' and t!='port_in_spk']
+        self.synapses = [ self._instantiate_synapse(i,t,n) for i,(t,n) in enumerate(self.s_list)
+                          if t != 'pass']
         self.buffer = circular_array(self.my_num_gpot_neurons,
                                      self.gpot_delay_steps, self.V, 
                                      self.my_num_spike_neurons, self.spike_delay_steps)
-
         if self.input_file:
             self.input_h5file = tables.openFile(self.input_file)
 
@@ -475,71 +547,17 @@ class LPU(Module, object):
             '''
             self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
             self.gpot_buffer_file.createEArray("/","array", \
-                                               tables.Float64Atom(), (0,self.gpot_delay_steps, self.my_num_gpot_neurons))
-        
-    def post_run(self):
-        super(LPU, self).post_run()
-        if self.output:
-            if self.my_num_gpot_neurons > 0:
-                self.output_gpot_file.close()
-            if self.my_num_spike_neurons > 0:
-                self.output_spike_file.close()
-        if self.debug:
-            # for file in self.in_gpot_files.itervalues():
-            #     file.close()
-            self.gpot_buffer_file.close()
-        
-        for neuron in self.neurons:
-            neuron.post_run()
-            if self.debug and not neuron.update_I_override:
-                neuron._BaseNeuron__post_run()
-                
-        for synapse in self.synapses:
-            synapse.post_run()
+                        tables.Float64Atom(), (0,self.gpot_delay_steps, self.my_num_gpot_neurons))
 
-
-
-    def run_step(self):
-        super(LPU, self).run_step()
-
-        self._read_LPU_input()
-        if self.debug:
-            self.gpot_buffer_file.root.array.append( \
-                self.buffer.gpot_buffer.get().reshape(1,self.gpot_delay_steps,-1) )
-
-        
-        if self.input_file is not None:
-            self._read_external_input()
-
-        for neuron in self.neurons:
-            neuron.update_I(self.synapse_state.gpudata)
-            neuron.eval()
-
-        self._update_buffer()
-        for synapse in self.synapses:
-            synapse.update_state(self.buffer)
-
-            self.buffer.step()
-
-        self._extract_output()
-
-        # Save output data to disk:
-        if self.output:
-            self._write_output()
-
-        
-    def _init_objects(self):
-        self.neurons = [ self._instantiate_neuron(i,t,n) for i,(t,n) in enumerate(self.n_list) \
-                         if t != 'port_in_got' and t!='port_in_spk']
-        self.synapses = [ self._instantiate_synapse(i,t,n) for i,(t,n) in enumerate(self.s_list)
-                          if t != 'pass']
-
+            self.synapse_state_file = tables.openFile(self.id + '_synapses.h5','w')
+            self.synapse_state_file.createEArray("/","array", \
+                        tables.Float64Atom(), (0, self.total_synapses + len(self.input_neuron_list)))
 
     def _initialize_gpu_ds(self):
         """
         Setup GPU arrays.
         """
-
+        
         self.synapse_state = garray.zeros(int(self.total_synapses) + \
                                     len(self.input_neuron_list), np.float64)
         
@@ -571,17 +589,15 @@ class LPU(Module, object):
 
         """
         
-        if self.port_in_gpot_mem_ind:
+        if self.ports_in_gpot_mem_ind:
             cuda.memcpy_htod(int(self.V.gpudata) + \
-            self.V.dtype.itemsize*self.idx_start_gpot[self.port_in_gpot_mem_ind],
+            self.V.dtype.itemsize*self.idx_start_gpot[self.ports_in_gpot_mem_ind],
             self.pm['gpot'][self.sel_in_gpot])
 
-        if self.port_in_spk_mem_ind:
+        if self.ports_in_spk_mem_ind:
             cuda.memcpy_htod(int(int(self.spike_state.gpudata) + \
-            self.spike_state.dtype.itemsize*self.idx_start_spike[self.port_in_spk_mem_ind], \
-            self.pm['spike'][self.sel_in_spk])
-
-        
+            self.spike_state.dtype.itemsize*self.idx_start_spike[self.ports_in_spk_mem_ind], \
+            self.pm['spike'][self.sel_in_spk]))
 
 
     def _extract_output(self, st=None):
@@ -590,16 +606,15 @@ class LPU(Module, object):
         the following kernel calls are not made as all the GPU data will have to be
         transferred to the host anyways.
         """
-        
         if len(self.out_ports_ids_gpot)>0:
             self._extract_gpot.prepared_async_call(\
                 self.grid_extract_gpot, self.block_extract, st, self.V.gpudata, \
                 self.out_port_data_gpot.gpudata, self.out_ports_ids_gpot_g.gpudata, \
                 self.num_public_gpot)
-        if self.len(self.out_ports_ids_spk)>0:
+        if len(self.out_ports_ids_spk)>0:
             self._extract_spike.prepared_async_call(\
                 self.grid_extract_spike, self.block_extract, st, self.spike_state.gpudata, \
-                self.out_port_data_spk.gpudata, self.out_ports_ids_spk.gpudata, \
+                self.out_port_data_spk.gpudata, self.out_ports_ids_spk_g.gpudata, \
                 len(self.out_ports_ids_spk))
 
         # Save the states of the graded potential neurons and the indices of the
@@ -607,7 +622,7 @@ class LPU(Module, object):
         if len(self.out_ports_ids_gpot)>0:
             self.pm['gpot'][self.sel_out_gpot] = (self.out_port_data_gpot.get())
         if len(self.out_ports_ids_spk)>0:
-            self.pm['gpot'][self.sel_out_spk](self.out_port_data_spk.get())
+            self.pm['spike'][self.sel_out_spk] = (self.out_port_data_spk.get())
 
     def _write_output(self):
         """
@@ -808,7 +823,7 @@ class circular_array:
     def __init__(self, num_gpot_neurons,  gpot_delay_steps,
                  rest, num_spike_neurons, spike_delay_steps):
 
-        self.num_gpot_neurons = my_num_gpot_neurons
+        self.num_gpot_neurons = num_gpot_neurons
         if num_gpot_neurons > 0:
             self.dtype = np.double
             self.gpot_delay_steps = gpot_delay_steps
