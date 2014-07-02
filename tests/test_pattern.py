@@ -446,6 +446,33 @@ class test_pattern(TestCase):
                                ('/bar[3]', '/foo[2]', {}),
                                ('/bar[3]', '/foo[3]', {})])
 
+    def test_from_graph(self):
+        p = Pattern('/foo[0:4]', '/bar[0:4]')
+        p['/foo[0]', '/bar[0]'] = 1
+        p['/foo[0]', '/bar[1]'] = 1
+        p['/foo[1]', '/bar[2]'] = 1
+        p['/bar[3]', '/foo[2]'] = 1
+        p['/bar[3]', '/foo[3]'] = 1
+
+        g = nx.DiGraph()
+        g.add_node('/bar[0]', interface=1, io='out')
+        g.add_node('/bar[1]', interface=1, io='out')
+        g.add_node('/bar[2]', interface=1, io='out')
+        g.add_node('/bar[3]', interface=1, io='in')
+        g.add_node('/foo[0]', interface=0, io='in')
+        g.add_node('/foo[1]', interface=0, io='in')
+        g.add_node('/foo[2]', interface=0, io='out')
+        g.add_node('/foo[3]', interface=0, io='out')
+        g.add_edge('/foo[0]', '/bar[0]')
+        g.add_edge('/foo[0]', '/bar[1]')
+        g.add_edge('/foo[1]', '/bar[2]')
+        g.add_edge('/bar[3]', '/foo[2]')
+        g.add_edge('/bar[3]', '/foo[3]')
+
+        pg = Pattern.from_graph(g)
+        assert_frame_equal(pg.data.sort(), p.data.sort())
+        assert_frame_equal(pg.interface.data.sort(), p.interface.data.sort())
+
     def test_gpot_ports(self):
         p = Pattern('/foo[0:3]', '/bar[0:3]')
         p.interface['/foo[0]', 'io', 'type'] = ['in', 'spike']

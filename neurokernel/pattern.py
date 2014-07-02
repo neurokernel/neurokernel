@@ -282,7 +282,6 @@ class Interface(object):
             Generated interface instance.
         """
 
-        # XX verify that this works
         i = cls(','.join(d.keys()))
         for k, v in d.iteritems():
             i[k] = v
@@ -314,6 +313,7 @@ class Interface(object):
             Generated interface instance.
         """
 
+        assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
     def gpot_ports(self, i=None):
@@ -1280,9 +1280,9 @@ class Pattern(object):
         self.data.index.names = index_names
 
     @classmethod
-    def from_graph(self, g):
+    def from_graph(cls, g):
         """
-        Convert a networkx directed graph into a Pattern instance.
+        Convert a NetworkX directed graph into a Pattern instance.
 
         Parameters
         ----------
@@ -1291,18 +1291,39 @@ class Pattern(object):
 
         Returns
         -------
-        The nodes in the specified graph must contain the attributes 
-        'interface', 'io', and 'type'.
+        p : Pattern
+            Pattern instance.
+
+        Notes
+        -----
+        The nodes in the specified graph must contain an 'interface' attribute.
         """
 
         assert type(g) == nx.DiGraph
 
-        ports = []
+        # Group ports by interface number:
+        ports_by_int = {}
         for n, data in g.nodes(data=True):
-            assert PathLikeSelector.is_identifier(n[0])
-            ports.append(n)
+            assert PathLikeSelector.is_identifier(n)
+            assert data.has_key('interface')
+            if not ports_by_int.has_key(data['interface']):
+                ports_by_int[data['interface']] = {}
+            ports_by_int[data['interface']][n] = data
 
-        # unfinished
+        # Create selectors for each interface number:
+        selector_list = []
+        for interface in sorted(ports_by_int.keys()):
+            selector_list.append(','.join(ports_by_int[interface].keys()))
+
+        p = cls(*selector_list)
+        for n, data in g.nodes(data=True):
+            p.interface[n] = data
+        for c in g.edges():
+            p[c[0], c[1]] = 1
+
+        p.data.sort_index(inplace=True)
+        p.interface.data.sort_index(inplace=True)
+        return p
 
     @classmethod
     def split_multiindex(cls, idx, a, b):
