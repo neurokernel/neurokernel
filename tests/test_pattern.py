@@ -4,6 +4,7 @@ from unittest import main, TestCase
 
 import numpy as np
 import pandas as pd
+import networkx as nx
 from pandas.util.testing import assert_frame_equal, assert_index_equal
 
 from neurokernel.pattern import Interface, Pattern
@@ -62,22 +63,22 @@ class test_interface(TestCase):
         idx = pd.MultiIndex.from_tuples([('foo', 0),
                                          ('foo', 1),
                                          ('foo', 2)])
-        data = data = [(0, 'in', 'spike'),
-                       (1, 'in', 'gpot'),
-                       (1, 'out', 'gpot')]
+        data = [(0, 'in', 'spike'),
+                (1, 'in', 'gpot'),
+                (1, 'out', 'gpot')]
         columns = ['interface', 'io', 'type']
         df = pd.DataFrame(data, index=idx, columns=columns)
         i = Interface.from_df(df)
         assert_index_equal(i.data.index, idx)
-        # Should also check DataFrame contents.
+        assert_frame_equal(i.data, df)
 
     def test_from_df_dup(self):
         idx = pd.MultiIndex.from_tuples([('foo', 0),
                                          ('foo', 0),
                                          ('foo', 2)])
-        data = data = [(0, 'in', 'spike'),
-                       (1, 'in', 'gpot'),
-                       (1, 'out', 'gpot')]
+        data  = [(0, 'in', 'spike'),
+                 (1, 'in', 'gpot'),
+                 (1, 'out', 'gpot')]
         columns = ['interface', 'io', 'type']
         df = pd.DataFrame(data, index=idx, columns=columns)
         self.assertRaises(Exception, Interface.from_df, df)
@@ -88,6 +89,19 @@ class test_interface(TestCase):
                            pd.MultiIndex.from_tuples([('foo', 0),
                                                       ('foo', 1),
                                                       ('foo', 2)]))
+
+    def test_from_graph(self):
+        i = Interface('/foo[0:3]')
+        i['/foo[0]'] = [0, 'in', 'gpot']
+        i['/foo[1]'] = [0, 'out', 'gpot']
+        i['/foo[2]'] = [0, 'out', 'spike']
+        g = nx.Graph()
+        g.add_node('/foo[0]', interface=0, io='in', type='gpot')
+        g.add_node('/foo[1]', interface=0, io='out', type='gpot')
+        g.add_node('/foo[2]', interface=0, io='out', type='spike')
+        ig = Interface.from_graph(g)
+        assert_index_equal(i.data.index, ig.data.index)
+        assert_frame_equal(i.data, ig.data)
 
     def test_is_in_interfaces(self):
         assert self.interface.is_in_interfaces('/foo[0:3]') == True

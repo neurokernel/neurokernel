@@ -265,7 +265,7 @@ class Interface(object):
 
         Examples
         --------
-        >>> d = {'/foo[0]': [0, 'in'], '/foo[1]': [1, 'out']}
+        >>> d = {'/foo[0]': [0, 'in', 'gpot'], '/foo[1]': [1, 'in', 'gpot']}
         >>> i = Interface.from_dict(d)
         
         Parameters
@@ -288,6 +288,33 @@ class Interface(object):
             i[k] = v
         i.data.sort_index(inplace=True)
         return i
+
+    @classmethod
+    def from_graph(cls, g):
+        """
+        Create an Interface from a NetworkX graph.
+
+        Examples
+        --------
+        >>> import networkx as nx
+        >>> g = nx.Graph()
+        >>> g.add_node('/foo[0]', interface=0, io='in', type='gpot')
+        >>> g.add_node('/foo[1]', interface=0, io='in', type='gpot')
+        >>> i = Interface.from_graph(g)
+        
+        Parameters
+        ----------
+        g : networkx.Graph
+            Graph whose node IDs are path-like port identifiers. The node attributes
+            are assigned to the ports.
+        
+        Returns
+        -------
+        i : Interface
+            Generated interface instance.
+        """
+
+        return cls.from_dict(g.node)
 
     def gpot_ports(self, i=None):
         """
@@ -1264,15 +1291,16 @@ class Pattern(object):
 
         Returns
         -------
-        Must contain node labels that at least contain 'interface'
-        and 'io' attributes.
+        The nodes in the specified graph must contain the attributes 
+        'interface', 'io', and 'type'.
         """
 
         assert type(g) == nx.DiGraph
 
-        nodes = []
-        for n in g.nodes(data=True):
+        ports = []
+        for n, data in g.nodes(data=True):
             assert PathLikeSelector.is_identifier(n[0])
+            ports.append(n)
 
         # unfinished
 
