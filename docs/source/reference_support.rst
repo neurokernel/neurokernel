@@ -13,6 +13,20 @@ Path-Like Port Identifier Handling
    PathLikeSelector
    PortMapper
 
+XML Tools
+---------
+.. currentmodule:: neurokernel.neuroml
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   graph_to_nml_module
+   graph_to_nml_pattern
+   load
+   nml_pattern_to_graph
+   nml_module_to_graph
+   write
+
 Context Managers
 ----------------
 .. currentmodule:: neurokernel.ctx_managers

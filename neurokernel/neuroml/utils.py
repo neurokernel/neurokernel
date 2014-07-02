@@ -70,7 +70,7 @@ def load(file):
 
     return nk_doc
 
-def nml_pattern_to_nx(pattern):
+def nml_pattern_to_graph(pattern):
     """
     Convert a pattern expressed in Neurokernel NeuroML into a NetworkX graph.
 
@@ -102,7 +102,7 @@ def nml_pattern_to_nx(pattern):
 
     return g
 
-def nx_to_nml_pattern(g, id):
+def graph_to_nml_pattern(g, id):
     """
     Convert a pattern expressed as a NetworkX graph into Neurokernel NeuroML.
 
@@ -137,7 +137,7 @@ def nx_to_nml_pattern(g, id):
 
     return pattern
 
-def nml_module_to_nx(module):
+def nml_module_to_graph(module):
     """
     Convert a module expressed in Neurokernel NeuroML into NetworkX graphs.
 
@@ -236,7 +236,7 @@ def nml_module_to_nx(module):
 
     return g, i
 
-def nx_to_nml_module(g, i, id):
+def graph_to_nml_module(g, i, id):
     """
     Convert a module expressed as NetworkX graphs into Neurokernel NeuroML.
 
