@@ -37,7 +37,7 @@ class Mock(object):
     def __getitem__(self, v):
         return Mock()
 
-MOCK_MODULES = ['bidict', 'matplotlib', 'matplotlib.pyplot',
+MOCK_MODULES = ['bidict', 'lxml', 'matplotlib', 'matplotlib.pyplot',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
                 'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
@@ -58,6 +58,7 @@ pkg_resources.require = Mock()
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.append(os.path.abspath('../sphinxext'))
 sys.path.append(os.path.abspath('../../neurokernel'))
+sys.path.append(os.path.abspath('../../neurokernel/neuroml'))
 sys.path.append(os.path.abspath('../../'))
 
 # -- General configuration -----------------------------------------------------

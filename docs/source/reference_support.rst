@@ -15,7 +15,7 @@ Path-Like Port Identifier Handling
 
 XML Tools
 ---------
-.. currentmodule:: neurokernel.neuroml
+.. currentmodule:: neurokernel.neuroml.utils
 .. autosummary::
    :toctree: generated/
    :nosignatures:
