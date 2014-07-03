@@ -18,6 +18,5 @@ Inter-LPU Connectivity
    :toctree: generated/
    :nosignatures:
 
-   neurokernel.base.BaseConnectivity
-   neurokernel.core.Connectivity
-   neurokernel.core.IntervalIndex
+   neurokernel.pattern.Interface
+   neurokernel.pattern.Pattern

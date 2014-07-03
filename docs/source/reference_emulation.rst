@@ -10,7 +10,7 @@ Construction and Execution
    :nosignatures:
 
    neurokernel.base.Broker
-   neurokernel.core.Manager
+   neurokernel.base.Manager
 
 Support Classes
 ---------------

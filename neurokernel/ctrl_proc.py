@@ -34,7 +34,7 @@ class ControlledProcess(mp.Process):
     Parameters
     ----------
     port_ctrl : int
-        Port for receiving control messages.
+        Network port for receiving control messages.
     quit_sig : int
         OS signal to use when quitting the proess.
     id : str

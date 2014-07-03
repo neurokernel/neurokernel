@@ -46,10 +46,12 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
     G.add_nodes_from(range(sum(neu_num)))
 
     idx = 0
+    spk_out_id = 0
+    gpot_out_id = 0
     for (t, n) in zip(neu_type, neu_num):
         for i in range(n):
             name = t+"_"+str(i)
-
+            
             # All local neurons are graded potential only:
             if t != 'local' or np.random.rand() < 0.5:
                 G.node[idx] = {
@@ -63,6 +65,9 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                     'Vt': -0.0251355161007,
                     'R': 1.02445570216,
                     'C': 0.0669810502993}
+                if t == 'output':
+                    G.node[idx]['selector'] = '/gen/out/spk/' + str(spk_out_id)
+                    spk_out_id += 1 
             else:
                 G.node[idx] = {
                     'model': "MorrisLecar",
@@ -70,15 +75,18 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                     'extern': True if t == 'sensory' else False,
                     'public': True if t == 'output' else False,
                     'spiking': False,
-                    'V1': 0.3,
-                    'V2': 0.15,
+                    'V1': 0.03,
+                    'V2': 0.015,
                     'V3': 0,
-                    'V4': 0.3,
+                    'V4': 0.03,
                     'phi': 0.025,
                     'offset': 0,
-                    'initV': -0.5214,
-                    'initn': 0.03,
-                    'n_dendrites': 1}
+                    'initV': -0.05214,
+                    'initn': 0.02, 
+                }
+                if t == 'output':
+                    G.node[idx]['selector'] = '/gen/out/gpot/' + str(gpot_out_id)
+                    gpot_out_id = 1
             idx += 1
 
     # Assume a probability of synapse existence for each group of synapses:
@@ -103,20 +111,20 @@ def create_lpu(file_name, N_sensory, N_local, N_output):
                     'class'       : 0 if G.node[tar]['spiking'] is True else 1,
                     'ar'          : 1.1*1e2,
                     'ad'          : 1.9*1e3,
-                    'reverse'     : 65*1e-3,
-                    'gmax'        : 3*1e-3,
+                    'reverse'     : 65*1e-3 if G.node[tar]['spiking'] else 0.01,
+                    'gmax'        : 3*1e-3 if G.node[tar]['spiking'] else 3.1e-4,
                     'conductance' : True})
             else:
                 G.add_edge(src,tar,type='directed',attr_dict={
                     'model'       : 'power_gpot_gpot',
                     'name'        : name,
                     'class'       : 2 if G.node[tar]['spiking'] is True else 3,
-                    'slope'       : 4e9,
-                    'threshold'   : -0.06,
-                    'power'       : 4,
-                    'saturation'  : 30,
+                    'slope'       : 0.8,
+                    'threshold'   : -0.05,
+                    'power'       : 1,
+                    'saturation'  : 0.03,
                     'delay'       : 1,
-                    'reverse'     : -0.015,
+                    'reverse'     : -0.1,
                     'conductance' : True})
 
     nx.write_gexf(G, file_name)
@@ -176,7 +184,7 @@ if __name__ == '__main__':
     start = 0.3
     stop = 0.6
     I_max = 0.6
-    neu_num = [np.random.randint(30, 41) for i in xrange(3)]
+    neu_num = [np.random.randint(31, 40) for i in xrange(3)]
 
     create_input(args.in_file_name, neu_num[0], dt, dur, start, stop, I_max)
     create_lpu(args.lpu_file_name, *neu_num)

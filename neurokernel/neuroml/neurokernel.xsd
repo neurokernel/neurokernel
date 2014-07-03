@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema targetNamespace="http://www.neuroml.org/schema/neuroml2"
+    xmlns="http://www.neuroml.org/schema/neuroml2"
+    xmlns:xi="http://www.w3.org/2001/XInclude"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:jxb="http://java.sun.com/xml/ns/jaxb" jxb:version="2.0"
+    xsi:schemaLocation="http://www.w3.org/2001/XMLSchema http://www.w3.org/2001/XMLSchema.xsd"
+    elementFormDefault="qualified"
+    attributeFormDefault="unqualified">
+
+    <xs:include schemaLocation="./NeuroML_v2beta2.xsd"/>
+
+    <!-- Neurokernel-specific neuron/synapse types -->
+    <xs:complexType name="LeakyIafCell">
+      <xs:complexContent>
+	<xs:extension base="BaseCell">
+	  <xs:attribute name="extern" type="xs:boolean" use="required"/>
+	  <xs:attribute name="public" type="xs:boolean" use="required"/>
+	  <xs:attribute name="spiking" type="xs:boolean" use="required"/>
+	  <xs:attribute name="V" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="Vr" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="Vt" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="R" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="C" type="Nml2Quantity_none" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="MorrisLecarCell">
+      <xs:complexContent>
+	<xs:extension base="BaseCell">
+	  <xs:attribute name="extern" type="xs:boolean" use="required"/>
+	  <xs:attribute name="public" type="xs:boolean" use="required"/>
+	  <xs:attribute name="spiking" type="xs:boolean" use="required"/>
+          <xs:attribute name="V1" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="V2" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="V3" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="V4" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="phi" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="offset" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="initV" type="Nml2Quantity_none" use="required"/>
+          <xs:attribute name="initn" type="Nml2Quantity_none" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:simpleType name="synClassTypes">
+      <xs:restriction base="xs:integer">
+	<xs:enumeration value="0"/>
+	<xs:enumeration value="1"/>
+	<xs:enumeration value="2"/>
+	<xs:enumeration value="3"/>
+      </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:complexType name="AlphaSynapse">
+      <xs:complexContent>
+	<xs:extension base="Standalone">
+	  <xs:attribute name="class" type="synClassTypes" use="required"/>
+	  <xs:attribute name="ar" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="ad" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="gmax" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="reverse" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="from" type="NmlId" use="required"/>
+	  <xs:attribute name="to" type="NmlId" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="PowerGpotGpotSynapse">
+      <xs:complexContent>
+	<xs:extension base="Standalone">
+	  <xs:attribute name="class" type="synClassTypes" use="required"/>
+	  <xs:attribute name="slope" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="threshold" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="power" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="saturation" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="delay" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="reverse" type="Nml2Quantity_none" use="required"/>
+	  <xs:attribute name="conductance" type="xs:boolean" use="required"/>
+	  <xs:attribute name="from" type="NmlId" use="required"/>
+	  <xs:attribute name="to" type="NmlId" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <!-- Shortened types for single instances of desired neuron and synapse models -->
+    <xs:complexType name="LifNeuron">
+      <xs:complexContent>
+	<xs:extension base="LeakyIafCell">
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="MLNeuron">
+      <xs:complexContent>
+	<xs:extension base="MorrisLecarCell">
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="AlSynapse">
+      <xs:complexContent>
+	<xs:extension base="AlphaSynapse">
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="PGGSynapse">
+      <xs:complexContent>
+	<xs:extension base="PowerGpotGpotSynapse">
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <!-- Root of a specified Neurokernel model -->
+    <xs:element name="nk" type="NeurokernelDoc">
+      <xs:annotation>
+	<xs:documentation>Root Neurokernel element.</xs:documentation>
+      </xs:annotation>
+    </xs:element>
+
+    <xs:complexType name="NeurokernelDoc">
+      <xs:annotation>
+	<xs:documentation>Neurokernel model.</xs:documentation>
+      </xs:annotation>
+      
+      <xs:complexContent>
+	<xs:extension base="Standalone">
+	  <xs:choice minOccurs="0" maxOccurs="unbounded">
+            <xs:element name="module" type="Module"
+			minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="pattern" type="Pattern"
+			minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="connection" type="ModuleConnection"
+			minOccurs="0" maxOccurs="unbounded"/>
+	  </xs:choice>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <!-- Inter-LPU architecture types -->
+    <xs:complexType name="Module">
+      <xs:annotation>
+	<xs:documentation>Local processing unit.</xs:documentation>
+      </xs:annotation>
+
+      <xs:complexContent>
+	<xs:extension base="Base">
+	  <xs:sequence>
+	    <xs:element name="interface" type="Interface"/>
+	    <xs:choice minOccurs="0" maxOccurs="unbounded">	      
+              <xs:element name="lifNeuron" type="LifNeuron"
+			  minOccurs="0" maxOccurs="unbounded"/>
+	      <xs:element name="mlNeuron" type="MLNeuron"
+			  minOccurs="0" maxOccurs="unbounded"/>
+	      <xs:element name="alSynapse" type="AlSynapse"
+			  minOccurs="0" maxOccurs="unbounded"/>
+	      <xs:element name="pggSynapse" type="PGGSynapse"
+			  minOccurs="0" maxOccurs="unbounded"/>
+	    </xs:choice>
+	  </xs:sequence>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="Pattern">
+      <xs:annotation>
+	<xs:documentation>Pattern of connections between module interfaces.
+	</xs:documentation>
+      </xs:annotation>
+      
+      <xs:complexContent>
+	<xs:extension base="Base">
+	  <xs:sequence>
+	    <xs:element name="interface" type="Interface"/>
+	    <xs:element name="connection" type="PatternConnection"
+			minOccurs="0" maxOccurs="unbounded"/>
+	  </xs:sequence>
+	</xs:extension>
+      </xs:complexContent>      
+    </xs:complexType>
+
+    <xs:complexType name="ModuleConnection">
+      <xs:annotation>
+	<xs:documentation>Connection between modules.</xs:documentation>
+      </xs:annotation>
+      
+      <xs:complexContent>
+	<xs:extension base="BaseWithoutId">
+	  <xs:attribute name="m0" type="NmlId" use="required"/>
+	  <xs:attribute name="m1" type="NmlId" use="required"/>
+	  <xs:attribute name="pat" type="NmlId" use="required"/>
+	  <xs:attribute name="int0" type="xs:integer" use="required"/>
+	  <xs:attribute name="int1" type="xs:integer" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+    
+    <xs:complexType name="Interface">
+      <xs:annotation>
+	<xs:documentation>Interface comprising multiple ports.</xs:documentation>
+      </xs:annotation>
+      
+      <xs:complexContent>
+	<xs:extension base="Base">
+	  <xs:sequence>
+	    <xs:element name="port" type="Port"
+			minOccurs="0" maxOccurs="unbounded"/>
+	  </xs:sequence>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="PatternConnection">
+      <xs:annotation>
+	<xs:documentation>Connection between ports.</xs:documentation>
+      </xs:annotation>
+
+      <xs:complexContent>
+	<xs:extension base="BaseWithoutId">
+	  <xs:attribute name="from" type="xs:string" use="required"/>
+	  <xs:attribute name="to" type="xs:string" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+
+    <xs:simpleType name="ioTypes">
+      <xs:restriction base="xs:string">
+	<xs:enumeration value="in"/>
+	<xs:enumeration value="out"/>
+      </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="transTypes">
+      <xs:restriction base="xs:string">
+	<xs:enumeration value="gpot"/>
+	<xs:enumeration value="spike"/>
+      </xs:restriction>
+    </xs:simpleType>
+
+    <xs:complexType name="Port">
+      <xs:annotation>
+	<xs:documentation>Module/pattern port.</xs:documentation>
+      </xs:annotation>
+
+      <!-- We cannot use the id attribute from the "Base" complexType
+	   because it doesn't allow characters that may appear in a path-like
+	   identifier string. -->
+      <xs:complexContent>
+	<xs:extension base="BaseWithoutId">
+	  <xs:attribute name="interface" type="xs:integer" use="required"/>
+	  <xs:attribute name="io" type="ioTypes" use="required"/>
+	  <xs:attribute name="type" type="transTypes" use="required"/>
+	  <xs:attribute name="identifier" type="xs:string" use="required"/>
+	</xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+</xs:schema>

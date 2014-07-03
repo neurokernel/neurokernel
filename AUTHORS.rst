@@ -18,7 +18,9 @@ Other contributors who have participated in the project include
 
 * Daniel S. Chevitarese
 
-The Neurokernel logo is based upon the logo of the FlyJunkies web site [9]_,
+Neurokernel contains modified code from the libNeuroML project [9]_.
+
+The Neurokernel logo is based upon the logo of the FlyJunkies web site [10]_,
 used with permission for non-profit use by the site maintainers Gavin Davis and
 Fraser Perry.
 
@@ -30,4 +32,6 @@ Fraser Perry.
 .. [6] http://www.linkedin.com/pub/nikul-ukani/16/737/990
 .. [7] http://www.linkedin.com/pub/chung-heng-yeh/5a/7a6/a
 .. [8] http://www.bionet.ee.columbia.edu/people#yiyin-zhou
-.. [9] http://www.flyjunkies.com.au/
+.. [9] https://github.com/NeuralEnsemble/libNeuroML
+.. [10] http://www.flyjunkies.com.au/
+

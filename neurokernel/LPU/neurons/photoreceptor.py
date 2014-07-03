@@ -1,4 +1,3 @@
-import pdb
 import time
 
 from tables.utils import convertToNPAtom2
@@ -10,14 +9,17 @@ from pycuda.compiler import SourceModule
 from pycuda.tools import dtype_to_ctype, context_dependent_memoize
 import tables
 
-import simpleio as si
-import curand as curand
-# import neurokernel.LPU.utils.visualizer as vis
-
 import matplotlib.pyplot as plt
 
+import utils.curand as curand
+import utils.simpleio as si
+#import neurokernel.LPU.utils.visualizer as vis
 
-class photoreceptor(object):
+
+from baseneuron import BaseNeuron
+
+
+class Photoreceptor(BaseNeuron):
     def __init__(self, num_neurons, num_microvilli, input_dt, outputfile,
                  dtype = np.double, inputfile = None,
                  record_neuron = True, record_microvilli = False):
@@ -39,25 +41,25 @@ class photoreceptor(object):
         self.grid_hh = ( (self.num_neurons-1)/self.block_hh[0]+1, 1)
 
     def simulate(self, steps):
-        self.initialize()
+        self._initialize()
         start_time = time.time()
         for i in range(steps):
-            self.run_step(i)
+            self._run_step(i)
             if i%100 == 0:
                 print i, 'time:', time.time() - start_time, 's'
         
         end_time = time.time()
         print end_time-start_time, 's'
         
-        self.post_run()
-        
-    def initialize(self):
-        self.setup_output()
-        self.setup_poisson()
-        self.setup_transduction()
-        self.setup_hh()
+        self._post_run()
 
-    def setup_output(self):
+    def _initialize(self):
+        self._setup_output()
+        self._setup_poisson()
+        self._setup_transduction()
+        self._setup_hh()
+
+    def _setup_output(self):
         outputfile = self.outputfile
         if self.record_neuron:
             self.outputfile_I = tables.openFile(outputfile+'I.h5', 'w')
@@ -114,12 +116,13 @@ class photoreceptor(object):
                 "/","array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-    def setup_poisson(self, seed = 3000):
+
+    def _setup_poisson(self, seed = 3000):
         self.randState = curand.curand_setup(
             self.block_transduction[0]*self.num_neurons, seed)
         self.photon_absorption_func = get_photon_absorption_func(self.dtype)
 
-    def setup_transduction(self):
+    def _setup_transduction(self):
         self.X = []
         tmp = np.zeros((self.num_neurons, self.num_microvilli * 2), np.int16)
         tmp[:,::2] = 50
@@ -161,7 +164,7 @@ class photoreceptor(object):
             change_ind1, change_ind2,
             change1, change2)
             
-    def setup_hh(self):
+    def _setup_hh(self):
         self.I_all = garray.empty((1,self.num_neurons), self.dtype)
         self.V = garray.empty((1,self.num_neurons), self.dtype)
         self.hhx = [garray.empty((1,self.num_neurons), self.dtype) for i in range(4)]
@@ -174,7 +177,7 @@ class photoreceptor(object):
                                                      self.block_transduction[0])
         self.hh_func = get_hh_func(self.dtype)
 
-    def run_step(self, step):
+    def _run_step(self, step):
         photon_inputs = garray.empty((1, self.num_neurons), self.dtype)
         # test
 #        if step == 3000:
@@ -211,15 +214,29 @@ class photoreceptor(object):
                 self.hhx[1].gpudata, self.hhx[2].gpudata, self.hhx[3].gpudata,
                 self.num_neurons, self.run_dt/10, 10)
 
-        self.write_outputfile()
+        self._write_outputfile()
         #if step > round(0.2/self.input_dt):
-        #    self.update_ns()
+        #    self._update_ns()
         
-    def update_ns(self):
+    def _update_ns(self):
         dns = (self.Ans+self.n_s0 - self.ns) / self.tau_ns
         self.ns += dns * self.run_dt
-        
-    def write_outputfile(self):
+
+    def _post_run(self):
+        print self.ns
+        if self.record_neuron:
+            self.outputfile_I.close()
+            self.outputfile_V.close()
+        if self.record_microvilli:
+            self.outputfile_X0.close()
+            self.outputfile_X1.close()
+            self.outputfile_X2.close()
+            self.outputfile_X3.close()
+            self.outputfile_X4.close()
+            self.outputfile_X5.close()
+            self.outputfile_X6.close()
+
+    def _write_outputfile(self):
         if self.record_neuron:
             self.outputfile_I.root.array.append(self.I_all.get())
             self.outputfile_I.flush()
@@ -247,20 +264,29 @@ class photoreceptor(object):
 
             self.outputfile_X6.root.array.append([self.X[3].get()[:,0]]) # M*
             self.outputfile_X6.flush()
-    
-    def post_run(self):
-        print self.ns
-        if self.record_neuron:
-            self.outputfile_I.close()
-            self.outputfile_V.close()
-        if self.record_microvilli:
-            self.outputfile_X0.close()
-            self.outputfile_X1.close()
-            self.outputfile_X2.close()
-            self.outputfile_X3.close()
-            self.outputfile_X4.close()
-            self.outputfile_X5.close()
-            self.outputfile_X6.close()
+
+    def eval():
+        #TODO
+        self.photon_absorption_func.prepared_call(
+            self.grid_transduction, self.block_transduction,
+            self.randState.gpudata, self.X[3].gpudata, self.X[3].shape[1],
+            self.num_microvilli, photon_inputs.gpudata)
+        
+
+        for i in range(self.multiple):
+            self.transduction_func.prepared_call(
+                self.grid_transduction, self.block_transduction,
+                self.randState.gpudata, self.X[0].shape[1], self.run_dt,
+                self.V.gpudata, self.ns)
+            self.sum_current_func.prepared_call(
+                self.grid_transduction, self.block_transduction,
+                self.X[2].gpudata, self.X[2].shape[1], self.num_microvilli,
+                self.I_all.gpudata, self.V.gpudata)
+            self.hh_func.prepared_call(
+                self.grid_hh, self.block_hh,
+                self.I_all.gpudata, self.V.gpudata, self.hhx[0].gpudata,
+                self.hhx[1].gpudata, self.hhx[2].gpudata, self.hhx[3].gpudata,
+                self.num_neurons, self.run_dt/10, 10)
     
     #TODO create a function that runs all functions related to simulation and
     # and does not rely on the user to call the functions in the right order  
@@ -323,7 +349,8 @@ class photoreceptor(object):
         fig.savefig(outputfile + '_plot.png', bbox_inches='tight')
         
         # Visualizer needs gexf file that is which is not present here
-            
+
+# end of photoreceptor
 def get_photon_absorption_func(dtype):
     template = """
 

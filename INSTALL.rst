@@ -33,6 +33,7 @@ packages:
 * `msgpack-numpy <http://pypi.python.org/pypi/msgpack-numpy>`_ 0.3.1.1 or later.
 * `networkx <https://networkx.github.io>`_ 1.8 or later
 * `numpy <http://numpy.scipy.org>`_ 1.2.0 or later.
+* `ply <http://www.dabeaz.com/ply/>`_ 3.4 or later.
 * `pycuda <http://mathema.tician.de/software/pycuda>`_ 2012.1 or
   later.
 * `pyzmq <http://zeromq.github.io/pyzmq/>`_ 13.0 or later.

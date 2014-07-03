@@ -27,7 +27,7 @@ dur = 1.0
 steps = int(dur/dt)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--debug', default=False,
+parser.add_argument('--debug', default=True,
                     dest='debug', action='store_true',
                     help='Write connectivity structures and inter-LPU routed data in debug folder')
 parser.add_argument('-l', '--log', default='none', type=str,
