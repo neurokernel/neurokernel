@@ -66,18 +66,18 @@ class LeakyIAF(BaseNeuron):
         self.V   = garray.to_gpu( np.asarray( n_dict['V'], dtype=np.float64 ))
         self.spk = spk
 
-        _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i] \
-                                    for i in range(self.num_neurons)], \
-                                    dtype=np.int32).flatten()
-        _num_dendrite = np.asarray([n_dict['num_dendrites_I'][i] \
-                                    for i in range(self.num_neurons)], \
+        _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i]
+                                         for i in range(self.num_neurons)],
+                                        dtype=np.int32).flatten()
+        _num_dendrite = np.asarray([n_dict['num_dendrites_I'][i]
+                                    for i in range(self.num_neurons)],
                                    dtype=np.int32).flatten()
 
-        self._cum_num_dendrite = garray.to_gpu(np.concatenate(( \
-                                    np.asarray([0,], dtype=np.int32), \
+        self._cum_num_dendrite = garray.to_gpu(np.concatenate((
+                                    np.asarray([0,], dtype=np.int32),
                                     np.cumsum(_num_dendrite, dtype=np.int32))))
-        self._cum_num_dendrite_cond = garray.to_gpu(np.concatenate(( \
-                                    np.asarray([0,], dtype=np.int32), \
+        self._cum_num_dendrite_cond = garray.to_gpu(np.concatenate((
+                                    np.asarray([0,], dtype=np.int32),
                                     np.cumsum(_num_dendrite_cond, dtype=np.int32))))
         self._num_dendrite = garray.to_gpu(_num_dendrite)
         self._num_dendrite_cond = garray.to_gpu(_num_dendrite_cond)
@@ -94,28 +94,28 @@ class LeakyIAF(BaseNeuron):
             if self.LPU_id is None:
                 self.LPU_id = "anon"
             self.I_file = tables.openFile(self.LPU_id + "_I.h5", mode="w")
-            self.I_file.createEArray("/","array", \
+            self.I_file.createEArray("/","array",
                                      tables.Float64Atom(), (0,self.num_neurons))
             self.V_file = tables.openFile(self.LPU_id + "_V.h5", mode="w")
-            self.V_file.createEArray("/","array", \
+            self.V_file.createEArray("/","array",
                                      tables.Float64Atom(), (0,self.num_neurons))
     @property
     def neuron_class(self): return True
 
     def eval( self, st = None):
-        self.update.prepared_async_call(\
-            self.gpu_grid,\
-            self.gpu_block,\
-            st,\
-            self.num_neurons,\
-            self.dt,\
-            self.spk,\
-            self.V.gpudata,\
-            self.I.gpudata,\
-            self.Vt.gpudata,\
-            self.Vr.gpudata,\
-            self.R.gpudata,\
-            self.C.gpudata )
+        self.update.prepared_async_call(
+            self.gpu_grid,
+            self.gpu_block,
+            st,
+            self.num_neurons,
+            self.dt,
+            self.spk,
+            self.V.gpudata,
+            self.I.gpudata,
+            self.Vt.gpudata,
+            self.Vr.gpudata,
+            self.R.gpudata,
+            self.C.gpudata)
         if self.debug:
             self.I_file.root.array.append(self.I.get().reshape((1,-1)))
             self.V_file.root.array.append(self.V.get().reshape((1,-1)))
@@ -125,9 +125,9 @@ class LeakyIAF(BaseNeuron):
         self.gpu_block = (128,1,1)
         self.gpu_grid = ((self.num_neurons - 1) / self.gpu_block[0] + 1, 1)
         #cuda_src = open( './leaky_iaf.cu','r')
-        mod = SourceModule( \
-                cuda_src % {"type": dtype_to_ctype(np.float64),\
-                            "nneu": self.gpu_block[0] },\
+        mod = SourceModule(
+                cuda_src % {"type": dtype_to_ctype(np.float64),
+                            "nneu": self.gpu_block[0] },
                 options=["--ptxas-options=-v"])
         func = mod.get_function("leaky_iaf")
         func.prepare( [ np.int32,   # neu_num
@@ -153,15 +153,16 @@ class LeakyIAF(BaseNeuron):
     def update_I(self, synapse_state, st=None):
         self.I.fill(0)
         if self._pre.size>0:
-            self._update_I_non_cond.prepared_async_call(self._grid_get_input,\
-                self._block_get_input, st, int(synapse_state), \
-                self._cum_num_dendrite.gpudata, self._num_dendrite.gpudata, self._pre.gpudata,
-                self.I.gpudata)
+            self._update_I_non_cond.prepared_async_call(self._grid_get_input,
+                self._block_get_input, st, int(synapse_state),
+                self._cum_num_dendrite.gpudata, self._num_dendrite.gpudata,
+                self._pre.gpudata, self.I.gpudata)
         if self._cond_pre.size>0:
-            self._update_I_cond.prepared_async_call(self._grid_get_input,\
-                self._block_get_input, st, int(synapse_state), \
-                self._cum_num_dendrite_cond.gpudata, self._num_dendrite_cond.gpudata,
-                self._cond_pre.gpudata, self.I.gpudata, self.V.gpudata, \
+            self._update_I_cond.prepared_async_call(self._grid_get_input,
+                self._block_get_input, st, int(synapse_state),
+                self._cum_num_dendrite_cond.gpudata, 
+                self._num_dendrite_cond.gpudata,
+                self._cond_pre.gpudata, self.I.gpudata, self.V.gpudata,
                 self._V_rev.gpudata)
         
 
@@ -314,47 +315,45 @@ class LeakyIAF(BaseNeuron):
             }
 
 
-               __syncthreads();
+            __syncthreads();
 
+            if(tidy < 8)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 8];
+                input[tidx][tidy] += input[tidx][tidy + 16];
+                input[tidx][tidy] += input[tidx][tidy + 24];
+            }
 
+            __syncthreads();
 
-               if(tidy < 8)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 8];
-                   input[tidx][tidy] += input[tidx][tidy + 16];
-                   input[tidx][tidy] += input[tidx][tidy + 24];
-               }
+            if(tidy < 4)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 4];
+            }
 
-               __syncthreads();
+            __syncthreads();
 
-               if(tidy < 4)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 4];
-               }
+            if(tidy < 2)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 2];
+            }
 
-               __syncthreads();
+            __syncthreads();
 
-               if(tidy < 2)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 2];
-               }
-
-               __syncthreads();
-
-               if(tidy == 0)
-               {
-                   input[tidx][0] += input[tidx][1];
-                   neuron = bid*N+tidx;
-                   if(neuron < NUM_NEURONS)
-                   {
-                       I_pre[neuron] += input[tidx][0];
-                   }
-               }
-
+            if(tidy == 0)
+            {
+                input[tidx][0] += input[tidx][1];
+                neuron = bid*N+tidx;
+                if(neuron < NUM_NEURONS)
+                {
+                    I_pre[neuron] += input[tidx][0];
+                }
+            }
         }
         //can be improved
         """
-        mod = SourceModule(template % {"num_neurons": self.num_neurons}, options = ["--ptxas-options=-v"])
+        mod = SourceModule(template % {"num_neurons": self.num_neurons}, 
+                           options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
         func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp])
         return func

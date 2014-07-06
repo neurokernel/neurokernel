@@ -1,0 +1,8 @@
+# ignore compiled python
+*.pyc
+
+#
+*.h5
+*qsub.py
+*gexf.gz
+neurokernel.egg-info

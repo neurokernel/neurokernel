@@ -11,35 +11,41 @@ import tables
 
 import matplotlib.pyplot as plt
 
-import utils.curand as curand
-import utils.simpleio as si
-#import neurokernel.LPU.utils.visualizer as vis
+import neurokernel.LPU.utils.curand as curand
+import neurokernel.LPU.utils.simpleio as si
 
 
 from baseneuron import BaseNeuron
 
 
 class Photoreceptor(BaseNeuron):
-    def __init__(self, num_neurons, num_microvilli, input_dt, outputfile,
-                 dtype = np.double, inputfile = None,
-                 record_neuron = True, record_microvilli = False):
-        self.num_neurons = int(num_neurons)
-        self.num_microvilli = int(num_microvilli)
+    def __init__(self, n_dict, V, input_dt,
+                 debug=False, LPU_id='anon'):
+
+        self.num_neurons = len(n_dict['id'])  # NOT n_dict['num_neurons']
+        # num_microvilli must be the same for every photoreceptor so the first
+        # one is taken
+        self.num_microvilli = int(n_dict['num_microvilli'][0])
+        self.dtype = np.double  # TODO pass it as parameter in n_dict
+        self.V = V  # output of hh
         self.input_dt = input_dt
         self.run_dt = 1e-4
+
         self.multiple = int(self.input_dt/self.run_dt)
         assert(self.multiple * self.run_dt == self.input_dt)
-        self.outputfile = outputfile
-        self.dtype = dtype
-        self.inputfile = inputfile
-        self.record_neuron = record_neuron
-        self.record_microvilli = record_microvilli
-        
+
+        self.record_neuron = debug
+        self.record_microvilli = debug
+        self.LPU_id = LPU_id
+
         self.block_transduction = (128, 1, 1)
         self.grid_transduction = (self.num_neurons, 1)
         self.block_hh = (256, 1, 1)
         self.grid_hh = ( (self.num_neurons-1)/self.block_hh[0]+1, 1)
+        
+        self._initialize()
 
+################################################################################
     def simulate(self, steps):
         self._initialize()
         start_time = time.time()
@@ -52,7 +58,7 @@ class Photoreceptor(BaseNeuron):
         print end_time-start_time, 's'
         
         self._post_run()
-
+################################################################################
     def _initialize(self):
         self._setup_output()
         self._setup_poisson()
@@ -60,7 +66,7 @@ class Photoreceptor(BaseNeuron):
         self._setup_hh()
 
     def _setup_output(self):
-        outputfile = self.outputfile
+        outputfile = self.LPU_id + '_out'
         if self.record_neuron:
             self.outputfile_I = tables.openFile(outputfile+'I.h5', 'w')
             self.outputfile_I.createEArray(
@@ -70,50 +76,50 @@ class Photoreceptor(BaseNeuron):
         
             self.outputfile_V = tables.openFile(outputfile+'V.h5', 'w')
             self.outputfile_V.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Float64Atom() if self.dtype == np.double else tables.Float32Atom(),
                 (0,self.num_neurons))
     
         if self.record_microvilli:
             self.outputfile_X0 = tables.openFile(outputfile+'X0.h5', 'w')
             self.outputfile_X0.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
         
             self.outputfile_X1 = tables.openFile(outputfile+'X1.h5', 'w')
             self.outputfile_X1.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
         
             self.outputfile_X2 = tables.openFile(outputfile+'X2.h5', 'w')
             self.outputfile_X2.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
         
             self.outputfile_X3 = tables.openFile(outputfile+'X3.h5', 'w')
             self.outputfile_X3.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
         
             self.outputfile_X4 = tables.openFile(outputfile+'X4.h5', 'w')
             self.outputfile_X4.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
         
             self.outputfile_X5 = tables.openFile(outputfile+'X5.h5', 'w')
             self.outputfile_X5.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
         
             self.outputfile_X6 = tables.openFile(outputfile+'X6.h5', 'w')
             self.outputfile_X6.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
 
@@ -137,24 +143,23 @@ class Photoreceptor(BaseNeuron):
         tmp = np.zeros((self.num_neurons, self.num_microvilli), np.int16)
         # variables Mstar
         self.X.append(garray.to_gpu(tmp))
-    
-        #self.X = [garray.zeros((self.num_neurons, self.num_microvilli), np.int16) \
-        #          for i in range(7)]
-        #self.X[1] += 50 # G initial condition
-        
+
         Xaddress = np.empty(4, np.int64)
         for i in range(4):
             Xaddress[i] = int(self.X[i].gpudata)
 
-        
-        change_ind1 = np.asarray([1, 1, 2, 3, 3, 2, 5, 4, 5, 5, 7, 6, 6], np.int32)-1
-        change_ind2 = np.asarray([1, 1, 3, 4, 1, 1, 1, 1, 1, 7, 1, 1, 1], np.int32)-1
-        change1 = np.asarray([0, -1, -1, -1, -1, 1, 1, -1, -1, -2, -1, 1, -1], np.int32)
-        change2 = np.asarray([0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0], np.int32)
+        change_ind1 = np.asarray([1, 1, 2, 3, 3, 2, 5, 4, 5, 5, 7, 6, 6], 
+                                 np.int32) - 1
+        change_ind2 = np.asarray([1, 1, 3, 4, 1, 1, 1, 1, 1, 7, 1, 1, 1], 
+                                 np.int32) - 1
+        change1 = np.asarray([0, -1, -1, -1, -1, 1, 1, -1, -1, -2, -1, 1, -1], 
+                             np.int32)
+        change2 = np.asarray([0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0], 
+                             np.int32)
         
         self.n_s0 = 202.
         self.ns = self.n_s0
-        self.Ans = 200.0
+        self.Ans = 200.
         self.tau_ns = 1.
         
         
@@ -165,10 +170,15 @@ class Photoreceptor(BaseNeuron):
             change1, change2)
             
     def _setup_hh(self):
-        self.I_all = garray.empty((1,self.num_neurons), self.dtype)
-        self.V = garray.empty((1,self.num_neurons), self.dtype)
-        self.hhx = [garray.empty((1,self.num_neurons), self.dtype) for i in range(4)]
-        self.V.fill(-71.1358)
+        self.I_all = garray.empty((1, self.num_neurons), self.dtype)
+        # self.V = garray.empty((1, self.num_neurons), self.dtype)
+        self.hhx = [garray.empty((1, self.num_neurons), self.dtype)
+                    for i in range(4)]
+        # self.V.fill(-71.1358)
+        V_init = np.empty((1, self.num_neurons), dtype=np.double)
+        V_init.fill(-71.1358)
+        cuda.memcpy_htod(int(self.V), V_init)
+        
         self.hhx[0].fill(0.3566)
         self.hhx[1].fill(0.9495)
         self.hhx[2].fill(0.0254)
@@ -176,51 +186,6 @@ class Photoreceptor(BaseNeuron):
         self.sum_current_func = get_sum_current_func(self.dtype,
                                                      self.block_transduction[0])
         self.hh_func = get_hh_func(self.dtype)
-
-    def _run_step(self, step):
-        photon_inputs = garray.empty((1, self.num_neurons), self.dtype)
-        # test
-#        if step == 3000:
-#            photon_inputs.fill(1)
-#        else:
-#            photon_inputs.fill(0)
-        if self.inputfile is not None:
-            input = si.read(self.inputfile, step, step+1).astype(self.dtype)
-            photon_inputs.set(input)
-        else:
-            photon_inputs.fill(30 if step > round(0.2/self.input_dt) else 0) # for multiple microvilli
-            #photon_inputs.fill(1 if step == 2000 else 0) # for test with 1 microvilli
-
-        
-
-        self.photon_absorption_func.prepared_call(
-            self.grid_transduction, self.block_transduction,
-            self.randState.gpudata, self.X[3].gpudata, self.X[3].shape[1],
-            self.num_microvilli, photon_inputs.gpudata)
-        
-
-        for i in range(self.multiple):
-            self.transduction_func.prepared_call(
-                self.grid_transduction, self.block_transduction,
-                self.randState.gpudata, self.X[0].shape[1], self.run_dt,
-                self.V.gpudata, self.ns)
-            self.sum_current_func.prepared_call(
-                self.grid_transduction, self.block_transduction,
-                self.X[2].gpudata, self.X[2].shape[1], self.num_microvilli,
-                self.I_all.gpudata, self.V.gpudata)
-            self.hh_func.prepared_call(
-                self.grid_hh, self.block_hh,
-                self.I_all.gpudata, self.V.gpudata, self.hhx[0].gpudata,
-                self.hhx[1].gpudata, self.hhx[2].gpudata, self.hhx[3].gpudata,
-                self.num_neurons, self.run_dt/10, 10)
-
-        self._write_outputfile()
-        #if step > round(0.2/self.input_dt):
-        #    self._update_ns()
-        
-    def _update_ns(self):
-        dns = (self.Ans+self.n_s0 - self.ns) / self.tau_ns
-        self.ns += dns * self.run_dt
 
     def _post_run(self):
         print self.ns
@@ -245,9 +210,9 @@ class Photoreceptor(BaseNeuron):
         
         if self.record_microvilli:
             tmp = self.X[0].get().view(np.int16) # G G*
-            self.outputfile_X0.root.array.append([tmp[:,0]])
+            self.outputfile_X0.root.array.append([tmp[:, 0]])
             self.outputfile_X0.flush()
-            self.outputfile_X1.root.array.append([tmp[:,1]])
+            self.outputfile_X1.root.array.append([tmp[:, 1]])
             self.outputfile_X1.flush()
             
             tmp = self.X[1].get().view(np.int16) # PLC* D*
@@ -300,9 +265,9 @@ class Photoreceptor(BaseNeuron):
         Nt = int(dur/dt)
         t = np.arange(0, dt*Nt, dt)
 
-        axis = 1 # axis along which the summation is done
-        neuron = 0 # neuron id
-        microv = 0 # microvillus id
+        axis = 1  # axis along which the summation is done
+        neuron = 0  # neuron id
+        microv = 0  # microvillus id
         
         input = si.read_array(self.inputfile)
         if self.record_neuron:
@@ -384,8 +349,9 @@ photon_absorption(curandStateXORWOW_t *state, short* M, int ld,
 }
 
 }
-"""#Used 33 registers, 352 bytes cmem[0], 328 bytes cmem[2]
-    # float: Used 47 registers, 352 bytes cmem[0], 332 bytes cmem[2]
+"""
+# Used 33 registers, 352 bytes cmem[0], 328 bytes cmem[2]
+# float: Used 47 registers, 352 bytes cmem[0], 332 bytes cmem[2]
     mod = SourceModule(template % {"type": dtype_to_ctype(dtype)},
                        options = ["--ptxas-options=-v"],
                        no_extern_c = True)
@@ -684,15 +650,18 @@ transduction(curandStateXORWOW_t *state, int ld1,
     #    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
     #ptxas info    : Used 60 registers, 7176 bytes smem, 352 bytes cmem[0], 324 bytes cmem[2]
     #float : Used 65 registers, 7172 bytes smem, 344 bytes cmem[0], 168 bytes cmem[2]
+
     scalartype = dtype.type if isinstance(dtype, np.dtype) else dtype
-    mod = SourceModule(template % {"type": dtype_to_ctype(dtype),
-                                   "block_size": block_size,
-                                   "num_microvilli": num_microvilli,
-                                   "fletter": 'f' if scalartype == np.float32 else '',
-                                   "dword": '_double' if scalartype == np.double else '',
-                                   "nn": '\\n'},
-                       options = ["--ptxas-options=-v --maxrregcount=56"],
-                       no_extern_c = True)
+    mod = SourceModule(
+        template % {
+            "type": dtype_to_ctype(dtype),
+            "block_size": block_size,
+            "num_microvilli": num_microvilli,
+            "fletter": 'f' if scalartype == np.float32 else '',
+            "dword": '_double' if scalartype == np.double else '',
+            "nn": '\\n'},
+        options = ["--ptxas-options=-v --maxrregcount=56"],
+        no_extern_c = True)
     func = mod.get_function('transduction')
     d_X_address, d_X_nbytes = mod.get_global("d_X")
     print d_X_nbytes

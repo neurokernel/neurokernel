@@ -23,13 +23,13 @@ class BaseNeuron(object):
         Every neuron class should setup GPU data structure needed
         by it during initialization. In addition, graded potential neurons
         should also update the neuron_state structures with their
-        initial state during  initialization.
+        initial state during initialization.
 
         n_dict is a dictionary representing the parameters needed
         by the neuron class.
         For example, if a derived neuron class called IAF needs a
         parameter called bias, n_dict['bias'] will be vector containing
-        the bias values fol all the IAF neurons in a particular LPU.
+        the bias values for all the IAF neurons in a particular LPU.
 
         In addition to the neuron parameters, n_dict will also contain:-
         1. n_dict['cond_pre'] representing the conductance based synapses
@@ -58,7 +58,7 @@ class BaseNeuron(object):
         Note that you only need the above information if you plan to override the
         default update_I method.
 
-        neuron_state_pointer is an integer representing the inital memory location
+        neuron_state_pointer is an integer representing the initial memory location
         on the GPU for storing the neuron states for this object.
         For graded potential neurons, the data type will be double whereas for
         spiking neurons, it will be int.
@@ -70,26 +70,26 @@ class BaseNeuron(object):
         '''
         self.__neuron_state_pointer = neuron_state_pointer
         self.__num_neurons = len(n_dict['id'])
-        _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i] \
-                                    for i in range(self.__num_neurons)], \
-                                    dtype=np.int32).flatten()
-        _num_dendrite = np.asarray([n_dict['num_dendrites_I'][i] \
-                                    for i in range(self.__num_neurons)], \
+        _num_dendrite_cond = np.asarray([n_dict['num_dendrites_cond'][i]
+                                         for i in range(self.__num_neurons)],
+                                        dtype=np.int32).flatten()
+        _num_dendrite = np.asarray([n_dict['num_dendrites_I'][i]
+                                    for i in range(self.__num_neurons)],
                                    dtype=np.int32).flatten()
 
-        self.__cum_num_dendrite = garray.to_gpu(np.concatenate(( \
-                                    np.asarray([0,], dtype=np.int32), \
-                                    np.cumsum(_num_dendrite, dtype=np.int32))))
-        self.__cum_num_dendrite_cond = garray.to_gpu(np.concatenate(( \
-                                    np.asarray([0,], dtype=np.int32), \
-                                    np.cumsum(_num_dendrite_cond, dtype=np.int32))))
+        self.__cum_num_dendrite = garray.to_gpu(np.concatenate((
+                                np.asarray([0,], dtype=np.int32),
+                                np.cumsum(_num_dendrite, dtype=np.int32))))
+        self.__cum_num_dendrite_cond = garray.to_gpu(np.concatenate((
+                                np.asarray([0,], dtype=np.int32),
+                                np.cumsum(_num_dendrite_cond, dtype=np.int32))))
         self.__num_dendrite = garray.to_gpu(_num_dendrite)
         self.__num_dendrite_cond = garray.to_gpu(_num_dendrite_cond)
         self.__pre = garray.to_gpu(np.asarray(n_dict['I_pre'], dtype=np.int32))
         self.__cond_pre = garray.to_gpu(np.asarray(n_dict['cond_pre'],
                                                   dtype=np.int32))
         self.__V_rev = garray.to_gpu(np.asarray(n_dict['reverse'],
-                                               dtype=np.double))
+                                                dtype=np.double))
         self.I = garray.zeros(self.__num_neurons, np.double)
         self.__update_I_cond = self.__get_update_I_cond_func()
         self.__update_I_non_cond = self.__get_update_I_non_cond_func()
@@ -135,28 +135,30 @@ class BaseNeuron(object):
         This method should compute the input current to each neuron
         based on the synapse states.
         synapse_state may either contain conductances or currents.
-        synapse_state will be an integer representing the inital memory
+        synapse_state will be an integer representing the initial memory
         location on the GPU reserved for the synapse states. The data
         type for synapse states will be double.
         The information needed to compute the currents is provided in the
         dictionary n_dict at initialization.
 
         BaseNeuron provides an implementation of this method. To use a
-        different implementation, this method should be overrided and
+        different implementation, this method should be overridden and
         update_I_override property must be defined to be True in the derived class.
 
         '''
         self.I.fill(0)
         if self.__pre.size>0:
-            self.__update_I_non_cond.prepared_async_call(self.__grid_get_input,\
-                self.__block_get_input, st, int(synapse_state), \
-                self.__cum_num_dendrite.gpudata, self.__num_dendrite.gpudata, self.__pre.gpudata,
+            self.__update_I_non_cond.prepared_async_call(
+                self.__grid_get_input, self.__block_get_input, st, 
+                int(synapse_state), self.__cum_num_dendrite.gpudata, 
+                self.__num_dendrite.gpudata, self.__pre.gpudata,
                 self.I.gpudata)
         if self.__cond_pre.size>0:
-            self.__update_I_cond.prepared_async_call(self.__grid_get_input,\
-                self.__block_get_input, st, int(synapse_state), \
-                self.__cum_num_dendrite_cond.gpudata, self.__num_dendrite_cond.gpudata,
-                self.__cond_pre.gpudata, self.I.gpudata, int(self.__neuron_state_pointer), \
+            self.__update_I_cond.prepared_async_call(
+                self.__grid_get_input, self.__block_get_input, st,
+                int(synapse_state), self.__cum_num_dendrite_cond.gpudata,
+                self.__num_dendrite_cond.gpudata, self.__cond_pre.gpudata,
+                self.I.gpudata, int(self.__neuron_state_pointer),
                 self.__V_rev.gpudata)
         if self.debug:
             self.__I_file.root.array.append(self.I.get().reshape((1,-1)))
@@ -181,7 +183,9 @@ class BaseNeuron(object):
         #define N 32
         #define NUM_NEURONS %(num_neurons)d
 
-        __global__ void get_input(double* synapse, int* cum_num_dendrite, int* num_dendrite, int* pre, double* I_pre, double* V, double* V_rev)
+        __global__ void get_input(double* synapse, int* cum_num_dendrite, 
+                                  int* num_dendrite, int* pre, double* I_pre, 
+                                  double* V, double* V_rev)
         {
             int tidx = threadIdx.x;
             int tidy = threadIdx.y;
@@ -202,7 +206,7 @@ class BaseNeuron(object):
                     num_den[tidx] = num_dendrite[neuron];
                     V_in[tidx] = V[neuron];
                 }
-            }else if(tidy == 1)
+            } else if(tidy == 1)
             {
                 neuron = bid * N + tidx;
                 if(neuron < NUM_NEURONS)
@@ -216,7 +220,8 @@ class BaseNeuron(object):
             __syncthreads();
 
             neuron = bid * N + tidy ;
-            if(neuron < NUM_NEURONS){
+            if(neuron < NUM_NEURONS)
+            {
                int n_den = num_den[tidy];
                int start = den_start[tidy];
                double VV = V_in[tidy];
@@ -228,50 +233,49 @@ class BaseNeuron(object):
                }
             }
 
-              __syncthreads();
+            __syncthreads();
     
+            if(tidy < 8)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 8];
+                input[tidx][tidy] += input[tidx][tidy + 16];
+                input[tidx][tidy] += input[tidx][tidy + 24];
+            }
 
+            __syncthreads();
 
-               if(tidy < 8)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 8];
-                   input[tidx][tidy] += input[tidx][tidy + 16];
-                   input[tidx][tidy] += input[tidx][tidy + 24];
-               }
+            if(tidy < 4)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 4];
+            }
 
-               __syncthreads();
+            __syncthreads();
 
-               if(tidy < 4)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 4];
-               }
+            if(tidy < 2)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 2];
+            }
 
-               __syncthreads();
+            __syncthreads();
 
-               if(tidy < 2)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 2];
-               }
-
-               __syncthreads();
-
-               if(tidy == 0)
-               {
-                   input[tidx][0] += input[tidx][1];
-                   neuron = bid*N+tidx;
-                   if(neuron < NUM_NEURONS)
-                   {
-                       I_pre[neuron] -= input[tidx][0];
-                    }
-               }
-
+            if(tidy == 0)
+            {
+                input[tidx][0] += input[tidx][1];
+                neuron = bid*N+tidx;
+                if(neuron < NUM_NEURONS)
+                {
+                    I_pre[neuron] -= input[tidx][0];
+                }
+            }
         }
-        //can be improved
+        // can be improved
         """
-        mod = SourceModule(template % {"num_neurons": self.__num_neurons}, options = ["--ptxas-options=-v"])
+        mod = SourceModule(template % {"num_neurons": self.__num_neurons}, 
+                           options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
-        func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
-        self.__block_get_input = (32,32,1)
+        func.prepare([np.intp, np.intp, np.intp, np.intp, 
+                      np.intp, np.intp, np.intp])
+        self.__block_get_input = (32, 32, 1)
         self.__grid_get_input = ((self.__num_neurons - 1) / 32 + 1, 1)
         return func
 
@@ -280,7 +284,8 @@ class BaseNeuron(object):
         #define N 32
         #define NUM_NEURONS %(num_neurons)d
 
-        __global__ void get_input(double* synapse, int* cum_num_dendrite, int* num_dendrite, int* pre, double* I_pre)
+        __global__ void get_input(double* synapse, int* cum_num_dendrite, 
+                                  int* num_dendrite, int* pre, double* I_pre)
         {
             int tidx = threadIdx.x;
             int tidy = threadIdx.y;
@@ -299,7 +304,7 @@ class BaseNeuron(object):
                 {
                     num_den[tidx] = num_dendrite[neuron];
                 }
-            }else if(tidy == 1)
+            } else if(tidy == 1)
             {
                 neuron = bid * N + tidx;
                 if(neuron < NUM_NEURONS)
@@ -322,48 +327,47 @@ class BaseNeuron(object):
                {
                    input[tidy][tidx] += synapse[pre[start] + i];
                }
-             }
-             __syncthreads();
+            }
+            __syncthreads();
 
+            if(tidy < 8)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 8];
+                input[tidx][tidy] += input[tidx][tidy + 16];
+                input[tidx][tidy] += input[tidx][tidy + 24];
+            }
 
+            __syncthreads();
 
-               if(tidy < 8)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 8];
-                   input[tidx][tidy] += input[tidx][tidy + 16];
-                   input[tidx][tidy] += input[tidx][tidy + 24];
-               }
+            if(tidy < 4)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 4];
+           }
 
-               __syncthreads();
+            __syncthreads();
 
-               if(tidy < 4)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 4];
-               }
+            if(tidy < 2)
+            {
+                input[tidx][tidy] += input[tidx][tidy + 2];
+            }
 
-               __syncthreads();
+            __syncthreads();
 
-               if(tidy < 2)
-               {
-                   input[tidx][tidy] += input[tidx][tidy + 2];
-               }
-
-               __syncthreads();
-
-               if(tidy == 0)
-               {
-                   input[tidx][0] += input[tidx][1];
-                   neuron = bid*N+tidx;
-                   if(neuron < NUM_NEURONS)
-                   {
-                       I_pre[neuron] += input[tidx][0];
-                   }
-               }
+            if(tidy == 0)
+            {
+                input[tidx][0] += input[tidx][1];
+                neuron = bid*N+tidx;
+                if(neuron < NUM_NEURONS)
+                {
+                    I_pre[neuron] += input[tidx][0];
+                }
+            }
 
         }
         //can be improved
         """
-        mod = SourceModule(template % {"num_neurons": self.__num_neurons}, options = ["--ptxas-options=-v"])
+        mod = SourceModule(template % {"num_neurons": self.__num_neurons}, 
+                           options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
         func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp])
         return func

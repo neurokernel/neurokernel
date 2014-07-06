@@ -9,8 +9,8 @@ import collections
 import numpy as np
 import time
 
-#import pycuda.driver as drv
-#import pycuda.gpuarray as gpuarray
+import pycuda.driver as drv
+import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
@@ -362,7 +362,7 @@ class Module(BaseModule):
         main run loop begins.
         """
         
-        #self._init_gpu()
+        self._init_gpu()
         pass
 
     def run(self):

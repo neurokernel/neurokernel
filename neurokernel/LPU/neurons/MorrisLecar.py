@@ -11,7 +11,7 @@ class MorrisLecar(BaseNeuron):
 
         self.num_neurons = len(n_dict['id'])
         self.dt = np.double(dt)
-        self.steps = max(int(round(dt / 1e-5)),1)
+        self.steps = max(int(round(dt / 1e-5)), 1)
         self.debug = debug
 
         self.ddt = dt / self.steps
@@ -28,7 +28,8 @@ class MorrisLecar(BaseNeuron):
         self.offset = garray.to_gpu(np.asarray(n_dict['offset'],
                                                dtype=np.float64))
 
-        cuda.memcpy_htod(int(self.V), np.asarray(n_dict['initV'], dtype=np.double))
+        cuda.memcpy_htod(int(self.V), np.asarray(n_dict['initV'], 
+                         dtype=np.double))
         self.update = self.get_euler_kernel()
 
 
@@ -36,7 +37,11 @@ class MorrisLecar(BaseNeuron):
     def neuron_class(self): return True
 
     def eval(self, st = None):
-        self.update.prepared_async_call(self.update_grid, self.update_block, st, self.V, self.n.gpudata, self.num_neurons, self.I.gpudata, self.ddt*1000, self.steps, self.V_1.gpudata, self.V_2.gpudata, self.V_3.gpudata, self.V_4.gpudata, self.Tphi.gpudata, self.offset.gpudata)
+        self.update.prepared_async_call(
+            self.update_grid, self.update_block, st, self.V, self.n.gpudata, 
+            self.num_neurons, self.I.gpudata, self.ddt*1000, self.steps, 
+            self.V_1.gpudata, self.V_2.gpudata, self.V_3.gpudata, 
+            self.V_4.gpudata, self.Tphi.gpudata, self.offset.gpudata)
 
 
     def get_euler_kernel(self):
@@ -73,8 +78,10 @@ class MorrisLecar(BaseNeuron):
 
 
     __global__ void
-    hhn_euler_multiple(%(type)s* g_V, %(type)s* g_n, int num_neurons, %(type)s* I_pre, %(type)s dt, int nsteps, \
-                       %(type)s* V_1, %(type)s* V_2, %(type)s* V_3, %(type)s* V_4, %(type)s* Tphi, %(type)s* offset)
+    hhn_euler_multiple(%(type)s* g_V, %(type)s* g_n, int num_neurons, 
+                       %(type)s* I_pre, %(type)s dt, int nsteps,
+                       %(type)s* V_1, %(type)s* V_2, %(type)s* V_3, 
+                       %(type)s* V_4, %(type)s* Tphi, %(type)s* offset)
     {
         int bid = blockIdx.x;
         int cart_id = bid * NNEU + threadIdx.x;
@@ -107,16 +114,22 @@ class MorrisLecar(BaseNeuron):
         }
 
     }
-    """#Used 40 registers, 1024+0 bytes smem, 84 bytes cmem[0], 308 bytes cmem[2], 28 bytes cmem[16]
+    """ 
+    # Used 40 registers, 1024+0 bytes smem, 84 bytes cmem[0],
+    # 308 bytes cmem[2], 28 bytes cmem[16]
         dtype = np.double
         scalartype = dtype.type if dtype.__class__ is np.dtype else dtype
-        self.update_block = (128,1,1)
+        self.update_block = (128, 1, 1)
         self.update_grid = ((self.num_neurons - 1) / 128 + 1, 1)
-        mod = SourceModule(template % {"type": dtype_to_ctype(dtype),  "nneu": self.update_block[0]}, options=["--ptxas-options=-v"])
+        mod = SourceModule(template % {"type": dtype_to_ctype(dtype),
+                           "nneu": self.update_block[0]}, 
+                           options=["--ptxas-options=-v"])
         func = mod.get_function("hhn_euler_multiple")
 
 
-        func.prepare([np.intp, np.intp, np.int32, np.intp, scalartype, np.int32, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
+        func.prepare([np.intp, np.intp, np.int32, np.intp, scalartype, 
+                      np.int32, np.intp, np.intp, np.intp, 
+                      np.intp, np.intp, np.intp])
 
 
         return func
