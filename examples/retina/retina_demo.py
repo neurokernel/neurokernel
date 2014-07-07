@@ -43,6 +43,7 @@ dt = 1e-4
 GEXF_FILE = 'retina.gexf.gz'
 INPUT_FILE = 'vision_input.h5'
 IMAGE_FILE = 'image1.mat'
+OUTPUT_FILE = 'retina_output.h5'
 
 if args.input:
     generate_input(INPUT_FILE, IMAGE_FILE, args.num_layers)
@@ -61,14 +62,17 @@ else:
 man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
-(n_dict_ret, s_dict_ret) = LPU.lpu_parser(GEXF_FILE)
+print('Print parsing lpu data')
+n_dict_ret, s_dict_ret = LPU.lpu_parser(GEXF_FILE)
+print('Initializing LPU')
 lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
               input_file=INPUT_FILE,
-              output_file='retina_output.h5', port_ctrl=port_ctrl,
+              output_file=OUTPUT_FILE, port_ctrl=port_ctrl,
               port_data=port_data, device=args.ret_dev, id='retina',
               debug=False)
 
 man.add_mod(lpu_ret)
-
+print('Staring simulation')
 man.start(steps=1000)
+print('Simulation complete')
 man.stop()

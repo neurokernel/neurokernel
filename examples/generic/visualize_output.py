@@ -30,8 +30,9 @@ V.add_plot({'type':'waveform', 'ids': [[0]]}, 'input_Sensory')
 
 V.add_LPU('generic_output_spike.h5',
           './data/generic_lpu.gexf.gz', 'Generic LPU')
-V.add_plot({'type':'raster', 'ids': {0:range(48,83)},
-            'yticks': range(1, 1+len(neu_out)), 'yticklabels': range(len(neu_out))},
+V.add_plot({'type':'raster', 'ids': {0:range(48, 83)},
+            'yticks': range(1, 1+len(neu_out)),
+            'yticklabels': range(len(neu_out))},
             'Generic LPU','Output')
 
 V._update_interval = 50
@@ -41,6 +42,6 @@ V.fontsize = 18
 V.out_filename = 'generic_output.avi'
 V.codec = 'libtheora'
 V.dt = 0.0001
-V.xlim = [0,1.0]
+V.xlim = [0, 1.0]
 V.run()
 

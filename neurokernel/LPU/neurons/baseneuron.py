@@ -147,13 +147,13 @@ class BaseNeuron(object):
 
         '''
         self.I.fill(0)
-        if self.__pre.size>0:
+        if self.__pre.size > 0:
             self.__update_I_non_cond.prepared_async_call(
                 self.__grid_get_input, self.__block_get_input, st, 
                 int(synapse_state), self.__cum_num_dendrite.gpudata, 
                 self.__num_dendrite.gpudata, self.__pre.gpudata,
                 self.I.gpudata)
-        if self.__cond_pre.size>0:
+        if self.__cond_pre.size > 0:
             self.__update_I_cond.prepared_async_call(
                 self.__grid_get_input, self.__block_get_input, st,
                 int(synapse_state), self.__cum_num_dendrite_cond.gpudata,
@@ -161,8 +161,8 @@ class BaseNeuron(object):
                 self.I.gpudata, int(self.__neuron_state_pointer),
                 self.__V_rev.gpudata)
         if self.debug:
-            self.__I_file.root.array.append(self.I.get().reshape((1,-1)))
-        
+            self.__I_file.root.array.append(self.I.get().reshape((1, -1)))
+
 
     def post_run(self):
         '''

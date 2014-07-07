@@ -7,7 +7,7 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 
 class MorrisLecar(BaseNeuron):
-    def __init__(self, n_dict, V, dt , debug=False):
+    def __init__(self, n_dict, V, dt, debug=False):
 
         self.num_neurons = len(n_dict['id'])
         self.dt = np.double(dt)
@@ -36,7 +36,7 @@ class MorrisLecar(BaseNeuron):
     @property
     def neuron_class(self): return True
 
-    def eval(self, st = None):
+    def eval(self, st=None):
         self.update.prepared_async_call(
             self.update_grid, self.update_block, st, self.V, self.n.gpudata, 
             self.num_neurons, self.I.gpudata, self.ddt*1000, self.steps, 

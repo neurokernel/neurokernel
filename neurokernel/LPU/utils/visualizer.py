@@ -6,7 +6,7 @@ LPU output visualization.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FFMpegWriter, FFMpegFileWriter
+from matplotlib.animation import FFMpegFileWriter
 from matplotlib.colors import hsv_to_rgb
 import networkx as nx
 import simpleio as sio
@@ -146,8 +146,9 @@ class visualizer(object):
         self._initialize()
         if not self._update_interval:
             self._update_interval = self._maxt - 1
-        self._t = self._update_interval+1
-        for i in range(self._update_interval,self._maxt, self._update_interval):
+        self._t = self._update_interval + 1
+        for _ in range(self._update_interval, 
+                       self._maxt, self._update_interval):
             self._update()
         if final_frame_name is not None:
             self.f.savefig(final_frame_name, dpi=dpi)

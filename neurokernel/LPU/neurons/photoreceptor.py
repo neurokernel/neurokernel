@@ -27,13 +27,14 @@ class Photoreceptor(BaseNeuron):
         # one is taken
         self.num_microvilli = int(n_dict['num_microvilli'][0])
         self.dtype = np.double  # TODO pass it as parameter in n_dict
-        self.V = V  # output of hh
+        self.V = V  # output of hh !pointer don't use .gpudata
         self.input_dt = input_dt
         self.run_dt = 1e-4
 
         self.multiple = int(self.input_dt/self.run_dt)
         assert(self.multiple * self.run_dt == self.input_dt)
 
+        self.debug = debug
         self.record_neuron = debug
         self.record_microvilli = debug
         self.LPU_id = LPU_id
@@ -41,24 +42,10 @@ class Photoreceptor(BaseNeuron):
         self.block_transduction = (128, 1, 1)
         self.grid_transduction = (self.num_neurons, 1)
         self.block_hh = (256, 1, 1)
-        self.grid_hh = ( (self.num_neurons-1)/self.block_hh[0]+1, 1)
+        self.grid_hh = ( (self.num_neurons-1)/self.block_hh[0] + 1, 1)
         
         self._initialize()
 
-################################################################################
-    def simulate(self, steps):
-        self._initialize()
-        start_time = time.time()
-        for i in range(steps):
-            self._run_step(i)
-            if i%100 == 0:
-                print i, 'time:', time.time() - start_time, 's'
-        
-        end_time = time.time()
-        print end_time-start_time, 's'
-        
-        self._post_run()
-################################################################################
     def _initialize(self):
         self._setup_output()
         self._setup_poisson()
@@ -188,7 +175,6 @@ class Photoreceptor(BaseNeuron):
         self.hh_func = get_hh_func(self.dtype)
 
     def _post_run(self):
-        print self.ns
         if self.record_neuron:
             self.outputfile_I.close()
             self.outputfile_V.close()
@@ -230,26 +216,28 @@ class Photoreceptor(BaseNeuron):
             self.outputfile_X6.root.array.append([self.X[3].get()[:,0]]) # M*
             self.outputfile_X6.flush()
 
-    def eval():
-        #TODO
+    def eval(self, st=None):
+        'Eval started'
+        # self.I is actually pointer to photon input
         self.photon_absorption_func.prepared_call(
             self.grid_transduction, self.block_transduction,
             self.randState.gpudata, self.X[3].gpudata, self.X[3].shape[1],
-            self.num_microvilli, photon_inputs.gpudata)
-        
+            self.num_microvilli, self.I.gpudata)
 
-        for i in range(self.multiple):
+
+        for _ in range(self.multiple):
             self.transduction_func.prepared_call(
                 self.grid_transduction, self.block_transduction,
                 self.randState.gpudata, self.X[0].shape[1], self.run_dt,
-                self.V.gpudata, self.ns)
+                self.V, self.ns)
             self.sum_current_func.prepared_call(
                 self.grid_transduction, self.block_transduction,
                 self.X[2].gpudata, self.X[2].shape[1], self.num_microvilli,
-                self.I_all.gpudata, self.V.gpudata)
+                self.I_all.gpudata, self.V)
+
             self.hh_func.prepared_call(
                 self.grid_hh, self.block_hh,
-                self.I_all.gpudata, self.V.gpudata, self.hhx[0].gpudata,
+                self.I_all.gpudata, self.V, self.hhx[0].gpudata,
                 self.hhx[1].gpudata, self.hhx[2].gpudata, self.hhx[3].gpudata,
                 self.num_neurons, self.run_dt/10, 10)
     
@@ -275,7 +263,6 @@ class Photoreceptor(BaseNeuron):
             outputIall = si.read_array(outputfile + 'I.h5')
         if self.record_microvilli:
             outputX0 = si.read_array(outputfile + 'X0.h5')
-            print(outputX0)
             outputX1 = si.read_array(outputfile + 'X1.h5')
             outputX2 = si.read_array(outputfile + 'X2.h5')
             outputX3 = si.read_array(outputfile + 'X3.h5')
@@ -411,7 +398,6 @@ __device__ float compute_fn( float Cstar_cc, float ns)
 __device__ float compute_ca(int Tstar, float cstar_cc, float Vm)
 {
     float I_in = Tstar*8*fmaxf(-Vm,0);
-    // float denom(120*(0.5-cstar_cc) + 1000 + 179.0952 * expf(-39.60793*Vm));
     float denom = (1060 - 120*cstar_cc + 179.0952 * expf(-39.60793*Vm));
     float numer = I_in * 690.9537 + 0.0795979 + 22*cstar_cc;
     
@@ -439,7 +425,6 @@ transduction(curandStateXORWOW_t *state, int ld1,
     
 
     float sumrate;
-    float rnumber;
     float dt_advanced;
     int reaction_ind;
     short2 tmp;
@@ -471,35 +456,22 @@ transduction(curandStateXORWOW_t *state, int ld1,
         
         // compute total rate of reaction
         sumrate = 0;
-        sumrate += mM_to_num(30) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) ); //11
-        sumrate += mM_to_num(5.5) * num_to_mM(X[tid][5]); //12
-        sumrate += 25 * (1+10*fn[tid]) * X[tid][6]; // 10
-        sumrate += 4 * (1+37.8*fn[tid]) * X[tid][4]; // 8
-        sumrate += 144 * (1+11.1*fn[tid]) * X[tid][3]; // 7
-        sumrate += 3.7*(1+40*fn[tid]) * X[tid][0]; // 1
-        sumrate += 1300 * X[tid][3]; // 6
-        sumrate += 3.0 * X[tid][2] * X[tid][3]; // 4
+        sumrate += mM_to_num(30) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) );  //11
+        sumrate += mM_to_num(5.5) * num_to_mM(X[tid][5]);  //12
+        sumrate += 25 * (1+10*fn[tid]) * X[tid][6];  // 10
+        sumrate += 4 * (1+37.8*fn[tid]) * X[tid][4];  // 8
+        sumrate += 144 * (1+11.1*fn[tid]) * X[tid][3];  // 7
+        sumrate += 3.7*(1+40*fn[tid]) * X[tid][0];  // 1
+        sumrate += 1300 * X[tid][3];  // 6
+        sumrate += 3.0 * X[tid][2] * X[tid][3];  // 4
         sumrate += 15.6 * X[tid][2] * (100-X[tid][3]);  // 3
-        sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]); // 5
-        sumrate += 7.05 * X[tid][1] * X[tid][0]; // 2
-        sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ; // 9
-        
-        /*
-        sumrate = 54198 * Ca[tid] * (0.5 - X[tid][5] * 5.5353e-4) + 5.5 * X[tid][5]; // 11, 12
-        sumrate += 25 * (1+10*fn[tid]) * X[tid][6]; // 10
-        sumrate += 4 * (1+37.8*fn[tid]) * X[tid][4] ; // 8
-        sumrate += (1444+1598.4*fn[tid]) * X[tid][3] ; // 7, 6
-        sumrate += (3.7*(1+40*fn[tid]) + 7.05 * X[tid][1]) * X[tid][0] ; // 1, 2
-        sumrate += (1560 - 12.6 * X[tid][3]) * X[tid][2]; // 3, 4
-        sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]) ; // 5
-        sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ; // 9
-        */
-        
+        sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]);  // 5
+        sumrate += 7.05 * X[tid][1] * X[tid][0];  // 2
+        sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ;  // 9
+
         // choose the next reaction time
         dt_advanced = -logf(curand_uniform(&localstate))/(LA+sumrate);
-        
-        int counter = 0;
-        
+
         // If the reaction time is smaller than dt,
         // pick the reaction and update,
         // then compute the total rate and next reaction time again
@@ -610,27 +582,9 @@ transduction(curandStateXORWOW_t *state, int ld1,
             sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]) ; // 5
             sumrate += 7.05 * X[tid][1] * X[tid][0] ; // 2
             sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ; // 9
-            
-            /*
-            sumrate = 54198 * Ca[tid] * (0.5 - X[tid][5] * 5.5353e-4) + 5.5 * X[tid][5]; // 11, 12
-            sumrate += 25 * (1+10*fn[tid]) * X[tid][6]; // 10
-            sumrate += 4 * (1+37.8*fn[tid]) * X[tid][4] ; // 8
-            sumrate += (1444+1598.4*fn[tid]) * X[tid][3] ; // 7, 6
-            sumrate += (3.7*(1+40*fn[tid]) + 7.05 * X[tid][1]) * X[tid][0] ; // 1, 2
-            sumrate += (1560 - 12.6 * X[tid][3]) * X[tid][2]; // 3, 4
-            sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]) ; // 5
-            sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ; // 9
-            */
-            
+
             dt_advanced -= logf(curand_uniform(&localstate))/(LA+sumrate);
-            
-            // for testing
-            //counter++;
-            //if(counter++ > 100)
-            //{
-            //    //printf("counter max: %%f%(nn)s", dt_advanced);
-            //    break;
-            //}
+
         } // end while
         
         ((short*)d_X[3])[bid*ld1 + i] = X[tid][0];
@@ -664,7 +618,6 @@ transduction(curandStateXORWOW_t *state, int ld1,
         no_extern_c = True)
     func = mod.get_function('transduction')
     d_X_address, d_X_nbytes = mod.get_global("d_X")
-    print d_X_nbytes
     cuda.memcpy_htod(d_X_address, Xaddress)
     d_change_ind1_address, d_change_ind1_nbytes = mod.get_global("change_ind1")
     d_change_ind2_address, d_change_ind2_nbytes = mod.get_global("change_ind2")
