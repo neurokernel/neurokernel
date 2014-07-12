@@ -5,14 +5,17 @@ from __future__ import division
 from math import ceil
 from scipy.io import loadmat
 
+import h5py
+import networkx as nx
 import numpy as np
 PI = np.pi
 
 from neurongeometry import NeuronGeometry
 from image2signal import Image2Signal
+from models import model1
 
 from map.mapimpl import (AlbersProjectionMap, EquidistantProjectionMap,
-                     SphereToSphereMap)
+                         SphereToSphereMap)
 
 from transform.imagetransform import ImageTransform
 
@@ -103,7 +106,6 @@ class HemisphereOmmatidium(object):
         return (self._screenlats[1:], self._screenlongs[1:])
 
 
-
 class EyeGeomImpl(NeuronGeometry, Image2Signal):
     # used by static and non static methods and should
     # be consistent among all of them
@@ -114,11 +116,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     def __init__(self, nrings, reye=1):
         """ map to sphere based on a 2D hex geometry that is closer to a circle
             e.g for one ring there will be 7 neurons arranged like this:
-                1
-             2     6
-                0
-             3     5
                 4
+             3     5
+                0
+             2     6
+                1
             Every other ring will have +6 neurons
 
             nrings: number of rings
@@ -130,7 +132,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         self._nommatidia = self._get_globalid(nrings+1, 0)
         self._ommatidia = []
-        self._neighborslist = []
+        self._supneighborslist = []
+        self._adjneighborslist = []
         self._init_neurons()
 
     @staticmethod
@@ -151,7 +154,117 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         else:
             return 3*(ring-1)*ring + 1 + (local_id % (6*ring))
 
-    def _get_neighborgids(self, lid, ring):
+    #TODO looks like the methods can be combined
+    # define a method that returns id depending on position
+    def _get_neighborgids_adjacency(self, lid, ring):
+        """ Gets adjacent ids in the following order
+                4
+            3       5
+                x
+            2       6
+                1
+        """
+        neighborgids = [0]*6
+        # note lid is from 0 to 6*ring-1
+        quot_ring, res_ring = divmod(lid, ring)
+
+        # **** id1 ****
+        if (quot_ring == 0) or \
+                ((quot_ring == 1) and (res_ring == 0)):
+            id = self._get_globalid(ring+1, lid)
+        elif ((quot_ring == 1) and (res_ring > 0)) or \
+                ((quot_ring == 2) and (res_ring == 0)):
+            id = self._get_globalid(ring, lid-1)
+        elif ((quot_ring == 2) and (res_ring > 0)) or \
+                (quot_ring == 3):
+            id = self._get_globalid(ring-1, lid-3)
+        elif (quot_ring == 4):
+            id = self._get_globalid(ring, lid+1)
+        elif (quot_ring == 5):
+            id = self._get_globalid(ring+1, lid+6)
+
+        neighborgids[0] = id
+
+        # **** id2 ****
+        if (quot_ring == 0) or (quot_ring == 1) or \
+                ((quot_ring == 2) and (res_ring == 0)):
+            id = self._get_globalid(ring+1, lid+1)
+        elif ((quot_ring == 2) and (res_ring > 0)) or \
+                ((quot_ring == 3) and (res_ring == 0)):
+            id = self._get_globalid(ring, lid-1)
+        elif ((quot_ring == 3) and (res_ring > 0)) or \
+                (quot_ring == 4):
+            id = self._get_globalid(ring-1, lid-4)
+        elif (quot_ring == 5):
+            id = self._get_globalid(ring, lid+1)
+
+        neighborgids[1] = id
+
+        # **** id3 ****
+        if (quot_ring == 0):
+            id = self._get_globalid(ring, lid+1)
+        elif (quot_ring == 1) or (quot_ring == 2) or \
+                ((quot_ring == 3) and (res_ring == 0)):
+            id = self._get_globalid(ring+1, lid+2)
+        elif ((quot_ring == 3) and (res_ring > 0)) or \
+                ((quot_ring == 4) and (res_ring == 0)):
+            id = self._get_globalid(ring, lid-1)
+        elif ((quot_ring == 4) and (res_ring > 0)) or \
+                (quot_ring == 5):
+            id = self._get_globalid(ring-1, lid-5)
+
+        neighborgids[2] = id
+
+        # **** id4 ****
+        if (quot_ring == 0):
+            id = self._get_globalid(ring-1, lid)
+        elif (quot_ring == 1):
+            id = self._get_globalid(ring, lid+1)
+        elif (quot_ring == 2) or (quot_ring == 3) or \
+                ((quot_ring == 4) and (res_ring == 0)):
+            id = self._get_globalid(ring+1, lid+3)
+        elif ((quot_ring == 4) and (res_ring > 0)) or \
+                ((quot_ring == 5) and (res_ring == 0)):
+            id = self._get_globalid(ring, lid-1)
+        elif ((quot_ring == 5) and (res_ring > 0)):
+            id = self._get_globalid(ring-1, lid-6)
+
+        neighborgids[3] = id
+
+        # **** id5 ****
+        if ((quot_ring == 0) and (res_ring > 0)) or \
+                (quot_ring == 1):
+            id = self._get_globalid(ring-1, lid-1)
+        elif (quot_ring == 2):
+            id = self._get_globalid(ring, lid+1)
+        elif (quot_ring == 3) or (quot_ring == 4) or \
+                ((quot_ring == 5) and (res_ring == 0)):
+            id = self._get_globalid(ring+1, lid+4)
+        elif ((quot_ring == 5) and (res_ring > 0)) or \
+                ((quot_ring == 0) and (res_ring == 0)):
+            id = self._get_globalid(ring, lid-1)
+
+        neighborgids[4] = id
+
+        # **** id6 ****
+        if ((quot_ring == 0) and (res_ring == 0)):
+            id = self._get_globalid(ring+1, lid-1)
+        elif ((quot_ring == 0) and (res_ring > 0)) or \
+                ((quot_ring == 1) and (res_ring == 0)):
+            id = self._get_globalid(ring, lid-1)
+        elif ((quot_ring == 1) and (res_ring > 0)) or \
+                (quot_ring == 2):
+            id = self._get_globalid(ring-1, lid-2)
+        elif (quot_ring == 3):
+            id = self._get_globalid(ring, lid+1)
+        elif (quot_ring == 4) or (quot_ring == 5):
+            id = self._get_globalid(ring+1, lid+5)
+
+        neighborgids[5] = id
+
+        return neighborgids
+
+    def _get_neighborgids_superposition(self, lid, ring):
         """ Gets global ids of neighbors in the following order (see also 
             RFC2 figure 2)
             in neigbors
@@ -329,7 +442,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         reye = self._reye
         ommatidium_cls = self.OMMATIDIUM_CLS
         ommatidia = self._ommatidia
-        neighborslist = self._neighborslist
+        supneighborslist = self._supneighborslist
+        adjneighborslist = self._adjneighborslist
 
         # the first neuron is a special case
         ommatid = 0
@@ -338,7 +452,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         ommatidium.add_photoreceptor((lat, long), 0)
 
         ommatidia.append(ommatidium)
-        neighborslist.append([ommatidium])
+        supneighborslist.append([ommatidium])
+        adjneighborslist.append([ommatidium])
 
         for ring in range(nrings + 2):
             # lid is local id
@@ -373,57 +488,93 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         nrings = self._nrings
         nommatidia = self._nommatidia
         ommatidia = self._ommatidia
-        neighborslist = self._neighborslist
+        supneighborslist = self._supneighborslist
+        adjneighborslist = self._adjneighborslist
 
         gid = self._get_globalid(ring, lid)
         ommatidium = ommatidia[gid]
 
         # out neighbors (neighbors to send the output to
         #                from current ommatidium)
-        # in neighbors (neighbors that current ommatidium receives input from )
-        # neighborslist has the out neighbors
-        # for the relative position parameter check the order that 
-        # the neighbors are returned by _get_neighborgids 
+        # in neighbors (neighbors that respective cartridge receives input from)
+        # supneighborslist has the out neighbors
+        # for the relative position parameter, check the order that
+        # the neighbors are returned by _get_neighborgids_superposition
         if ring > nrings:
             in_neighborgids, out_neighborgids = \
-                self._get_neighborgids(lid, ring)
+                self._get_neighborgids_superposition(lid, ring)
+            adj_neighborgids = self._get_neighborgids_adjacency(lid, ring)
             for i, neighborgid in enumerate(in_neighborgids):
                 if neighborgid < nommatidia:
                     neighborommat = ommatidia[neighborgid]
                     relative_neighborpos = i + 1
-                    neighborommat.add_photoreceptor(ommatidium.get_direction(), 
-                                                    relative_neighborpos)
-                    neighborslist[neighborgid].append(ommatidium)
+                    neighborommat.add_photoreceptor(ommatidium.get_direction(),
+                                                       relative_neighborpos)
+                    supneighborslist[neighborgid].append(ommatidium)
+            for i, neighborgid in enumerate(adj_neighborgids):
+                if neighborgid < nommatidia:
+                    adjneighborslist[neighborgid].append(ommatidium)
         else:
-            neighbors = [ommatidium]
+            supneighbors = [ommatidium]
+            adjneighbors = [ommatidium]
             in_neighborgids, out_neighborgids = \
-                self._get_neighborgids(lid, ring)
+                self._get_neighborgids_superposition(lid, ring)
+            adj_neighborgids = self._get_neighborgids_adjacency(lid, ring)
             for i, neighborgid in enumerate(in_neighborgids):
                 if neighborgid < gid:
                     neighborommat = ommatidia[neighborgid]
                     relative_neighborpos = i + 1
                     neighborommat.add_photoreceptor(ommatidium.get_direction(),
                                                     relative_neighborpos)
-                    neighborslist[neighborgid].append(ommatidium)
+                    supneighborslist[neighborgid].append(ommatidium)
             for i, neighborgid in enumerate(out_neighborgids):
                 if neighborgid < gid:
                     neighborommat = ommatidia[neighborgid]
                     relative_neighborpos = 5 - i
                     ommatidium.add_photoreceptor(neighborommat.get_direction(),
                                                  relative_neighborpos)
-                    neighbors.append(neighborommat)
+                    supneighbors.append(neighborommat)
 
-            neighborslist.append(neighbors)
+            for i, neighborgid in enumerate(adj_neighborgids):
+                if neighborgid < gid:
+                    neighborommat = ommatidia[neighborgid]
+                    adjneighborslist[neighborgid].append(ommatidium)
+                    adjneighbors.append(neighborommat)
 
-    def get_neighbors(self):
+            supneighborslist.append(supneighbors)
+            adjneighborslist.append(adjneighbors)
+
+    def get_ommatidia(self):
+        return self._ommatidia
+
+    def get_neighbors(self, config = {'rule':'superposition'}):
         """
-            neighbors are defined according to the superposition rule
+            config: configuration dictionary
+                    keys
+                    rule: "superposition"(default) neighbors are defined 
+                          according to the superposition rule and correspond 
+                          to the columns that receive input from the 
+                          ommatidium (second image of Figure 2 in RFC2)
+                          "adjacency" neighbors are the closest
+            
             returns: a list of lists of neighbors, the entries in the initial
                      list are as many as the ommatidia and contain a list of
                      the neighboring ommatidia in no particular order except
                      the first entry that is the reference ommatidium
         """
-        return self._neighborslist
+        try:
+            rule = config['rule']
+            valid_values = ["superposition", "adjacency"]
+            if coord not in valid_values:
+                raise ValueError("rule attribute must be one of %s" % ", "
+                                 .join(str(x) for x in valid_values))
+        except KeyError:
+            rule = "superposition"
+        
+        if rule == "superposition":
+            return self._supneighborslist
+        else:
+            return self._adjneighborslist
 
     def get_positions(self, config={'coord': 'spherical', 'include': 'center',
                                     'add_dummy': True }):
@@ -451,6 +602,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              3
                      in case of 'center' only 0 is returned and in case of
                      'R1toR6' all others in numerical order
+                     To 
         """
         try:
             coord = config['coord']
@@ -697,6 +849,226 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     def visualise_output(self, output, file, config=None):
         pass
+
+    def generate_input(self, image_file, output_file):
+        intensities = self.get_intensities(image_file, 
+                                           {'still_image': True})
+
+        with h5py.File(output_file, 'w') as f:
+            f.create_dataset('array', intensities.shape,
+                             dtype=np.float64,
+                             data=intensities)
+
+    def generate_retina(self, output_file):
+        G = nx.DiGraph()
+        
+        photoreceptor_num = 6*self._nommatidia
+        G.add_nodes_from(range(photoreceptor_num))
+    
+        for i in range(photoreceptor_num):
+            name = 'photor' + str(i)
+            G.node[i] = {
+                'model': 'Photoreceptor',
+                'name': name,
+                'extern': True,  # gets input from file
+                'public': True,  # it's an output neuron
+                'spiking': False,
+                'selector': '/ret/' + str(i),
+                'num_microvilli': 30000
+            }
+
+        nx.write_gexf(G, output_file)
+
+    def generate_lamina(self, output_file):
+        G = nx.MultiDiGraph()
+
+        # ommatidia are equal with the cartridges
+        cartridge_num = self._nommatidia
+
+        neuron_types = model1.NEURON_LIST
+        synapse_types = model1.SYNAPSE_LIST
+
+        # lists will have only one copy of
+        # neurons synapses
+        # dicts may have duplicates
+        neuron_list = []
+        synapse_list = []
+        neuron_dict = {}
+        synapse_dict = {}
+
+        alpha_profiles = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
+
+        for neuron_params in neuron_types:
+            neuron_name = neuron_params['name']
+            if neuron_name=='Am':
+                am_num = neuron_params['num']
+                bound = PI/np.sqrt(am_num)
+
+                # create amacrine neurons
+                for i in range(am_num):
+                    n = Neuron(neuron_params)
+                    n.num = len(neuron_list)
+                    #are amacrine cells output neurons? TODO
+                    neuron_list.append(n)
+                    neuron_dict[(i, 'Am')] = n
+
+                # connect them to cartridges
+                am_lats = (PI/2)*np.random.random(am_num)
+                am_longs = 2*PI*np.random.random(am_num) - PI
+                om_lats, om_longs = self.get_positions({'add_dummy': False})
+                
+                for i, (om_lat, om_long) in \
+                        enumerate(zip(om_lats.tolist(), om_longs.tolist())):
+                    # calculate distance and find amacrine cells within
+                    # distance defined by bound
+                    dist = np.sqrt((om_lat-am_lats)**2 + (om_long-am_longs)**2)
+                    suitable_am = np.nonzero(dist <= bound)[0]
+                    # if less than 4 neurons in the bound, get
+                    # the 4 closest amacrine cells
+                    if suitable_am.size < 4:
+                        suitable_am = np.argsort(dist)[0:4]
+
+                    # an amacrine neuron should not be connected more than 3
+                    # times with a cartridge
+                    fill = np.zeros(am_num, np.int8)
+                    for name in alpha_profiles:
+                        assigned = False
+                        for am_ind in np.random.permutation(suitable_am):
+                            if fill[am_ind] < 3:
+                                fill[am_ind] += 1
+                                neuron_dict[(i, name)] = \
+                                    neuron_dict[(am_ind, 'Am')]
+                                assigned = True
+                                break
+                        if not assigned:
+                            print ("{} in cartridge {} not assigned"
+                                   .format(name, i))
+
+            else:
+                for i in range(cartridge_num):
+                    n = Neuron(neuron_params)
+                    n.num = len(neuron_list)
+                    if neuron_params['output']:
+                        n.update_selector('/lam/'+neuron_name+'/'+str(i))
+                    neuron_list.append(n)
+                    neuron_dict[(i, neuron_name)] = n
+
+        supneighbors = self._supneighborslist
+
+        # find the right selectors
+        # supneighbors is list of lists
+        for i, neighbors in enumerate(supneighbors):
+            for j, neighbor in enumerate(neighbors[1:]):
+                neuron_name = 'R' + str(j+1)
+                if neighbor.id != -1:
+                    # photoreceptor j of ommatidium i send output to
+                    # neighbor i
+                    neuron = neuron_dict[(neighbor.id, neuron_name)]
+                    photor_id = 6*i + j
+                    neuron.update_selector('/ret/' + str(photor_id))
+
+        adjneighbors = self._adjneighborslist
+
+        for synapse_params in synapse_types:
+            prename = synapse_params['prename']
+            postname = synapse_params['postname']
+            cart = synapse_params['cart']
+
+            if cart is None:
+                for cart_num in range(cartridge_num):
+                    s = Synapse(synapse_params)
+                    s.prenum = neuron_dict[(cart_num, prename)].num
+                    s.postnum = neuron_dict[(cart_num, postname)].num
+                    synapse_list.append(s)
+            else:
+                for cart_num in range(cartridge_num):
+                    s = Synapse(synapse_params)
+                    s.prenum = neuron_dict[(cart_num, prename)].num
+                    # find the neighbor cartridge
+                    neighbor = adjneighbors[cart_num][cart]
+                    if neighbor.id != -1:
+                        s.postnum = neuron_dict[(neighbor.id, postname)].num
+                        synapse_list.append(s)
+
+        # G.add_nodes_from(range(len(neuron_list)))
+
+        # nodes that correspond to photoreceptors near the edge 
+        # that don't exist in all neighbors
+        excluded_nodes = set()
+        for node in neuron_list:
+            params = node.params
+            if params['model'] == 'port_in_gpot':
+                if 'selector' in params:
+                    G.add_node(node.num, params)
+                else:
+                    excluded_nodes.add(node.num)
+            else:
+                G.add_node(node.num, params)
+
+
+        for edge in synapse_list:
+            edge.process_before_export()
+            if (edge.prenum not in excluded_nodes) and \
+                    (edge.postnum not in excluded_nodes):
+                G.add_edge(edge.prenum, edge.postnum, attr_dict=edge.params)
+
+        nx.write_gexf(G, output_file, prettyprint=True)
+
+
+class Neuron(object):
+    def __init__(self, params):
+        self._params = params.copy()
+        if 'num' in self._params.keys():
+            del self._params['num']
+
+    @property
+    def num(self):
+        return self._num
+    
+    @num.setter
+    def num(self, value):
+        self._num = value
+
+    @property
+    def params(self):
+        return self._params
+
+    def update_selector(self, selector):
+        self._params.update({'selector': selector})
+
+
+class Synapse(object):
+    def __init__(self, param_dict):
+        self._params = param_dict.copy()
+
+    @property
+    def prenum(self):
+        return self._prenum
+    
+    @prenum.setter
+    def prenum(self, value):
+        self._prenum = value
+
+    @property
+    def postnum(self):
+        return self._postnum
+    
+    @postnum.setter
+    def postnum(self, value):
+        self._postnum = value
+
+    @property
+    def params(self):
+        return self._params
+        
+    def process_before_export(self):
+        self._params.update({'conductance': True})
+        if 'cart' in self._params.keys():
+            del self._params['cart']
+        if 'scale' in self.params.keys():
+            self._params['slope'] *= self._params['scale']
+            self._params['saturation'] *= self._params['scale']
+            del self._params['scale']
 
 if __name__ == '__main__':
     from mpl_toolkits.mplot3d import Axes3D

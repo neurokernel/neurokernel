@@ -376,15 +376,18 @@ class LPU(Module, object):
         I_post = I_post[order1]
         I_pre = I_pre[order1]
 
-        self.idx_start_gpot = np.concatenate((np.asarray([0,], dtype=np.int32),\
-                                np.cumsum(num_gpot_neurons, dtype=np.int32)))
-        self.idx_start_spike = np.concatenate((np.asarray([0,], dtype=np.int32),\
-                                np.cumsum(num_spike_neurons, dtype=np.int32)))
-        self.idx_start_synapse = np.concatenate((np.asarray([0,], dtype=np.int32),\
-                                        np.cumsum(num_synapses, dtype=np.int32)))
+        self.idx_start_gpot = np.concatenate(
+            (np.asarray([0,], dtype=np.int32),
+             np.cumsum(num_gpot_neurons, dtype=np.int32)))
+        self.idx_start_spike = np.concatenate(
+            (np.asarray([0,], dtype=np.int32),
+             np.cumsum(num_spike_neurons, dtype=np.int32)))
+        self.idx_start_synapse = np.concatenate(
+            (np.asarray([0,], dtype=np.int32),
+             np.cumsum(num_synapses, dtype=np.int32)))
 
 
-        for i,(t,n) in enumerate(self.n_list):
+        for i, (t, n) in enumerate(self.n_list):
             if n['spiking'][0]:
                 idx = np.where(
                     (cond_post >= self.idx_start_spike[i] + spike_shift)&
