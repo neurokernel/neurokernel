@@ -247,7 +247,7 @@ class PathLikeSelector(object):
     @classmethod
     def parse(cls, selector):
         """
-        Parse a selector string into individual port identifiers.
+        Parse a selector string into tokens.
 
         Parameters
         ----------
@@ -259,6 +259,15 @@ class PathLikeSelector(object):
         parse_list : list
             List of lists containing the tokens corresponding to each individual
             selector in the string.
+
+        Notes
+        -----
+        This method does not expand selectors into the tokens corresponding to
+        individual port identifiers.
+
+        See Also
+        --------
+        PathLikeSelector.expand
         """
 
         if re.search('^\s*$', selector):
@@ -1102,55 +1111,25 @@ class PathLikeSelector(object):
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
-        if type(selector) in [str, unicode]:
-            parse_list = cls.parse(selector)
-        elif np.iterable(selector):
+        # Start with at least one level so that a valid Index will be returned
+        # if the selector is empty:
+        levels = [[]]
 
-            # Treat empty sequence as a valid selector:
-            if not selector:
-                selector = [[]]
-            parse_list = selector
-        else:
-            raise ValueError('invalid selector type')
-
-        idx_list = []
-        for tokens in parse_list:
-
-            # Accumulate lists of tokens for each level:
-            list_list = []
-            for token in tokens:
-                if type(token) == tuple:
-                    list_list.append(range(token[0], token[1]))
-                elif type(token) == list:
-                    list_list.append(token)
-                else:
-                    list_list.append([token])
-            if not names:
-                idx_names = range(len(list_list))
-            else:
-                idx_names = names
-            if list_list:
-                idx = pd.MultiIndex.from_product(list_list, names=idx_names)
-            else:
-                idx = pd.Index([])
-            idx_list.append(idx)
-
-        # Attempting to create a MultiIndex with a single level results in
-        # an Index; therefore, all created indices must either be Index
-        # instances or all be MultiIndex instances:        
-        if all(map(lambda idx: isinstance(idx, pd.MultiIndex), idx_list)):
-
-            # All of the token lists in the selector must have the same number of
-            # levels:
-            assert len(set(map(lambda idx: len(idx.levels), idx_list))) == 1
-        
-            # Combine all of the created indices into a single index:
-            return reduce(pd.MultiIndex.append, idx_list)
-        if all(map(lambda idx: isinstance(idx, pd.Index) and \
-                   not isinstance(idx, pd.MultiIndex), idx_list)):
-            return reduce(pd.Index.append, idx_list)
-        else:
-            raise ValueError('All identifiers must contain same number of levels.')
+        # Accumulate unique values for each level of the MultiIndex
+        selector_list = cls.expand(selector)
+        for selector in selector_list:
+            for j in xrange(len(selector)):
+                if len(levels) < j+1:
+                    levels.append([])
+                levels[j].append(selector[j])
+        levels = [sorted(set(l)) for l in levels]
+        labels = [[] for i in xrange(len(levels))]
+        for selector in selector_list:
+            for j in xrange(len(selector)):
+                labels[j].append(levels[j].index(selector[j]))
+        if not names:
+            names = range(len(levels))
+        return pd.MultiIndex(levels=levels, labels=labels, names=names)
 
     @classmethod
     def select(cls, df, selector, start=None, stop=None):
