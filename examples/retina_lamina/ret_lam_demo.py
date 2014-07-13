@@ -78,9 +78,12 @@ lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
 
 print('Parsing lamina lpu data')
 n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
+print(n_dict_lam.keys())
+print(len(n_dict_lam['MorrisLecar']['name']))
+print(len(n_dict_lam['MorrisLecar']))
 print('Initializing lamina LPU')
 lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-              input_file=INPUT_FILE,
+              input_file=None,
               output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
               port_data=port_data, device=args.lam_dev, id='lamina',
               debug=False)

@@ -12,6 +12,10 @@ PI = np.pi
 
 from neurongeometry import NeuronGeometry
 from image2signal import Image2Signal
+from entities.neuron import Neuron
+from entities.synapse import Synapse
+from entities.hemisphere_ommatidium import (HemisphereOmmatidium, 
+                                            HemisphereNeuron)
 from models import model1
 
 from map.mapimpl import (AlbersProjectionMap, EquidistantProjectionMap,
@@ -19,91 +23,7 @@ from map.mapimpl import (AlbersProjectionMap, EquidistantProjectionMap,
 
 from transform.imagetransform import ImageTransform
 
-
-class HemisphereNeuron(object):
-    """
-        stores and transforms position related information
-        access and set parameters only through the provided functions
-    """
-    def __init__(self, eye_to_screen_map, screen_to_2d_map,
-                 eyelat, eyelong):
-
-        self._eyelat = eyelat
-        self._eyelong = eyelong
-        screenlat, screenlong = eye_to_screen_map.map(eyelat, eyelong)
-        self._screenlat = screenlat
-        self._screenlong = screenlong
-        x, y = screen_to_2d_map.map(screenlat, screenlong)
-        self._x = x
-        self._y = y
-
-    def get_planepoint(self):
-        return (self._x, self._y)
-
-    def get_screenpoint(self):
-        return (self._screenlat, self._screenlong)
-
-    def append_screenpoint(self, screenlats, screenlongs):
-        """ appends neuron's screen position to the respective parameters """
-        screenlats.append(self._screenlat)
-        screenlongs.append(self._screenlong)
-
-
-class HemisphereOmmatidium(object):
-    # static variables (Don't modify)
-    _rscreen = 10
-    # allows easy change to another map
-    MAP_SCREEN = AlbersProjectionMap(_rscreen)
-
-    def __init__(self, id, lat, long, reye):
-        self.id = id
-        self._lat = lat
-        self._long = long
-
-        self._reye = reye
-        self._neurons = []
-        self._screenlats = [0]*7
-        self._screenlongs = [0]*7
-
-    def add_photoreceptor(self, direction, rel_pos):
-        """ direction: the direction photoreceptor will be facing
-            rel_pos: the id of relative position of photoreceptor
-            6       1
-                0
-            5       2
-                4
-                    3
-            [the direction of photoreceptor 1 should be the direction 
-             that neighbor at position 5 faces and the same applies 
-             to all the others]
-        """
-        reye = self._reye
-        rscreen = self._rscreen
-
-        # eye to screen
-        mapeye = SphereToSphereMap(reye, rscreen, direction)
-        # screen to xy plane
-        mapscreen = self.MAP_SCREEN
-
-        neuron = HemisphereNeuron(mapeye, mapscreen, self._lat, self._long)
-        self._neurons.append(neuron)
-
-        # update screenpoints
-        neuron_point = neuron.get_screenpoint()
-        self._screenlats[rel_pos] = neuron_point[0]
-        self._screenlongs[rel_pos] = neuron_point[1]
-
-    def get_direction(self):
-        return (self._lat, self._long)
-
-    def get_eyepoint(self):
-        return (self._lat, self._long)
-
-    def get_screenpoints(self):
-        return (self._screenlats, self._screenlongs)
-        
-    def get_R1toR6points(self):
-        return (self._screenlats[1:], self._screenlongs[1:])
+PORT_IN_GPOT = 'port_in_gpot'
 
 
 class EyeGeomImpl(NeuronGeometry, Image2Signal):
@@ -448,7 +368,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         # the first neuron is a special case
         ommatid = 0
         lat = long = 0
-        ommatidium = ommatidium_cls(ommatid, lat, long, reye)
+        ommatidium = ommatidium_cls(lat, long, reye, ommatid)
         ommatidium.add_photoreceptor((lat, long), 0)
 
         ommatidia.append(ommatidium)
@@ -474,12 +394,12 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         long = (lid/(6*ring))*2*PI - PI   # long: -pi to pi
 
         # if ommatidium is outside the range of rings,
-        # construct it
+        # construct it without id
         if ring > nrings:
-            ommatidium = ommatidium_cls(-1, lat, long, reye)
+            ommatidium = ommatidium_cls(lat, long, reye)
         else:
             gid = self._get_globalid(ring, lid)
-            ommatidium = ommatidium_cls(gid, lat, long, reye)
+            ommatidium = ommatidium_cls(lat, long, reye, gid)
             ommatidium.add_photoreceptor((lat, long), 0)
 
         ommatidia.append(ommatidium)
@@ -816,9 +736,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         """ Given a point (f1, f2) return nxn closest points in the box
             [min1, min2, max1, max2]
         """
-        ind1 = np.linspace(np.floor(f1)+(1-n/2), np.ceil(f1)+(-1+n/2), n)\
+        ind1 = np.linspace(np.floor(f1) + (1-n/2), np.ceil(f1) + (-1+n/2), n) \
             .astype(int)
-        ind2 = np.linspace(np.floor(f2)+(1-n/2), np.ceil(f2)+(-1+n/2), n)\
+        ind2 = np.linspace(np.floor(f2) + (1-n/2), np.ceil(f2) + (-1+n/2), n) \
             .astype(int)
         ind1 = np.minimum(ind1, max1)
         ind2 = np.minimum(ind2, max2)
@@ -848,6 +768,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         return func3/np.sum(func3)
 
     def visualise_output(self, output, file, config=None):
+        """ config: { type: 'retina'(default)/'lamina'
+                    }
+        """
         pass
 
     def generate_input(self, image_file, output_file):
@@ -873,7 +796,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 'extern': True,  # gets input from file
                 'public': True,  # it's an output neuron
                 'spiking': False,
-                'selector': '/ret/' + str(i),
+                'selector': '/ret/out/' + str(i),
                 'num_microvilli': 30000
             }
 
@@ -908,7 +831,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 for i in range(am_num):
                     n = Neuron(neuron_params)
                     n.num = len(neuron_list)
-                    #are amacrine cells output neurons? TODO
                     neuron_list.append(n)
                     neuron_dict[(i, 'Am')] = n
 
@@ -960,12 +882,31 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         for i, neighbors in enumerate(supneighbors):
             for j, neighbor in enumerate(neighbors[1:]):
                 neuron_name = 'R' + str(j+1)
-                if neighbor.id != -1:
-                    # photoreceptor j of ommatidium i send output to
-                    # neighbor i
+                # if neighbor is a valid ommatidium
+                if not neighbor.is_dummy():
+                    # photoreceptor j of ommatidium i sends output to
+                    # respective neighbor, see rfc 2 figure 2
+                    assert(neighbor.id < cartridge_num)
                     neuron = neuron_dict[(neighbor.id, neuron_name)]
                     photor_id = 6*i + j
-                    neuron.update_selector('/ret/' + str(photor_id))
+                    neuron.update_selector('/ret/out/' + str(photor_id))
+                    
+        # renumber neurons to omit photoreceptors 
+        # near the edge that have no input (no selector is set)
+        count = 0
+        for node in neuron_list:
+            params = node.params
+            if params['model'] == PORT_IN_GPOT:
+                if 'selector' in params:
+                    node.num = count
+                    count += 1
+                else:
+                    node.num = None
+            else:
+                node.num = count
+                count += 1
+        print(len(neuron_list))
+        print(count)
 
         adjneighbors = self._adjneighborslist
 
@@ -977,98 +918,47 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             if cart is None:
                 for cart_num in range(cartridge_num):
                     s = Synapse(synapse_params)
-                    s.prenum = neuron_dict[(cart_num, prename)].num
-                    s.postnum = neuron_dict[(cart_num, postname)].num
+                    
+                    npre = neuron_dict[(cart_num, prename)]
+                    npost = neuron_dict[(cart_num, postname)]
+                    if npre.is_dummy() or npost.is_dummy():
+                        continue
+                    
+                    s.prenum = npre.num
+                    s.postnum = npost.num
+                    s.update_class(Synapse.get_class(npre, npost))
                     synapse_list.append(s)
             else:
                 for cart_num in range(cartridge_num):
                     s = Synapse(synapse_params)
-                    s.prenum = neuron_dict[(cart_num, prename)].num
+                    
+                    npre = neuron_dict[(cart_num, prename)]
+                    if npre.is_dummy():
+                        continue
+                    s.prenum = npre.num
                     # find the neighbor cartridge
                     neighbor = adjneighbors[cart_num][cart]
-                    if neighbor.id != -1:
-                        s.postnum = neuron_dict[(neighbor.id, postname)].num
+                    # if cartridge is not dummy
+                    if not neighbor.is_dummy():
+                        npost = neuron_dict[(neighbor.id, postname)]
+                        if npost.is_dummy():
+                            continue
+                        s.postnum = npost.num
+                        s.update_class(Synapse.get_class(npre, npost))
                         synapse_list.append(s)
-
-        # G.add_nodes_from(range(len(neuron_list)))
-
-        # nodes that correspond to photoreceptors near the edge 
-        # that don't exist in all neighbors
-        excluded_nodes = set()
+        
+        # add nodes to graph
         for node in neuron_list:
-            params = node.params
-            if params['model'] == 'port_in_gpot':
-                if 'selector' in params:
-                    G.add_node(node.num, params)
-                else:
-                    excluded_nodes.add(node.num)
-            else:
-                G.add_node(node.num, params)
-
+            # if neuron is not dummy
+            if not node.is_dummy():
+                G.add_node(node.num, node.params)
 
         for edge in synapse_list:
             edge.process_before_export()
-            if (edge.prenum not in excluded_nodes) and \
-                    (edge.postnum not in excluded_nodes):
-                G.add_edge(edge.prenum, edge.postnum, attr_dict=edge.params)
+            G.add_edge(edge.prenum, edge.postnum, attr_dict=edge.params)
 
         nx.write_gexf(G, output_file, prettyprint=True)
 
-
-class Neuron(object):
-    def __init__(self, params):
-        self._params = params.copy()
-        if 'num' in self._params.keys():
-            del self._params['num']
-
-    @property
-    def num(self):
-        return self._num
-    
-    @num.setter
-    def num(self, value):
-        self._num = value
-
-    @property
-    def params(self):
-        return self._params
-
-    def update_selector(self, selector):
-        self._params.update({'selector': selector})
-
-
-class Synapse(object):
-    def __init__(self, param_dict):
-        self._params = param_dict.copy()
-
-    @property
-    def prenum(self):
-        return self._prenum
-    
-    @prenum.setter
-    def prenum(self, value):
-        self._prenum = value
-
-    @property
-    def postnum(self):
-        return self._postnum
-    
-    @postnum.setter
-    def postnum(self, value):
-        self._postnum = value
-
-    @property
-    def params(self):
-        return self._params
-        
-    def process_before_export(self):
-        self._params.update({'conductance': True})
-        if 'cart' in self._params.keys():
-            del self._params['cart']
-        if 'scale' in self.params.keys():
-            self._params['slope'] *= self._params['scale']
-            self._params['saturation'] *= self._params['scale']
-            del self._params['scale']
 
 if __name__ == '__main__':
     from mpl_toolkits.mplot3d import Axes3D

@@ -105,7 +105,8 @@ class Module(BaseModule):
         # Create module interface given the specified ports:
         self.interface = Interface(selector, columns)
 
-        # Set the interface ID to 0; we assume that a module only has one interface:
+        # Set the interface ID to 0
+        # we assume that a module only has one interface:
         self.interface[selector, 'interface'] = 0
 
         # Set port types:

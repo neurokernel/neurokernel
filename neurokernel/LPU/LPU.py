@@ -159,7 +159,10 @@ class LPU(Module, object):
                 neu['selector'] = ''
             # if the neuron model does not appear before, add it into n_dict
             if model not in n_dict:
-                n_dict[model] = { k:[] for k in neu.keys()+['id'] }
+                n_dict[model] = {k:[] for k in neu.keys() + ['id']}
+
+            # neurons of the same model should have the same attributes
+            assert(set(n_dict[model].keys()) == set(neu.keys() + ['id']))
             # add neuron data into the subdictionary of n_dict
             for key in neu.iterkeys():
                 n_dict[model][key].append( neu[key] )
@@ -176,16 +179,21 @@ class LPU(Module, object):
             # syn[0/1]: pre-/post-neu id; syn[2]: dict of synaptic data
             model = syn[2]['model']
             syn[2]['id'] = int( syn[2]['id'] )
-            # if the sysnapse model does not appear before, add it into s_dict
+            # if the synapse model does not appear before, add it into s_dict
             if model not in s_dict:
-                s_dict[model] = { k:[] for k in syn[2].keys()+['pre', 'post'] }
+                s_dict[model] = {k:[] for k in syn[2].keys() + ['pre', 'post']}
+
+            # synapses of the same model should have the same attributes
+            assert(set(s_dict[model].keys()) == set(syn[2].keys() + ['pre', 'post']))
             # add synaptic data into the subdictionary of s_dict
             for key in syn[2].iterkeys():
                 s_dict[model][key].append(syn[2][key])
             s_dict[model]['pre'].append(syn[0])
             s_dict[model]['post'].append(syn[1])
-        for val in s_dict.itervalues(): val.pop('model')
-        if not s_dict: s_dict = {}
+        for val in s_dict.itervalues(): 
+            val.pop('model')
+        if not s_dict: 
+            s_dict = {}
         return n_dict, s_dict
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
