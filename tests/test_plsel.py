@@ -33,6 +33,17 @@ df.set_index(0, append=False, inplace=True)
 df.set_index(1, append=True, inplace=True)
 df.set_index(2, append=True, inplace=True)
 
+df2 = pd.DataFrame(data={'data': np.random.rand(10),
+                  0: ['foo', 'foo', 'foo', 'foo', 'foo',
+                      'bar', 'bar', 'bar', 'baz', 'baz'],
+                  1: ['qux', 'qux', 'mof', 'mof', 'mof',
+                      'qux', 'qux', 'qux', 'qux', 'mof'],
+                  2: [0, 1, 0, 1, 2, 
+                      0, 1, 2, 0, 0]})
+df2.set_index(0, append=False, inplace=True)
+df2.set_index(1, append=True, inplace=True)
+df2.set_index(2, append=True, inplace=True)
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()
@@ -325,6 +336,10 @@ class test_path_like_selector(TestCase):
                                      ((0, 1, 2), 0)]) == False
         assert self.sel.is_selector([('foo', ['a', 0])]) == False
 
+    def test_make_index_empty(self):
+        idx = self.sel.make_index('')
+        assert_index_equal(idx, pd.Index([], dtype='object'))
+
     def test_make_index_str_single_level(self):
         idx = self.sel.make_index('/foo')
         assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
@@ -353,10 +368,6 @@ class test_path_like_selector(TestCase):
 
     def test_make_index_invalid(self):
         self.assertRaises(Exception, self.sel.make_index, 'foo/bar[')
-        self.assertRaises(Exception, self.sel.make_index, 
-                          [['foo', 'bar'], ['baz']])
-        self.assertRaises(Exception, self.sel.make_index, 
-                          [['foo', 'bar', (0, 2)], ['baz', 'qux']])
 
     def test_max_levels_str(self):
         assert self.sel.max_levels('/foo/bar[0:10]') == 3

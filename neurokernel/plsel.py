@@ -568,7 +568,7 @@ class PathLikeSelector(object):
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
         return [tuple(x) for y in p for x in itertools.product(*y)]
-
+    
     @classmethod
     def is_expandable(cls, selector):
         """
@@ -1111,22 +1111,40 @@ class PathLikeSelector(object):
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
+        selectors = cls.expand(selector)
+
         # Start with at least one level so that a valid Index will be returned
         # if the selector is empty:
         levels = [[]]
 
-        # Accumulate unique values for each level of the MultiIndex
-        selector_list = cls.expand(selector)
-        for selector in selector_list:
-            for j in xrange(len(selector)):
+        # Accumulate unique values for each level of the MultiIndex:
+        max_levels = max(map(len, selectors)) if len(selectors) else 0
+        for i in xrange(len(selectors)):
+
+            # Pad expanded selectors:
+            selectors[i] = list(selectors[i])
+            n = len(selectors[i])
+            if n < max_levels:
+                selectors[i].extend(['' for k in xrange(max_levels-n)])
+            for j in xrange(max_levels):
                 if len(levels) < j+1:
                     levels.append([])
-                levels[j].append(selector[j])
-        levels = [sorted(set(l)) for l in levels]
-        labels = [[] for i in xrange(len(levels))]
-        for selector in selector_list:
-            for j in xrange(len(selector)):
-                labels[j].append(levels[j].index(selector[j]))
+                levels[j].append(selectors[i][j])
+
+        # Discard duplicates:
+        levels = [sorted(set(level)) for level in levels]
+            
+        # Start with at least one label so that a valid Index will be returned
+        # if the selector is empty:        
+        labels = [[]]
+
+        # Construct label indices:
+        for i in xrange(len(selectors)):
+            for j in xrange(max_levels):
+                if len(labels) < j+1:
+                    labels.append([])
+                labels[j].append(levels[j].index(selectors[i][j]))
+                    
         if not names:
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
