@@ -28,7 +28,7 @@ import msgpack_numpy as msgpack
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from tools.comm import is_poll_in, get_random_port
+from tools.comm import is_poll_in, get_random_port, ZMQOutput
 from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
