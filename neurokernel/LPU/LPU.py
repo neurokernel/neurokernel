@@ -198,10 +198,10 @@ class LPU(Module, object):
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA, 
-                 id=None, debug=False, columns = [ 'io', 'type']):
+                 id=None, debug=False, columns = [ 'io', 'type', 'interface']):
         assert('io' in columns)
         assert('type' in columns)
-        columns.append('interface')
+        assert('interface' in columns)
         self.LPU_id = id
         self.dt = dt
         self.debug = debug
@@ -223,6 +223,7 @@ class LPU(Module, object):
         self.n_list = n_dict.items()
         n_model_is_spk = [ n['spiking'][0] for _, n in self.n_list ]
         n_model_num = [ len(n['id']) for _, n in self.n_list ]
+        # concatenation of lists of neurons
         n_id = np.array(sum( [ n['id'] for _, n in self.n_list ], []), 
                         dtype=np.int32)
         # flattens list of lists
@@ -303,14 +304,10 @@ class LPU(Module, object):
         self.num_public_gpot = len( public_gpot_list )
         self.num_public_spike = len( public_spike_list )
         self.num_input = len( self.input_neuron_list )
-        if len(in_ports_ids_gpot) > 0:
-            in_ports_ids_gpot = self.order[in_ports_ids_gpot]
-        if len(in_ports_ids_spk) > 0:
-            in_ports_ids_spk = self.order[in_ports_ids_spk]
-        if len(self.out_ports_ids_gpot) > 0:
-            self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
-        if len(self.out_ports_ids_spk) > 0:
-            self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
+        in_ports_ids_gpot = self.order[in_ports_ids_gpot]
+        in_ports_ids_spk = self.order[in_ports_ids_spk]
+        self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
+        self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
         
         #TODO: comment
         self.s_dict = s_dict
@@ -425,10 +422,13 @@ class LPU(Module, object):
         self.gpot_delay_steps = int(round(gpot_delay_steps*1e-3/self.dt)) + 1
         self.spike_delay_steps = int(round(spike_delay_steps*1e-3/self.dt)) + 1
 
-        data_gpot = np.zeros(self.num_public_gpot, np.double)
-        data_spike = np.zeros(self.num_public_spike, np.bool)
+        data_gpot = np.zeros(self.num_public_gpot + len(in_ports_ids_gpot),
+                             np.double)
+        data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
+                              np.bool)
         super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl, self.LPU_id, device, debug)
+                                  columns, port_data, port_ctrl, self.LPU_id,
+                                  device, debug)
 
         self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
         self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']

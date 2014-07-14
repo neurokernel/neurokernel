@@ -18,7 +18,7 @@ import neurokernel.LPU.utils.visualizer as vis
 import networkx as nx
 
 nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
-                                        'true':True, 'True':True}
+                                       'true':True, 'True':True}
 
 G = nx.read_gexf('./data/generic_lpu.gexf.gz')
 neu_out = [k for k,n in G.node.items() if n['name'][:3] == 'out']

@@ -3,6 +3,7 @@
 import argparse
 
 import neurokernel.core as core
+import neurokernel.base as base
 from neurokernel.LPU.LPU import LPU
 from neurokernel.tools.comm import get_random_port
 
@@ -37,8 +38,24 @@ parser.add_argument('-i', '--input', action="store_true",
                     help='generates input if set')
 parser.add_argument('-g', '--gexf', action="store_true",
                     help='generates gexf of LPU if set')
+parser.add_argument('-o', '--output', action="store_true",
+                    help='generates output if set')
+
+parser.add_argument('--log', default='none', type=str,
+                    help='Log output to screen [file, screen, both, or none;'
+                         ' default:none]')
 
 args = parser.parse_args()
+
+#logging setup
+file_name = None
+screen = False
+if args.log.lower() in ['file', 'both']:
+    file_name = 'neurokernel.log'
+if args.log.lower() in ['screen', 'both']:
+    screen = True
+logger = base.setup_logger(file_name, screen)
+
 
 dt = 1e-4
 RET_GEXF_FILE = 'retina.gexf.gz'
@@ -48,6 +65,8 @@ INPUT_FILE = 'vision_input.h5'
 IMAGE_FILE = 'image1.mat'
 RET_OUTPUT_FILE = 'retina_output.h5'
 LAM_OUTPUT_FILE = 'lamina_output.h5'
+RET_OUTPUT_PNG = 'retina_output.png'
+LAM_OUTPUT_PNG = 'lamina_output.png'
 
 eyemodel = EyeGeomImpl(args.num_layers)
 
@@ -78,9 +97,9 @@ lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
 
 print('Parsing lamina lpu data')
 n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
-print(n_dict_lam.keys())
-print(len(n_dict_lam['MorrisLecar']['name']))
-print(len(n_dict_lam['MorrisLecar']))
+#print(n_dict_lam.keys())
+#print(len(n_dict_lam['MorrisLecar']['name']))
+#print(len(n_dict_lam['MorrisLecar']))
 print('Initializing lamina LPU')
 lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
               input_file=None,
@@ -99,3 +118,12 @@ print('Starting simulation')
 man.start(steps=1000)
 print('Simulation complete')
 man.stop()
+
+if args.output:
+    # neurokernel adds gpot at the end of filename TODO
+    eyemodel.visualise_output(media_file=RET_OUTPUT_PNG,
+                              model_output=RET_OUTPUT_FILE,
+                              config = {'LPU': 'retina', 'type':'image'} )
+    eyemodel.visualise_output(media_file=LAM_OUTPUT_PNG,
+                              model_output=LAM_OUTPUT_FILE,
+                              config = {'LPU': 'lamina', 'type':'image'} )

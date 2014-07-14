@@ -10,6 +10,14 @@ import networkx as nx
 import numpy as np
 PI = np.pi
 
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from matplotlib.animation import FFMpegFileWriter
+import matplotlib.pyplot as plt
+
+
+import neurokernel.LPU.utils.simpleio as sio
+
 from neurongeometry import NeuronGeometry
 from image2signal import Image2Signal
 from entities.neuron import Neuron
@@ -85,100 +93,34 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 1
         """
         neighborgids = [0]*6
-        # note lid is from 0 to 6*ring-1
-        quot_ring, res_ring = divmod(lid, ring)
 
         # **** id1 ****
-        if (quot_ring == 0) or \
-                ((quot_ring == 1) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid)
-        elif ((quot_ring == 1) and (res_ring > 0)) or \
-                ((quot_ring == 2) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 2) and (res_ring > 0)) or \
-                (quot_ring == 3):
-            id = self._get_globalid(ring-1, lid-3)
-        elif (quot_ring == 4):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 5):
-            id = self._get_globalid(ring+1, lid+6)
+        id = self._get_neighborgid(lid, ring, 1)
 
         neighborgids[0] = id
 
         # **** id2 ****
-        if (quot_ring == 0) or (quot_ring == 1) or \
-                ((quot_ring == 2) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+1)
-        elif ((quot_ring == 2) and (res_ring > 0)) or \
-                ((quot_ring == 3) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 3) and (res_ring > 0)) or \
-                (quot_ring == 4):
-            id = self._get_globalid(ring-1, lid-4)
-        elif (quot_ring == 5):
-            id = self._get_globalid(ring, lid+1)
+        id = self._get_neighborgid(lid, ring, 2)
 
         neighborgids[1] = id
 
         # **** id3 ****
-        if (quot_ring == 0):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 1) or (quot_ring == 2) or \
-                ((quot_ring == 3) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+2)
-        elif ((quot_ring == 3) and (res_ring > 0)) or \
-                ((quot_ring == 4) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 4) and (res_ring > 0)) or \
-                (quot_ring == 5):
-            id = self._get_globalid(ring-1, lid-5)
+        id = self._get_neighborgid(lid, ring, 3)
 
         neighborgids[2] = id
 
         # **** id4 ****
-        if (quot_ring == 0):
-            id = self._get_globalid(ring-1, lid)
-        elif (quot_ring == 1):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 2) or (quot_ring == 3) or \
-                ((quot_ring == 4) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+3)
-        elif ((quot_ring == 4) and (res_ring > 0)) or \
-                ((quot_ring == 5) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 5) and (res_ring > 0)):
-            id = self._get_globalid(ring-1, lid-6)
+        id = self._get_neighborgid(lid, ring, 5)
 
         neighborgids[3] = id
 
         # **** id5 ****
-        if ((quot_ring == 0) and (res_ring > 0)) or \
-                (quot_ring == 1):
-            id = self._get_globalid(ring-1, lid-1)
-        elif (quot_ring == 2):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 3) or (quot_ring == 4) or \
-                ((quot_ring == 5) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+4)
-        elif ((quot_ring == 5) and (res_ring > 0)) or \
-                ((quot_ring == 0) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
+        id = self._get_neighborgid(lid, ring, 6)
 
         neighborgids[4] = id
 
         # **** id6 ****
-        if ((quot_ring == 0) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid-1)
-        elif ((quot_ring == 0) and (res_ring > 0)) or \
-                ((quot_ring == 1) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 1) and (res_ring > 0)) or \
-                (quot_ring == 2):
-            id = self._get_globalid(ring-1, lid-2)
-        elif (quot_ring == 3):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 4) or (quot_ring == 5):
-            id = self._get_globalid(ring+1, lid+5)
+        id = self._get_neighborgid(lid, ring, 7)
 
         neighborgids[5] = id
 
@@ -187,7 +129,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     def _get_neighborgids_superposition(self, lid, ring):
         """ Gets global ids of neighbors in the following order (see also 
             RFC2 figure 2)
-            in neigbors
+            in neighbors
             (here x is cartridge and gets inputs from numbered neighbors)
             3
                 4
@@ -195,7 +137,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 x
             1       6
             ---------
-            out neigbors
+            out neighbors
             (here x is ommatidium and sends output to numbered neighbors)
             6       1
                 x
@@ -205,157 +147,196 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         """
         in_neighborgids = [0]*6
         out_neighborgids = [0]*6
-        # note lid is from 0 to 6*ring-1
-        quot_ring, res_ring = divmod(lid, ring)
 
         # **** in id1 out id5 ****
-        if (quot_ring == 0) or (quot_ring == 1) or \
-                ((quot_ring == 2) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+1)
-        elif ((quot_ring == 2) and (res_ring > 0)) or \
-                ((quot_ring == 3) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 3) and (res_ring > 0)) or \
-                (quot_ring == 4):
-            id = self._get_globalid(ring-1, lid-4)
-        elif (quot_ring == 5):
-            id = self._get_globalid(ring, lid+1)
+        id = self._get_neighborgid(lid, ring, 2)
 
         in_neighborgids[0] = id
         out_neighborgids[4] = id
 
         # **** in id2 out id6 ****
-        if (quot_ring == 0):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 1) or (quot_ring == 2) or \
-                ((quot_ring == 3) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+2)
-        elif ((quot_ring == 3) and (res_ring > 0)) or \
-                ((quot_ring == 4) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 4) and (res_ring > 0)) or \
-                (quot_ring == 5):
-            id = self._get_globalid(ring-1, lid-5)
+        id = self._get_neighborgid(lid, ring, 3)
 
         in_neighborgids[1] = id
         out_neighborgids[5] = id
 
         # **** in id3 ****
-        if ((quot_ring == 0) and (res_ring < ring-1)):
-            id = self._get_globalid(ring-1, lid+1)
-        elif ((quot_ring == 0) and (res_ring == ring-1)):
-            id = self._get_globalid(ring, lid+2)
-        elif (quot_ring == 1):
-            id = self._get_globalid(ring+1, lid+3)
-        elif (quot_ring == 2) or ((quot_ring == 3) and (res_ring == 0)):
-            id = self._get_globalid(ring+2, lid+5)
-        elif ((quot_ring == 3) and (res_ring > 0)) or \
-                ((quot_ring == 4) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+2)
-        elif ((quot_ring == 4) and (res_ring == 1)) or \
-                ((quot_ring == 5) and (res_ring == 0) and (ring == 1)):
-            id = self._get_globalid(ring, lid-2)
-        elif ((quot_ring == 4) and (res_ring > 1)) or \
-                ((quot_ring == 5) and (res_ring == 0)):
-            id = self._get_globalid(ring-1, lid-6)
-        elif ((quot_ring == 5) and (res_ring > 0)):
-            id = self._get_globalid(ring-2, lid-11)
+        id = self._get_neighborgid(lid, ring, 4)
 
         in_neighborgids[2] = id
 
         # **** out id3 ****
-        if ((quot_ring == 0) and (res_ring == 0)):
-            id = self._get_globalid(ring+2, lid-1)  # lid = 0 -> lid-1=-1 ->
-                                                    # 6*(ring+2)-1
-        elif ((quot_ring == 0) and (res_ring > 0)) or \
-                ((quot_ring == 1) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid-1)
-        elif ((quot_ring == 1) and (res_ring == 1)) or \
-                ((quot_ring == 2) and (res_ring == 0) and (ring == 1)):
-            id = self._get_globalid(ring, lid-2)
-        elif ((quot_ring == 1) and (res_ring > 1)) or \
-                ((quot_ring == 2) and (res_ring == 0)):
-            id = self._get_globalid(ring-1, lid-3)
-        elif ((quot_ring == 2) and (res_ring > 0)):
-            id = self._get_globalid(ring-2, lid-5)
-        elif ((quot_ring == 3) and (res_ring < ring-1)):
-            id = self._get_globalid(ring-1, lid-2)
-        elif ((quot_ring == 3) and (res_ring == ring-1)):
-            id = self._get_globalid(ring, lid+2)
-        elif (quot_ring == 4):
-            id = self._get_globalid(ring+1, lid+6)
-        elif (quot_ring == 5):
-            id = self._get_globalid(ring+2, lid+11)
+        id = self._get_neighborgid(lid, ring, 8)
 
         out_neighborgids[2] = id
 
         # **** in id4 ****
-        if (quot_ring == 0):
-            id = self._get_globalid(ring-1, lid)
-        elif (quot_ring == 1):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 2) or (quot_ring == 3) or \
-                ((quot_ring == 4) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+3)
-        elif ((quot_ring == 4) and (res_ring > 0)) or \
-                ((quot_ring == 5) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 5) and (res_ring > 0)):
-            id = self._get_globalid(ring-1, lid-6)
+        id = self._get_neighborgid(lid, ring, 5)
 
         in_neighborgids[3] = id
         
         # **** out id4 ****
-        if (quot_ring == 0) or \
-                ((quot_ring == 1) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid)
-        elif ((quot_ring == 1) and (res_ring > 0)) or \
-                ((quot_ring == 2) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 2) and (res_ring > 0)) or \
-                (quot_ring == 3):
-            id = self._get_globalid(ring-1, lid-3)
-        elif (quot_ring == 4):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 5):
-            id = self._get_globalid(ring+1, lid+6)
+        id = self._get_neighborgid(lid, ring, 1)
 
         out_neighborgids[3] = id
 
         # **** in id5 out id1 ****
-        if ((quot_ring == 0) and (res_ring > 0)) or \
-                (quot_ring == 1):
-            id = self._get_globalid(ring-1, lid-1)
-        elif (quot_ring == 2):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 3) or (quot_ring == 4) or \
-                ((quot_ring == 5) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid+4)
-        elif ((quot_ring == 5) and (res_ring > 0)) or \
-                ((quot_ring == 0) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
+        id = self._get_neighborgid(lid, ring, 6)
 
         in_neighborgids[4] = id
         out_neighborgids[0] = id
 
         # **** in id6 out id2 ****
-        if ((quot_ring == 0) and (res_ring == 0)):
-            id = self._get_globalid(ring+1, lid-1)
-        elif ((quot_ring == 0) and (res_ring > 0)) or \
-                ((quot_ring == 1) and (res_ring == 0)):
-            id = self._get_globalid(ring, lid-1)
-        elif ((quot_ring == 1) and (res_ring > 0)) or \
-                (quot_ring == 2):
-            id = self._get_globalid(ring-1, lid-2)
-        elif (quot_ring == 3):
-            id = self._get_globalid(ring, lid+1)
-        elif (quot_ring == 4) or (quot_ring == 5):
-            id = self._get_globalid(ring+1, lid+5)
+        id = self._get_neighborgid(lid, ring, 7)
 
         in_neighborgids[5] = id
         out_neighborgids[1] = id
 
         return (in_neighborgids, out_neighborgids)
+
+    @classmethod
+    def _get_neighborgid(cls, lid, ring, pos):
+        """ Return the global id of one neighbbor at relative position pos
+            pos: the relative position which can be from 0 to 8
+            4
+                5
+            3       6
+                0
+            2       7
+                1
+                    8
+        """
+        # note lid is from 0 to 6*ring-1
+        quot_ring, res_ring = divmod(lid, ring)
+
+        if pos == 0:
+            id = cls._get_globalid(ring, lid)
+        elif pos == 1:
+            if (quot_ring == 0) or \
+                    ((quot_ring == 1) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid)
+            elif ((quot_ring == 1) and (res_ring > 0)) or \
+                    ((quot_ring == 2) and (res_ring == 0)):
+                id = cls._get_globalid(ring, lid-1)
+            elif ((quot_ring == 2) and (res_ring > 0)) or \
+                    (quot_ring == 3):
+                id = cls._get_globalid(ring-1, lid-3)
+            elif (quot_ring == 4):
+                id = cls._get_globalid(ring, lid+1)
+            elif (quot_ring == 5):
+                id = cls._get_globalid(ring+1, lid+6)
+        elif pos == 2:
+            if (quot_ring == 0) or (quot_ring == 1) or \
+                    ((quot_ring == 2) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid+1)
+            elif ((quot_ring == 2) and (res_ring > 0)) or \
+                    ((quot_ring == 3) and (res_ring == 0)):
+                id = cls._get_globalid(ring, lid-1)
+            elif ((quot_ring == 3) and (res_ring > 0)) or \
+                    (quot_ring == 4):
+                id = cls._get_globalid(ring-1, lid-4)
+            elif (quot_ring == 5):
+                id = cls._get_globalid(ring, lid+1)
+        elif pos == 3:
+            if (quot_ring == 0):
+                id = cls._get_globalid(ring, lid+1)
+            elif (quot_ring == 1) or (quot_ring == 2) or \
+                    ((quot_ring == 3) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid+2)
+            elif ((quot_ring == 3) and (res_ring > 0)) or \
+                    ((quot_ring == 4) and (res_ring == 0)):
+                id = cls._get_globalid(ring, lid-1)
+            elif ((quot_ring == 4) and (res_ring > 0)) or \
+                    (quot_ring == 5):
+                id = cls._get_globalid(ring-1, lid-5)
+        elif pos == 4:
+            if ((quot_ring == 0) and (res_ring < ring-1)):
+                id = cls._get_globalid(ring-1, lid+1)
+            elif ((quot_ring == 0) and (res_ring == ring-1)):
+                id = cls._get_globalid(ring, lid+2)
+            elif (quot_ring == 1):
+                id = cls._get_globalid(ring+1, lid+3)
+            elif (quot_ring == 2) or ((quot_ring == 3) and (res_ring == 0)):
+                id = cls._get_globalid(ring+2, lid+5)
+            elif ((quot_ring == 3) and (res_ring > 0)) or \
+                    ((quot_ring == 4) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid+2)
+            elif ((quot_ring == 4) and (res_ring == 1)) or \
+                    ((quot_ring == 5) and (res_ring == 0) and (ring == 1)):
+                id = cls._get_globalid(ring, lid-2)
+            elif ((quot_ring == 4) and (res_ring > 1)) or \
+                    ((quot_ring == 5) and (res_ring == 0)):
+                id = cls._get_globalid(ring-1, lid-6)
+            elif ((quot_ring == 5) and (res_ring > 0)):
+                id = cls._get_globalid(ring-2, lid-11)
+        elif pos == 5:
+            if (quot_ring == 0):
+                id = cls._get_globalid(ring-1, lid)
+            elif (quot_ring == 1):
+                id = cls._get_globalid(ring, lid+1)
+            elif (quot_ring == 2) or (quot_ring == 3) or \
+                    ((quot_ring == 4) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid+3)
+            elif ((quot_ring == 4) and (res_ring > 0)) or \
+                    ((quot_ring == 5) and (res_ring == 0)):
+                id = cls._get_globalid(ring, lid-1)
+            elif ((quot_ring == 5) and (res_ring > 0)):
+                id = cls._get_globalid(ring-1, lid-6)
+        elif pos == 6:
+            if ((quot_ring == 0) and (res_ring > 0)) or \
+                    (quot_ring == 1):
+                id = cls._get_globalid(ring-1, lid-1)
+            elif (quot_ring == 2):
+                id = cls._get_globalid(ring, lid+1)
+            elif (quot_ring == 3) or (quot_ring == 4) or \
+                    ((quot_ring == 5) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid+4)
+            elif ((quot_ring == 5) and (res_ring > 0)) or \
+                    ((quot_ring == 0) and (res_ring == 0)):
+                id = cls._get_globalid(ring, lid-1)
+        elif pos == 7:
+            if ((quot_ring == 0) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid-1)
+            elif ((quot_ring == 0) and (res_ring > 0)) or \
+                    ((quot_ring == 1) and (res_ring == 0)):
+                id = cls._get_globalid(ring, lid-1)
+            elif ((quot_ring == 1) and (res_ring > 0)) or \
+                    (quot_ring == 2):
+                id = cls._get_globalid(ring-1, lid-2)
+            elif (quot_ring == 3):
+                id = cls._get_globalid(ring, lid+1)
+            elif (quot_ring == 4) or (quot_ring == 5):
+                id = cls._get_globalid(ring+1, lid+5)
+        elif pos == 8:
+            if ((quot_ring == 0) and (res_ring == 0)):
+                id = cls._get_globalid(ring+2, lid-1)  # lid = 0 ->
+                                                        # lid-1=-1 ->
+                                                        # 6*(ring+2)-1
+            elif ((quot_ring == 0) and (res_ring > 0)) or \
+                    ((quot_ring == 1) and (res_ring == 0)):
+                id = cls._get_globalid(ring+1, lid-1)
+            elif ((quot_ring == 1) and (res_ring == 1)) or \
+                    ((quot_ring == 2) and (res_ring == 0) and (ring == 1)):
+                id = cls._get_globalid(ring, lid-2)
+            elif ((quot_ring == 1) and (res_ring > 1)) or \
+                    ((quot_ring == 2) and (res_ring == 0)):
+                id = cls._get_globalid(ring-1, lid-3)
+            elif ((quot_ring == 2) and (res_ring > 0)):
+                id = cls._get_globalid(ring-2, lid-5)
+            elif ((quot_ring == 3) and (res_ring < ring-1)):
+                id = cls._get_globalid(ring-1, lid-2)
+            elif ((quot_ring == 3) and (res_ring == ring-1)):
+                id = cls._get_globalid(ring, lid+2)
+            elif (quot_ring == 4):
+                id = cls._get_globalid(ring+1, lid+6)
+            elif (quot_ring == 5):
+                id = cls._get_globalid(ring+2, lid+11)
+        else:
+            raise ValueError("Invalid position {}, should be 0-8")
+
+        return id
+
+
 
     def _init_neurons(self):
         nrings = self._nrings
@@ -522,8 +503,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              3
                      in case of 'center' only 0 is returned and in case of
                      'R1toR6' all others in numerical order
-                     To 
         """
+        # the order of ommatidia in output is the exact order of
+        # _ommatidia parameter
         try:
             coord = config['coord']
             valid_values = ["spherical", "cartesian3D", "cartesian2D"]
@@ -592,9 +574,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             returns: numpy array with with height the number of simulation
                      steps and width the number of neurons.
                      The order of neurons is the same as that returned 
-                     in get_positions, with 'R1toR6' option for 'include'
-                     configuration parameter
+                     in get_positions, with 'include'
+                     configuration parameter set to 'R1toR6'
         """
+        # the order of ommatidia in output is the exact order of
+        # _ommatidia parameter
         try:
             dt = config['dt']
         except KeyError:
@@ -767,11 +751,60 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         # ignore constant factor C_p and normalize so that everything sums to 1
         return func3/np.sum(func3)
 
-    def visualise_output(self, output, file, config=None):
-        """ config: { type: 'retina'(default)/'lamina'
+    def visualise_output(self, model_output, media_file, config={}):
+        """ config: { LPU: 'retina'(default)/'lamina'
+                      type: 'image'(default)/'video'
                     }
         """
-        pass
+        try:
+            lpu = config['LPU']
+        except KeyError:
+            lpu = 'retina'
+            
+        try:
+            type = config['type']
+        except KeyError:
+            type = 'image'
+            
+        with h5py.File(model_output, 'r') as f:
+            data = f['array'].value
+        
+        if lpu == 'retina':
+            xpositions, ypositions = hemisphere.get_positions(
+                    {'coord': 'cartesian2D', 'include': 'R1toR6',
+                    'add_dummy': False})
+            if type == 'image':
+                fig = plt.figure()
+
+                scatter(xpositions, -ypositions, c=data[0], cmap=cm.gray,
+                        s=5, edgecolors='none')
+                    
+                fig.savefig(media_file)
+            elif type == 'video':
+                fig = plt.figure()
+
+                writer = FFMpegFileWriter(fps=5, codec='libtheora')
+                writer.setup(
+                    fig, media_file, dpi=80,
+                    frame_prefix=os.path.splitext(self.out_filename)[0]+'_')
+
+
+                step = 100
+                for i, d in enumerate(data):
+                    if i % step == 0:
+                        scatter(xpositions, -ypositions, c=data[0],
+                                cmap=cm.gray, s=5, edgecolors='none')
+                        fig.canvas.draw()
+                        writer.grab_frame()
+            else:
+                raise ValueError('Invalid value for media type: {}'
+                                 ', valid values image, video'.format(type))
+
+        elif lpu == 'lamina':
+            pass
+        else:
+            raise ValueError('Invalid value for lpu: {}'
+                             ', valid values retina, lamina'.format(lpu))
 
     def generate_input(self, image_file, output_file):
         intensities = self.get_intensities(image_file, 
@@ -961,10 +994,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
 
 if __name__ == '__main__':
-    from mpl_toolkits.mplot3d import Axes3D
-    from matplotlib import cm
     from matplotlib.collections import LineCollection
-    import matplotlib.pyplot as plt
     import time
 
     N_RINGS = 1

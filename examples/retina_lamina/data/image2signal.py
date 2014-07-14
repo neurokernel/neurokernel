@@ -25,12 +25,12 @@ class Image2Signal(object):
         return
 
     @abstractmethod
-    def visualise_output(self, output, file, config=None):
+    def visualise_output(self, model_output, media_file, config=None):
         """ given the output of a neuron model generate a file
             that visualizes it
 
-            output: output of neuron model
-            file:   output file (where visualized output will be stored)
+            model_output: output of neuron model
+            media_file: output file (where visualized output will be stored)
             config: optional configuration
                     (but class should have a default one), may be a custom
                     object that may specify among others: the type of file,

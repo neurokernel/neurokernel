@@ -117,6 +117,10 @@ class Module(BaseModule):
         self.interface[sel_spike, 'type'] = 'spike'
 
         # Set up mapper between port identifiers and their associated data:
+        print(data_gpot)
+        print(self.interface.gpot_ports())
+        print("Port nums: {},{}".format(len(data_gpot), len(self.interface.gpot_ports())))
+
         assert len(data_gpot) == len(self.interface.gpot_ports())
         assert len(data_spike) == len(self.interface.spike_ports())
         self.data = {}
