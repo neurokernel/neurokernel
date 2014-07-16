@@ -31,7 +31,7 @@ V.add_plot({'type':'waveform', 'ids': [[0]]}, 'input_Sensory')
 V.add_LPU('generic_output_spike.h5',
           './data/generic_lpu.gexf.gz', 'Generic LPU')
 V.add_plot({'type':'raster', 'ids': {0:range(48, 83)},
-            'yticks': range(1, 1+len(neu_out)),
+            'yticks': range(1, 1 + len(neu_out)),
             'yticklabels': range(len(neu_out))},
             'Generic LPU','Output')
 

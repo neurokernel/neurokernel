@@ -79,7 +79,7 @@ class Interface(object):
         """
 
         if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
-           len(idx.unique()) < len(idx):
+                len(idx.unique()) < len(idx):
             raise ValueError('Duplicate interface index entries detected.')
 
     def __getitem__(self, key):
@@ -153,6 +153,7 @@ class Interface(object):
         """
 
         return self.data.index
+
     @index.setter
     def index(self, i):
         self.data.index = i
@@ -454,7 +455,7 @@ class Interface(object):
         idx_a = self.data[self.data['interface'] == a].index
         idx_b = i.data[i.data['interface'] == b].index
         if idx_a.equals(idx_b) and all(io_a_inv==io_b) \
-           and all(type_a==type_b):
+                and all(type_a==type_b):
             return True
         else:
             return False

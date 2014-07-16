@@ -217,7 +217,6 @@ class Photoreceptor(BaseNeuron):
             self.outputfile_X6.flush()
 
     def eval(self, st=None):
-        print 'Eval started'
         # self.I is actually pointer to photon input
         self.photon_absorption_func.prepared_call(
             self.grid_transduction, self.block_transduction,

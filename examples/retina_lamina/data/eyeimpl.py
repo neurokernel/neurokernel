@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 
 
 import neurokernel.LPU.utils.simpleio as sio
+from neurokernel.pattern import Pattern
 
 from neurongeometry import NeuronGeometry
 from image2signal import Image2Signal
@@ -478,7 +479,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             return self._adjneighborslist
 
     def get_positions(self, config={'coord': 'spherical', 'include': 'center',
-                                    'add_dummy': True }):
+                                    'add_dummy':True }):
         """ returns projected positions of photoreceptors
             config: configuration dictionary
                     keys
@@ -530,19 +531,19 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         if include == 'all':
             for ommatidium in self._ommatidia:
-                if add_dummy or ommatidium.id != -1:
+                if add_dummy or not ommatidium.is_dummy():
                     screenlats, screenlongs = ommatidium.get_screenpoints()
                     latitudes.extend(screenlats)
                     longitudes.extend(screenlongs)
         elif include == 'R1toR6':
             for ommatidium in self._ommatidia:
-                if add_dummy or ommatidium.id != -1:
+                if add_dummy or not ommatidium.is_dummy():
                     screenlats, screenlongs = ommatidium.get_R1toR6points()
                     latitudes.extend(screenlats)
                     longitudes.extend(screenlongs)
         else:
             for ommatidium in self._ommatidia:
-                if add_dummy or ommatidium.id != -1:
+                if add_dummy or not ommatidium.is_dummy():
                     eyelat, eyelong = ommatidium.get_eyepoint()
                     latitudes.append(eyelat)
                     longitudes.append(eyelong)
@@ -770,18 +771,18 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             data = f['array'].value
         
         if lpu == 'retina':
-            xpositions, ypositions = hemisphere.get_positions(
+            xpositions, ypositions = self.get_positions(
                     {'coord': 'cartesian2D', 'include': 'R1toR6',
-                    'add_dummy': False})
+                     'add_dummy': False})
             if type == 'image':
-                fig = plt.figure()
+                fig, ax = plt.subplots()
 
-                scatter(xpositions, -ypositions, c=data[0], cmap=cm.gray,
-                        s=5, edgecolors='none')
+                ax.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
+                           s=5, edgecolors='none')
                     
                 fig.savefig(media_file)
             elif type == 'video':
-                fig = plt.figure()
+                fig, ax = plt.subplots()
 
                 writer = FFMpegFileWriter(fps=5, codec='libtheora')
                 writer.setup(
@@ -792,8 +793,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 step = 100
                 for i, d in enumerate(data):
                     if i % step == 0:
-                        scatter(xpositions, -ypositions, c=data[0],
-                                cmap=cm.gray, s=5, edgecolors='none')
+                        ax.scatter(xpositions, -ypositions, c=data[i],
+                                   cmap=cm.gray, s=5, edgecolors='none')
                         fig.canvas.draw()
                         writer.grab_frame()
             else:
@@ -814,6 +815,26 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             f.create_dataset('array', intensities.shape,
                              dtype=np.float64,
                              data=intensities)
+    
+    def connect_retina_lamina(self, manager, ret_lpu, lam_lpu):
+        #.values or .tolist()
+        ret_sel = ret_lpu.interface.index.tolist()
+        lam_sel = lam_lpu.interface.index.tolist()
+        lam_sel_in = [sel for sel in lam_sel if sel[0]=="ret"]
+        lam_sel_out = [sel for sel in lam_sel if sel[0]!="ret"]
+
+        pat = Pattern(ret_sel, lam_sel)
+        # pattern gets input from retina
+        
+        print(len(lam_sel_in))
+        pat.interface[ret_sel, 'io'] = 'in'
+        pat.interface[ret_sel, 'type'] = 'gpot'
+        pat.interface[lam_sel_in, 'io'] = 'out'
+        pat.interface[lam_sel_out, 'io'] = 'in'
+        pat.interface[lam_sel, 'type'] = 'gpot'
+        
+        # connect(self, m_0, m_1, pat, int_0=0, int_1=1):
+        manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
     def generate_retina(self, output_file):
         G = nx.DiGraph()
@@ -922,7 +943,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     assert(neighbor.id < cartridge_num)
                     neuron = neuron_dict[(neighbor.id, neuron_name)]
                     photor_id = 6*i + j
-                    neuron.update_selector('/ret/out/' + str(photor_id))
+                    # connected LPUs are not allowed to have the same name in
+                    # ports in current implementation of pattern
+                    neuron.update_selector('/ret/in/' + str(photor_id))
                     
         # renumber neurons to omit photoreceptors 
         # near the edge that have no input (no selector is set)
@@ -938,8 +961,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             else:
                 node.num = count
                 count += 1
-        print(len(neuron_list))
-        print(count)
 
         adjneighbors = self._adjneighborslist
 

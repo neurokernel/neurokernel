@@ -2,7 +2,9 @@
 *.pyc
 
 #
+*.png
 *.h5
 *qsub.py
 *gexf.gz
 neurokernel.egg-info
+neurokernel/neurokernel.log

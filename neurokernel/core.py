@@ -16,8 +16,8 @@ import bidict
 
 from base import BaseModule, Manager, Broker, PORT_DATA, PORT_CTRL, setup_logger
 
-from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
-     ExceptionOnSignal, TryExceptionOnSignal
+from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
+                          ExceptionOnSignal, TryExceptionOnSignal)
 
 from tools.comm import get_random_port
 from tools.misc import catch_exception
@@ -117,10 +117,6 @@ class Module(BaseModule):
         self.interface[sel_spike, 'type'] = 'spike'
 
         # Set up mapper between port identifiers and their associated data:
-        print(data_gpot)
-        print(self.interface.gpot_ports())
-        print("Port nums: {},{}".format(len(data_gpot), len(self.interface.gpot_ports())))
-
         assert len(data_gpot) == len(self.interface.gpot_ports())
         assert len(data_spike) == len(self.interface.spike_ports())
         self.data = {}
@@ -573,7 +569,7 @@ if __name__ == '__main__':
 
     # To set the emulation to exit after executing a fixed number of steps,
     # start it as follows and remove the sleep statement:    
-    # man.start(steps=500)    
+    # man.start(steps=500)
     man.start()
     time.sleep(2)
     man.stop()

@@ -239,17 +239,18 @@ class LPU(Module, object):
                                             .index(PORT_IN_GPOT)
         except KeyError:
             sel_in_gpot = ''
-            in_ports_ids_gpot = np.array([])
+            in_ports_ids_gpot = np.array([], dtype=np.int32)
             self.ports_in_gpot_mem_ind = None
 
         try:
             sel_in_spk = ','.join(filter(None,
                                          n_dict[PORT_IN_SPK]['selector']))
-            in_ports_ids_spk = np.array(n_dict[PORT_IN_SPK]['id'])
+            in_ports_ids_spk = np.array(n_dict[PORT_IN_SPK]['id'], 
+                                        dtype=np.int32)
             self.ports_in_spk_mem_ind = zip(*self.n_list)[0].index(PORT_IN_SPK)
         except KeyError:
             sel_in_spk = ''
-            in_ports_ids_spk = np.array([])
+            in_ports_ids_spk = np.array([], dtype=np.int32)
             self.ports_in_spk_mem_ind = None
             
         sel_in = ','.join(filter(None, [sel_in_gpot, sel_in_spk]))
@@ -262,12 +263,11 @@ class LPU(Module, object):
                                 if pub and spk ]))
         self.out_ports_ids_gpot = np.array([id for _, n in self.n_list for id, pub, spk in
                                             zip(n['id'], n['public'], n['spiking'])
-                                            if pub and not spk ] )
+                                            if pub and not spk], dtype=np.int32)
         self.out_ports_ids_spk = np.array([id for _, n in self.n_list for id, pub, spk in
                                            zip(n['id'], n['public'], n['spiking'])
-                                           if pub and spk ] )
+                                           if pub and spk], dtype=np.int32)
 
-        
         sel_out = ','.join(filter(None, [sel_out_gpot, sel_out_spk]))
 
         sel_gpot = ','.join(filter(None, [sel_in_gpot, sel_out_gpot]))
@@ -452,6 +452,7 @@ class LPU(Module, object):
             #     file.close()
             self.gpot_buffer_file.close()
             self.synapse_state_file.close()
+
         for neuron in self.neurons:
             neuron.post_run()
             if self.debug and not neuron.update_I_override:
@@ -494,7 +495,7 @@ class LPU(Module, object):
     def _init_objects(self):
         self.neurons = [ self._instantiate_neuron(i, t, n) 
                          for i, (t, n) in enumerate(self.n_list)
-                         if t!='port_in_got' and t!=PORT_IN_SPK]
+                         if t!=PORT_IN_GPOT and t!=PORT_IN_SPK]
         self.synapses = [ self._instantiate_synapse(i, t, n) 
                          for i, (t, n) in enumerate(self.s_list)
                          if t!='pass']

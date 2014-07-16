@@ -41,6 +41,9 @@ parser.add_argument('-g', '--gexf', action="store_true",
 parser.add_argument('-o', '--output', action="store_true",
                     help='generates output if set')
 
+parser.add_argument('-s', '--suppress', action="store_true",
+                    help='supresses simulation')
+                    
 parser.add_argument('--log', default='none', type=str,
                     help='Log output to screen [file, screen, both, or none;'
                          ' default:none]')
@@ -63,8 +66,10 @@ LAM_GEXF_FILE = 'lamina.gexf.gz'
 
 INPUT_FILE = 'vision_input.h5'
 IMAGE_FILE = 'image1.mat'
-RET_OUTPUT_FILE = 'retina_output.h5'
-LAM_OUTPUT_FILE = 'lamina_output.h5'
+RET_OUTPUT_FILE = 'retina_output'
+LAM_OUTPUT_FILE = 'lamina_output'
+RET_OUTPUT_GPOT = RET_OUTPUT_FILE + '_gpot.h5'
+LAM_OUTPUT_GPOT = LAM_OUTPUT_FILE + '_gpot.h5'
 RET_OUTPUT_PNG = 'retina_output.png'
 LAM_OUTPUT_PNG = 'lamina_output.png'
 
@@ -83,47 +88,50 @@ else:
     port_ctrl = args.port_ctrl
 
 #TODO
-man = core.Manager(port_data, port_ctrl)
-man.add_brok()
+if not args.suppress:
+    man = core.Manager(port_data, port_ctrl)
+    man.add_brok()
 
-print('Parsing retina lpu data')
-n_dict_ret, s_dict_ret = LPU.lpu_parser(RET_GEXF_FILE)
-print('Initializing retina LPU')
-lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
-              input_file=INPUT_FILE,
-              output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
-              port_data=port_data, device=args.ret_dev, id='retina',
-              debug=False)
+    print('Parsing retina lpu data')
+    n_dict_ret, s_dict_ret = LPU.lpu_parser(RET_GEXF_FILE)
+    print('Initializing retina LPU')
+    lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
+                  input_file=INPUT_FILE,
+                  output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
+                  port_data=port_data, device=args.ret_dev, id='retina',
+                  debug=False)
 
-print('Parsing lamina lpu data')
-n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
-#print(n_dict_lam.keys())
-#print(len(n_dict_lam['MorrisLecar']['name']))
-#print(len(n_dict_lam['MorrisLecar']))
-print('Initializing lamina LPU')
-lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-              input_file=None,
-              output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
-              port_data=port_data, device=args.lam_dev, id='lamina',
-              debug=False)
+    print('Parsing lamina lpu data')
+    n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
+    #print(n_dict_lam.keys())
+    #print(len(n_dict_lam['MorrisLecar']['name']))
+    #print(len(n_dict_lam['MorrisLecar']))
+    print('Initializing lamina LPU')
+    lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
+                  input_file=None,
+                  output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
+                  port_data=port_data, device=args.lam_dev, id='lamina',
+                  debug=False)
 
-# check core.py on how to connect 2 modules
-# amacrine cells get input 
-# from photoreceptors and give output to other neurons
-# see synapse_lamina.csv
+    # check core.py on how to connect 2 modules
+    # amacrine cells get input 
+    # from photoreceptors and give output to other neurons
+    # see synapse_lamina.csv
+    
 
-man.add_mod(lpu_ret)
-man.add_mod(lpu_lam)
-print('Starting simulation')
-man.start(steps=1000)
-print('Simulation complete')
-man.stop()
+    man.add_mod(lpu_ret)
+    man.add_mod(lpu_lam)
+    eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam)
+    print('Starting simulation')
+    man.start(steps=1000)
+    man.stop()
+    print('Simulation complete')
 
 if args.output:
     # neurokernel adds gpot at the end of filename TODO
     eyemodel.visualise_output(media_file=RET_OUTPUT_PNG,
-                              model_output=RET_OUTPUT_FILE,
+                              model_output=RET_OUTPUT_GPOT,
                               config = {'LPU': 'retina', 'type':'image'} )
     eyemodel.visualise_output(media_file=LAM_OUTPUT_PNG,
-                              model_output=LAM_OUTPUT_FILE,
+                              model_output=LAM_OUTPUT_GPOT,
                               config = {'LPU': 'lamina', 'type':'image'} )
