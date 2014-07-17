@@ -137,6 +137,9 @@ class LPU(Module, object):
         # parse neuron data
         n_dict = {}
         neurons = graph.node.items()
+        # sort based on id (id is first converted to an integer)
+        # this is done so that consecutive neurons of the same type 
+        # in the constructed LPU is the same in neurokernel
         neurons.sort(cmp=neuron_cmp)
         for id, neu in neurons:
             model = neu['model']
@@ -224,9 +227,11 @@ class LPU(Module, object):
         n_model_is_spk = [ n['spiking'][0] for _, n in self.n_list ]
         n_model_num = [ len(n['id']) for _, n in self.n_list ]
         # concatenation of lists of neurons
+        # n['id'] is a list of integers that correspond to the positions 
+        # of the neuron model n['model'] in LPU graph
         n_id = np.array(sum( [ n['id'] for _, n in self.n_list ], []), 
                         dtype=np.int32)
-        # flattens list of lists
+        # concatenates lists of common attributes in model dictionaries
         n_is_spk = np.array(sum( [ n['spiking'] for _, n in self.n_list ], []))
         n_is_pub = np.array(sum( [ n['public'] for _, n in self.n_list ], []))
         n_has_in = np.array(sum( [ n['extern'] for _, n in self.n_list ], []))
@@ -356,7 +361,7 @@ class LPU(Module, object):
                 if 'delay' in s:
                     max_del = np.max( s['delay'] )
                     spike_delay_steps = max_del if max_del > spike_delay_steps \
-                                       else spike_delay_steps
+                                        else spike_delay_steps
         
         self.total_synapses = int(np.sum(num_synapses))
         I_post.extend(self.input_neuron_list)
@@ -463,7 +468,7 @@ class LPU(Module, object):
 
     def run_step(self):
         super(LPU, self).run_step()
-
+        
         self._read_LPU_input()
 
         if self.input_file is not None:
@@ -600,14 +605,14 @@ class LPU(Module, object):
 
         """
         
-        if self.ports_in_gpot_mem_ind:
+        if self.ports_in_gpot_mem_ind is not  None:
             cuda.memcpy_htod(
                 int(self.V.gpudata) +
                 self.V.dtype.itemsize*
                 self.idx_start_gpot[self.ports_in_gpot_mem_ind],
                 self.pm['gpot'][self.sel_in_gpot])
 
-        if self.ports_in_spk_mem_ind:
+        if self.ports_in_spk_mem_ind is not None:
             cuda.memcpy_htod(
                 int(int(self.spike_state.gpudata) +
                 self.spike_state.dtype.itemsize*
@@ -645,6 +650,7 @@ class LPU(Module, object):
     def _write_output(self):
         """
         Save neuron states or spikes to output file.
+        The order is the same as the order of the assigned ids in gexf
         """
 
         if self.my_num_gpot_neurons > 0:
@@ -655,6 +661,8 @@ class LPU(Module, object):
                 self.spike_state.get()[self.spike_order].reshape((1, -1)))
 
     def _read_external_input(self):
+        # if eof not reached or there are frames in buffer not read
+        # copy the input from buffer to synapse state array
         if not self.input_eof or self.frame_count < self.frames_in_buffer:
             cuda.memcpy_dtod(
                 int(int(self.synapse_state.gpudata) +
@@ -666,6 +674,7 @@ class LPU(Module, object):
         else:
             self.logger.info('Input end of file reached. ' 
                              'Subsequent behaviour is undefined.')
+        # if all buffer frames were read from file
         if self.frame_count >= self._one_time_import and not self.input_eof:
             input_ld = self.input_h5file.root.array.shape[0]
             if input_ld - self.file_pointer < self._one_time_import:

@@ -64,6 +64,10 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         self._supneighborslist = []
         self._adjneighborslist = []
         self._init_neurons()
+        self._generate_retina()
+        self._generate_lamina()
+
+
 
     @staticmethod
     def _get_globalid(ring, local_id):
@@ -340,6 +344,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
 
     def _init_neurons(self):
+        """ Generates neurons and initializes neighbors """
         nrings = self._nrings
         reye = self._reye
         ommatidium_cls = self.OMMATIDIUM_CLS
@@ -752,9 +757,12 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         # ignore constant factor C_p and normalize so that everything sums to 1
         return func3/np.sum(func3)
 
+    #TODO apply DRY principle
     def visualise_output(self, model_output, media_file, config={}):
         """ config: { LPU: 'retina'(default)/'lamina'
                       type: 'image'(default)/'video'
+                      neuron: the id of the neuron to plot(for lamina)
+                              e.g L1
                     }
         """
         try:
@@ -774,38 +782,64 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             xpositions, ypositions = self.get_positions(
                     {'coord': 'cartesian2D', 'include': 'R1toR6',
                      'add_dummy': False})
-            if type == 'image':
-                fig, ax = plt.subplots()
 
-                ax.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
-                           s=5, edgecolors='none')
-                    
-                fig.savefig(media_file)
-            elif type == 'video':
-                fig, ax = plt.subplots()
+            self._plot_output(type, xpositions, ypositions, data, media_file)
 
-                writer = FFMpegFileWriter(fps=5, codec='libtheora')
-                writer.setup(
-                    fig, media_file, dpi=80,
-                    frame_prefix=os.path.splitext(self.out_filename)[0]+'_')
-
-
-                step = 100
-                for i, d in enumerate(data):
-                    if i % step == 0:
-                        ax.scatter(xpositions, -ypositions, c=data[i],
-                                   cmap=cm.gray, s=5, edgecolors='none')
-                        fig.canvas.draw()
-                        writer.grab_frame()
-            else:
-                raise ValueError('Invalid value for media type: {}'
-                                 ', valid values image, video'.format(type))
 
         elif lpu == 'lamina':
-            pass
+            xpositions, ypositions = self.get_positions(
+                    {'coord': 'cartesian2D', 'include': 'center',
+                     'add_dummy': False})
+            try:
+                neuron = config['neuron']
+            except KeyError:
+                neuron = 'L1'
+
+            n_ids = self._get_lamina_ids(neuron)
+
+            print(n_ids)
+            self._plot_output(type, xpositions, ypositions, data[:, n_ids],
+                              media_file)
         else:
             raise ValueError('Invalid value for lpu: {}'
                              ', valid values retina, lamina'.format(lpu))
+
+    def _plot_output(self, type, xpositions, ypositions, data, media_file):
+        fig, ax = plt.subplots()
+
+        if type == 'image':
+            print(len(xpositions), len(data[-1]))
+            print(data.shape)
+            ax.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
+                       s=5, edgecolors='none')
+                
+            fig.savefig(media_file)
+        elif type == 'video':
+            writer = FFMpegFileWriter(fps=5, codec='libtheora')
+            writer.setup(
+                fig, media_file, dpi=80,
+                frame_prefix=os.path.splitext(self.out_filename)[0]+'_')
+
+            step = 100
+            for i, d in enumerate(data):
+                if i % step == 0:
+                    ax.scatter(xpositions, -ypositions, c=data[i],
+                               cmap=cm.gray, s=5, edgecolors='none')
+                    fig.canvas.draw()
+                    writer.grab_frame()
+        else:
+            raise ValueError('Invalid value for media type: {}'
+                             ', valid values image, video'.format(type))
+
+    def _get_lamina_ids(self, neuron_name):
+        G = self._lamina_graph
+        neurons = G.node.items()
+
+        ids = []
+        for id, neu in neurons:
+            if neuron_name == neu['name']:
+                ids.append(id)
+        return ids
 
     def generate_input(self, image_file, output_file):
         intensities = self.get_intensities(image_file, 
@@ -826,44 +860,40 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         pat = Pattern(ret_sel, lam_sel)
         # pattern gets input from retina
         
-        print(len(lam_sel_in))
         pat.interface[ret_sel, 'io'] = 'in'
         pat.interface[ret_sel, 'type'] = 'gpot'
         pat.interface[lam_sel_in, 'io'] = 'out'
         pat.interface[lam_sel_out, 'io'] = 'in'
         pat.interface[lam_sel, 'type'] = 'gpot'
+        for sel in lam_sel_in:
+            pat['/ret/out/' + str(sel[2]), '/ret/in/' + str(sel[2])] = 1
         
         # connect(self, m_0, m_1, pat, int_0=0, int_1=1):
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
-    def generate_retina(self, output_file):
+    def _generate_retina(self):
         G = nx.DiGraph()
         
         photoreceptor_num = 6*self._nommatidia
-        G.add_nodes_from(range(photoreceptor_num))
-    
+
         for i in range(photoreceptor_num):
-            name = 'photor' + str(i)
             G.node[i] = {
                 'model': 'Photoreceptor',
-                'name': name,
+                'name': 'photor' + str(i),
                 'extern': True,  # gets input from file
                 'public': True,  # it's an output neuron
                 'spiking': False,
                 'selector': '/ret/out/' + str(i),
                 'num_microvilli': 30000
             }
+        self._retina_graph = G
 
-        nx.write_gexf(G, output_file)
-
-    def generate_lamina(self, output_file):
+    #TODO break into smaller functions
+    def _generate_lamina(self):
         G = nx.MultiDiGraph()
 
         # ommatidia are equal with the cartridges
         cartridge_num = self._nommatidia
-
-        neuron_types = model1.NEURON_LIST
-        synapse_types = model1.SYNAPSE_LIST
 
         # lists will have only one copy of
         # neurons synapses
@@ -871,63 +901,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         neuron_list = []
         synapse_list = []
         neuron_dict = {}
-        synapse_dict = {}
 
-        alpha_profiles = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
-
-        for neuron_params in neuron_types:
-            neuron_name = neuron_params['name']
-            if neuron_name=='Am':
-                am_num = neuron_params['num']
-                bound = PI/np.sqrt(am_num)
-
-                # create amacrine neurons
-                for i in range(am_num):
-                    n = Neuron(neuron_params)
-                    n.num = len(neuron_list)
-                    neuron_list.append(n)
-                    neuron_dict[(i, 'Am')] = n
-
-                # connect them to cartridges
-                am_lats = (PI/2)*np.random.random(am_num)
-                am_longs = 2*PI*np.random.random(am_num) - PI
-                om_lats, om_longs = self.get_positions({'add_dummy': False})
-                
-                for i, (om_lat, om_long) in \
-                        enumerate(zip(om_lats.tolist(), om_longs.tolist())):
-                    # calculate distance and find amacrine cells within
-                    # distance defined by bound
-                    dist = np.sqrt((om_lat-am_lats)**2 + (om_long-am_longs)**2)
-                    suitable_am = np.nonzero(dist <= bound)[0]
-                    # if less than 4 neurons in the bound, get
-                    # the 4 closest amacrine cells
-                    if suitable_am.size < 4:
-                        suitable_am = np.argsort(dist)[0:4]
-
-                    # an amacrine neuron should not be connected more than 3
-                    # times with a cartridge
-                    fill = np.zeros(am_num, np.int8)
-                    for name in alpha_profiles:
-                        assigned = False
-                        for am_ind in np.random.permutation(suitable_am):
-                            if fill[am_ind] < 3:
-                                fill[am_ind] += 1
-                                neuron_dict[(i, name)] = \
-                                    neuron_dict[(am_ind, 'Am')]
-                                assigned = True
-                                break
-                        if not assigned:
-                            print ("{} in cartridge {} not assigned"
-                                   .format(name, i))
-
-            else:
-                for i in range(cartridge_num):
-                    n = Neuron(neuron_params)
-                    n.num = len(neuron_list)
-                    if neuron_params['output']:
-                        n.update_selector('/lam/'+neuron_name+'/'+str(i))
-                    neuron_list.append(n)
-                    neuron_dict[(i, neuron_name)] = n
+        self._generate_neurons(neuron_list, neuron_dict, cartridge_num)
 
         supneighbors = self._supneighborslist
 
@@ -962,44 +937,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 node.num = count
                 count += 1
 
-        adjneighbors = self._adjneighborslist
-
-        for synapse_params in synapse_types:
-            prename = synapse_params['prename']
-            postname = synapse_params['postname']
-            cart = synapse_params['cart']
-
-            if cart is None:
-                for cart_num in range(cartridge_num):
-                    s = Synapse(synapse_params)
-                    
-                    npre = neuron_dict[(cart_num, prename)]
-                    npost = neuron_dict[(cart_num, postname)]
-                    if npre.is_dummy() or npost.is_dummy():
-                        continue
-                    
-                    s.prenum = npre.num
-                    s.postnum = npost.num
-                    s.update_class(Synapse.get_class(npre, npost))
-                    synapse_list.append(s)
-            else:
-                for cart_num in range(cartridge_num):
-                    s = Synapse(synapse_params)
-                    
-                    npre = neuron_dict[(cart_num, prename)]
-                    if npre.is_dummy():
-                        continue
-                    s.prenum = npre.num
-                    # find the neighbor cartridge
-                    neighbor = adjneighbors[cart_num][cart]
-                    # if cartridge is not dummy
-                    if not neighbor.is_dummy():
-                        npost = neuron_dict[(neighbor.id, postname)]
-                        if npost.is_dummy():
-                            continue
-                        s.postnum = npost.num
-                        s.update_class(Synapse.get_class(npre, npost))
-                        synapse_list.append(s)
+        self._generate_synapses(synapse_list, neuron_dict, cartridge_num)
         
         # add nodes to graph
         for node in neuron_list:
@@ -1011,7 +949,113 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             edge.process_before_export()
             G.add_edge(edge.prenum, edge.postnum, attr_dict=edge.params)
 
-        nx.write_gexf(G, output_file, prettyprint=True)
+        self._lamina_graph = G
+
+    def _generate_neurons(self, n_list, n_dict, cartridge_num):
+        neuron_types = model1.NEURON_LIST
+        alpha_profiles = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
+
+        for neuron_params in neuron_types:
+            neuron_name = neuron_params['name']
+            if neuron_name=='Am':
+                am_num = neuron_params['num']
+                bound = PI/np.sqrt(am_num)
+
+                # create amacrine neurons
+                for i in range(am_num):
+                    n = Neuron(neuron_params)
+                    n.num = len(n_list)
+                    n_list.append(n)
+                    n_dict[(i, 'Am')] = n
+
+                # connect them to cartridges
+                am_lats = (PI/2)*np.random.random(am_num)
+                am_longs = 2*PI*np.random.random(am_num) - PI
+                om_lats, om_longs = self.get_positions({'add_dummy': False})
+                
+                for i, (om_lat, om_long) in \
+                        enumerate(zip(om_lats.tolist(), om_longs.tolist())):
+                    # calculate distance and find amacrine cells within
+                    # distance defined by bound
+                    dist = np.sqrt((om_lat-am_lats)**2 + (om_long-am_longs)**2)
+                    suitable_am = np.nonzero(dist <= bound)[0]
+                    # if less than 4 neurons in the bound, get
+                    # the 4 closest amacrine cells
+                    if suitable_am.size < 4:
+                        suitable_am = np.argsort(dist)[0:4]
+
+                    # an amacrine neuron should not be connected more than 3
+                    # times with a cartridge
+                    fill = np.zeros(am_num, np.int8)
+                    for name in alpha_profiles:
+                        assigned = False
+                        for am_ind in np.random.permutation(suitable_am):
+                            if fill[am_ind] < 3:
+                                fill[am_ind] += 1
+                                n_dict[(i, name)] = \
+                                    n_dict[(am_ind, 'Am')]
+                                assigned = True
+                                break
+                        if not assigned:
+                            print ("{} in cartridge {} not assigned"
+                                   .format(name, i))
+            else:
+                # the order of neurons of the same name
+                # is the same as the order of cartridges
+                for i in range(cartridge_num):
+                    n = Neuron(neuron_params)
+                    n.num = len(n_list)
+                    if neuron_params['output']:
+                        n.update_selector('/lam/' + neuron_name + '/' + str(i))
+                    n_list.append(n)
+                    n_dict[(i, neuron_name)] = n
+
+    def _generate_synapses(self, s_list, n_dict, cartridge_num):
+        synapse_types = model1.SYNAPSE_LIST
+        adjneighbors = self._adjneighborslist
+
+        for synapse_params in synapse_types:
+            prename = synapse_params['prename']
+            postname = synapse_params['postname']
+            cart = synapse_params['cart']
+
+            if cart is None:
+                for cart_num in range(cartridge_num):
+                    s = Synapse(synapse_params)
+                    
+                    npre = n_dict[(cart_num, prename)]
+                    npost = n_dict[(cart_num, postname)]
+                    if npre.is_dummy() or npost.is_dummy():
+                        continue
+                    
+                    s.prenum = npre.num
+                    s.postnum = npost.num
+                    s.update_class(Synapse.get_class(npre, npost))
+                    s_list.append(s)
+            else:
+                for cart_num in range(cartridge_num):
+                    s = Synapse(synapse_params)
+                    
+                    npre = n_dict[(cart_num, prename)]
+                    if npre.is_dummy():
+                        continue
+                    s.prenum = npre.num
+                    # find the neighbor cartridge
+                    neighbor = adjneighbors[cart_num][cart]
+                    # if cartridge is not dummy
+                    if not neighbor.is_dummy():
+                        npost = n_dict[(neighbor.id, postname)]
+                        if npost.is_dummy():
+                            continue
+                        s.postnum = npost.num
+                        s.update_class(Synapse.get_class(npre, npost))
+                        s_list.append(s)
+
+    def write_retina(self, output_file):
+        nx.write_gexf(self._retina_graph, output_file)
+
+    def write_lamina(self, output_file):
+        nx.write_gexf(self._lamina_graph, output_file, prettyprint=True)
 
 
 if __name__ == '__main__':

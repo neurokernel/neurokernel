@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import time
 
 import neurokernel.core as core
 import neurokernel.base as base
@@ -44,7 +45,7 @@ parser.add_argument('-o', '--output', action="store_true",
 parser.add_argument('-s', '--suppress', action="store_true",
                     help='supresses simulation')
                     
-parser.add_argument('--log', default='none', type=str,
+parser.add_argument('--log', default='file', type=str,
                     help='Log output to screen [file, screen, both, or none;'
                          ' default:none]')
 
@@ -78,8 +79,8 @@ eyemodel = EyeGeomImpl(args.num_layers)
 if args.input:
     eyemodel.generate_input(IMAGE_FILE, INPUT_FILE)
 if args.gexf:
-    eyemodel.generate_retina(RET_GEXF_FILE)
-    eyemodel.generate_lamina(LAM_GEXF_FILE)
+    eyemodel.write_retina(RET_GEXF_FILE)
+    eyemodel.write_lamina(LAM_GEXF_FILE)
 if args.port_data is None and args.port_ctrl is None:
     port_data = get_random_port()
     port_ctrl = get_random_port()
@@ -123,9 +124,12 @@ if not args.suppress:
     man.add_mod(lpu_lam)
     eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam)
     print('Starting simulation')
-    man.start(steps=1000)
+    start_time = time.time()
+    man.start(steps=10)
     man.stop()
-    print('Simulation complete')
+    
+    print('Simulation complete: Duration {} seconds'.format(time.time() - 
+                                                            start_time))
 
 if args.output:
     # neurokernel adds gpot at the end of filename TODO
@@ -134,4 +138,5 @@ if args.output:
                               config = {'LPU': 'retina', 'type':'image'} )
     eyemodel.visualise_output(media_file=LAM_OUTPUT_PNG,
                               model_output=LAM_OUTPUT_GPOT,
-                              config = {'LPU': 'lamina', 'type':'image'} )
+                              config = {'LPU': 'lamina', 'type':'image',
+                                        'neuron': 'L1'} )

@@ -59,13 +59,13 @@ class Photoreceptor(BaseNeuron):
             self.outputfile_I.createEArray(
                 "/","array",
                 tables.Float64Atom() if self.dtype == np.double else tables.Float32Atom(),
-                (0,self.num_neurons))
+                (0, self.num_neurons))
         
             self.outputfile_V = tables.openFile(outputfile+'V.h5', 'w')
             self.outputfile_V.createEArray(
                 "/", "array",
                 tables.Float64Atom() if self.dtype == np.double else tables.Float32Atom(),
-                (0,self.num_neurons))
+                (0, self.num_neurons))
     
         if self.record_microvilli:
             self.outputfile_X0 = tables.openFile(outputfile+'X0.h5', 'w')
@@ -163,7 +163,7 @@ class Photoreceptor(BaseNeuron):
                     for i in range(4)]
         # self.V.fill(-71.1358)
         V_init = np.empty((1, self.num_neurons), dtype=np.double)
-        V_init.fill(-71.1358)
+        V_init.fill(-0.0711358)
         cuda.memcpy_htod(int(self.V), V_init)
         
         self.hhx[0].fill(0.3566)
@@ -361,44 +361,103 @@ extern "C" {
 #define LA 0.5
 //#define VV -70
 
+/* Simulation Constants */
+#define C_T     900     /* Total number of calmodulin **Should be a number not concetration */
+#define G_T     50      /* Total number of G-protein */
+#define PLC_T   100     /* Total number of PLC */
+#define T_T     25      /* Total number of TRP/TRPL channels */
+#define I_TSTAR 0.68    /* Average current through one opened TRP/TRPL channel (pA)*/
+
+#define M_P     2       /* Hill constant for positive calcium feedback */
+#define M_N     3       /* Hill constant for negative calmodulin feedback */
+
+#define GAMMA_DSTAR     4   /* s^(-1) rate constant*/
+#define GAMMA_GAP       3   /* s^(-1) rate constant*/
+#define GAMMA_GSTAR     3.5 /* s^(-1) rate constant*/
+#define GAMMA_MSTAR     3.7 /* s^(-1) rate constant*/
+#define GAMMA_PLCSTAR   144 /* s^(-1) rate constant */
+#define GAMMA_TSTAR     25  /* s^(-1) rate constant */
+
+#define H_DSTAR         37.8    /* strength constant */
+#define H_MSTAR         40      /* strength constant */
+#define H_PLCSTAR       11.1    /* strength constant */
+#define H_TSTARP        11.5    /* strength constant */
+#define H_TSTARN        10      /* strength constant */
+
+#define K_P     0.3     /* Dissociation coefficient for calcium positive feedback */
+#define K_P_INV 3.3333  /* K_P inverse ( too many decimals are not important) */
+#define K_N     0.18    /* Dissociation coefficient for calmodulin negative feedback */
+#define K_N_INV 5.5555  /* K_N inverse ( too many decimals are not important) */ 
+#define K_U     30      /* (mM^(-1)s^(-1)) Rate of Ca2+ uptake by calmodulin */
+#define K_R     5.5     /* (mM^(-1)s^(-1)) Rate of Ca2+ release by calmodulin */
+#define K_CA    1000    /* s^(-1) diffusion from microvillus to somata */
+
+#define K_NACA  3e-8    /* Scaling factor for Na+/Ca2+ exchanger model */
+
+#define KAPPA_DSTAR         1300    /* s^(-1) rate constant - there is also a capital K_DSTAR */
+#define KAPPA_GSTAR         7.05    /* s^(-1) rate constant */
+#define KAPPA_PLCSTAR       15.6    /* s^(-1) rate constant */
+#define KAPPA_TSTAR         150     /* s^(-1) rate constant */
+#define K_DSTAR             100     /* rate constant */
+
+#define F                   96.485  /* (C/mol) Faraday constant */
+#define N                   4       /* Binding sites for calcium on calmodulin */
+#define R                   8.314   /* (J*K^-1*mol^-1)Gas constant */
+#define T                   293     /* (K) Absolute temperature */
+#define VOL                 3e-9    /* changed from 3e-12microlitres to nlitres 
+                                     * microvillus volume so that units agree */
+
+#define N_S0_DIM        1   /* initial condition */
+#define N_S0_BRIGHT     2
+
+#define A_N_S0_DIM      4   /* upper bound for dynamic increase (of negetive feedback) */
+#define A_N_S0_BRIGHT   200
+
+#define TAU_N_S0_DIM    3000    /* time constant for negative feedback */
+#define TAU_N_S0_BRIGHT 1000
+
+#define NA_CO           120     /* (mM) Extracellular sodium concentration */
+#define NA_CI           8       /* (mM) Intracellular sodium concentration */
+#define CA_CO           1.5     /* (mM) Extracellular calcium concentration */
+
 __device__ __constant__ long long int d_X[4];
 __device__ __constant__ int change_ind1[13];
 __device__ __constant__ int change1[13];
 __device__ __constant__ int change_ind2[13];
 __device__ __constant__ int change2[13];
 
-
+/* cc = n/(NA*VOL) [6.0221413e+23 mol^-1 * 3*10e-21 m^3] */
 __device__ float num_to_mM(int n)
 {
-    //float cc;
     return n * 5.5353e-4; // n/1806.6;
 }
 
+/* n = cc*VOL*NA [6.0221413e+23 mol^-1 * 3*10e-21 m^3] */
 __device__ float mM_to_num(float cc)
 {
-    //float n;
     return rintf(cc * 1806.6);
 }
 
-__device__ float compute_fp( float ca_cc)
+__device__ float compute_fp(float Ca_cc)
 {
-    float tmp = ca_cc*3.3333333333;
+    float tmp = Ca_cc*K_P_INV;
     tmp *= tmp;
-    return tmp/(1+tmp);
+    return tmp/(1 + tmp);
 }
 
-__device__ float compute_fn( float Cstar_cc, float ns)
+__device__ float compute_fn(float Cstar_cc, float ns)
 {
-    float tmp = Cstar_cc*5.55555555;
+    float tmp = Cstar_cc*K_N_INV;
     tmp *= tmp*tmp;
     return ns*tmp/(1+tmp);
 }
 
-__device__ float compute_ca(int Tstar, float cstar_cc, float Vm)
+/* Vm [V] */
+__device__ float compute_ca(int Tstar, float Cstar_cc, float Vm)
 {
-    float I_in = Tstar*8*fmaxf(-Vm,0);
-    float denom = (1060 - 120*cstar_cc + 179.0952 * expf(-39.60793*Vm));
-    float numer = I_in * 690.9537 + 0.0795979 + 22*cstar_cc;
+    float I_in = Tstar*8*fmaxf(-Vm, 0);
+    float denom = (1060 - 120*Cstar_cc + 179.0952 * expf(-39.60793*Vm));  // F/(R*T) = 39.60793e-3 ??
+    float numer = I_in * 690.9537 + 0.0795979 + N*K_R*Cstar_cc;
     
     return fmaxf(1.6e-4, numer/denom);
 }
@@ -412,12 +471,12 @@ transduction(curandStateXORWOW_t *state, int ld1,
     
     __shared__ int X[BLOCK_SIZE][7]; // number of molecules
     __shared__ float Ca[BLOCK_SIZE];
-    __shared__ float Vm[1]; // membrane voltage, shared over all threads
+    __shared__ float Vm; // membrane voltage, shared over all threads
     __shared__ float fn[BLOCK_SIZE];
     
     if(tid == 0)
     {
-        Vm[0] = d_Vm[bid]*1e-3;
+        Vm = d_Vm[bid];  // V
     }
     
     __syncthreads();
@@ -441,7 +500,7 @@ transduction(curandStateXORWOW_t *state, int ld1,
         X[tid][6] = tmp.y;
         
         // update calcium concentration
-        Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm[0]);
+        Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm);
         fn[tid] = compute_fn( num_to_mM(X[tid][5]), ns);
         
         // load the rest of variables
@@ -564,7 +623,7 @@ transduction(curandStateXORWOW_t *state, int ld1,
             }
             
             // compute the advance time again
-            Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm[0]);
+            Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm);
             fn[tid] = compute_fn( num_to_mM(X[tid][5]), ns );
             //fp[tid] = compute_fp( Ca[tid] );
         
@@ -652,7 +711,7 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
     if(tid < num_neurons)
     {
         %(type)s I = I_all[tid]  * 1.0; // rescale the input as temporary remedy
-        %(type)s V = d_V[tid];
+        %(type)s V = 1000*d_V[tid];  //[V -> mV]
         %(type)s sa = d_sa[tid];
         %(type)s si = d_si[tid];
         %(type)s dra = d_dra[tid];
@@ -685,7 +744,7 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
             dx = (I - G_K*(V-E_K) - G_Cl * (V-E_Cl) - G_s * sa * si * (V-E_K) - G_dr * dra * dri * (V-E_K) - 0.093*(V-10) )/C;
             V += ddt * 1000 * dx;
         }
-        d_V[tid] = V;
+        d_V[tid] = 0.001*V;
         d_sa[tid] = sa;
         d_si[tid] = si;
         d_dra[tid] = dra;
@@ -755,7 +814,7 @@ sum_current(short2* d_Tstar, int ld, int num_microvilli, %(type)s* I_all,
     
     if(tid == 0)
     {
-        %(type)s Vm = d_Vm[bid] * 1e-3;
+        %(type)s Vm = d_Vm[bid];
         %(type)s I_in;
         if(Vm < 0)
         {

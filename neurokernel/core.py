@@ -568,7 +568,7 @@ if __name__ == '__main__':
     man.connect(m1, m2, pat12, 0, 1)
 
     # To set the emulation to exit after executing a fixed number of steps,
-    # start it as follows and remove the sleep statement:    
+    # start it as follows and remove the sleep statement:
     # man.start(steps=500)
     man.start()
     time.sleep(2)
