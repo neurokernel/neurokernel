@@ -374,10 +374,8 @@ class Module(BaseModule):
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
-                                  
             # Initialize environment:
             self._init_net()
-
             # Initialize Buffer for incoming data.  Dict used to store the
             # incoming data keyed by the source module id.  Each value is a
             # queue buferring the received data:
@@ -393,7 +391,6 @@ class Module(BaseModule):
             curr_steps = 0
             while curr_steps < self._steps:
                 self.logger.info('execution step: %s' % curr_steps)
-
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
                 if self.debug:
@@ -447,6 +444,7 @@ class Module(BaseModule):
         
 
 if __name__ == '__main__':
+    import time
 
     class MyModule(Module):
         """
@@ -508,69 +506,89 @@ if __name__ == '__main__':
             np.random.seed(id(self))
             super(MyModule, self).run()
 
+    def emulate(n):
+        assert(n>1)
+        n = str(n)
+        # Set up emulation:
+        man = Manager(get_random_port(), get_random_port())
+        man.add_brok()
+
+        m1_int_sel_in_gpot = '/a/in/gpot[0:'+n+']'
+        m1_int_sel_out_gpot = '/a/out/gpot[0:'+n+']'
+        m1_int_sel_in_spike = '/a/in/spike[0:'+n+']'
+        m1_int_sel_out_spike = '/a/out/spike[0:'+n+']'
+        m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
+                               m1_int_sel_in_spike, m1_int_sel_out_spike])
+        N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
+                                                         m1_int_sel_out_gpot]))
+        N1_spike = PathLikeSelector.count_ports(','.join([m1_int_sel_in_spike,
+                                                          m1_int_sel_out_spike]))
+        m1 = MyModule(m1_int_sel, 
+                      m1_int_sel_in_gpot, m1_int_sel_in_spike,
+                      m1_int_sel_out_gpot, m1_int_sel_out_spike,
+                      np.zeros(N1_gpot, np.float64),
+                      np.zeros(N1_spike, int), ['interface', 'io', 'type'],
+                      man.port_data, man.port_ctrl, 'm1   ')
+        man.add_mod(m1)
+
+        m2_int_sel_in_gpot = '/b/in/gpot[0:'+n+']'
+        m2_int_sel_out_gpot = '/b/out/gpot[0:'+n+']'
+        m2_int_sel_in_spike = '/b/in/spike[0:'+n+']'
+        m2_int_sel_out_spike = '/b/out/spike[0:'+n+']'
+        m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
+                               m2_int_sel_in_spike, m2_int_sel_out_spike])
+        N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
+                                                         m2_int_sel_out_gpot]))
+        N2_spike = PathLikeSelector.count_ports(','.join([m2_int_sel_in_spike,
+                                                m2_int_sel_out_spike]))
+        m2 = MyModule(m2_int_sel,
+                      m2_int_sel_in_gpot, m2_int_sel_in_spike,
+                      m2_int_sel_out_gpot, m2_int_sel_out_spike,
+                      np.zeros(N2_gpot, np.float64),
+                      np.zeros(N2_spike, int), ['interface', 'io', 'type'],
+                      man.port_data, man.port_ctrl, 'm2   ')
+                                             
+        # Make sure that all ports in the patterns' interfaces are set so 
+        # that they match those of the modules:
+        pat12 = Pattern(m1_int_sel, m2_int_sel)
+        pat12.interface[m1_int_sel_out_gpot] = [0, 'in', 'gpot']
+        pat12.interface[m1_int_sel_in_gpot] = [0, 'out', 'gpot']
+        pat12.interface[m1_int_sel_out_spike] = [0, 'in', 'spike']
+        pat12.interface[m1_int_sel_in_spike] = [0, 'out', 'spike']
+        pat12.interface[m2_int_sel_in_gpot] = [1, 'out', 'gpot']
+        pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
+        pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
+        pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
+        pat12['/a/out/gpot[0]', '/b/in/gpot[0]'] = 1
+        pat12['/a/out/gpot[1]', '/b/in/gpot[1]'] = 1
+        pat12['/b/out/gpot[0]', '/a/in/gpot[0]'] = 1
+        pat12['/b/out/gpot[1]', '/a/in/gpot[1]'] = 1
+        pat12['/a/out/spike[0]', '/b/in/spike[0]'] = 1
+        pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
+        pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
+        pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
+        man.connect(m1, m2, pat12, 0, 1)
+
+        # To set the emulation to exit after executing a fixed number of steps,
+        # start it as follows and remove the sleep statement:
+        man.start(steps=10)
+        # man.start()
+        # time.sleep(2)
+        man.stop()
+
     # Set up logging:
     logger = setup_logger()
 
-    # Set up emulation:
-    man = Manager(get_random_port(), get_random_port())
-    man.add_brok()
-
-    m1_int_sel_in_gpot = '/a/in/gpot[0:2]'; m1_int_sel_out_gpot = '/a/out/gpot[0:2]'
-    m1_int_sel_in_spike = '/a/in/spike[0:2]'; m1_int_sel_out_spike = '/a/out/spike[0:2]'
-    m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
-                           m1_int_sel_in_spike, m1_int_sel_out_spike])
-    N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
-                                                     m1_int_sel_out_gpot]))
-    N1_spike = PathLikeSelector.count_ports(','.join([m1_int_sel_in_spike,
-                                                      m1_int_sel_out_spike]))
-    m1 = MyModule(m1_int_sel, 
-                  m1_int_sel_in_gpot, m1_int_sel_in_spike,
-                  m1_int_sel_out_gpot, m1_int_sel_out_spike,
-                  np.zeros(N1_gpot, np.float64),
-                  np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm1   ')
-    man.add_mod(m1)
-
-    m2_int_sel_in_gpot = '/b/in/gpot[0:2]'; m2_int_sel_out_gpot = '/b/out/gpot[0:2]'
-    m2_int_sel_in_spike = '/b/in/spike[0:2]'; m2_int_sel_out_spike = '/b/out/spike[0:2]'
-    m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
-                           m2_int_sel_in_spike, m2_int_sel_out_spike])
-    N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
-                                                     m2_int_sel_out_gpot]))
-    N2_spike = PathLikeSelector.count_ports(','.join([m2_int_sel_in_spike,
-                                            m2_int_sel_out_spike]))
-    m2 = MyModule(m2_int_sel,
-                  m2_int_sel_in_gpot, m2_int_sel_in_spike,
-                  m2_int_sel_out_gpot, m2_int_sel_out_spike,
-                  np.zeros(N2_gpot, np.float64),
-                  np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm2   ')
-                                         
-    # Make sure that all ports in the patterns' interfaces are set so 
-    # that they match those of the modules:
-    pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12.interface[m1_int_sel_out_gpot] = [0, 'in', 'gpot']
-    pat12.interface[m1_int_sel_in_gpot] = [0, 'out', 'gpot']
-    pat12.interface[m1_int_sel_out_spike] = [0, 'in', 'spike']
-    pat12.interface[m1_int_sel_in_spike] = [0, 'out', 'spike']
-    pat12.interface[m2_int_sel_in_gpot] = [1, 'out', 'gpot']
-    pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
-    pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
-    pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-    pat12['/a/out/gpot[0]', '/b/in/gpot[0]'] = 1
-    pat12['/a/out/gpot[1]', '/b/in/gpot[1]'] = 1
-    pat12['/b/out/gpot[0]', '/a/in/gpot[0]'] = 1
-    pat12['/b/out/gpot[1]', '/a/in/gpot[1]'] = 1
-    pat12['/a/out/spike[0]', '/b/in/spike[0]'] = 1
-    pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
-    pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
-    pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
-    man.connect(m1, m2, pat12, 0, 1)
-
-    # To set the emulation to exit after executing a fixed number of steps,
-    # start it as follows and remove the sleep statement:
-    # man.start(steps=500)
-    man.start()
-    time.sleep(2)
-    man.stop()
+    # Emulation 1
+    start_time = time.time()
+    size = 2
+    emulate(size)
+    print('Simulation of size {} complete: Duration {} seconds'.format(size, time.time() -
+                                                            start_time))
+    # Emulation 2
+    start_time = time.time()
+    size = 1000
+    emulate(size)
+    print('Simulation of size {} complete: Duration {} seconds'.format(size, time.time() -
+                                                            start_time))
     logger.info('all done')

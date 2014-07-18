@@ -32,8 +32,8 @@ parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
 parser.add_argument('-a', '--ret_dev', default=0, type=int,
                     help='GPU for retina lobe [default: 0]')
-parser.add_argument('-b', '--lam_dev', default=0, type=int,
-                    help='GPU for lamina lobe [default: 0]')
+parser.add_argument('-b', '--lam_dev', default=1, type=int,
+                    help='GPU for lamina lobe [default: 1]')
 
 parser.add_argument('-i', '--input', action="store_true",
                     help='generates input if set')
@@ -48,6 +48,9 @@ parser.add_argument('-s', '--suppress', action="store_true",
 parser.add_argument('--log', default='file', type=str,
                     help='Log output to screen [file, screen, both, or none;'
                          ' default:none]')
+
+parser.add_argument('--steps', default=10, type=int,
+                    help='simulation steps')
 
 args = parser.parse_args()
 
@@ -77,10 +80,14 @@ LAM_OUTPUT_PNG = 'lamina_output.png'
 eyemodel = EyeGeomImpl(args.num_layers)
 
 if args.input:
+    print('Generating input of model from image file')
     eyemodel.generate_input(IMAGE_FILE, INPUT_FILE)
 if args.gexf:
+    print('Writing retina lpu')
     eyemodel.write_retina(RET_GEXF_FILE)
+    print('Writing lamina lpu')
     eyemodel.write_lamina(LAM_GEXF_FILE)
+
 if args.port_data is None and args.port_ctrl is None:
     port_data = get_random_port()
     port_ctrl = get_random_port()
@@ -104,9 +111,7 @@ if not args.suppress:
 
     print('Parsing lamina lpu data')
     n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
-    #print(n_dict_lam.keys())
-    #print(len(n_dict_lam['MorrisLecar']['name']))
-    #print(len(n_dict_lam['MorrisLecar']))
+
     print('Initializing lamina LPU')
     lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
                   input_file=None,
@@ -114,18 +119,13 @@ if not args.suppress:
                   port_data=port_data, device=args.lam_dev, id='lamina',
                   debug=False)
 
-    # check core.py on how to connect 2 modules
-    # amacrine cells get input 
-    # from photoreceptors and give output to other neurons
-    # see synapse_lamina.csv
-    
-
     man.add_mod(lpu_ret)
     man.add_mod(lpu_lam)
+    print('Connecting retina and lamina')
     eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam)
     print('Starting simulation')
     start_time = time.time()
-    man.start(steps=10)
+    man.start(steps=args.steps)
     man.stop()
     
     print('Simulation complete: Duration {} seconds'.format(time.time() - 

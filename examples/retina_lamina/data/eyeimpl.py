@@ -797,7 +797,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
             n_ids = self._get_lamina_ids(neuron)
 
-            print(n_ids)
             self._plot_output(type, xpositions, ypositions, data[:, n_ids],
                               media_file)
         else:
@@ -852,14 +851,17 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     
     def connect_retina_lamina(self, manager, ret_lpu, lam_lpu):
         #.values or .tolist()
+        print('Initializing selectors')
         ret_sel = ret_lpu.interface.index.tolist()
         lam_sel = lam_lpu.interface.index.tolist()
         lam_sel_in = [sel for sel in lam_sel if sel[0]=="ret"]
         lam_sel_out = [sel for sel in lam_sel if sel[0]!="ret"]
 
+        print('Initializing pattern with selectors')
         pat = Pattern(ret_sel, lam_sel)
         # pattern gets input from retina
-        
+
+        print('Setting selector attributes in pattern')
         pat.interface[ret_sel, 'io'] = 'in'
         pat.interface[ret_sel, 'type'] = 'gpot'
         pat.interface[lam_sel_in, 'io'] = 'out'
@@ -868,7 +870,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         for sel in lam_sel_in:
             pat['/ret/out/' + str(sel[2]), '/ret/in/' + str(sel[2])] = 1
         
-        # connect(self, m_0, m_1, pat, int_0=0, int_1=1):
+        print('Connecting LPUs with the pattern')
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
     def _generate_retina(self):
@@ -888,7 +890,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             }
         self._retina_graph = G
 
-    #TODO break into smaller functions
     def _generate_lamina(self):
         G = nx.MultiDiGraph()
 
@@ -1068,7 +1069,7 @@ if __name__ == '__main__':
     print('Initializing geometry')
     hemisphere = EyeGeomImpl(N_RINGS)
     print('Getting positions')
-    positions = hemisphere.get_positions({'coord': "cartesian3D"})
+    positions = hemisphere.get_positions({'coord': 'cartesian3D'})
     print('Getting neighbors')
     neighbors = hemisphere.get_neighbors()
 
@@ -1076,7 +1077,7 @@ if __name__ == '__main__':
     start_time = time.time()
     intensities = hemisphere.get_intensities('image1.mat', 
                                              {'still_image': STILL_IMAGE})
-    print("--- Duration {} seconds ---".format(time.time() - start_time))
+    print('--- Duration {} seconds ---'.format(time.time() - start_time))
 
     print('Setting up plot 1: Ommatidia on 3D sphere')
     fig1 = plt.figure()

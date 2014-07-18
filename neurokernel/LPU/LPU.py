@@ -4,6 +4,8 @@
 Local Processing Unit (LPU) draft implementation.
 """
 
+import sys
+
 import collections
 
 import pycuda.gpuarray as garray
@@ -468,7 +470,7 @@ class LPU(Module, object):
 
     def run_step(self):
         super(LPU, self).run_step()
-        
+
         self._read_LPU_input()
 
         if self.input_file is not None:
@@ -476,7 +478,6 @@ class LPU(Module, object):
 
         for neuron in self.neurons:
             neuron.update_I(self.synapse_state.gpudata)
-            neuron.eval()
 
         self._update_buffer()
         for synapse in self.synapses:

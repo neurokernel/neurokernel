@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 import neurokernel.LPU.utils.curand as curand
 import neurokernel.LPU.utils.simpleio as si
 
-
 from baseneuron import BaseNeuron
 
 
@@ -57,7 +56,7 @@ class Photoreceptor(BaseNeuron):
         if self.record_neuron:
             self.outputfile_I = tables.openFile(outputfile+'I.h5', 'w')
             self.outputfile_I.createEArray(
-                "/","array",
+                "/", "array",
                 tables.Float64Atom() if self.dtype == np.double else tables.Float32Atom(),
                 (0, self.num_neurons))
         
@@ -368,11 +367,8 @@ extern "C" {
 #define T_T     25      /* Total number of TRP/TRPL channels */
 #define I_TSTAR 0.68    /* Average current through one opened TRP/TRPL channel (pA)*/
 
-#define M_P     2       /* Hill constant for positive calcium feedback */
-#define M_N     3       /* Hill constant for negative calmodulin feedback */
-
-#define GAMMA_DSTAR     4   /* s^(-1) rate constant*/
-#define GAMMA_GAP       3   /* s^(-1) rate constant*/
+#define GAMMA_DSTAR     4.0 /* s^(-1) rate constant*/
+#define GAMMA_GAP       3.0 /* s^(-1) rate constant*/
 #define GAMMA_GSTAR     3.5 /* s^(-1) rate constant*/
 #define GAMMA_MSTAR     3.7 /* s^(-1) rate constant*/
 #define GAMMA_PLCSTAR   144 /* s^(-1) rate constant */
@@ -438,6 +434,7 @@ __device__ float mM_to_num(float cc)
     return rintf(cc * 1806.6);
 }
 
+/* Assumes Hill constant (=2) for positive calcium feedback */
 __device__ float compute_fp(float Ca_cc)
 {
     float tmp = Ca_cc*K_P_INV;
@@ -445,6 +442,7 @@ __device__ float compute_fp(float Ca_cc)
     return tmp/(1 + tmp);
 }
 
+/* Assumes Hill constant(=3) for negative calmodulin feedback */
 __device__ float compute_fn(float Cstar_cc, float ns)
 {
     float tmp = Cstar_cc*K_N_INV;
@@ -456,9 +454,9 @@ __device__ float compute_fn(float Cstar_cc, float ns)
 __device__ float compute_ca(int Tstar, float Cstar_cc, float Vm)
 {
     float I_in = Tstar*8*fmaxf(-Vm, 0);
-    float denom = (1060 - 120*Cstar_cc + 179.0952 * expf(-39.60793*Vm));  // F/(R*T) = 39.60793e-3 ??
-    float numer = I_in * 690.9537 + 0.0795979 + N*K_R*Cstar_cc;
-    
+    float denom = (1060 - 120*Cstar_cc + 179.0952 * expf(-39.60793*Vm));  // F/(R*T) = 0.03960793 ??
+    float numer = I_in * 690.9537 + 0.0795979 + N*K_R*Cstar_cc; // K_NACA*CA_CO*NA_CI^3/(V*F) = 79.5979
+
     return fmaxf(1.6e-4, numer/denom);
 }
 
@@ -501,8 +499,8 @@ transduction(curandStateXORWOW_t *state, int ld1,
         
         // update calcium concentration
         Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm);
-        fn[tid] = compute_fn( num_to_mM(X[tid][5]), ns);
-        
+        fn[tid] = compute_fn(num_to_mM(X[tid][5]), ns);
+
         // load the rest of variables
         tmp = ((short2*)d_X[1])[bid*ld1 + i];
         X[tid][4] = tmp.y;
@@ -511,21 +509,22 @@ transduction(curandStateXORWOW_t *state, int ld1,
         X[tid][2] = tmp.y;
         X[tid][1] = tmp.x;
         X[tid][0] = ((short*)d_X[3])[bid*ld1 + i];
-        
+
         // compute total rate of reaction
         sumrate = 0;
-        sumrate += mM_to_num(30) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) );  //11
-        sumrate += mM_to_num(5.5) * num_to_mM(X[tid][5]);  //12
-        sumrate += 25 * (1+10*fn[tid]) * X[tid][6];  // 10
-        sumrate += 4 * (1+37.8*fn[tid]) * X[tid][4];  // 8
-        sumrate += 144 * (1+11.1*fn[tid]) * X[tid][3];  // 7
-        sumrate += 3.7*(1+40*fn[tid]) * X[tid][0];  // 1
-        sumrate += 1300 * X[tid][3];  // 6
-        sumrate += 3.0 * X[tid][2] * X[tid][3];  // 4
-        sumrate += 15.6 * X[tid][2] * (100-X[tid][3]);  // 3
-        sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]);  // 5
-        sumrate += 7.05 * X[tid][1] * X[tid][0];  // 2
-        sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ;  // 9
+        sumrate += mM_to_num(K_U) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) );  //11
+        sumrate += mM_to_num(K_R) * num_to_mM(X[tid][5]);  //12
+        sumrate += GAMMA_TSTAR * (1 + H_TSTARN*fn[tid]) * X[tid][6];  // 10
+        sumrate += GAMMA_DSTAR * (1 + H_DSTAR*fn[tid]) * X[tid][4];  // 8
+        sumrate += GAMMA_PLCSTAR * (1 + H_PLCSTAR*fn[tid]) * X[tid][3];  // 7
+        sumrate += GAMMA_MSTAR * (1 + H_MSTAR*fn[tid]) * X[tid][0];  // 1
+        sumrate += KAPPA_DSTAR * X[tid][3];  // 6
+        sumrate += GAMMA_GAP * X[tid][2] * X[tid][3];  // 4
+        sumrate += KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);  // 3
+        sumrate += GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]);  // 5
+        sumrate += KAPPA_GSTAR * X[tid][1] * X[tid][0];  // 2
+        sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * (1+11.5*compute_fp( Ca[tid] )) 
+                   * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ;  // 9
 
         // choose the next reaction time
         dt_advanced = -logf(curand_uniform(&localstate))/(LA+sumrate);
@@ -541,55 +540,56 @@ transduction(curandStateXORWOW_t *state, int ld1,
         {
             reaction_ind = 0;
             sumrate = curand_uniform(&localstate) * sumrate;
-            
-            sumrate -= mM_to_num(30) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) );
+
+            sumrate -= mM_to_num(K_U) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) );
             reaction_ind = (sumrate<=2e-5) * 11;
             
             if(!reaction_ind)
             {
-                sumrate -= mM_to_num(5.5) * num_to_mM(X[tid][5]) ;
+                sumrate -= mM_to_num(K_R) * num_to_mM(X[tid][5]) ;
                 reaction_ind = (sumrate<=2e-5) * 12;
                 if(!reaction_ind)
                 {
-                    sumrate -= 25 * (1+10*fn[tid]) * X[tid][6] ;
+                    sumrate -= GAMMA_TSTAR * (1 + H_TSTARN*fn[tid]) * X[tid][6] ;
                     reaction_ind = (sumrate<=2e-5) * 10;
                     if(!reaction_ind)
                     {
-                        sumrate -= 4 * (1+37.8*fn[tid]) * X[tid][4] ;
+                        sumrate -= GAMMA_DSTAR * (1 + H_DSTAR*fn[tid]) * X[tid][4] ;
                         reaction_ind = (sumrate<=2e-5) * 8;
-                    
+
                         if(!reaction_ind)
                         {
-                            sumrate -= 144 * (1+11.1*fn[tid]) * X[tid][3] ;
+                            sumrate -= GAMMA_PLCSTAR * (1 + H_PLCSTAR*fn[tid]) * X[tid][3] ;
                             reaction_ind = (sumrate<=2e-5) * 7;
                             if(!reaction_ind)
                             {
-                                sumrate -= 3.7*(1+40*fn[tid]) * X[tid][0];
+                                sumrate -= GAMMA_MSTAR * (1 + H_MSTAR*fn[tid]) * X[tid][0];
                                 reaction_ind = (sumrate<=2e-5) * 1;
                                 if(!reaction_ind)
                                 {
-                                    sumrate -= 1300 * X[tid][3] ;
+                                    sumrate -= KAPPA_DSTAR * X[tid][3] ;
                                     reaction_ind = (sumrate<=2e-5) * 6;
                                     if(!reaction_ind)
                                     {
-                                        sumrate -= 3.0 * X[tid][2] * X[tid][3] ;
+                                        sumrate -= GAMMA_GAP * X[tid][2] * X[tid][3] ;
                                         reaction_ind = (sumrate<=2e-5) * 4;
                                     
                                         if(!reaction_ind)
                                         {
-                                            sumrate -= 15.6 * X[tid][2] * (100-X[tid][3]) ;
+                                            sumrate -= KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]) ;
                                             reaction_ind = (sumrate<=2e-5) * 3;
                                             if(!reaction_ind)
                                             {
-                                                sumrate -= 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]) ;
+                                                sumrate -= GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]) ;
                                                 reaction_ind = (sumrate<=2e-5) * 5;
                                                 if(!reaction_ind)
                                                 {
-                                                    sumrate -= 7.05 * X[tid][1] * X[tid][0] ;
+                                                    sumrate -= KAPPA_GSTAR * X[tid][1] * X[tid][0] ;
                                                     reaction_ind = (sumrate<=2e-5) * 2;
                                                     if(!reaction_ind)
                                                     {
-                                                        sumrate -= 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5;
+                                                        sumrate -= (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * (1+11.5*compute_fp( Ca[tid] )) 
+                                                                   * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5;
                                                         reaction_ind = (sumrate<=2e-5) * 9;
                                                     }
                                                 }
@@ -628,20 +628,21 @@ transduction(curandStateXORWOW_t *state, int ld1,
             //fp[tid] = compute_fp( Ca[tid] );
         
             sumrate = 0;
-            sumrate += mM_to_num(30) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) ); //11
-            sumrate += mM_to_num(5.5) * num_to_mM(X[tid][5]) ; //12
-            sumrate += 25 * (1+10*fn[tid]) * X[tid][6] ; // 10
-            sumrate += 4 * (1+37.8*fn[tid]) * X[tid][4] ; // 8
-            sumrate += 144 * (1+11.1*fn[tid]) * X[tid][3] ; // 7
-            sumrate += 3.7*(1+40*fn[tid]) * X[tid][0] ; // 1
-            sumrate += 1300 * X[tid][3] ; // 6
-            sumrate += 3.0 * X[tid][2] * X[tid][3] ; // 4
-            sumrate += 15.6 * X[tid][2] * (100-X[tid][3]) ;  // 3
-            sumrate += 3.5 * (50 - X[tid][2] - X[tid][1] - X[tid][3]) ; // 5
-            sumrate += 7.05 * X[tid][1] * X[tid][0] ; // 2
-            sumrate += 0.015 * (1+11.5*compute_fp( Ca[tid] )) * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ; // 9
+            sumrate += mM_to_num(K_U) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) ); //11
+            sumrate += mM_to_num(K_R) * num_to_mM(X[tid][5]); //12
+            sumrate += GAMMA_TSTAR * (1 + H_TSTARN*fn[tid]) * X[tid][6]; // 10
+            sumrate += GAMMA_DSTAR * (1 + H_DSTAR*fn[tid]) * X[tid][4]; // 8
+            sumrate += GAMMA_PLCSTAR * (1 + H_PLCSTAR*fn[tid]) * X[tid][3]; // 7
+            sumrate += GAMMA_MSTAR * (1 + H_MSTAR*fn[tid]) * X[tid][0]; // 1
+            sumrate += KAPPA_DSTAR * X[tid][3]; // 6
+            sumrate += GAMMA_GAP * X[tid][2] * X[tid][3]; // 4
+            sumrate += KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);  // 3
+            sumrate += GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]); // 5
+            sumrate += KAPPA_GSTAR * X[tid][1] * X[tid][0]; // 2
+            sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * (1+11.5*compute_fp( Ca[tid] )) 
+                       * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5; // 9
 
-            dt_advanced -= logf(curand_uniform(&localstate))/(LA+sumrate);
+            dt_advanced -= logf(curand_uniform(&localstate))/(LA + sumrate);
 
         } // end while
         
@@ -710,7 +711,7 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
     
     if(tid < num_neurons)
     {
-        %(type)s I = I_all[tid]  * 1.0; // rescale the input as temporary remedy
+        %(type)s I = I_all[tid] * 1.0;  // rescale the input as temporary remedy
         %(type)s V = 1000*d_V[tid];  //[V -> mV]
         %(type)s sa = d_sa[tid];
         %(type)s si = d_si[tid];
@@ -718,31 +719,34 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
         %(type)s dri = d_dri[tid];
         
         %(type)s x_inf, tau_x, dx;
+        %(type)s dt = 1000 * ddt;
         
         for(int i = 0; i < multiple; ++i)
         {
+            /* The precision of power constant affects the result */
             x_inf = pow%(fletter)s(1/(1+exp%(fletter)s((-30-V)/13.5)), 1.0/3);
             tau_x = 0.13+3.39*exp%(fletter)s(-(-73-V)*(-73-V)/400);
             dx = (x_inf - sa)/tau_x;
-            sa += ddt * 1000 * dx;
+            sa += dt * dx;
             
             x_inf = 1/(1+exp%(fletter)s((-55-V)/-5.5));
             tau_x = 113*exp(-(-71-V)*(-71-V)/841);
             dx = (x_inf - si)/tau_x;
-            si += ddt * 1000 * dx;
+            si += dt * dx;
             
             x_inf = sqrt%(fletter)s(1/(1+exp%(fletter)s((-5-V)/9)));
             tau_x = 0.5+5.75*exp%(fletter)s(-(-25-V)*(-25-V)/1024);
             dx = (x_inf - dra)/tau_x;
-            dra += ddt * 1000 * dx;
+            dra += dt * dx;
             
             x_inf = 1/(1+exp%(fletter)s((-25-V)/-10.5));
             tau_x = 890;
             dx = (x_inf - dri)/tau_x;
-            dri += ddt * 1000 * dx;
+            dri += dt * dx;
             
-            dx = (I - G_K*(V-E_K) - G_Cl * (V-E_Cl) - G_s * sa * si * (V-E_K) - G_dr * dra * dri * (V-E_K) - 0.093*(V-10) )/C;
-            V += ddt * 1000 * dx;
+            dx = (I - G_K*(V-E_K) - G_Cl * (V-E_Cl) - G_s * sa * si * (V-E_K) - 
+                  G_dr * dra * dri * (V-E_K) - 0.093*(V-10) ) /C;
+            V += dt * dx;
         }
         d_V[tid] = 0.001*V;
         d_sa[tid] = sa;

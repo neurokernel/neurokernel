@@ -5,6 +5,7 @@
 *.png
 *.h5
 *.log
+*.file
 *qsub.py
 *gexf.gz
 neurokernel.egg-info

@@ -837,13 +837,19 @@ class Manager(object):
             Which of the pattern's interfaces to connect to `m_0` and `m_1`,
             respectively.
         """
-    
+
+
         assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
         assert isinstance(pat, Pattern)
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
+        self.logger.info('connecting modules {0} and {1}'
+                         .format(m_0.id, m_1.id))
+
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
+        self.logger.info('checking compatibility of modules {0} and {1} and'
+                         ' assigned pattern'.format(m_0.id, m_1.id))
         assert m_0.interface.is_compatible(0, pat.interface, int_0)
         assert m_1.interface.is_compatible(0, pat.interface, int_1)
 
@@ -855,14 +861,20 @@ class Manager(object):
             self.add_mod(m_1)
 
         # Pass the pattern to the modules being connected:
+        self.logger.info('passing connection pattern to modules {0} and {1}'
+            .format(m_0.id, m_1.id))
         m_0.connect(m_1, pat, int_0, int_1)
         m_1.connect(m_0, pat, int_1, int_0)
 
         # Update the routing table:
+        self.logger.info('updating routing table')
         if pat.is_connected(0, 1):
             self.routing_table[m_0.id, m_1.id] = 1
         if pat.is_connected(1, 0):
             self.routing_table[m_1.id, m_0.id] = 1
+
+        self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
+
 
     @property
     def N_brok(self):
@@ -924,11 +936,17 @@ class Manager(object):
 
         self.steps = steps
         with IgnoreKeyboardInterrupt():
+            bi = 0
+            mi = 0
             for b in self.brokers.values():
+                self.logger.info(str(bi) + ' broker about to start')
                 b.start()
+                self.logger.info(str(bi) + ' started')
             for m in self.modules.values():
                 m.steps = steps
+                self.logger.info(str(mi) + ' module about to start')
                 m.start()
+                self.logger.info(str(mi) + ' module started')
 
     def send_ctrl_msg(self, i, *msg):
         """
