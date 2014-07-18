@@ -826,7 +826,8 @@ class Pattern(object):
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         else:
             idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
-                                   
+        p.__validate_index__(idx)
+
         # Replace the pattern's DataFrame:
         p.data = pd.DataFrame(data=data, index=idx, columns=columns)
 
