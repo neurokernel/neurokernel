@@ -6,6 +6,8 @@ Represent connectivity pattern using pandas DataFrame.
 
 from collections import OrderedDict
 import itertools
+
+from cachetools import lfu_cache
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -373,6 +375,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache(maxsize=2)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
