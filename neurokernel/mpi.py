@@ -183,7 +183,11 @@ class Worker(object):
 
                 # Quit:
                 elif msg[0] == 'quit':
-                    self.logger.info('quitting')
+                    self.logger.info('acknowledging quit')
+
+                    # Block until acknowledgment message received:
+                    MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
+                    self.logger.info('quit')
                     return
 
                 r_ctrl = []
@@ -234,11 +238,11 @@ class Manager(object):
 
         # Make logger name reflect process identity:
         if self._is_launcher():
-            self.logger = twiggy.log.name(format_name('manager/launcher  '))
+            self.logger = twiggy.log.name(format_name('manager/launcher'))
         elif self._is_master():
-            self.logger = twiggy.log.name(format_name('manager/master    '))
+            self.logger = twiggy.log.name(format_name('manager/master'))
         else:
-            self.logger = twiggy.log.name(format_name('manager/worker %s ' % MPI.COMM_WORLD.Get_rank()))
+            self.logger = twiggy.log.name(format_name('manager/worker %s' % MPI.COMM_WORLD.Get_rank()))
 
         # Tags used to distinguish MPI messages:
         self._data_tag = data_tag
@@ -376,7 +380,17 @@ class Manager(object):
                 for i in xrange(1, size):
                     MPI.COMM_WORLD.isend(msg, dest=i, tag=self._ctrl_tag)
 
+                # Wait for all workers to acknowledge quit message:
                 if msg == 'quit':
+                    req = MPI.Request()
+                    r_quit = []
+                    self.logger.info('waiting for quit acknowledgments')
+                    for i in xrange(1, size):
+                        r_quit.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
+                                                           tag=self._ctrl_tag))
+                    while not req.testall(r_quit):
+                        pass
+
                     self.logger.info('finished running master')
                     break
 
