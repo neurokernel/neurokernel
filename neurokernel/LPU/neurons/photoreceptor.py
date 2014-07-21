@@ -356,12 +356,10 @@ extern "C" {
 
 #define NUM_MICROVILLI %(num_microvilli)d 
 #define BLOCK_SIZE %(block_size)d
-//#define ns 5
 #define LA 0.5
-//#define VV -70
 
 /* Simulation Constants */
-#define C_T     900     /* Total number of calmodulin **Should be a number not concetration */
+#define C_T     0.5     /* Total concentration of calmodulin */
 #define G_T     50      /* Total number of G-protein */
 #define PLC_T   100     /* Total number of PLC */
 #define T_T     25      /* Total number of TRP/TRPL channels */
@@ -386,7 +384,7 @@ extern "C" {
 #define K_N_INV 5.5555  /* K_N inverse ( too many decimals are not important) */ 
 #define K_U     30      /* (mM^(-1)s^(-1)) Rate of Ca2+ uptake by calmodulin */
 #define K_R     5.5     /* (mM^(-1)s^(-1)) Rate of Ca2+ release by calmodulin */
-#define K_CA    1000    /* s^(-1) diffusion from microvillus to somata */
+#define K_CA    1000    /* s^(-1) diffusion from microvillus to somata (tuned) */
 
 #define K_NACA  3e-8    /* Scaling factor for Na+/Ca2+ exchanger model */
 
@@ -396,7 +394,7 @@ extern "C" {
 #define KAPPA_TSTAR         150     /* s^(-1) rate constant */
 #define K_DSTAR             100     /* rate constant */
 
-#define F                   96.485  /* (C/mol) Faraday constant */
+#define F                   96485   /* (mC/mol) Faraday constant (changed from paper)*/
 #define N                   4       /* Binding sites for calcium on calmodulin */
 #define R                   8.314   /* (J*K^-1*mol^-1)Gas constant */
 #define T                   293     /* (K) Absolute temperature */
@@ -415,6 +413,9 @@ extern "C" {
 #define NA_CO           120     /* (mM) Extracellular sodium concentration */
 #define NA_CI           8       /* (mM) Intracellular sodium concentration */
 #define CA_CO           1.5     /* (mM) Extracellular calcium concentration */
+
+#define G_TRP           8       /* conductance of a TRP channel */
+#define TRP_REV         0       /* TRP channel reversal potential */
 
 __device__ __constant__ long long int d_X[4];
 __device__ __constant__ int change_ind1[13];
@@ -447,15 +448,19 @@ __device__ float compute_fn(float Cstar_cc, float ns)
 {
     float tmp = Cstar_cc*K_N_INV;
     tmp *= tmp*tmp;
-    return ns*tmp/(1+tmp);
+    return ns*tmp/(1 + tmp);
 }
 
 /* Vm [V] */
 __device__ float compute_ca(int Tstar, float Cstar_cc, float Vm)
 {
-    float I_in = Tstar*8*fmaxf(-Vm, 0);
-    float denom = (1060 - 120*Cstar_cc + 179.0952 * expf(-39.60793*Vm));  // F/(R*T) = 0.03960793 ??
-    float numer = I_in * 690.9537 + 0.0795979 + N*K_R*Cstar_cc; // K_NACA*CA_CO*NA_CI^3/(V*F) = 79.5979
+    float I_in = Tstar*G_TRP*fmaxf(-Vm, -TRP_REV);
+    /* CaM = C_T - Cstar_cc */
+    float denom = (K_CA + (N*K_U*C_T) - (N*K_U)*Cstar_cc + 179.0952 * expf(-(F/(R*T))*Vm));  // (K_NACA*NA_CO^3/VOL*F)
+    /* I_Ca ~= 0.4*I_in */
+    float numer = (0.4*I_in)/(2*VOL*F) + 
+                  ((K_NACA*CA_CO*NA_CI*NA_CI*NA_CI)/(VOL*F)) +  // in paper it's -K_NACA... due to different conventions
+                  N*K_R*Cstar_cc;
 
     return fmaxf(1.6e-4, numer/denom);
 }
@@ -467,9 +472,9 @@ transduction(curandStateXORWOW_t *state, int ld1,
     int tid = threadIdx.x;
     int bid = blockIdx.x;
     
-    __shared__ int X[BLOCK_SIZE][7]; // number of molecules
+    __shared__ int X[BLOCK_SIZE][7];  // number of molecules
     __shared__ float Ca[BLOCK_SIZE];
-    __shared__ float Vm; // membrane voltage, shared over all threads
+    __shared__ float Vm;  // membrane voltage, shared over all threads
     __shared__ float fn[BLOCK_SIZE];
     
     if(tid == 0)
@@ -523,11 +528,12 @@ transduction(curandStateXORWOW_t *state, int ld1,
         sumrate += KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);  // 3
         sumrate += GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]);  // 5
         sumrate += KAPPA_GSTAR * X[tid][1] * X[tid][0];  // 2
-        sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * (1+11.5*compute_fp( Ca[tid] )) 
-                   * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5 ;  // 9
+        sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * 
+                   (1 + H_TSTARP*compute_fp( Ca[tid] )) *
+                   X[tid][4]*(X[tid][4]-1)*(T_T-X[tid][6])*0.5 ;  // 9
 
         // choose the next reaction time
-        dt_advanced = -logf(curand_uniform(&localstate))/(LA+sumrate);
+        dt_advanced = -logf(curand_uniform(&localstate))/(LA + sumrate);
 
         // If the reaction time is smaller than dt,
         // pick the reaction and update,
@@ -588,8 +594,9 @@ transduction(curandStateXORWOW_t *state, int ld1,
                                                     reaction_ind = (sumrate<=2e-5) * 2;
                                                     if(!reaction_ind)
                                                     {
-                                                        sumrate -= (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * (1+11.5*compute_fp( Ca[tid] )) 
-                                                                   * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5;
+                                                        sumrate -= (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * 
+                                                                   (1 + H_TSTARP*compute_fp( Ca[tid] )) *
+                                                                   X[tid][4]*(X[tid][4]-1)*(T_T-X[tid][6])*0.5;
                                                         reaction_ind = (sumrate<=2e-5) * 9;
                                                     }
                                                 }
@@ -639,8 +646,9 @@ transduction(curandStateXORWOW_t *state, int ld1,
             sumrate += KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);  // 3
             sumrate += GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]); // 5
             sumrate += KAPPA_GSTAR * X[tid][1] * X[tid][0]; // 2
-            sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * (1+11.5*compute_fp( Ca[tid] )) 
-                       * X[tid][4]*(X[tid][4]-1)*(25-X[tid][6])*0.5; // 9
+            sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * 
+                       (1 + H_TSTARP*compute_fp( Ca[tid] )) *
+                       X[tid][4]*(X[tid][4]-1)*(T_T-X[tid][6])*0.5; // 9
 
             dt_advanced -= logf(curand_uniform(&localstate))/(LA + sumrate);
 
@@ -670,9 +678,8 @@ transduction(curandStateXORWOW_t *state, int ld1,
             "type": dtype_to_ctype(dtype),
             "block_size": block_size,
             "num_microvilli": num_microvilli,
-            "fletter": 'f' if scalartype == np.float32 else '',
-            "dword": '_double' if scalartype == np.double else '',
-            "nn": '\\n'},
+            "fletter": 'f' if scalartype == np.float32 else ''
+        },
         options = ["--ptxas-options=-v --maxrregcount=56"],
         no_extern_c = True)
     func = mod.get_function('transduction')

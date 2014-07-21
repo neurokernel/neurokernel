@@ -203,7 +203,7 @@ class LPU(Module, object):
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA, 
-                 id=None, debug=False, columns = [ 'io', 'type', 'interface']):
+                 id=None, debug=False, columns = ['io', 'type', 'interface']):
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
@@ -606,7 +606,7 @@ class LPU(Module, object):
 
         """
         
-        if self.ports_in_gpot_mem_ind is not  None:
+        if self.ports_in_gpot_mem_ind is not None:
             cuda.memcpy_htod(
                 int(self.V.gpudata) +
                 self.V.dtype.itemsize*

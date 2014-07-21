@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import time
 
 import neurokernel.core as core
 from neurokernel.LPU.LPU import LPU
@@ -37,6 +38,9 @@ parser.add_argument('-i', '--input', action="store_true",
 parser.add_argument('-g', '--gexf', action="store_true",
                     help='generates gexf of LPU if set')
 
+parser.add_argument('--steps', default=10, type=int,
+                    help='simulation steps')
+
 args = parser.parse_args()
 
 dt = 1e-4
@@ -46,8 +50,10 @@ IMAGE_FILE = 'image1.mat'
 OUTPUT_FILE = 'retina_output.h5'
 
 if args.input:
+    print('Generating input of model from image file')
     generate_input(INPUT_FILE, IMAGE_FILE, args.num_layers)
 if args.gexf:
+    print('Writing retina lpu')
     n = args.num_layers
     photoreceptor_num = 6*(3*n*(n+1)+1)
     generate_gexf(GEXF_FILE, photoreceptor_num)
@@ -72,7 +78,10 @@ lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
               debug=False)
 
 man.add_mod(lpu_ret)
+
 print('Starting simulation')
-man.start(steps=1000)
+start_time = time.time()
+man.start(steps=args.steps)
 man.stop()
-print('Simulation complete')
+print('Simulation complete: Duration {} seconds'.format(time.time() - 
+                                                            start_time))

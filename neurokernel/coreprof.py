@@ -8,6 +8,7 @@ import atexit
 import collections
 import numpy as np
 import time
+import cProfile
 
 import pycuda.driver as drv
 import pycuda.gpuarray as gpuarray
@@ -226,7 +227,7 @@ class Module(BaseModule):
                 # module's ports that should receive transmitted spikes:
 
                 data = self._in_data[in_id].popleft()
-            except:
+            except IndexError:
                 self.logger.info('no input data from [%s] retrieved' % in_id)
             else:
                 self.logger.info('input data from [%s] retrieved' % in_id)
@@ -240,7 +241,6 @@ class Module(BaseModule):
                 
                 # ..and then set the port data using the transmitted
                 # information about source module spikes:
-                #self.pm['spike'][self.pm['spike'].inds_to_ports(data[1])] = 1
                 self.pm['spike'][data[1]] = 1
 
     def _put_out_data(self):
@@ -378,7 +378,7 @@ class Module(BaseModule):
             self._init_net()
             # Initialize Buffer for incoming data.  Dict used to store the
             # incoming data keyed by the source module id.  Each value is a
-            # queue buferring the received data:
+            # queue buffering the received data:
             self._in_data = {k: collections.deque() for k in self.in_ids}
 
             # Initialize _out_port_dict and _in_port_dict attributes:
@@ -387,48 +387,7 @@ class Module(BaseModule):
             # Perform any pre-emulation operations:
             self.pre_run()
 
-            self.running = True
-            curr_steps = 0
-            while curr_steps < self._steps:
-                self.logger.info('execution step: %s' % curr_steps)
-                # If the debug flag is set, don't catch exceptions so that
-                # errors will lead to visible failures:
-                if self.debug:
-
-                    # Get transmitted input data for processing:
-                    self._get_in_data()
-
-                    # Run the processing step:
-                    self.run_step()
-
-                    # Stage generated output data for transmission to other
-                    # modules:
-                    self._put_out_data()
-
-                    # Synchronize:
-                    self._sync()
-
-                else:
-
-                    # Get transmitted input data for processing:
-                    catch_exception(self._get_in_data, self.logger.info)
-
-                    # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info)
-
-                    # Stage generated output data for transmission to other
-                    # modules:
-                    catch_exception(self._put_out_data, self.logger.info)
-
-                    # Synchronize:
-                    catch_exception(self._sync, self.logger.info)
-
-                # Exit run loop when a quit signal has been received:
-                if not self.running:
-                    self.logger.info('run loop stopped')
-                    break
-
-                curr_steps += 1
+            cProfile.runctx('self.main_run()', globals(), locals(), 'prof%s.prof' % self.id)
 
             # Perform any post-emulation operations:
             self.post_run()
@@ -442,6 +401,49 @@ class Module(BaseModule):
                 
         self.logger.info('exiting')
         
+    def main_run(self):
+        self.running = True
+        curr_steps = 0
+        while curr_steps < self._steps:
+            self.logger.info('execution step: %s' % curr_steps)
+            # If the debug flag is set, don't catch exceptions so that
+            # errors will lead to visible failures:
+            if self.debug:
+
+                # Get transmitted input data for processing:
+                self._get_in_data()
+
+                # Run the processing step:
+                self.run_step()
+
+                # Stage generated output data for transmission to other
+                # modules:
+                self._put_out_data()
+
+                # Synchronize:
+                self._sync()
+
+            else:
+
+                # Get transmitted input data for processing:
+                catch_exception(self._get_in_data, self.logger.info)
+
+                # Run the processing step:
+                catch_exception(self.run_step, self.logger.info)
+
+                # Stage generated output data for transmission to other
+                # modules:
+                catch_exception(self._put_out_data, self.logger.info)
+
+                # Synchronize:
+                catch_exception(self._sync, self.logger.info)
+
+            # Exit run loop when a quit signal has been received:
+            if not self.running:
+                self.logger.info('run loop stopped')
+                break
+
+            curr_steps += 1
 
 if __name__ == '__main__':
     import time
@@ -513,10 +515,10 @@ if __name__ == '__main__':
         man = Manager(get_random_port(), get_random_port())
         man.add_brok()
 
-        m1_int_sel_in_gpot = '/aingpot[0:'+n+']'
-        m1_int_sel_out_gpot = '/aoutgpot[0:'+n+']'
-        m1_int_sel_in_spike = '/ainspike[0:'+n+']'
-        m1_int_sel_out_spike = '/aoutspike[0:'+n+']'
+        m1_int_sel_in_gpot = '/a/in/gpot[0:'+n+']'
+        m1_int_sel_out_gpot = '/a/out/gpot[0:'+n+']'
+        m1_int_sel_in_spike = '/a/in/spike[0:'+n+']'
+        m1_int_sel_out_spike = '/a/out/spike[0:'+n+']'
         m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                                m1_int_sel_in_spike, m1_int_sel_out_spike])
         N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
@@ -531,10 +533,10 @@ if __name__ == '__main__':
                       man.port_data, man.port_ctrl, 'm1   ')
         man.add_mod(m1)
 
-        m2_int_sel_in_gpot = '/bingpot[0:'+n+']'
-        m2_int_sel_out_gpot = '/boutgpot[0:'+n+']'
-        m2_int_sel_in_spike = '/binspike[0:'+n+']'
-        m2_int_sel_out_spike = '/boutspike[0:'+n+']'
+        m2_int_sel_in_gpot = '/b/in/gpot[0:'+n+']'
+        m2_int_sel_out_gpot = '/b/out/gpot[0:'+n+']'
+        m2_int_sel_in_spike = '/b/in/spike[0:'+n+']'
+        m2_int_sel_out_spike = '/b/out/spike[0:'+n+']'
         m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                                m2_int_sel_in_spike, m2_int_sel_out_spike])
         N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
@@ -559,14 +561,14 @@ if __name__ == '__main__':
         pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
         pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
         pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-        pat12['/aoutgpot[0]', '/bingpot[0]'] = 1
-        pat12['/aoutgpot[1]', '/bingpot[1]'] = 1
-        pat12['/boutgpot[0]', '/aingpot[0]'] = 1
-        pat12['/boutgpot[1]', '/aingpot[1]'] = 1
-        pat12['/aoutspike[0]', '/binspike[0]'] = 1
-        pat12['/aoutspike[1]', '/binspike[1]'] = 1
-        pat12['/boutspike[0]', '/ainspike[0]'] = 1
-        pat12['/boutspike[1]', '/ainspike[1]'] = 1
+        pat12['/a/out/gpot[0]', '/b/in/gpot[0]'] = 1
+        pat12['/a/out/gpot[1]', '/b/in/gpot[1]'] = 1
+        pat12['/b/out/gpot[0]', '/a/in/gpot[0]'] = 1
+        pat12['/b/out/gpot[1]', '/a/in/gpot[1]'] = 1
+        pat12['/a/out/spike[0]', '/b/in/spike[0]'] = 1
+        pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
+        pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
+        pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
         man.connect(m1, m2, pat12, 0, 1)
 
         # To set the emulation to exit after executing a fixed number of steps,
@@ -582,14 +584,14 @@ if __name__ == '__main__':
 
     # Emulation 1
     start_time = time.time()
-    size = 2
+    size = 100
     emulate(size, steps)
     print('Simulation of size {} complete: Duration {} seconds'.format(
         size, time.time() - start_time))
     # Emulation 2
     start_time = time.time()
-    size = 100
-    emulate(size, steps)
-    print('Simulation of size {} complete: Duration {} seconds'.format(
-        size, time.time() - start_time))
+    #size = 100
+    #emulate(size, steps)
+    #print('Simulation of size {} complete: Duration {} seconds'.format(
+    #    size, time.time() - start_time))
     logger.info('all done')

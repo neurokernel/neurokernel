@@ -51,6 +51,9 @@ parser.add_argument('--log', default='file', type=str,
 
 parser.add_argument('--steps', default=10, type=int,
                     help='simulation steps')
+                    
+parser.add_argument('--retina-only', action="store_true",
+                    help='if set only retina simulation takes place')
 
 args = parser.parse_args()
 
@@ -85,8 +88,9 @@ if args.input:
 if args.gexf:
     print('Writing retina lpu')
     eyemodel.write_retina(RET_GEXF_FILE)
-    print('Writing lamina lpu')
-    eyemodel.write_lamina(LAM_GEXF_FILE)
+    if not args.retina_only:
+        print('Writing lamina lpu')
+        eyemodel.write_lamina(LAM_GEXF_FILE)
 
 if args.port_data is None and args.port_ctrl is None:
     port_data = get_random_port()
@@ -95,7 +99,6 @@ else:
     port_data = args.port_data
     port_ctrl = args.port_ctrl
 
-#TODO
 if not args.suppress:
     man = core.Manager(port_data, port_ctrl)
     man.add_brok()
@@ -108,21 +111,22 @@ if not args.suppress:
                   output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
                   port_data=port_data, device=args.ret_dev, id='retina',
                   debug=False)
-
-    print('Parsing lamina lpu data')
-    n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
-
-    print('Initializing lamina LPU')
-    lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-                  input_file=None,
-                  output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
-                  port_data=port_data, device=args.lam_dev, id='lamina',
-                  debug=False)
-
     man.add_mod(lpu_ret)
-    man.add_mod(lpu_lam)
-    print('Connecting retina and lamina')
-    eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam)
+
+    if not args.retina_only:
+        print('Parsing lamina lpu data')
+        n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
+        print('Initializing lamina LPU')
+        lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
+                      input_file=None,
+                      output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
+                      port_data=port_data, device=args.lam_dev, id='lamina',
+                      debug=False)
+
+        man.add_mod(lpu_lam)
+        print('Connecting retina and lamina')
+        eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam)
+
     print('Starting simulation')
     start_time = time.time()
     man.start(steps=args.steps)
@@ -136,7 +140,8 @@ if args.output:
     eyemodel.visualise_output(media_file=RET_OUTPUT_PNG,
                               model_output=RET_OUTPUT_GPOT,
                               config = {'LPU': 'retina', 'type':'image'} )
-    eyemodel.visualise_output(media_file=LAM_OUTPUT_PNG,
-                              model_output=LAM_OUTPUT_GPOT,
-                              config = {'LPU': 'lamina', 'type':'image',
-                                        'neuron': 'L1'} )
+    if not args.retina_only:
+        eyemodel.visualise_output(media_file=LAM_OUTPUT_PNG,
+                                  model_output=LAM_OUTPUT_GPOT,
+                                  config = {'LPU': 'lamina', 'type':'image',
+                                            'neuron': 'L1'} )

@@ -103,7 +103,7 @@ class Interface(object):
 
         # If the select fails, try to create new rows with the index specified
         # by the selector and load them with the specified data:
-        except:
+        except ValueError:
             try:
                 idx = self.sel.make_index(selector, self.data.index.names)
             except:
@@ -319,6 +319,7 @@ class Interface(object):
         assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
+    @lfu_cache(maxsize=2)
     def gpot_ports(self, i=None):
         """
         Restrict Interface ports to graded potential ports.
@@ -348,6 +349,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache(maxsize=2)
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -480,6 +482,7 @@ class Interface(object):
 
         return self.sel.is_in(s, self.index.tolist())
 
+    @lfu_cache(maxsize=2)
     def out_ports(self, i=None):
         """
         Restrict Interface ports to output ports.
@@ -538,6 +541,7 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
+    @lfu_cache(maxsize=2)
     def spike_ports(self, i=None):
         """
         Restrict Interface ports to spiking ports.
@@ -594,6 +598,7 @@ class Interface(object):
             result.append(selector)
         return result
 
+    @lfu_cache(maxsize=2)
     def to_tuples(self, i=None):
         """
         Retrieve Interface's port identifiers as list of tuples.
@@ -892,22 +897,27 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='+')
 
+    @lfu_cache(maxsize=2)
     def gpot_ports(self, i=None):
         return self.interface.gpot_ports(i)
     gpot_ports.__doc__ = Interface.gpot_ports.__doc__
 
+    @lfu_cache(maxsize=2)
     def in_ports(self, i=None):
         return self.interface.in_ports(i)
     in_ports.__doc__ = Interface.in_ports.__doc__
 
+    @lfu_cache(maxsize=2)
     def interface_ports(self, i=None):
         return self.interface.interface_ports(i)
     interface_ports.__doc__ = Interface.interface_ports.__doc__
 
+    @lfu_cache(maxsize=2)
     def out_ports(self, i=None):
         return self.interface.out_ports(i)
     out_ports.__doc__ = Interface.out_ports.__doc__
 
+    @lfu_cache(maxsize=2)
     def spike_ports(self, i=None):
         return self.interface.spike_ports(i)
     spike_ports.__doc__ = Interface.spike_ports.__doc__
