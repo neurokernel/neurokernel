@@ -922,7 +922,7 @@ class PathLikeSelector(object):
             if tokens[0] == '*':
                 continue
             elif type(tokens[0]) in [int, str, unicode]:
-                if row != token:
+                if row != tokens[0]:
                     break
             elif type(tokens[0]) == list:
                 if row not in tokens[0]:
