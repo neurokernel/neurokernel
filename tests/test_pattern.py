@@ -421,6 +421,25 @@ class test_pattern(TestCase):
                                   ('/aaa[1]', '/bbb[0]'),
                                   ('/aaa[2]', '/bbb[1]')])
 
+    def test_split_multiindex(self):
+        idx = pd.MultiIndex(levels=[['a'], ['b', 'c'], ['d', 'e'], [0, 1, 2]],
+                            labels=[[0, 0, 0, 0], [0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 1, 2]])
+        idx0, idx1 = Pattern.split_multiindex(idx, slice(0, 2), slice(2, 4))
+        assert_index_equal(idx0,
+                           pd.MultiIndex(levels=[['a'], ['b', 'c']],
+                                         labels=[[0, 0, 0, 0], [0, 0, 1, 1]]))
+        assert_index_equal(idx1,
+                           pd.MultiIndex(levels=[['d', 'e'], [0, 1, 2]],
+                                         labels=[[0, 1, 0, 1], [0, 1, 1, 2]]))
+
+        idx0, idx1 = Pattern.split_multiindex(idx, slice(0, 1), slice(1, 4))
+        assert_index_equal(idx0,
+                           pd.Index(['a', 'a', 'a', 'a']))
+        assert_index_equal(idx1,
+                           pd.MultiIndex(levels=[['b', 'c'], ['d', 'e'], [0, 1, 2]],
+                                         labels=[[0, 0, 1, 1], [0, 1, 0, 1],
+                                                 [0, 1, 1, 2]]))
+
     def test_to_graph(self):
         p = Pattern('/foo[0:4]', '/bar[0:4]')
         p['/foo[0]', '/bar[0]'] = 1
