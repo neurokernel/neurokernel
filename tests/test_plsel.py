@@ -44,6 +44,10 @@ df2.set_index(0, append=False, inplace=True)
 df2.set_index(1, append=True, inplace=True)
 df2.set_index(2, append=True, inplace=True)
 
+df_single = pd.DataFrame(data={'data': np.random.rand(5),
+                               0: ['foo', 'foo', 'bar', 'bar', 'baz']})
+df_single.set_index(0, append=False, inplace=True)
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()
@@ -231,12 +235,22 @@ class test_path_like_selector(TestCase):
                                   ('foo', 'mof', 1),
                                   ('foo', 'mof', 2)])
 
+        result = self.sel.get_tuples(df_single, '/foo')
+        self.assertSequenceEqual(result,
+                                 [('foo',),
+                                  ('foo',)])
+
     def test_get_tuples_list(self):
         result = self.sel.get_tuples(df, [['foo', 'mof', '*']])
         self.assertSequenceEqual(result,
                                  [('foo', 'mof', 0),
                                   ('foo', 'mof', 1),
                                   ('foo', 'mof', 2)])
+
+        result = self.sel.get_tuples(df_single, [['foo']])
+        self.assertSequenceEqual(result,
+                                 [('foo',),
+                                  ('foo',)])
 
     def test_is_ambiguous_str(self):
         assert self.sel.is_ambiguous('/foo/*') == True

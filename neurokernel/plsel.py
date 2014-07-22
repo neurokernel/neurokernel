@@ -869,8 +869,11 @@ class PathLikeSelector(object):
             if not tokens:
                 continue
 
-            # If this loop terminates prematurely, it will not return True;
-            # this forces checking of the subsequent token list:
+            # Check whether all of the entries in `row_sub` match some list of
+            # tokens. If this loop terminates prematurely because of a mismatch
+            # between `row_sub` and some list of tokens in `parse_list`, it will
+            # not return True; this forces checking of the subsequent token
+            # lists:
             for i, token in enumerate(tokens):
                 if token == '*':
                     continue
@@ -897,7 +900,7 @@ class PathLikeSelector(object):
         """
         Check whether a row in an Index matches a parsed selector.
 
-        Check whether a row label in a MultiIndex matches the
+        Check whether a row label in an Index instance matches the
         specified token values.
 
         Parameters
@@ -914,27 +917,28 @@ class PathLikeSelector(object):
             False otherwise.
         """
 
+        # Since `row` is a scalar, it need only match the sole entry of one of
+        # the lists in `parse_list`:
         for tokens in parse_list:
             if not tokens:
                 continue
             if len(tokens) > 1:
                 raise ValueError('index row only is scalar')
             if tokens[0] == '*':
-                continue
+                return True
             elif type(tokens[0]) in [int, str, unicode]:
-                if row != tokens[0]:
-                    break
+                if row == tokens[0]:
+                    return True
             elif type(tokens[0]) == list:
-                if row not in tokens[0]:
-                    break
+                if row in tokens[0]:
+                    return True
             elif type(tokens[0]) == tuple:
                 i_start, i_stop = tokens[0]
-                if not(row >= i_start and row < i_stop):
-                    break
+                if row >= i_start and row < i_stop:
+                    return True
             else:
                 continue
-        else:
-            return True
+        return False
 
     @classmethod
     def is_in(cls, s, t):
@@ -1010,7 +1014,7 @@ class PathLikeSelector(object):
             return [t for t in df.index \
                     if cls._multiindex_row_in(t, parse_list, start, stop)]
         else:
-            return [t for t in df.index \
+            return [(t,) for t in df.index \
                     if cls._index_row_in(t, parse_list)]
 
     @classmethod
