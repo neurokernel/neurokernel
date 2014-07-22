@@ -314,8 +314,8 @@ class PathLikeSelector(object):
                     else:
                         return False
 
-            # If all entries are iterable non-strings, try to expand:
-            elif all([(np.iterable(x) and type(x) not in [str, unicode]) for x in s]):
+            # If all entries are lists or tuples, try to expand:
+            elif all([(type(x) in [list, tuple]) for x in s]):
                 if len(cls.expand(s)) == 1:
                     return True
                 else:
@@ -353,7 +353,7 @@ class PathLikeSelector(object):
         a sequence of tokens is not a valid selector).
         """
 
-        assert np.iterable(s) and type(s) not in [str, unicode]
+        assert type(s) in [list, tuple]
         if set(map(type, s)).issubset([int, str, unicode]):
             tokens = s
         else:
@@ -395,7 +395,7 @@ class PathLikeSelector(object):
                 return True
             else:
                 return False
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
             for tokens in selector:
                 for token in tokens:
                     if token == '*' or \
@@ -406,7 +406,7 @@ class PathLikeSelector(object):
             raise ValueError('invalid selector type')
 
     @classmethod
-    def is_selector_empty(cls, s):
+    def is_selector_empty(cls, selector):
         """
         Check whether a string or sequence is an empty selector.
 
@@ -420,21 +420,19 @@ class PathLikeSelector(object):
         result : bool
             True if `s` is a sequence containing empty sequences or a null
             string, False otherwise.
+
+        Notes
+        -----
+        Ambiguous selectors are not deemed to be empty.
         """
         
-        if type(s) in [str, unicode]:
-            if re.search('^\s*$', s):
+        if type(selector) in [str, unicode] and \
+           re.search('^\s*$', selector):
+            return True
+        if type(selector) in [list, tuple] and \
+             all([len(x) == 0 for x in selector]):
                 return True
-            else:
-                return False
-        elif np.iterable(s):
-            if all(map(np.iterable, s)) and \
-               all(map(lambda e: len(e) == 0, s)):
-                return True
-            else:
-                return False
-        else:
-            return False
+        return False
 
     @classmethod
     def is_selector_seq(cls, s):
@@ -573,35 +571,6 @@ class PathLikeSelector(object):
         return [tuple(x) for y in p for x in itertools.product(*y)]
     
     @classmethod
-    def is_empty(cls, selector):
-        """
-        Check whether a selector is empty.
-
-        Parameters
-        ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
-
-        Returns
-        -------
-        result : bool
-            True if the selector contains no port identifiers.
-
-        Notes
-        -----
-        Ambiguous selectors are not deemed to be empty.
-        """
-
-        assert cls.is_selector(selector)
-        if selector == '':
-            return True
-        if type(selector) in [list, tuple] and \
-           all([len(x) == 0 for x in selector]):
-            return True
-        return False
-
-    @classmethod
     def is_expandable(cls, selector):
         """
         Check whether a selector can be expanded into multiple identifiers.
@@ -626,7 +595,7 @@ class PathLikeSelector(object):
             return False
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
             p = selector
         else:
             raise ValueError('invalid selector type')
@@ -858,7 +827,7 @@ class PathLikeSelector(object):
                     count = max(map(len, cls.parse(selector)))
                 except:
                     count = 0
-            elif np.iterable(selector):
+            elif type(selector) in [list, tuple]:
                 try:
                     count = max(map(len, selector))
                 except:
@@ -1030,7 +999,7 @@ class PathLikeSelector(object):
 
         if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
             parse_list = selector
         else:
             raise ValueError('invalid selector type')        
@@ -1210,7 +1179,7 @@ class PathLikeSelector(object):
 
         if type(selector) in [str, unicode]:
             parse_list = cls.parse(selector)
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
             parse_list = selector
         else:
             raise ValueError('invalid selector type')

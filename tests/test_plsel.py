@@ -293,21 +293,6 @@ class test_path_like_selector(TestCase):
         self.assertSequenceEqual(self.sel.index_to_selector(idx),
                                  [('foo', 0), ('foo', 1)])
 
-    def test_is_empty(self):
-        assert self.sel.is_empty('') == True
-        assert self.sel.is_empty([[]]) == True
-        assert self.sel.is_empty([()]) == True
-        assert self.sel.is_empty(((),)) == True
-        assert self.sel.is_empty(([])) == True
-        assert self.sel.is_empty([[], []]) == True
-        assert self.sel.is_empty([[], ()]) == True
-        assert self.sel.is_empty(([], [])) == True
-        assert self.sel.is_empty(([], ())) == True
-
-        assert self.sel.is_empty('/xxx') == False
-        assert self.sel.is_empty([['x']]) == False
-        assert self.sel.is_empty([('x')]) == False
-
     def test_is_expandable(self):
         assert self.sel.is_expandable('') == False
 
@@ -342,10 +327,14 @@ class test_path_like_selector(TestCase):
         assert self.sel.is_selector_empty('') == True            
         assert self.sel.is_selector_empty([[]]) == True
         assert self.sel.is_selector_empty([()]) == True
+        assert self.sel.is_selector_empty(((),)) == True
         assert self.sel.is_selector_empty([[], []]) == True
         assert self.sel.is_selector_empty([(), []]) == True
+        assert self.sel.is_selector_empty(((), [])) == True
 
         assert self.sel.is_selector_empty('/foo') == False
+        assert self.sel.is_selector_empty('/foo/*') == False
+        assert self.sel.is_selector_empty([['foo']]) == False
         assert self.sel.is_selector_empty([['foo', 'bar']]) == False
         assert self.sel.is_selector_empty([['']]) == False # is this correct?
 
