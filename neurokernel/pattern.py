@@ -6,6 +6,8 @@ Represent connectivity pattern using pandas DataFrame.
 
 from collections import OrderedDict
 import itertools
+
+from cachetools import lfu_cache
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -251,9 +253,13 @@ class Interface(object):
         new Interface instance.
         """
         
-        assert isinstance(df.index, pd.MultiIndex)
         assert set(df.columns).issuperset(['interface', 'io', 'type'])
-        i = cls(df.index.tolist(), df.columns)
+        if isinstance(df.index, pd.MultiIndex):
+            i = cls(df.index.tolist(), df.columns)
+        elif isinstance(df.index, pd.Index):
+            i = cls([(s,) for s in df.index.tolist()], df.columns)
+        else:
+            raise ValueError('invalid index type')
         i.data = df.copy()
         i.__validate_index__(i.index)
         return i
@@ -373,6 +379,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache(maxsize=2)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
@@ -606,9 +613,15 @@ class Interface(object):
         """
 
         if i is None:
-            return self.index.tolist()
+            if isinstance(self.index, pd.MultiIndex):
+                return self.index.tolist()
+            else:
+                return [(t,) for t in self.index]
         try:
-            return self.data[self.data['interface'] == i].index.tolist()
+            if isinstance(self.index, pd.MultiIndex):
+                return self.data[self.data['interface'] == i].index.tolist()
+            else:
+                return [(t,) for t in self.data[self.data['interface'] == i].index]
         except:
             return []
     
