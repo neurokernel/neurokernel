@@ -4,6 +4,7 @@
 Path-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 """
 
+import copy
 import itertools
 import re
 
@@ -554,7 +555,9 @@ class PathLikeSelector(object):
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
         elif np.iterable(selector):
-            p = selector
+            
+            # Copy the selector to avoid modifying it:
+            p = copy.copy(selector) 
         else:
             raise ValueError('invalid selector type')
         for i in xrange(len(p)):
