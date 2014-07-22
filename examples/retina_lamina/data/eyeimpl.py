@@ -2,6 +2,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
+import os
+from collections import namedtuple
 from math import ceil
 from scipy.io import loadmat
 
@@ -87,8 +89,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         else:
             return 3*(ring-1)*ring + 1 + (local_id % (6*ring))
 
-    #TODO looks like the methods can be combined
-    # define a method that returns id depending on position
     def _get_neighborgids_adjacency(self, lid, ring):
         """ Gets adjacent ids in the following order
                 4
@@ -454,7 +454,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     def get_ommatidia(self):
         return self._ommatidia
 
-    def get_neighbors(self, config = {'rule':'superposition'}):
+    def get_neighbors(self, config = {'rule': 'superposition'}):
         """
             config: configuration dictionary
                     keys
@@ -572,11 +572,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             return (r2d*coslongs, r2d*sinlongs)
 
     def get_intensities(self, file, config={}):
-        """ file: mat file is assumed but in case more file formats need to be
-                  supported an additional field should be included in config
+        """ file: input image file, mat file is assumed with a variable im in it
             config: {'still_image': True(default)/False, 
                      'steps':<simulation steps>,
-                     'dt':<time step>, 'output_file':<filename>}
+                     'dt':<time step>, 
+                     'output_file':<filename>}
             returns: numpy array with with height the number of simulation
                      steps and width the number of neurons.
                      The order of neurons is the same as that returned 
@@ -601,7 +601,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             still_image = True
             
         try:
-            # TODO
             output_file = config['output_file']
         except KeyError:
             output_file = None
@@ -651,8 +650,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                 photorlong, screenlat, 
                                                 screenlong)
             intensities = np.tile(intensities, (time_steps, 1))
+            positions = None
         else:
             intensities = np.empty((time_steps, len(photorlat)), 
+                                   dtype='float32')
+            positions = np.empty((time_steps, 4),
                                    dtype='float32')
             mx = mx - mx.min()  # start from 0
             my = my - my.min()
@@ -678,9 +680,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 intensities[i] = self._get_intensities(transimage, photorlat, 
                                                        photorlong, screenlat, 
                                                        screenlong)
+                positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
 
         # get interpolated image values on these positions
+        with h5py.File(output_file, 'w') as f:
+            f.create_dataset('array', intensities.shape,
+                             dtype=np.float64,
+                             data=intensities)
 
+        InputConfig = namedtuple('InputConfig', 'image positions')
+        self.input_config = InputConfig(image=image, positions=positions)
         return intensities
 
     def _get_intensities(self, transimage, photorlat, photorlong,
@@ -757,7 +766,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         # ignore constant factor C_p and normalize so that everything sums to 1
         return func3/np.sum(func3)
 
-    #TODO apply DRY principle
     def visualise_output(self, model_output, media_file, config={}):
         """ config: { LPU: 'retina'(default)/'lamina'
                       type: 'image'(default)/'video'
@@ -804,28 +812,38 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              ', valid values retina, lamina'.format(lpu))
 
     def _plot_output(self, type, xpositions, ypositions, data, media_file):
-        fig, ax = plt.subplots()
+        fig, (ax1, ax2) = plt.subplots(2)
+        image = self.input_config.image
+        impositions = self.input_config.positions
 
         if type == 'image':
-            print(len(xpositions), len(data[-1]))
-            print(data.shape)
-            ax.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
-                       s=5, edgecolors='none')
+            ax1.imshow(image, cmap=cm.Greys_r)
+            ax2.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
+                        s=5, edgecolors='none')
                 
             fig.savefig(media_file)
         elif type == 'video':
-            writer = FFMpegFileWriter(fps=5, codec='libtheora')
+            writer = FFMpegFileWriter(fps=5, codec='h264')
             writer.setup(
                 fig, media_file, dpi=80,
-                frame_prefix=os.path.splitext(self.out_filename)[0]+'_')
+                frame_prefix=os.path.splitext(media_file)[0]+'_')
+            writer.frame_format = 'png'
+            writer.grab_frame()
 
             step = 100
             for i, d in enumerate(data):
                 if i % step == 0:
-                    ax.scatter(xpositions, -ypositions, c=data[i],
-                               cmap=cm.gray, s=5, edgecolors='none')
+                    # TODO show red rectangle
+                    xind = impositions[i, 0:2]
+                    yind = impositions[i, 2:4]
+                    ax1.imshow(image[int(xind[0]):int(xind[1]),
+                                     int(yind[0]):int(yind[1])],
+                               cmap=cm.Greys_r)
+                    ax2.scatter(xpositions, -ypositions, c=data[i],
+                                cmap=cm.gray, s=5, edgecolors='none')
                     fig.canvas.draw()
                     writer.grab_frame()
+            writer.finish()
         else:
             raise ValueError('Invalid value for media type: {}'
                              ', valid values image, video'.format(type))
@@ -840,35 +858,33 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 ids.append(id)
         return ids
 
-    def generate_input(self, image_file, output_file):
-        intensities = self.get_intensities(image_file, 
-                                           {'still_image': True})
-
-        with h5py.File(output_file, 'w') as f:
-            f.create_dataset('array', intensities.shape,
-                             dtype=np.float64,
-                             data=intensities)
-    
     def connect_retina_lamina(self, manager, ret_lpu, lam_lpu):
         #.values or .tolist()
         print('Initializing selectors')
-        ret_sel = ret_lpu.interface.index.tolist()
-        lam_sel = lam_lpu.interface.index.tolist()
-        lam_sel_in = [sel for sel in lam_sel if sel[0]=="ret"]
-        lam_sel_out = [sel for sel in lam_sel if sel[0]!="ret"]
+        # some workarounds
+        ret_sel = ','.join(['/'+sel for sel in ret_lpu.interface.index.tolist()])
+        lam_sel = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist()])
 
         print('Initializing pattern with selectors')
         pat = Pattern(ret_sel, lam_sel)
         # pattern gets input from retina
+        # HACK Pattern changes ret_sel, lam_sel so they are generated again
+        # selectors are converted to a format that is guaranteed to work but it may be simpler
+        ret_sel = ','.join(['/'+sel for sel in ret_lpu.interface.index.tolist()])
+        lam_sel_in = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist() if sel.startswith("ret")])
+        lam_sel_out = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist() if not sel.startswith("ret")])
 
         print('Setting selector attributes in pattern')
-        pat.interface[ret_sel, 'io'] = 'in'
-        pat.interface[ret_sel, 'type'] = 'gpot'
-        pat.interface[lam_sel_in, 'io'] = 'out'
-        pat.interface[lam_sel_out, 'io'] = 'in'
-        pat.interface[lam_sel, 'type'] = 'gpot'
-        for sel in lam_sel_in:
-            pat['/ret/out/' + str(sel[2]), '/ret/in/' + str(sel[2])] = 1
+        pat.interface[ret_sel] = [0, 'in', 'gpot']
+        pat.interface[lam_sel_in] = [1, 'out', 'gpot']
+        pat.interface[lam_sel_out] = [1, 'in', 'gpot']
+        # pat.interface[','.join(ret_sel), 'io'] = 'in'
+        # pat.interface[','.join(ret_sel), 'type'] = 'gpot'
+        # pat.interface[','.join(lam_sel_in), 'io'] = 'out'
+        # pat.interface[','.join(lam_sel_out), 'io'] = 'in'
+        # pat.interface[','.join(lam_sel), 'type'] = 'gpot'
+        for sel in lam_sel_in.split(','):
+            pat[sel.replace('in', 'out'), sel] = 1
         
         print('Connecting LPUs with the pattern')
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
@@ -885,7 +901,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 'extern': True,  # gets input from file
                 'public': True,  # it's an output neuron
                 'spiking': False,
-                'selector': '/ret/out/' + str(i),
+                'selector': '/retout' + str(i),
                 'num_microvilli': 30000
             }
         self._retina_graph = G
@@ -921,7 +937,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     photor_id = 6*i + j
                     # connected LPUs are not allowed to have the same name in
                     # ports in current implementation of pattern
-                    neuron.update_selector('/ret/in/' + str(photor_id))
+                    neuron.update_selector('/retin' + str(photor_id))
                     
         # renumber neurons to omit photoreceptors 
         # near the edge that have no input (no selector is set)
@@ -1007,7 +1023,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     n = Neuron(neuron_params)
                     n.num = len(n_list)
                     if neuron_params['output']:
-                        n.update_selector('/lam/' + neuron_name + '/' + str(i))
+                        n.update_selector('/lam' + neuron_name + '_' + str(i))
                     n_list.append(n)
                     n_dict[(i, neuron_name)] = n
 

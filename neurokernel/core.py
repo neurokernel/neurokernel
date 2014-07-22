@@ -513,10 +513,10 @@ if __name__ == '__main__':
         man = Manager(get_random_port(), get_random_port())
         man.add_brok()
 
-        m1_int_sel_in_gpot = '/aingpot[0:'+n+']'
-        m1_int_sel_out_gpot = '/aoutgpot[0:'+n+']'
-        m1_int_sel_in_spike = '/ainspike[0:'+n+']'
-        m1_int_sel_out_spike = '/aoutspike[0:'+n+']'
+        m1_int_sel_in_gpot = '/aingpot0,/aingpot1'
+        m1_int_sel_out_gpot = '/aoutgpot0,/aoutgpot1'
+        m1_int_sel_in_spike = '/ainspike0,/ainspike1'
+        m1_int_sel_out_spike = '/aoutspike0,/aoutspike1'
         m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                                m1_int_sel_in_spike, m1_int_sel_out_spike])
         N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
@@ -528,13 +528,13 @@ if __name__ == '__main__':
                       m1_int_sel_out_gpot, m1_int_sel_out_spike,
                       np.zeros(N1_gpot, np.float64),
                       np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, 'm1   ')
+                      man.port_data, man.port_ctrl, 'm1')
         man.add_mod(m1)
 
-        m2_int_sel_in_gpot = '/bingpot[0:'+n+']'
-        m2_int_sel_out_gpot = '/boutgpot[0:'+n+']'
-        m2_int_sel_in_spike = '/binspike[0:'+n+']'
-        m2_int_sel_out_spike = '/boutspike[0:'+n+']'
+        m2_int_sel_in_gpot = '/bingpot0,/bingpot1'
+        m2_int_sel_out_gpot = '/boutgpot0,/boutgpot1'
+        m2_int_sel_in_spike = '/binspike0,/binspike1'
+        m2_int_sel_out_spike = '/boutspike0,/boutspike1'
         m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                                m2_int_sel_in_spike, m2_int_sel_out_spike])
         N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
@@ -546,7 +546,7 @@ if __name__ == '__main__':
                       m2_int_sel_out_gpot, m2_int_sel_out_spike,
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, 'm2   ')
+                      man.port_data, man.port_ctrl, 'm2')
                                              
         # Make sure that all ports in the patterns' interfaces are set so 
         # that they match those of the modules:
@@ -559,14 +559,14 @@ if __name__ == '__main__':
         pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
         pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
         pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-        pat12['/aoutgpot[0]', '/bingpot[0]'] = 1
-        pat12['/aoutgpot[1]', '/bingpot[1]'] = 1
-        pat12['/boutgpot[0]', '/aingpot[0]'] = 1
-        pat12['/boutgpot[1]', '/aingpot[1]'] = 1
-        pat12['/aoutspike[0]', '/binspike[0]'] = 1
-        pat12['/aoutspike[1]', '/binspike[1]'] = 1
-        pat12['/boutspike[0]', '/ainspike[0]'] = 1
-        pat12['/boutspike[1]', '/ainspike[1]'] = 1
+        pat12['/aoutgpot0', '/bingpot0'] = 1
+        pat12['/aoutgpot1', '/bingpot1'] = 1
+        pat12['/boutgpot0', '/aingpot0'] = 1
+        pat12['/boutgpot1', '/aingpot1'] = 1
+        pat12['/aoutspike0', '/binspike0'] = 1
+        pat12['/aoutspike1', '/binspike1'] = 1
+        pat12['/boutspike0', '/ainspike0'] = 1
+        pat12['/boutspike1', '/ainspike1'] = 1
         man.connect(m1, m2, pat12, 0, 1)
 
         # To set the emulation to exit after executing a fixed number of steps,
