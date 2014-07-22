@@ -53,13 +53,32 @@ class test_interface(TestCase):
                                   ('foo', 2),
                                   ('foo', 3)])
 
+        i = Interface('[0:4]')
+        i['[0:2]', 'interface'] = 0
+        i['[2:4]', 'interface'] = 1
+        self.assertSequenceEqual(i.to_tuples(0),
+                                 [(0,), (1,)])
+        self.assertSequenceEqual(i.to_tuples(),
+                                 [(0,), (1,), (2,), (3,)])
+
     def test_data_select(self):
         i = self.interface.data_select(lambda x: x['io'] >= 'out')
         assert_index_equal(i.data.index,
                            pd.MultiIndex.from_tuples([('foo', 1),
                                                       ('foo', 2)]))
 
-    def test_from_df(self):
+    def test_from_df_index(self):
+        idx = pd.Index(['foo', 'bar', 'baz'])
+        data = [(0, 'in', 'spike'),
+                (1, 'in', 'gpot'),
+                (1, 'out', 'gpot')]
+        columns = ['interface', 'io', 'type']
+        df = pd.DataFrame(data, index=idx, columns=columns)
+        i = Interface.from_df(df)
+        assert_index_equal(i.data.index, idx)
+        assert_frame_equal(i.data, df)
+
+    def test_from_df_multiindex(self):
         idx = pd.MultiIndex.from_tuples([('foo', 0),
                                          ('foo', 1),
                                          ('foo', 2)])
@@ -420,6 +439,25 @@ class test_pattern(TestCase):
                                  [('/aaa[0]', '/bbb[2]'),
                                   ('/aaa[1]', '/bbb[0]'),
                                   ('/aaa[2]', '/bbb[1]')])
+
+    def test_split_multiindex(self):
+        idx = pd.MultiIndex(levels=[['a'], ['b', 'c'], ['d', 'e'], [0, 1, 2]],
+                            labels=[[0, 0, 0, 0], [0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 1, 2]])
+        idx0, idx1 = Pattern.split_multiindex(idx, slice(0, 2), slice(2, 4))
+        assert_index_equal(idx0,
+                           pd.MultiIndex(levels=[['a'], ['b', 'c']],
+                                         labels=[[0, 0, 0, 0], [0, 0, 1, 1]]))
+        assert_index_equal(idx1,
+                           pd.MultiIndex(levels=[['d', 'e'], [0, 1, 2]],
+                                         labels=[[0, 1, 0, 1], [0, 1, 1, 2]]))
+
+        idx0, idx1 = Pattern.split_multiindex(idx, slice(0, 1), slice(1, 4))
+        assert_index_equal(idx0,
+                           pd.Index(['a', 'a', 'a', 'a']))
+        assert_index_equal(idx1,
+                           pd.MultiIndex(levels=[['b', 'c'], ['d', 'e'], [0, 1, 2]],
+                                         labels=[[0, 0, 1, 1], [0, 1, 0, 1],
+                                                 [0, 1, 1, 2]]))
 
     def test_to_graph(self):
         p = Pattern('/foo[0:4]', '/bar[0:4]')
