@@ -293,6 +293,39 @@ class test_path_like_selector(TestCase):
         self.assertSequenceEqual(self.sel.index_to_selector(idx),
                                  [('foo', 0), ('foo', 1)])
 
+    def test_is_empty(self):
+        assert self.sel.is_empty('') == True
+        assert self.sel.is_empty([[]]) == True
+        assert self.sel.is_empty([()]) == True
+        assert self.sel.is_empty(((),)) == True
+        assert self.sel.is_empty(([])) == True
+        assert self.sel.is_empty([[], []]) == True
+        assert self.sel.is_empty([[], ()]) == True
+        assert self.sel.is_empty(([], [])) == True
+        assert self.sel.is_empty(([], ())) == True
+
+        assert self.sel.is_empty('/xxx') == False
+        assert self.sel.is_empty([['x']]) == False
+        assert self.sel.is_empty([('x')]) == False
+
+    def test_is_expandable(self):
+        assert self.sel.is_expandable('') == False
+
+        assert self.sel.is_expandable('/foo') == False
+        assert self.sel.is_expandable('/foo/bar') == False
+        assert self.sel.is_expandable('/foo/*') == False
+
+        assert self.sel.is_expandable([['foo']]) == False
+        assert self.sel.is_expandable([['foo', 'bar']]) == False
+
+        assert self.sel.is_expandable('/foo[0:2]') == True
+        assert self.sel.is_expandable('[0:2]') == True
+
+        assert self.sel.is_expandable([['foo', [0, 1]]]) == True
+        assert self.sel.is_expandable([['foo', 0],
+                                       ['foo', 1]]) == True
+        assert self.sel.is_expandable([[[0, 1]]]) == True
+
     def test_is_in_str(self):
         assert self.sel.is_in('', '/foo[0:5]') == True
         assert self.sel.is_in('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True

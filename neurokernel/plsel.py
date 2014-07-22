@@ -573,6 +573,35 @@ class PathLikeSelector(object):
         return [tuple(x) for y in p for x in itertools.product(*y)]
     
     @classmethod
+    def is_empty(cls, selector):
+        """
+        Check whether a selector is empty.
+
+        Parameters
+        ----------
+        selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
+
+        Returns
+        -------
+        result : bool
+            True if the selector contains no port identifiers.
+
+        Notes
+        -----
+        Ambiguous selectors are not deemed to be empty.
+        """
+
+        assert cls.is_selector(selector)
+        if selector == '':
+            return True
+        if type(selector) in [list, tuple] and \
+           all([len(x) == 0 for x in selector]):
+            return True
+        return False
+
+    @classmethod
     def is_expandable(cls, selector):
         """
         Check whether a selector can be expanded into multiple identifiers.
