@@ -540,7 +540,7 @@ if __name__ == '__main__':
         N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
                                                          m2_int_sel_out_gpot]))
         N2_spike = PathLikeSelector.count_ports(','.join([m2_int_sel_in_spike,
-                                                m2_int_sel_out_spike]))
+                                                          m2_int_sel_out_spike]))
         m2 = MyModule(m2_int_sel,
                       m2_int_sel_in_gpot, m2_int_sel_in_spike,
                       m2_int_sel_out_gpot, m2_int_sel_out_spike,

@@ -1,5 +1,3 @@
-import time
-
 from tables.utils import convertToNPAtom2
 
 import numpy as np

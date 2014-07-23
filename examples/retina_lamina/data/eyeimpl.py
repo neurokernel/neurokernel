@@ -2,7 +2,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import os
+import sys, os
+sys.path.append(os.path.realpath('../'))
 from collections import namedtuple
 from math import ceil
 from scipy.io import loadmat
@@ -14,7 +15,7 @@ PI = np.pi
 
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
-from matplotlib.animation import FFMpegFileWriter
+from matplotlib.animation import FFMpegFileWriter, AVConvFileWriter
 import matplotlib.pyplot as plt
 
 
@@ -44,7 +45,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     DEFAULT_INTENSITY = 0
     MARGIN = 10
 
-    def __init__(self, nrings, reye=1):
+    def __init__(self, nrings, reye=1, retina_only=False):
         """ map to sphere based on a 2D hex geometry that is closer to a circle
             e.g for one ring there will be 7 neurons arranged like this:
                 4
@@ -66,8 +67,10 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         self._supneighborslist = []
         self._adjneighborslist = []
         self._init_neurons()
-        self._generate_retina()
-        self._generate_lamina()
+        self._generate_retina(retina_only)
+        # TODO add retina only to state
+        if not retina_only:
+            self._generate_lamina()
 
 
 
@@ -573,10 +576,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     def get_intensities(self, file, config={}):
         """ file: input image file, mat file is assumed with a variable im in it
-            config: {'still_image': True(default)/False, 
+            config: {'type': 'image'(default)/'video'/'scaled_image',
                      'steps':<simulation steps>,
                      'dt':<time step>, 
-                     'output_file':<filename>}
+                     'output_file':<filename>
+                     'factors': list of factors for scaled image }
             returns: numpy array with with height the number of simulation
                      steps and width the number of neurons.
                      The order of neurons is the same as that returned 
@@ -596,14 +600,19 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             time_steps = 1000
 
         try:
-            still_image = config['still_image']
+            type = config['type']
         except KeyError:
-            still_image = True
+            type = 'image'
             
         try:
             output_file = config['output_file']
         except KeyError:
             output_file = None
+
+        try:
+            factors = config['factors']
+        except KeyError:
+            factors = [1,2,3]
 
         mat = loadmat(file)
         try:
@@ -637,7 +646,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                     'include': 'R1toR6',
                                                     'add_dummy': False})
 
-        if still_image:
+        if type == 'image':
             mx = mx - mx.min()  # start from 0
             my = my - my.min()
             mx *= h_im/mx.max()  # scale to image size
@@ -651,7 +660,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                 screenlong)
             intensities = np.tile(intensities, (time_steps, 1))
             positions = None
-        else:
+        elif type == 'video':
             intensities = np.empty((time_steps, len(photorlat)), 
                                    dtype='float32')
             positions = np.empty((time_steps, 4),
@@ -681,6 +690,28 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                        photorlong, screenlat, 
                                                        screenlong)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
+        elif type == 'graded_image':
+            mx = mx - mx.min()  # start from 0
+            my = my - my.min()
+            mx *= h_im/mx.max()  # scale to image size
+            my *= w_im/my.max()
+
+            # shape (20, 3)*self._nrings
+            transimage = transform.interpolate((mx, my))
+            
+            intensities = self._get_intensities(transimage, photorlat, 
+                                                photorlong, screenlat, 
+                                                screenlong)
+            intensities = np.tile(intensities, (time_steps, 1))
+
+            # Equal or almost equal parts of the array equal with the
+            # factors are multiplied by the respective factor
+            end = len(intensities)
+            flen = len(factors)
+            for i, factor in enumerate(factors):
+                intensities[i*end//flen:(i+1)*end//flen] *= factors
+
+            positions = None
 
         # get interpolated image values on these positions
         with h5py.File(output_file, 'w') as f:
@@ -688,8 +719,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              dtype=np.float64,
                              data=intensities)
 
-        InputConfig = namedtuple('InputConfig', 'image positions')
-        self.input_config = InputConfig(image=image, positions=positions)
+        InputConfig = namedtuple('InputConfig', 'image positions factors')
+        self.input_config = InputConfig(image=image, positions=positions,
+                                        factors=factors)
         return intensities
 
     def _get_intensities(self, transimage, photorlat, photorlong,
@@ -812,25 +844,44 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              ', valid values retina, lamina'.format(lpu))
 
     def _plot_output(self, type, xpositions, ypositions, data, media_file):
-        fig, (ax1, ax2) = plt.subplots(2)
+        fig, (ax1, ax2) = plt.subplots(1, 2)
         image = self.input_config.image
         impositions = self.input_config.positions
 
-        if type == 'image':
-            ax1.imshow(image, cmap=cm.Greys_r)
-            ax2.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
-                        s=5, edgecolors='none')
-                
-            fig.savefig(media_file)
-        elif type == 'video':
-            writer = FFMpegFileWriter(fps=5, codec='h264')
-            writer.setup(
-                fig, media_file, dpi=80,
-                frame_prefix=os.path.splitext(media_file)[0]+'_')
-            writer.frame_format = 'png'
-            writer.grab_frame()
+        writer = AVConvFileWriter(fps=5, codec='mpeg4')
+        writer.setup(
+            fig, media_file, dpi=80,
+            frame_prefix=os.path.splitext(media_file)[0]+'_')
+        writer.frame_format = 'png'
 
-            step = 100
+        step = 100
+        plt.hold(False)
+
+        if type == 'image':
+            #ax1.imshow(image, cmap=cm.Greys_r)
+            #ax2.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
+            #            s=10, edgecolors='none')
+            #
+            #fig.savefig(media_file)
+            for i, d in enumerate(data):
+                if i % step == 0:
+                    ax1.imshow(image, cmap=cm.Greys_r)
+                    ax2.scatter(xpositions, -ypositions, c=data[i],
+                                cmap=cm.gray, s=10, edgecolors='none')
+                    fig.canvas.draw()
+                    writer.grab_frame()
+            writer.finish()
+
+
+        elif type == 'video':
+            #writer = AVConvFileWriter(fps=5, codec='mpeg4')
+            #writer.setup(
+            #    fig, media_file, dpi=80,
+            #    frame_prefix=os.path.splitext(media_file)[0]+'_')
+            #writer.frame_format = 'png'
+
+            #step = 100
+            #plt.hold(False)
             for i, d in enumerate(data):
                 if i % step == 0:
                     # TODO show red rectangle
@@ -840,7 +891,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                      int(yind[0]):int(yind[1])],
                                cmap=cm.Greys_r)
                     ax2.scatter(xpositions, -ypositions, c=data[i],
-                                cmap=cm.gray, s=5, edgecolors='none')
+                                cmap=cm.gray, s=10, edgecolors='none')
                     fig.canvas.draw()
                     writer.grab_frame()
             writer.finish()
@@ -869,7 +920,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         pat = Pattern(ret_sel, lam_sel)
         # pattern gets input from retina
         # HACK Pattern changes ret_sel, lam_sel so they are generated again
-        # selectors are converted to a format that is guaranteed to work but it may be simpler
+        # selectors are converted to a format that is guaranteed to work,
+        # but the code could be simpler
         ret_sel = ','.join(['/'+sel for sel in ret_lpu.interface.index.tolist()])
         lam_sel_in = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist() if sel.startswith("ret")])
         lam_sel_out = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist() if not sel.startswith("ret")])
@@ -878,18 +930,14 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         pat.interface[ret_sel] = [0, 'in', 'gpot']
         pat.interface[lam_sel_in] = [1, 'out', 'gpot']
         pat.interface[lam_sel_out] = [1, 'in', 'gpot']
-        # pat.interface[','.join(ret_sel), 'io'] = 'in'
-        # pat.interface[','.join(ret_sel), 'type'] = 'gpot'
-        # pat.interface[','.join(lam_sel_in), 'io'] = 'out'
-        # pat.interface[','.join(lam_sel_out), 'io'] = 'in'
-        # pat.interface[','.join(lam_sel), 'type'] = 'gpot'
+
         for sel in lam_sel_in.split(','):
             pat[sel.replace('in', 'out'), sel] = 1
         
         print('Connecting LPUs with the pattern')
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
-    def _generate_retina(self):
+    def _generate_retina(self, retina_only=False):
         G = nx.DiGraph()
         
         photoreceptor_num = 6*self._nommatidia
@@ -899,11 +947,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 'model': 'Photoreceptor',
                 'name': 'photor' + str(i),
                 'extern': True,  # gets input from file
-                'public': True,  # it's an output neuron
+                'public': False,  # True if it's an output neuron
                 'spiking': False,
-                'selector': '/retout' + str(i),
                 'num_microvilli': 30000
             }
+            if not retina_only:
+                G.node[i]['selector'] = '/retout' + str(i)
+                G.node[i]['public'] = True
         self._retina_graph = G
 
     def _generate_lamina(self):

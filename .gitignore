@@ -2,6 +2,7 @@
 *.pyc
 
 #
+*.mp4
 *.avi
 *.prof
 *.png
