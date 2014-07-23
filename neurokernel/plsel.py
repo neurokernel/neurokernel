@@ -749,6 +749,8 @@ class PathLikeSelector(object):
         Notes
         -----
         The selectors must not be ambiguous.
+
+        The empty selector is deemed to be disjoint to all other selectors.
         """
 
         assert len(selectors) >= 1
@@ -760,9 +762,14 @@ class PathLikeSelector(object):
         ids = set()
         for selector in selectors:
 
+            # Skip empty selectors; they are seemed to be disjoint to all
+            # selectors:
+            ids_new = set(map(tuple, cls.expand(selector)))
+            if ids_new == set([()]):
+                continue
+
             # If some identifiers are present in both the previous expanded
             # selectors and the current selector, the selectors cannot be disjoint:
-            ids_new = set(map(tuple, cls.expand(selector)))
             if ids.intersection(ids_new):
                 return False
             else:

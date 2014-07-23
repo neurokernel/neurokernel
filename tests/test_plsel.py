@@ -177,13 +177,16 @@ class test_path_like_selector(TestCase):
                                         names=[0, 1, 2])
         assert_frame_equal(result, self.df.ix[idx])
 
-    def test_are_disjoint_str(self):
+    def test_are_disjoint(self):
         assert self.sel.are_disjoint('/foo[0:10]/baz',
                                      '/bar[10:20]/qux') == True
         assert self.sel.are_disjoint('/foo[0:10]/baz',
                                      '/foo[5:15]/[baz,qux]') == False
 
-    def test_are_disjoint_list(self):
+        assert self.sel.are_disjoint('/foo', '') == True
+        assert self.sel.are_disjoint('', '') == True
+        assert self.sel.are_disjoint('/foo', '/foo', '') == False
+
         result = self.sel.are_disjoint([['foo', (0, 10), 'baz']], 
                                        [['bar', (10, 20), 'qux']])
         assert result == True
