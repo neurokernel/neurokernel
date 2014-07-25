@@ -18,7 +18,7 @@ class ImageTransform(SignalTransform):
         self._image = image
 
     def get_transform(self):
-        return self._f
+        return self._image
 
     def interpolate(self, points):
         points0 = np.atleast_1d(points[0])

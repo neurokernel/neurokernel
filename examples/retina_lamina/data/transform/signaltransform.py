@@ -14,6 +14,6 @@ class SignalTransform(object):
     @abstractmethod
     def interpolate(self, point):
         """ gets the value of the signal at the specific point,
-            as the signal is discrete it will be a kind of approximation
+            as the signal is discrete it will be interpolated
         """
         return

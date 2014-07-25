@@ -2,8 +2,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
 
-import sys, os
-sys.path.append(os.path.realpath('../'))
+import os
+
 from collections import namedtuple
 from math import ceil
 from scipy.io import loadmat
@@ -475,7 +475,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         try:
             rule = config['rule']
             valid_values = ["superposition", "adjacency"]
-            if coord not in valid_values:
+            if rule not in valid_values:
                 raise ValueError("rule attribute must be one of %s" % ", "
                                  .join(str(x) for x in valid_values))
         except KeyError:
@@ -487,7 +487,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             return self._adjneighborslist
 
     def get_positions(self, config={'coord': 'spherical', 'include': 'center',
-                                    'add_dummy':True }):
+                                    'add_dummy': True}):
         """ returns projected positions of photoreceptors
             config: configuration dictionary
                     keys
@@ -668,8 +668,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             mx = mx - mx.min()  # start from 0
             my = my - my.min()
             for i in range(time_steps):
-                mx = mx + 2*np.random.random() - 1  # move randomly
-                my = my + 2*np.random.random() - 1  # between -1 and 1
+                scale = 0.1
+                mx = mx + scale*(2*np.random.random() - 1)  # move randomly
+                my = my + scale*(2*np.random.random() - 1)  # between -1 and 1
                 mxi_max = mx.max()
                 if mxi_max > h_im:
                     mx = mx - 2*(mxi_max-h_im)
@@ -706,22 +707,24 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
             # Equal or almost equal parts of the array equal with the
             # factors are multiplied by the respective factor
-            end = len(intensities)
+            ilen = len(intensities)
             flen = len(factors)
             for i, factor in enumerate(factors):
-                intensities[i*end//flen:(i+1)*end//flen] *= factors
+                intensities[(i*ilen)//flen:((i+1)*ilen)//flen] *= factor
 
             positions = None
 
         # get interpolated image values on these positions
-        with h5py.File(output_file, 'w') as f:
-            f.create_dataset('array', intensities.shape,
-                             dtype=np.float64,
-                             data=intensities)
+        if output_file:
+            with h5py.File(output_file, 'w') as f:
+                f.create_dataset('array', intensities.shape,
+                                 dtype=np.float64,
+                                 data=intensities)
 
-        InputConfig = namedtuple('InputConfig', 'image positions factors')
+        InputConfig = namedtuple('InputConfig', 'image positions factors intensities')
         self.input_config = InputConfig(image=image, positions=positions,
-                                        factors=factors)
+                                        factors=factors, 
+                                        intensities=intensities)
         return intensities
 
     def _get_intensities(self, transimage, photorlat, photorlong,
@@ -844,9 +847,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              ', valid values retina, lamina'.format(lpu))
 
     def _plot_output(self, type, xpositions, ypositions, data, media_file):
-        fig, (ax1, ax2) = plt.subplots(1, 2)
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
         image = self.input_config.image
         impositions = self.input_config.positions
+        imfactors = self.input_config.factors
+        intensities = self.input_config.intensities
 
         writer = AVConvFileWriter(fps=5, codec='mpeg4')
         writer.setup(
@@ -857,31 +862,22 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         step = 100
         plt.hold(False)
 
+        #TODO keep DRY
         if type == 'image':
-            #ax1.imshow(image, cmap=cm.Greys_r)
-            #ax2.scatter(xpositions, -ypositions, c=data[-1], cmap=cm.gray,
-            #            s=10, edgecolors='none')
-            #
-            #fig.savefig(media_file)
             for i, d in enumerate(data):
                 if i % step == 0:
                     ax1.imshow(image, cmap=cm.Greys_r)
-                    ax2.scatter(xpositions, -ypositions, c=data[i],
+                    ax1.set_title('Image')
+                    ax2.scatter(xpositions, -ypositions, c=intensities[i],
                                 cmap=cm.gray, s=10, edgecolors='none')
+                    ax2.set_title('Intensities')
+                    ax3.scatter(xpositions, -ypositions, c=data[i],
+                                cmap=cm.gray, s=10, edgecolors='none')
+                    ax3.set_title('Photoreceptor outputs')
                     fig.canvas.draw()
                     writer.grab_frame()
             writer.finish()
-
-
         elif type == 'video':
-            #writer = AVConvFileWriter(fps=5, codec='mpeg4')
-            #writer.setup(
-            #    fig, media_file, dpi=80,
-            #    frame_prefix=os.path.splitext(media_file)[0]+'_')
-            #writer.frame_format = 'png'
-
-            #step = 100
-            #plt.hold(False)
             for i, d in enumerate(data):
                 if i % step == 0:
                     # TODO show red rectangle
@@ -890,11 +886,27 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     ax1.imshow(image[int(xind[0]):int(xind[1]),
                                      int(yind[0]):int(yind[1])],
                                cmap=cm.Greys_r)
-                    ax2.scatter(xpositions, -ypositions, c=data[i],
+                    ax2.scatter(xpositions, -ypositions, c=intensities[i],
+                                cmap=cm.gray, s=10, edgecolors='none')
+                    ax3.scatter(xpositions, -ypositions, c=data[i],
                                 cmap=cm.gray, s=10, edgecolors='none')
                     fig.canvas.draw()
                     writer.grab_frame()
             writer.finish()
+        elif type == 'graded_image':
+            #TODO multiply by factors
+            for i, d in enumerate(data):
+                if i % step == 0:
+                    factor = imfactors[i*len(imfactors)//len(data)]
+                    ax1.imshow(image, cmap=cm.Greys_r)
+                    ax2.scatter(xpositions, -ypositions, c=intensities[i],
+                                cmap=cm.gray, s=10, edgecolors='none')
+                    ax3.scatter(xpositions, -ypositions, c=data[i],
+                                cmap=cm.gray, s=10, edgecolors='none')
+                    fig.canvas.draw()
+                    writer.grab_frame()
+            writer.finish()
+
         else:
             raise ValueError('Invalid value for media type: {}'
                              ', valid values image, video'.format(type))
@@ -1126,23 +1138,25 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
 
 if __name__ == '__main__':
+    #TODO fix
     from matplotlib.collections import LineCollection
     import time
 
-    N_RINGS = 1
-    STILL_IMAGE = True
+    N_RINGS = 35
+    INPUT_TYPE = 'image'
     
     print('Initializing geometry')
     hemisphere = EyeGeomImpl(N_RINGS)
     print('Getting positions')
     positions = hemisphere.get_positions({'coord': 'cartesian3D'})
     print('Getting neighbors')
-    neighbors = hemisphere.get_neighbors()
+    neighbors = hemisphere.get_neighbors({'rule': 'superposition'})
 
     print('Getting intensities')
     start_time = time.time()
     intensities = hemisphere.get_intensities('image1.mat', 
-                                             {'still_image': STILL_IMAGE})
+                                             {'type': INPUT_TYPE,
+                                              'steps': 10})
     print('--- Duration {} seconds ---'.format(time.time() - start_time))
 
     print('Setting up plot 1: Ommatidia on 3D sphere')
@@ -1169,7 +1183,7 @@ if __name__ == '__main__':
         original = original.id
         for neighbor in neighborlist[1:]:
             neighbor = neighbor.id
-            if (neighbor != -1):  # some edges are added twice
+            if (not neighbor is None):  # some edges are added twice
                 segmentlist.append([[xpositions[original],
                                      ypositions[original]],
                                     [xpositions[neighbor],
@@ -1212,7 +1226,7 @@ if __name__ == '__main__':
                                                        'add_dummy': False})
     print(xpositions.shape)
 
-    ax3_2.scatter(xpositions, -ypositions, c=intensities[1], cmap=cm.gray, s=5,
+    ax3_2.scatter(xpositions, -ypositions, c=intensities[0], cmap=cm.gray, s=10,
                   edgecolors='none')
 
-    plt.show()
+    fig3.savefig('figure3.png', bbox_inches='tight')

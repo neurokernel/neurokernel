@@ -2,6 +2,7 @@
 *.pyc
 
 #
+*.mat
 *.mp4
 *.avi
 *.prof
@@ -14,3 +15,4 @@
 *temp*
 neurokernel.egg-info
 neurokernel/neurokernel.log
+!neurokernel/examples/retina_lamina/image1.mat

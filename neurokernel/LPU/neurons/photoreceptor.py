@@ -40,7 +40,7 @@ class Photoreceptor(BaseNeuron):
         self.grid_transduction = (self.num_neurons, 1)
         self.block_hh = (256, 1, 1)
         self.grid_hh = ( (self.num_neurons-1)/self.block_hh[0] + 1, 1)
-        
+
         self._initialize()
 
     def _initialize(self):
@@ -57,50 +57,50 @@ class Photoreceptor(BaseNeuron):
                 "/", "array",
                 tables.Float64Atom() if self.dtype == np.double else tables.Float32Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_V = tables.openFile(outputfile+'V.h5', 'w')
             self.outputfile_V.createEArray(
                 "/", "array",
                 tables.Float64Atom() if self.dtype == np.double else tables.Float32Atom(),
                 (0, self.num_neurons))
-    
+
         if self.record_microvilli:
             self.outputfile_X0 = tables.openFile(outputfile+'X0.h5', 'w')
             self.outputfile_X0.createEArray(
                 "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_X1 = tables.openFile(outputfile+'X1.h5', 'w')
             self.outputfile_X1.createEArray(
                 "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_X2 = tables.openFile(outputfile+'X2.h5', 'w')
             self.outputfile_X2.createEArray(
                 "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_X3 = tables.openFile(outputfile+'X3.h5', 'w')
             self.outputfile_X3.createEArray(
                 "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_X4 = tables.openFile(outputfile+'X4.h5', 'w')
             self.outputfile_X4.createEArray(
                 "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_X5 = tables.openFile(outputfile+'X5.h5', 'w')
             self.outputfile_X5.createEArray(
                 "/", "array",
                 tables.Int16Atom(),
                 (0, self.num_neurons))
-        
+
             self.outputfile_X6 = tables.openFile(outputfile+'X6.h5', 'w')
             self.outputfile_X6.createEArray(
                 "/", "array",
@@ -132,27 +132,27 @@ class Photoreceptor(BaseNeuron):
         for i in range(4):
             Xaddress[i] = int(self.X[i].gpudata)
 
-        change_ind1 = np.asarray([1, 1, 2, 3, 3, 2, 5, 4, 5, 5, 7, 6, 6], 
+        change_ind1 = np.asarray([1, 1, 2, 3, 3, 2, 5, 4, 5, 5, 7, 6, 6],
                                  np.int32) - 1
-        change_ind2 = np.asarray([1, 1, 3, 4, 1, 1, 1, 1, 1, 7, 1, 1, 1], 
+        change_ind2 = np.asarray([1, 1, 3, 4, 1, 1, 1, 1, 1, 7, 1, 1, 1],
                                  np.int32) - 1
-        change1 = np.asarray([0, -1, -1, -1, -1, 1, 1, -1, -1, -2, -1, 1, -1], 
+        change1 = np.asarray([0, -1, -1, -1, -1, 1, 1, -1, -1, -2, -1, 1, -1],
                              np.int32)
-        change2 = np.asarray([0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0], 
+        change2 = np.asarray([0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
                              np.int32)
-        
+
         self.n_s0 = 202.
         self.ns = self.n_s0
         self.Ans = 200.
         self.tau_ns = 1.
-        
-        
+
+
         self.transduction_func = get_transduction_func(
             self.dtype, self.block_transduction[0],
             self.num_microvilli, Xaddress,
             change_ind1, change_ind2,
             change1, change2)
-            
+
     def _setup_hh(self):
         self.I_all = garray.empty((1, self.num_neurons), self.dtype)
         # self.V = garray.empty((1, self.num_neurons), self.dtype)
@@ -162,7 +162,7 @@ class Photoreceptor(BaseNeuron):
         V_init = np.empty((1, self.num_neurons), dtype=np.double)
         V_init.fill(-0.0711358)
         cuda.memcpy_htod(int(self.V), V_init)
-        
+
         self.hhx[0].fill(0.3566)
         self.hhx[1].fill(0.9495)
         self.hhx[2].fill(0.0254)
@@ -190,20 +190,20 @@ class Photoreceptor(BaseNeuron):
             self.outputfile_I.flush()
             self.outputfile_V.root.array.append(self.V.get())
             self.outputfile_V.flush()
-        
+
         if self.record_microvilli:
             tmp = self.X[0].get().view(np.int16) # G G*
             self.outputfile_X0.root.array.append([tmp[:, 0]])
             self.outputfile_X0.flush()
             self.outputfile_X1.root.array.append([tmp[:, 1]])
             self.outputfile_X1.flush()
-            
+
             tmp = self.X[1].get().view(np.int16) # PLC* D*
             self.outputfile_X2.root.array.append([tmp[:,0]])
             self.outputfile_X2.flush()
             self.outputfile_X3.root.array.append([tmp[:,1]])
             self.outputfile_X3.flush()
-            
+
             tmp = self.X[2].get().view(np.int16) # C* T*
             self.outputfile_X4.root.array.append([tmp[:,0]])
             self.outputfile_X4.flush()
@@ -236,15 +236,15 @@ class Photoreceptor(BaseNeuron):
                 self.I_all.gpudata, self.V, self.hhx[0].gpudata,
                 self.hhx[1].gpudata, self.hhx[2].gpudata, self.hhx[3].gpudata,
                 self.num_neurons, self.run_dt/10, 10)
-    
+
     #TODO create a function that runs all functions related to simulation and
-    # and does not rely on the user to call the functions in the right order  
+    # and does not rely on the user to call the functions in the right order
     def generate_graphs(self, dur):
-        """ Access output files and 
-            process them to generate graphs and/or videos 
+        """ Access output files and
+            process them to generate graphs and/or videos
         """
         outputfile = self.outputfile
-        
+
         dt = self.run_dt # check if other dt is needed
         Nt = int(dur/dt)
         t = np.arange(0, dt*Nt, dt)
@@ -252,7 +252,7 @@ class Photoreceptor(BaseNeuron):
         axis = 1  # axis along which the summation is done
         neuron = 0  # neuron id
         microv = 0  # microvillus id
-        
+
         input = si.read_array(self.inputfile)
         if self.record_neuron:
             outputV = si.read_array(outputfile + 'V.h5')
@@ -266,12 +266,12 @@ class Photoreceptor(BaseNeuron):
             outputX5 = si.read_array(outputfile + 'X5.h5')
             outputX6 = si.read_array(outputfile + 'X6.h5')
 
-        
+
         fig, ax = plt.subplots(5,2, sharex=True)
 
         ax[0,0].plot(t,input[:,neuron])
         ax[0,0].set_title('Input Light Intensity per second', fontsize=12)
-        
+
         if self.record_neuron:
             ax[0,1].plot(t,outputV[:,neuron])
             ax[0,1].set_title('Output Potential', fontsize=12)
@@ -292,10 +292,10 @@ class Photoreceptor(BaseNeuron):
             ax[4,0].set_title('T star state of a microvillus', fontsize=12)
             ax[4,1].plot(t,outputX6[:,neuron])
             ax[4,1].set_title('M star state of a microvillus', fontsize=12)
-            
+
         fig.canvas.draw()
         fig.savefig(outputfile + '_plot.png', bbox_inches='tight')
-        
+
         # Visualizer needs gexf file that is which is not present here
 
 # end of photoreceptor
@@ -311,14 +311,14 @@ photon_absorption(curandStateXORWOW_t *state, short* M, int ld,
     int tid = threadIdx.x;
     int bid = blockIdx.x;
     int bdim = blockDim.x;
-    
+
     %(type)s lambda = input[bid] / num_microvilli;
     //int photon = input[bid];
-    
+
     int n_photon;
-    
+
     curandStateXORWOW_t localstate = state[bdim*bid + tid];
-    
+
     for(int i = tid; i < num_microvilli; i += bdim)
     {
         //M[i + bid * ld] += photon;//curand_poisson(state + tid + bdim*bid, lambda);
@@ -352,7 +352,7 @@ def get_transduction_func(dtype, block_size, num_microvilli, Xaddress,
 extern "C" {
 #include "stdio.h"
 
-#define NUM_MICROVILLI %(num_microvilli)d 
+#define NUM_MICROVILLI %(num_microvilli)d
 #define BLOCK_SIZE %(block_size)d
 #define LA 0.5
 
@@ -379,24 +379,24 @@ extern "C" {
 #define K_P     0.3     /* Dissociation coefficient for calcium positive feedback */
 #define K_P_INV 3.3333  /* K_P inverse ( too many decimals are not important) */
 #define K_N     0.18    /* Dissociation coefficient for calmodulin negative feedback */
-#define K_N_INV 5.5555  /* K_N inverse ( too many decimals are not important) */ 
+#define K_N_INV 5.5555  /* K_N inverse ( too many decimals are not important) */
 #define K_U     30      /* (mM^(-1)s^(-1)) Rate of Ca2+ uptake by calmodulin */
 #define K_R     5.5     /* (mM^(-1)s^(-1)) Rate of Ca2+ release by calmodulin */
 #define K_CA    1000    /* s^(-1) diffusion from microvillus to somata (tuned) */
 
 #define K_NACA  3e-8    /* Scaling factor for Na+/Ca2+ exchanger model */
 
-#define KAPPA_DSTAR         1300    /* s^(-1) rate constant - there is also a capital K_DSTAR */
+#define KAPPA_DSTAR         1300.0  /* s^(-1) rate constant - there is also a capital K_DSTAR */
 #define KAPPA_GSTAR         7.05    /* s^(-1) rate constant */
 #define KAPPA_PLCSTAR       15.6    /* s^(-1) rate constant */
-#define KAPPA_TSTAR         150     /* s^(-1) rate constant */
-#define K_DSTAR             100     /* rate constant */
+#define KAPPA_TSTAR         150.0   /* s^(-1) rate constant */
+#define K_DSTAR             100.0   /* rate constant */
 
 #define F                   96485   /* (mC/mol) Faraday constant (changed from paper)*/
 #define N                   4       /* Binding sites for calcium on calmodulin */
 #define R                   8.314   /* (J*K^-1*mol^-1)Gas constant */
 #define T                   293     /* (K) Absolute temperature */
-#define VOL                 3e-9    /* changed from 3e-12microlitres to nlitres 
+#define VOL                 3e-9    /* changed from 3e-12microlitres to nlitres
                                      * microvillus volume so that units agree */
 
 #define N_S0_DIM        1   /* initial condition */
@@ -456,7 +456,7 @@ __device__ float compute_ca(int Tstar, float Cstar_cc, float Vm)
     /* CaM = C_T - Cstar_cc */
     float denom = (K_CA + (N*K_U*C_T) - (N*K_U)*Cstar_cc + 179.0952 * expf(-(F/(R*T))*Vm));  // (K_NACA*NA_CO^3/VOL*F)
     /* I_Ca ~= 0.4*I_in */
-    float numer = (0.4*I_in)/(2*VOL*F) + 
+    float numer = (0.4*I_in)/(2*VOL*F) +
                   ((K_NACA*CA_CO*NA_CI*NA_CI*NA_CI)/(VOL*F)) +  // in paper it's -K_NACA... due to different conventions
                   N*K_R*Cstar_cc;
 
@@ -469,28 +469,28 @@ transduction(curandStateXORWOW_t *state, int ld1,
 {
     int tid = threadIdx.x;
     int bid = blockIdx.x;
-    
+
     __shared__ int X[BLOCK_SIZE][7];  // number of molecules
     __shared__ float Ca[BLOCK_SIZE];
     __shared__ float Vm;  // membrane voltage, shared over all threads
     __shared__ float fn[BLOCK_SIZE];
-    
+
     if(tid == 0)
     {
         Vm = d_Vm[bid];  // V
     }
-    
+
     __syncthreads();
-    
+
 
     float sumrate;
     float dt_advanced;
     int reaction_ind;
     short2 tmp;
-    
+
     // copy random generator state locally to avoid accessing global memory
     curandStateXORWOW_t localstate = state[BLOCK_SIZE*bid + tid];
-    
+
     // iterate over all microvilli in one photoreceptor
     for(int i = tid; i < NUM_MICROVILLI; i += BLOCK_SIZE)
     {
@@ -499,7 +499,7 @@ transduction(curandStateXORWOW_t *state, int ld1,
         tmp = ((short2*)d_X[2])[bid*ld1 + i];
         X[tid][5] = tmp.x;
         X[tid][6] = tmp.y;
-        
+
         // update calcium concentration
         Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm);
         fn[tid] = compute_fn(num_to_mM(X[tid][5]), ns);
@@ -526,7 +526,7 @@ transduction(curandStateXORWOW_t *state, int ld1,
         sumrate += KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);  // 3
         sumrate += GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]);  // 5
         sumrate += KAPPA_GSTAR * X[tid][1] * X[tid][0];  // 2
-        sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * 
+        sumrate += (KAPPA_TSTAR/(K_DSTAR*K_DSTAR)) *
                    (1 + H_TSTARP*compute_fp( Ca[tid] )) *
                    X[tid][4]*(X[tid][4]-1)*(T_T-X[tid][6])*0.5 ;  // 9
 
@@ -547,23 +547,23 @@ transduction(curandStateXORWOW_t *state, int ld1,
 
             sumrate -= mM_to_num(K_U) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) );
             reaction_ind = (sumrate<=2e-5) * 11;
-            
+
             if(!reaction_ind)
             {
-                sumrate -= mM_to_num(K_R) * num_to_mM(X[tid][5]) ;
+                sumrate -= mM_to_num(K_R) * num_to_mM(X[tid][5]);
                 reaction_ind = (sumrate<=2e-5) * 12;
                 if(!reaction_ind)
                 {
-                    sumrate -= GAMMA_TSTAR * (1 + H_TSTARN*fn[tid]) * X[tid][6] ;
+                    sumrate -= GAMMA_TSTAR * (1 + H_TSTARN*fn[tid]) * X[tid][6];
                     reaction_ind = (sumrate<=2e-5) * 10;
                     if(!reaction_ind)
                     {
-                        sumrate -= GAMMA_DSTAR * (1 + H_DSTAR*fn[tid]) * X[tid][4] ;
+                        sumrate -= GAMMA_DSTAR * (1 + H_DSTAR*fn[tid]) * X[tid][4];
                         reaction_ind = (sumrate<=2e-5) * 8;
 
                         if(!reaction_ind)
                         {
-                            sumrate -= GAMMA_PLCSTAR * (1 + H_PLCSTAR*fn[tid]) * X[tid][3] ;
+                            sumrate -= GAMMA_PLCSTAR * (1 + H_PLCSTAR*fn[tid]) * X[tid][3];
                             reaction_ind = (sumrate<=2e-5) * 7;
                             if(!reaction_ind)
                             {
@@ -571,28 +571,28 @@ transduction(curandStateXORWOW_t *state, int ld1,
                                 reaction_ind = (sumrate<=2e-5) * 1;
                                 if(!reaction_ind)
                                 {
-                                    sumrate -= KAPPA_DSTAR * X[tid][3] ;
+                                    sumrate -= KAPPA_DSTAR * X[tid][3];
                                     reaction_ind = (sumrate<=2e-5) * 6;
                                     if(!reaction_ind)
                                     {
-                                        sumrate -= GAMMA_GAP * X[tid][2] * X[tid][3] ;
+                                        sumrate -= GAMMA_GAP * X[tid][2] * X[tid][3];
                                         reaction_ind = (sumrate<=2e-5) * 4;
-                                    
+
                                         if(!reaction_ind)
                                         {
-                                            sumrate -= KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]) ;
+                                            sumrate -= KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);
                                             reaction_ind = (sumrate<=2e-5) * 3;
                                             if(!reaction_ind)
                                             {
-                                                sumrate -= GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]) ;
+                                                sumrate -= GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]);
                                                 reaction_ind = (sumrate<=2e-5) * 5;
                                                 if(!reaction_ind)
                                                 {
-                                                    sumrate -= KAPPA_GSTAR * X[tid][1] * X[tid][0] ;
+                                                    sumrate -= KAPPA_GSTAR * X[tid][1] * X[tid][0];
                                                     reaction_ind = (sumrate<=2e-5) * 2;
                                                     if(!reaction_ind)
                                                     {
-                                                        sumrate -= (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * 
+                                                        sumrate -= (KAPPA_TSTAR/(K_DSTAR*K_DSTAR)) *
                                                                    (1 + H_TSTARP*compute_fp( Ca[tid] )) *
                                                                    X[tid][4]*(X[tid][4]-1)*(T_T-X[tid][6])*0.5;
                                                         reaction_ind = (sumrate<=2e-5) * 9;
@@ -607,31 +607,31 @@ transduction(curandStateXORWOW_t *state, int ld1,
                     }
                 }
             }
-            
+
             int ind;
-               
+
             // only up to two state variables are needed to be updated
             // update the first one.
             ind = change_ind1[reaction_ind];
             X[tid][ind] += change1[reaction_ind];
-            
+
             //if(reaction_ind == 9)
             //{
             //    X[tid][ind] = max(X[tid][ind], 0);
             //}
-                
+
             ind = change_ind2[reaction_ind];
             //update the second one
             if(ind != 0)
             {
                 X[tid][ind] += change2[reaction_ind];
             }
-            
+
             // compute the advance time again
             Ca[tid] = compute_ca(X[tid][6], num_to_mM(X[tid][5]), Vm);
             fn[tid] = compute_fn( num_to_mM(X[tid][5]), ns );
             //fp[tid] = compute_fp( Ca[tid] );
-        
+
             sumrate = 0;
             sumrate += mM_to_num(K_U) * Ca[tid] * (0.5 - num_to_mM(X[tid][5]) ); //11
             sumrate += mM_to_num(K_R) * num_to_mM(X[tid][5]); //12
@@ -644,14 +644,14 @@ transduction(curandStateXORWOW_t *state, int ld1,
             sumrate += KAPPA_PLCSTAR * X[tid][2] * (PLC_T-X[tid][3]);  // 3
             sumrate += GAMMA_GSTAR * (G_T - X[tid][2] - X[tid][1] - X[tid][3]); // 5
             sumrate += KAPPA_GSTAR * X[tid][1] * X[tid][0]; // 2
-            sumrate += (KAPPA_TSTAR/(KAPPA_DSTAR*KAPPA_DSTAR)) * 
+            sumrate += (KAPPA_TSTAR/(K_DSTAR*K_DSTAR)) *
                        (1 + H_TSTARP*compute_fp( Ca[tid] )) *
                        X[tid][4]*(X[tid][4]-1)*(T_T-X[tid][6])*0.5; // 9
 
             dt_advanced -= logf(curand_uniform(&localstate))/(LA + sumrate);
 
         } // end while
-        
+
         ((short*)d_X[3])[bid*ld1 + i] = X[tid][0];
         ((short2*)d_X[0])[bid*ld1 + i] = make_short2(X[tid][1], X[tid][2]);
         ((short2*)d_X[1])[bid*ld1 + i] = make_short2(X[tid][3], X[tid][4]);
@@ -691,7 +691,7 @@ transduction(curandStateXORWOW_t *state, int ld1,
     cuda.memcpy_htod(d_change_ind2_address, change_ind2)
     cuda.memcpy_htod(d_change1_address, change1)
     cuda.memcpy_htod(d_change2_address, change2)
-    
+
     func.prepare([np.intp, np.int32, np.float32, np.intp, np.float32])
     func.set_cache_config(cuda.func_cache.PREFER_SHARED)
     return func
@@ -707,13 +707,13 @@ def get_hh_func(dtype):
 #define G_K 0.082
 #define C 4
 
-    
+
 __global__ void
 hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
    %(type)s* d_dra, %(type)s* d_dri, int num_neurons, %(type)s ddt, int multiple)
 {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    
+
     if(tid < num_neurons)
     {
         %(type)s I = I_all[tid] * 1.0;  // rescale the input as temporary remedy
@@ -722,10 +722,10 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
         %(type)s si = d_si[tid];
         %(type)s dra = d_dra[tid];
         %(type)s dri = d_dri[tid];
-        
+
         %(type)s x_inf, tau_x, dx;
         %(type)s dt = 1000 * ddt;
-        
+
         for(int i = 0; i < multiple; ++i)
         {
             /* The precision of power constant affects the result */
@@ -733,23 +733,23 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
             tau_x = 0.13+3.39*exp%(fletter)s(-(-73-V)*(-73-V)/400);
             dx = (x_inf - sa)/tau_x;
             sa += dt * dx;
-            
+
             x_inf = 1/(1+exp%(fletter)s((-55-V)/-5.5));
             tau_x = 113*exp(-(-71-V)*(-71-V)/841);
             dx = (x_inf - si)/tau_x;
             si += dt * dx;
-            
+
             x_inf = sqrt%(fletter)s(1/(1+exp%(fletter)s((-5-V)/9)));
             tau_x = 0.5+5.75*exp%(fletter)s(-(-25-V)*(-25-V)/1024);
             dx = (x_inf - dra)/tau_x;
             dra += dt * dx;
-            
+
             x_inf = 1/(1+exp%(fletter)s((-25-V)/-10.5));
             tau_x = 890;
             dx = (x_inf - dri)/tau_x;
             dri += dt * dx;
-            
-            dx = (I - G_K*(V-E_K) - G_Cl * (V-E_Cl) - G_s * sa * si * (V-E_K) - 
+
+            dx = (I - G_K*(V-E_K) - G_Cl * (V-E_Cl) - G_s * sa * si * (V-E_K) -
                   G_dr * dra * dri * (V-E_K) - 0.093*(V-10) ) /C;
             V += dt * dx;
         }
@@ -775,52 +775,52 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
 def get_sum_current_func(dtype, block_size):
     template = """
 #define BLOCK_SIZE %(block_size)d
-    
+
 __global__ void
 sum_current(short2* d_Tstar, int ld, int num_microvilli, %(type)s* I_all,
             %(type)s* d_Vm)
 {
     int tid = threadIdx.x;
     int bid = blockIdx.x;
-    
+
     __shared__ int sum[BLOCK_SIZE];
     sum[tid] = 0;
-    
+
     for(int i = tid; i < num_microvilli; i += BLOCK_SIZE)
     {
         sum[tid] += d_Tstar[i + bid*ld].y;
     }
     __syncthreads();
-    
+
     if(tid < 32)
     {
         #pragma unroll
         for(int i = 0; i < BLOCK_SIZE/32; ++i)
         {
             sum[tid] += sum[tid + 32*i];
-        } 
+        }
     }
-    
+
     if(tid < 16)
     {
         sum[tid] += sum[tid+16];
     }
-    
+
     if(tid < 8)
     {
         sum[tid] += sum[tid+8];
     }
-    
+
     if(tid < 4)
     {
         sum[tid] += sum[tid+4];
     }
-    
+
     if(tid < 2)
     {
         sum[tid] += sum[tid+2];
     }
-    
+
     if(tid == 0)
     {
         %(type)s Vm = d_Vm[bid];

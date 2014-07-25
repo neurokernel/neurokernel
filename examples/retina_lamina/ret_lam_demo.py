@@ -98,7 +98,8 @@ if args.input:
     _dummy = eyemodel.get_intensities(IMAGE_FILE,
                                       {'type': args.video_type,
                                        'steps': args.steps,
-                                       'dt': dt, 'output_file': INPUT_FILE})
+                                       'dt': dt, 'output_file': INPUT_FILE,
+                                       'factors': [1, 5, 10, 20, 50, 100]})
 if args.gexf:
     print('Writing retina lpu')
     eyemodel.write_retina(RET_GEXF_FILE)
@@ -124,7 +125,7 @@ if not args.suppress:
                   input_file=INPUT_FILE,
                   output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
                   port_data=port_data, device=args.ret_dev, id='retina',
-                  debug=False)
+                  debug=True)
     man.add_mod(lpu_ret)
 
     if not args.retina_only:
