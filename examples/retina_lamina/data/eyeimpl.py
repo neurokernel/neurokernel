@@ -745,8 +745,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             # nxn closest points on grid (int values)
             indlat, indlong = self.get_closest_indexes(parallelf, meridianf,
                                                        min1=0, min2=0, 
-                                                       max1=h_tim, 
-                                                       max2=w_tim, 
+                                                       max1=w_tim, 
+                                                       max2=h_tim, 
                                                        n=2)
             try:
                 pixels = transimage[indlong, indlat]  # nxn np array
