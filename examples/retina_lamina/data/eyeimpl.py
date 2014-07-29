@@ -19,8 +19,8 @@ from matplotlib.animation import FFMpegFileWriter, AVConvFileWriter
 import matplotlib.pyplot as plt
 
 
-# import neurokernel.LPU.utils.simpleio as sio
-# from neurokernel.pattern import Pattern
+import neurokernel.LPU.utils.simpleio as sio
+from neurokernel.pattern import Pattern
 
 from neurongeometry import NeuronGeometry
 from image2signal import Image2Signal
@@ -575,7 +575,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     def get_intensities(self, file, config={}):
         """ file: input image file, mat file is assumed with a variable im in it
-            config: {'type': 'image'(default)/'video'/'scaled_image',
+            config: {'type': 'image'(default)/'video',
                      'steps':<simulation steps>,
                      'dt':<time step>, 
                      'output_file':<filename>
@@ -611,7 +611,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         try:
             factors = config['factors']
         except KeyError:
-            factors = [1,2,3]
+            factors = [1]
 
         mat = loadmat(file)
         try:
@@ -657,6 +657,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                 photorlong, screenlat, 
                                                 screenlong)
             intensities = np.tile(intensities, (time_steps, 1))
+            # Equal or almost equal parts of the array equal with the
+            # factors are multiplied by the respective factor
+            ilen = len(intensities)
+            flen = len(factors)
+            for i, factor in enumerate(factors):
+                intensities[(i*ilen)//flen:((i+1)*ilen)//flen] *= factor
+
             positions = None
         elif type == 'video':
             intensities = np.empty((time_steps, len(photorlat)), 
@@ -689,28 +696,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                        photorlong, screenlat, 
                                                        screenlong)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
-        elif type == 'graded_image':
-            mx = mx - mx.min()  # start from 0
-            my = my - my.min()
-            mx *= h_im/mx.max()  # scale to image size
-            my *= w_im/my.max()
-
-            # shape (M, P)*self._nrings
-            transimage = transform.interpolate((mx, my))
-            
-            intensities = self._get_intensities(transimage, photorlat, 
-                                                photorlong, screenlat, 
-                                                screenlong)
-            intensities = np.tile(intensities, (time_steps, 1))
-
-            # Equal or almost equal parts of the array equal with the
-            # factors are multiplied by the respective factor
-            ilen = len(intensities)
-            flen = len(factors)
-            for i, factor in enumerate(factors):
-                intensities[(i*ilen)//flen:((i+1)*ilen)//flen] *= factor
-
-            positions = None
 
         # get interpolated image values on these positions
         if output_file:
@@ -727,9 +712,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     def _get_intensities(self, transimage, photorlat, photorlong,
                          screenlat, screenlong):
-    
-        
-        
+
         # shape (M, P)*self._nrings
         # h meridians, w parallels
         h_tim, w_tim = transimage.shape
@@ -777,7 +760,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             # e^(-kappa) can be ignored since kappa will be large so
             # x*exp(x) < 2*pi*eps*(inprc-1)
             # where x=(inprc-1)*kappa
-            
             
             self._kappa = self.compute_W(2*PI*eps*(inprc-1))/(inprc-1)
             print('Kappa: {}'.format(self._kappa))
@@ -876,15 +858,15 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             data = f['array'].value
         
         if lpu == 'retina':
-            xpositions, ypositions = self.get_positions(
+            latpositions, longpositions = self.get_positions(
                     {'coord': 'spherical', 'include': 'R1toR6',
                      'add_dummy': False})
 
-            self._plot_output(type, xpositions, ypositions, data, media_file)
+            self._plot_output(type, latpositions, longpositions, data, media_file)
 
 
         elif lpu == 'lamina':
-            xpositions, ypositions = self.get_positions(
+            latpositions, longpositions = self.get_positions(
                     {'coord': 'spherical', 'include': 'center',
                      'add_dummy': False})
             try:
@@ -894,14 +876,14 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
             n_ids = self._get_lamina_ids(neuron)
 
-            self._plot_output(type, xpositions, ypositions, data[:, n_ids],
+            self._plot_output(type, latpositions, longpositions, data[:, n_ids],
                               media_file)
         else:
             raise ValueError('Invalid value for lpu: {}'
                              ', valid values retina, lamina'.format(lpu))
 
-    def _plot_output(self, type, xpositions, ypositions, data, media_file):
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+    def _plot_output(self, type, latpositions, longpositions, data, media_file):
+        fig = plt.figure(figsize=plt.figaspect(0.3))
         image = self.input_config.image
         impositions = self.input_config.positions
         imfactors = self.input_config.factors
@@ -917,53 +899,72 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         plt.hold(False)
 
         #TODO keep DRY
-        if type == 'image':
-            for i, d in enumerate(data):
-                if i % step == 0:
+        U, V = np.mgrid[0:np.pi/2:complex(0, self.PARALLELS),
+                        0:2*np.pi:complex(0, self.MERIDIANS)]
+        X = np.cos(V)*np.sin(U)
+        Y = np.sin(V)*np.sin(U)
+        Z = np.cos(U)
+        for i, d in enumerate(data):
+            if i % step == 0:
+                ax1 = fig.add_subplot(1, 3, 1)
+                ax1.set_title('Image')
+                if type == 'image':
                     ax1.imshow(image, cmap=cm.Greys_r)
-                    ax1.set_title('Image')
-                    #ax2.scatter(xpositions, -ypositions, c=intensities[i],
-                    #            cmap=cm.gray, s=10, edgecolors='none')
-                    ax.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=colors,
-                                    linewidth=0, antialiased=False)
-                    ax2.set_title('Intensities')
-                    ax3.scatter(xpositions, -ypositions, c=data[i],
-                                cmap=cm.gray, s=10, edgecolors='none')
-                    ax3.set_title('Photoreceptor outputs')
-                    fig.canvas.draw()
-                    writer.grab_frame()
-            writer.finish()
-        elif type == 'video':
-            for i, d in enumerate(data):
-                if i % step == 0:
+                elif type == 'video':
                     # TODO show red rectangle
+                    ax1 = fig.add_subplot(1, 3, 1)
                     xind = impositions[i, 0:2]
                     yind = impositions[i, 2:4]
                     ax1.imshow(image[int(xind[0]):int(xind[1]),
                                      int(yind[0]):int(yind[1])],
                                cmap=cm.Greys_r)
-                    ax2.scatter(xpositions, -ypositions, c=intensities[i],
-                                cmap=cm.gray, s=10, edgecolors='none')
-                    ax3.scatter(xpositions, -ypositions, c=data[i],
-                                cmap=cm.gray, s=10, edgecolors='none')
-                    fig.canvas.draw()
-                    writer.grab_frame()
-            writer.finish()
-        elif type == 'graded_image':
-            for i, d in enumerate(data):
-                if i % step == 0:
-                    factor = imfactors[i*len(imfactors)//len(data)]
-                    ax1.imshow(image, cmap=cm.Greys_r)
-                    ax2.scatter(xpositions, -ypositions, c=intensities[i]*factor,
-                                cmap=cm.gray, s=10, edgecolors='none')
-                    ax3.scatter(xpositions, -ypositions, c=data[i],
-                                cmap=cm.gray, s=10, edgecolors='none')
-                    fig.canvas.draw()
-                    writer.grab_frame()
-            writer.finish()
-        else:
-            raise ValueError('Invalid value for media type: {}'
-                             ', valid values image, video'.format(type))
+                else:
+                    raise ValueError('Invalid value for media type: {}'
+                                     ', valid values image, video'.format(type))
+                
+                colors = self.compute_colors(U, V, latpositions, 
+                                             longpositions, intensities[i])
+                ax2 = fig.add_subplot(1, 3, 2, projection='3d')
+                ax2.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
+                                 antialiased=False, shade=False)
+                ax2.set_title('Intensities')
+                colors = self.compute_colors(U, V, latpositions, 
+                                             longpositions, data[i])
+                ax3 = fig.add_subplot(1, 3, 3, projection='3d')
+                ax3.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
+                                 antialiased=False, shade=False)
+                ax3.set_title('Photoreceptor outputs')
+                fig.canvas.draw()
+                writer.grab_frame()
+        writer.finish()
+
+    @staticmethod
+    def compute_colors(gridlats, gridlongs, lats, longs, values):
+        """
+            computes values at positions gridlat, gridlong based on values at
+            positions lat, long given by 'values' array
+            Result is normalized in interval [0, 1]
+            gridlats:
+            gridlongs:
+            lats: flat array of latitudes
+            longs: flat array of longitudes
+            values: flat array of values corresponding to the positions (lats, longs)
+            return: interpolated values at grid positions
+        """
+        gvalues = np.empty(gridlats.size)
+        coords = zip(gridlats.flatten(), gridlongs.flatten())
+        for i,(glat, glong) in enumerate(coords):
+            # assign value of the closest point
+            in_prod = np.sin(lats)*np.sin(glat)*np.cos(glong-longs) \
+                    + np.cos(lats)*np.cos(glat)
+            maxpos = in_prod.argmax()
+            gvalues[i] = values[maxpos]
+        # normalize result
+        gvalues -= gvalues.min()
+        if gvalues.max() > 0:
+            gvalues /= gvalues.max()
+        print('min,max: {},{}'.format(gvalues.min(), gvalues.max()))
+        return gvalues.reshape(gridlats.shape)
 
     def _get_lamina_ids(self, neuron_name):
         G = self._lamina_graph
