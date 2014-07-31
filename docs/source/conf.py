@@ -37,7 +37,7 @@ class Mock(object):
     def __getitem__(self, v):
         return Mock()
 
-MOCK_MODULES = ['bidict', 'lxml', 'matplotlib', 'matplotlib.pyplot',
+MOCK_MODULES = ['bidict', 'cachetools', 'lxml', 'matplotlib', 'matplotlib.pyplot',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
                 'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
