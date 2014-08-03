@@ -7,7 +7,7 @@ Represent connectivity pattern using pandas DataFrame.
 from collections import OrderedDict
 import itertools
 
-from cachetools import lfu_cache
+from chash import lfu_cache_method
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -192,6 +192,7 @@ class Interface(object):
 
         self.data.drop(self.data.index, inplace=True)
 
+    @lfu_cache_method(key_idx=0)
     def data_select(self, f, inplace=False):
         """
         Restrict Interface data with a selection function.
@@ -322,6 +323,7 @@ class Interface(object):
         assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def gpot_ports(self, i=None):
         """
         Restrict Interface ports to graded potential ports.
@@ -351,6 +353,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -379,7 +382,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
@@ -483,6 +486,7 @@ class Interface(object):
 
         return self.sel.is_in(s, self.index.tolist())
 
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def out_ports(self, i=None):
         """
         Restrict Interface ports to output ports.
@@ -512,6 +516,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache_method(key_idx=0)
     def port_select(self, f, inplace=False):
         """
         Restrict Interface ports with a selection function.
@@ -541,6 +546,7 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def spike_ports(self, i=None):
         """
         Restrict Interface ports to spiking ports.
@@ -570,6 +576,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def to_selectors(self, i=None):
         """
         Retrieve Interface's port identifiers as list of path-like selectors.
@@ -597,6 +604,7 @@ class Interface(object):
             result.append(selector)
         return result
 
+    @lfu_cache_method(maxsize=2, key_idx=0)
     def to_tuples(self, i=None):
         """
         Retrieve Interface's port identifiers as list of tuples.
@@ -1236,6 +1244,7 @@ class Pattern(object):
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
 
+    @lfu_cache_method(maxsize=4, key_idx=slice(0, 2))
     def is_connected(self, from_int, to_int):
         """
         Check whether the specified interfaces are connected.
