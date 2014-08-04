@@ -66,7 +66,6 @@ if __name__ == "__main__":
         data_files = [('neurokernel', ['neurokernel/__init__.py'])],
         include_package_data = True,
         dependency_links = [
-            'http://github.com/lebedov/xxhash/tarball/master#egg=xxhash',
             'http://github.com/lebedov/chash/tarball/master#egg=chash'],
         install_requires = [
             'bidict',
@@ -86,6 +85,6 @@ if __name__ == "__main__":
             'scipy',
             'tables',
             'twiggy',
-            'xxhash'
+            'xxh'
         ],
         )
