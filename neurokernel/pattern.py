@@ -7,31 +7,34 @@ Represent connectivity pattern using pandas DataFrame.
 from collections import OrderedDict
 import itertools
 
-from cachetools import lfu_cache
+from chash import lfu_cache_method
 import networkx as nx
 import numpy as np
 import pandas as pd
 
 from plsel import PathLikeSelector
 
+from chash import chash
+_hash_func = chash
+
 class Interface(object):
     """
     Container for set of interface comprising ports.
 
     This class contains information about a set of interfaces comprising
-    path-like identifiers and the attributes associated with them. 
-    By default, each port must have at least the following attributes; 
+    path-like identifiers and the attributes associated with them.
+    By default, each port must have at least the following attributes;
     other attributes may be added:
 
     - interface - indicates which interface a port is associated with.
-    - io - indicates whether the port receives input ('in') or 
+    - io - indicates whether the port receives input ('in') or
       emits output ('out').
-    - type - indicates whether the port emits/receives spikes or 
+    - type - indicates whether the port emits/receives spikes or
       graded potentials.
 
-    All port identifiers in an interface must be unique. For two interfaces 
+    All port identifiers in an interface must be unique. For two interfaces
     to be deemed compatible, they must contain the same port identifiers and
-    their identifiers' 'io' attributes must be the inverse of each other 
+    their identifiers' 'io' attributes must be the inverse of each other
     (i.e., every 'in' port in one interface must be mirrored by an 'out' port
     in the other interface.
 
@@ -51,8 +54,8 @@ class Interface(object):
     Parameters
     ----------
     selector : str, unicode, or sequence
-            Selector string (e.g., 'foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]) describing the port 
+            Selector string (e.g., 'foo[0:2]') or sequence of token
+            sequences (e.g., [['foo', (0, 2)]]) describing the port
             identifiers comprised by the interface.
     columns : list, default = ['interface', 'io', 'type']
         Data column names.
@@ -165,7 +168,7 @@ class Interface(object):
         """
         Interface identifiers.
         """
-        
+
         return set(self.data['interface'])
 
     @property
@@ -179,7 +182,7 @@ class Interface(object):
             Interface instance whose 'io' attributes are the inverse of those of
         the current instance.
         """
-        
+
         data_inv = self.data.copy()
         f = lambda x: 'out' if x == 'in' else \
             ('in' if x == 'out' else x)
@@ -193,6 +196,7 @@ class Interface(object):
 
         self.data.drop(self.data.index, inplace=True)
 
+    @lfu_cache_method(key_idx=0, hash_func=_hash_func)
     def data_select(self, f, inplace=False):
         """
         Restrict Interface data with a selection function.
@@ -227,7 +231,7 @@ class Interface(object):
     def from_df(cls, df):
         """
         Create an Interface from a properly formatted DataFrame.
-        
+
         Examples
         --------
         >>> import plsel
@@ -323,7 +327,7 @@ class Interface(object):
         assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def gpot_ports(self, i=None):
         """
         Restrict Interface ports to graded potential ports.
@@ -353,7 +357,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -382,7 +386,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
@@ -486,7 +490,7 @@ class Interface(object):
 
         return self.sel.is_in(s, self.index.tolist())
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def out_ports(self, i=None):
         """
         Restrict Interface ports to output ports.
@@ -516,6 +520,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache_method(key_idx=0, hash_func=_hash_func)
     def port_select(self, f, inplace=False):
         """
         Restrict Interface ports with a selection function.
@@ -545,7 +550,7 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def spike_ports(self, i=None):
         """
         Restrict Interface ports to spiking ports.
@@ -575,6 +580,7 @@ class Interface(object):
             except:
                 return Interface()
 
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def to_selectors(self, i=None):
         """
         Retrieve Interface's port identifiers as list of path-like selectors.
@@ -602,7 +608,7 @@ class Interface(object):
             result.append(selector)
         return result
 
-    @lfu_cache(maxsize=2)
+    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def to_tuples(self, i=None):
         """
         Retrieve Interface's port identifiers as list of tuples.
@@ -1247,6 +1253,7 @@ class Pattern(object):
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
 
+    @lfu_cache_method(maxsize=4, key_idx=slice(0, 2), hash_func=_hash_func)
     def is_connected(self, from_int, to_int):
         """
         Check whether the specified interfaces are connected.
