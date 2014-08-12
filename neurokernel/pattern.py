@@ -1272,9 +1272,19 @@ class Pattern(object):
         idx = self.data[self.data['conn'] != 0].index
         for t in idx.tolist():
             
-            # Split tuple into 'from' and 'to' identifiers:
-            from_id = t[0:self.num_levels['from']]
-            to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
+            # Split tuple into 'from' and 'to' identifiers; since the interface
+            # index for a 'from' or 'to' identifier is an Index rather than a
+            # MultiIndex, we need to extract a scalar rather than a tuple in the
+            # former case:
+            if self.num_levels['from'] == 1:
+                from_id = t[0]
+            else:
+                from_id = t[0:self.num_levels['from']]
+            if self.num_levels['to'] == 1:
+                to_id = t[self.num_levels['from']]
+            else:
+                to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
+
             if from_id in self.interface.interface_ports(from_int).index and \
                to_id in self.interface.interface_ports(to_int).index:
                 return True

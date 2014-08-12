@@ -420,7 +420,13 @@ class test_pattern(TestCase):
                                ('yyy', 2)])
         self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
 
-    def test_is_connected(self):
+    def test_is_connected_single_level(self):
+        p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
+        p['/aaa', '/ccc'] = 1
+        assert p.is_connected(0, 1) == True
+        assert p.is_connected(1, 0) == False
+
+    def test_is_connected_multi_level(self):
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
         p['/aaa[0]', '/bbb[2]'] = 1
         assert p.is_connected(0, 1) == True
