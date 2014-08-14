@@ -195,7 +195,7 @@ class Interface(object):
 
         self.data.drop(self.data.index, inplace=True)
 
-    @lfu_cache_method(key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(key_idx=0, hash_func=_hash_func)
     def data_select(self, f, inplace=False):
         """
         Restrict Interface data with a selection function.
@@ -326,7 +326,7 @@ class Interface(object):
         assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def gpot_ports(self, i=None):
         """
         Restrict Interface ports to graded potential ports.
@@ -356,7 +356,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -385,7 +385,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
@@ -489,7 +489,7 @@ class Interface(object):
 
         return self.sel.is_in(s, self.index.tolist())
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def out_ports(self, i=None):
         """
         Restrict Interface ports to output ports.
@@ -519,7 +519,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(key_idx=0, hash_func=_hash_func)
     def port_select(self, f, inplace=False):
         """
         Restrict Interface ports with a selection function.
@@ -549,7 +549,7 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def spike_ports(self, i=None):
         """
         Restrict Interface ports to spiking ports.
@@ -579,7 +579,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def to_selectors(self, i=None):
         """
         Retrieve Interface's port identifiers as list of path-like selectors.
@@ -607,7 +607,7 @@ class Interface(object):
             result.append(selector)
         return result
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def to_tuples(self, i=None):
         """
         Retrieve Interface's port identifiers as list of tuples.
@@ -1247,7 +1247,7 @@ class Pattern(object):
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
 
-    @lfu_cache_method(maxsize=4, key_idx=slice(0, 2), hash_func=_hash_func)
+    #@lfu_cache_method(maxsize=4, key_idx=slice(0, 2), hash_func=_hash_func)
     def is_connected(self, from_int, to_int):
         """
         Check whether the specified interfaces are connected.
@@ -1268,6 +1268,11 @@ class Pattern(object):
         assert from_int in self.interface.interface_ids
         assert to_int in self.interface.interface_ids
 
+        # Get indices of the 'from' and 'to' interfaces as lists to speed up the
+        # check below [*]:
+        from_idx = self.interface.interface_ports(from_int).index.tolist()
+        to_idx = self.interface.interface_ports(to_int).index.tolist()
+
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
         for t in idx.tolist():
@@ -1285,8 +1290,8 @@ class Pattern(object):
             else:
                 to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
 
-            if from_id in self.interface.interface_ports(from_int).index and \
-               to_id in self.interface.interface_ports(to_int).index:
+            # Check whether port identifiers are in the interface indices [*]:
+            if from_id in from_idx and to_id in to_idx:
                 return True
         return False
 

@@ -40,7 +40,7 @@ class test_interface(TestCase):
                                   '/foo[2]',
                                   '/foo[3]'])
 
-    def test_to_tuples(self):
+    def test_to_tuples_multi_levels(self):
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
@@ -53,6 +53,7 @@ class test_interface(TestCase):
                                   ('foo', 2),
                                   ('foo', 3)])
 
+    def test_to_tuples_single_level(self):
         i = Interface('[0:4]')
         i['[0:2]', 'interface'] = 0
         i['[2:4]', 'interface'] = 1
