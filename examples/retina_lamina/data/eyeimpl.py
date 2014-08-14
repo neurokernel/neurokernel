@@ -37,6 +37,7 @@ from transform.imagetransform import ImageTransform
 
 PORT_IN_GPOT = 'port_in_gpot'
 
+import time
 
 class EyeGeomImpl(NeuronGeometry, Image2Signal):
     # used by static and non static methods and should
@@ -644,6 +645,10 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                     'include': 'R1toR6',
                                                     'add_dummy': False})
 
+        
+        ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
+                                                photorlat,photorlong,
+                                                screenlat,screenlong)
         if type == 'image':
             mx = mx - mx.min()  # start from 0
             my = my - my.min()
@@ -652,10 +657,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
             # shape (M, P)*self._nrings
             transimage = transform.interpolate((mx, my))
-            
-            intensities = self._get_intensities(transimage, photorlat, 
-                                                photorlong, screenlat, 
-                                                screenlong)
+            intensities = self._get_intensities(transimage, ind_weights)
             intensities = np.tile(intensities, (time_steps, 1))
             # Equal or almost equal parts of the array equal with the
             # factors are multiplied by the respective factor
@@ -692,9 +694,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 
                 
                 transimage = transform.interpolate((mx, my))
-                intensities[i] = self._get_intensities(transimage, photorlat, 
-                                                       photorlong, screenlat, 
-                                                       screenlong)
+                
+                intensities[i] = self._get_intensities(transimage, ind_weights)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
 
         # get interpolated image values on these positions
@@ -710,16 +711,27 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                         intensities=intensities)
         return intensities
 
-    def _get_intensities(self, transimage, photorlat, photorlong,
-                         screenlat, screenlong):
+    def _get_intensities(self, transimage, ind_weights):
+        intensities = np.empty(len(ind_weights), dtype='float32')
+        for i, (indlong, indlat, weights) in enumerate(ind_weights):
+            try:
+                pixels = transimage[indlong, indlat]  # nxn np array
+            except IndexError:
+                print('Array size is {}'.format(transimage.shape))
+                print('Indexes are {} and {}'.format(indlat, indlong))
+                raise
 
-        # shape (M, P)*self._nrings
-        # h meridians, w parallels
-        h_tim, w_tim = transimage.shape
+            # works with >=1.8 numpy
+            intensities[i] = np.sum(pixels*weights)
+
+        return intensities
+
+    def _pre_get_intensities(self, h_tim, w_tim, photorlat, photorlong,
+                             screenlat, screenlong):
         dlat = screenlat[0, 1] - screenlat[0, 0]
         dlong = screenlong[1, 0] - screenlong[0, 0]
         
-        intensities = np.empty(len(photorlat), dtype='float32')
+        ind_weights = [0] * len(photorlat) 
         for i, (lat, long) in enumerate(zip(photorlat, photorlong)):
 
             # position in grid (float values)
@@ -732,21 +744,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                        min1=0, min2=0,
                                                        max1=w_tim, max2=h_tim,
                                                        n=self.get_min_points())
-            try:
-                pixels = transimage[indlong, indlat]  # nxn np array
-            except IndexError:
-                print('Array size is {}'.format(transimage.shape))
-                print('Indexes are {} and {}'.format(indlat, indlong))
-                raise
-
             weights = self.get_gaussian_sphere(screenlat[indlong, indlat],
                                                screenlong[indlong, indlat],
                                                lat, long, dlat, dlong,
                                                self.get_kappa())
-            # works with >=1.8 numpy
-            intensities[i] = np.sum(pixels*weights)
+            ind_weights[i] = (indlong, indlat, weights)
 
-        return intensities
+        return ind_weights
             
     def get_kappa(self):
         try:
@@ -833,7 +837,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             + np.cos(lats)*np.cos(reflat)
         #approximate e^kappa - e^-kappa as e^-kappa as kappa is generally large
         func3 = (kappa/2*PI)*np.exp(kappa*(in_prod-1))*np.sin(lats)*dlat*dlong
-        total = sum(sum(func3))
+        #total = sum(sum(func3))
         #print(total)
         return func3
 
@@ -997,7 +1001,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         for sel in lam_sel_in.split(','):
             pat[sel.replace('in', 'out'), sel] = 1
-
+            
         print('Connecting LPUs with the pattern')
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
