@@ -196,7 +196,6 @@ class Interface(object):
 
         self.data.drop(self.data.index, inplace=True)
 
-    @lfu_cache_method(key_idx=0, hash_func=_hash_func)
     def data_select(self, f, inplace=False):
         """
         Restrict Interface data with a selection function.
@@ -327,7 +326,6 @@ class Interface(object):
         assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def gpot_ports(self, i=None):
         """
         Restrict Interface ports to graded potential ports.
@@ -357,7 +355,6 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -386,7 +383,6 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
@@ -448,7 +444,7 @@ class Interface(object):
         # Find 'type' attributes for specified interfaces:
         type_a = self.data[self.data['interface'] == a]['type']
         type_b = i.data[i.data['interface'] == b]['type']
-        
+
         # Exclude null entries from 'type' attribs:
         type_a = type_a[type_a.notnull()]
         type_b = type_b[type_b.notnull()]
@@ -459,7 +455,6 @@ class Interface(object):
             ('in' if x == 'out' else x)
         io_a_inv = self.data[self.data['interface'] == a]['io'].apply(f)
         io_b = i.data[i.data['interface'] == b]['io']
-
         # Exclude null entries from inverted and original 'io' attribs:
         io_a_inv = io_a_inv[io_a_inv.notnull()]
         io_b = io_b[io_b.notnull()]
@@ -490,7 +485,6 @@ class Interface(object):
 
         return self.sel.is_in(s, self.index.tolist())
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def out_ports(self, i=None):
         """
         Restrict Interface ports to output ports.
@@ -520,7 +514,6 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(key_idx=0, hash_func=_hash_func)
     def port_select(self, f, inplace=False):
         """
         Restrict Interface ports with a selection function.
@@ -550,7 +543,6 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def spike_ports(self, i=None):
         """
         Restrict Interface ports to spiking ports.
@@ -580,7 +572,6 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def to_selectors(self, i=None):
         """
         Retrieve Interface's port identifiers as list of path-like selectors.
@@ -608,7 +599,6 @@ class Interface(object):
             result.append(selector)
         return result
 
-    @lfu_cache_method(maxsize=2, key_idx=0, hash_func=_hash_func)
     def to_tuples(self, i=None):
         """
         Retrieve Interface's port identifiers as list of tuples.
@@ -913,27 +903,22 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='+')
 
-    @lfu_cache(maxsize=2)
     def gpot_ports(self, i=None):
         return self.interface.gpot_ports(i)
     gpot_ports.__doc__ = Interface.gpot_ports.__doc__
 
-    @lfu_cache(maxsize=2)
     def in_ports(self, i=None):
         return self.interface.in_ports(i)
     in_ports.__doc__ = Interface.in_ports.__doc__
 
-    @lfu_cache(maxsize=2)
     def interface_ports(self, i=None):
         return self.interface.interface_ports(i)
     interface_ports.__doc__ = Interface.interface_ports.__doc__
 
-    @lfu_cache(maxsize=2)
     def out_ports(self, i=None):
         return self.interface.out_ports(i)
     out_ports.__doc__ = Interface.out_ports.__doc__
 
-    @lfu_cache(maxsize=2)
     def spike_ports(self, i=None):
         return self.interface.spike_ports(i)
     spike_ports.__doc__ = Interface.spike_ports.__doc__
@@ -1253,7 +1238,6 @@ class Pattern(object):
     def __repr__(self):
         return 'Pattern\n-------\n'+self.data.__repr__()
 
-    @lfu_cache_method(maxsize=4, key_idx=slice(0, 2), hash_func=_hash_func)
     def is_connected(self, from_int, to_int):
         """
         Check whether the specified interfaces are connected.
@@ -1273,9 +1257,11 @@ class Pattern(object):
         assert from_int != to_int
         assert from_int in self.interface.interface_ids
         assert to_int in self.interface.interface_ids
-
+        
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
+        from_ind_list = self.interface.interface_ports(from_int).index
+        to_ind_list = self.interface.interface_ports(to_int).index
         for t in idx.tolist():
             
             # Split tuple into 'from' and 'to' identifiers; since the interface
@@ -1291,8 +1277,8 @@ class Pattern(object):
             else:
                 to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
 
-            if from_id in self.interface.interface_ports(from_int).index and \
-               to_id in self.interface.interface_ports(to_int).index:
+            if from_id in from_ind_list and \
+               to_id in to_ind_list:
                 return True
         return False
 

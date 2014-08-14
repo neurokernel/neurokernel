@@ -439,11 +439,13 @@ class LPU(Module, object):
         self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
         self.interface[sel_in_spk, 'io', 'type'] = ['in', 'spike']
         self.interface[sel_out_spk, 'io', 'type'] = ['out', 'spike']
-
+        
     def pre_run(self):
         super(LPU, self).pre_run()
         self._initialize_gpu_ds()
         self._init_objects()
+        self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
+        self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
 
     def post_run(self):
         super(LPU, self).post_run()
@@ -604,14 +606,12 @@ class LPU(Module, object):
         Put inputs from other LPUs to buffer.
 
         """
-        
         if self.ports_in_gpot_mem_ind is not None:
             cuda.memcpy_htod(
                 int(self.V.gpudata) +
                 self.V.dtype.itemsize*
                 self.idx_start_gpot[self.ports_in_gpot_mem_ind],
-                self.pm['gpot'][self.sel_in_gpot])
-
+                self.pm['gpot'].data[self.sel_in_gpot_ids])
         if self.ports_in_spk_mem_ind is not None:
             cuda.memcpy_htod(
                 int(int(self.spike_state.gpudata) +
@@ -642,8 +642,9 @@ class LPU(Module, object):
 
         # Save the states of the graded potential neurons and the indices of the
         # spiking neurons that have emitted a spike:
+        self.logger.info('Extracting out port data')
         if len(self.out_ports_ids_gpot) > 0:
-            self.pm['gpot'][self.sel_out_gpot] = (self.out_port_data_gpot.get())
+            self.pm['gpot'].data[self.sel_out_gpot_ids] = (self.out_port_data_gpot.get())
         if len(self.out_ports_ids_spk) > 0:
             self.pm['spike'][self.sel_out_spk] = (self.out_port_data_spk.get())
 

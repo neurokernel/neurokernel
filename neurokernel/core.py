@@ -152,6 +152,7 @@ class Module(BaseModule):
         # send output to this module. Must be initialized immediately before
         # an emulation begins running. Keyed on source module ID:
         self._in_port_dict = {}
+        self._in_port_dict_ids = {}
         self._in_port_dict['gpot'] = {}
         self._in_port_dict['spike'] = {}
 
@@ -159,8 +160,12 @@ class Module(BaseModule):
         # receive input from this module. Must be initialized immediately before
         # an emulation begins running. Keyed on destination module ID:
         self._out_port_dict = {}
+        self._out_port_dict_ids = {}
         self._out_port_dict['gpot'] = {}
         self._out_port_dict['spike'] = {}
+
+        self._out_ids = []
+        self._in_ids = []
         
     def _init_gpu(self):
         """
@@ -210,13 +215,11 @@ class Module(BaseModule):
         """
 
         self.logger.info('retrieving from input buffer')
-
         # Since fan-in is not permitted, the data from all source modules
         # must necessarily map to different ports; we can therefore write each
         # of the received data to the array associated with the module's ports
         # here without worry of overwriting the data from each source module:
-        for in_id in self.in_ids:
-
+        for in_id in self._in_ids:
             # Check for exceptions so as to not fail on the first emulation
             # step when there is no input data to retrieve:
             try:
@@ -233,11 +236,10 @@ class Module(BaseModule):
 
                 # Assign transmitted graded potential values directly to port
                 # data array:
-                self.pm['gpot'][self._in_port_dict['gpot'][in_id]] = data[0]
-
+                self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
                 # Clear all input spike port data..
                 self.pm['spike'][self._in_port_dict['spike'][in_id]] = 0
-                
+                    
                 # ..and then set the port data using the transmitted
                 # information about source module spikes:
                 #self.pm['spike'][self.pm['spike'].inds_to_ports(data[1])] = 1
@@ -258,12 +260,11 @@ class Module(BaseModule):
 
         # Select data that should be sent to each destination module and append
         # it to the outgoing queue:
-        for out_id in self.out_ids:
-
+        for out_id in self._out_ids:
             # Select graded potential data using list of 
             # graded potential ports that can transmit output:
-            gpot_data = self.pm['gpot'][self._out_port_dict['gpot'][out_id]]
-
+            gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                
             # Select spiking ports that can transmit output:
             out_spike_ports_all = self._out_port_dict['spike'][out_id]
 
@@ -294,7 +295,7 @@ class Module(BaseModule):
                 self.logger.info('no output data to [%s] sent' % out_id)
             else:
                 self.logger.info('output data to [%s] sent' % out_id)
-
+                
     def run_step(self):
         """
         Module work method.
@@ -316,7 +317,11 @@ class Module(BaseModule):
         # for all modules receiving output from the current module:
         self._out_port_dict['gpot'] = {}
         self._out_port_dict['spike'] = {}
-        for out_id in self.out_ids:
+        self._out_port_dict_ids['gpot'] = {}
+        self._out_port_dict_ids['spike'] = {}
+
+        self._out_ids = self.out_ids
+        for out_id in self._out_ids:
             self.logger.info('extracting output ports for %s' % out_id)
 
             # Get interfaces of pattern connecting the current module to
@@ -329,15 +334,23 @@ class Module(BaseModule):
             self._out_port_dict['gpot'][out_id] = \
                 self.patterns[out_id].src_idx(from_int, to_int,
                                               'gpot', 'gpot')
+            self._out_port_dict_ids['gpot'][out_id] = \
+                self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id])
             self._out_port_dict['spike'][out_id] = \
                 self.patterns[out_id].src_idx(from_int, to_int,
                                               'spike', 'spike')
+            self._out_port_dict_ids['spike'][out_id] = \
+                self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id])
                                                               
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
         self._in_port_dict['gpot'] = {}
         self._in_port_dict['spike'] = {}
-        for in_id in self.in_ids:
+        self._in_port_dict_ids['gpot'] = {}
+        self._in_port_dict_ids['spike'] = {}
+
+        self._in_ids = self.in_ids
+        for in_id in self._in_ids:
             self.logger.info('extracting input ports for %s' % in_id)
 
             # Get interfaces of pattern connecting the current module to
@@ -350,10 +363,14 @@ class Module(BaseModule):
             self._in_port_dict['gpot'][in_id] = \
                 self.patterns[in_id].dest_idx(from_int, to_int,
                                               'gpot', 'gpot')
+            self._in_port_dict_ids['gpot'][in_id] = \
+                self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id])
             self._in_port_dict['spike'][in_id] = \
                 self.patterns[in_id].dest_idx(from_int, to_int,
                                               'spike', 'spike')
-
+            self._in_port_dict_ids['spike'][in_id] = \
+                self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
+            
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
@@ -376,13 +393,15 @@ class Module(BaseModule):
         with IgnoreKeyboardInterrupt():
             # Initialize environment:
             self._init_net()
+            
+            # Initialize _out_port_dict and _in_port_dict attributes:
+            self._init_port_dicts()
+
+            
             # Initialize Buffer for incoming data.  Dict used to store the
             # incoming data keyed by the source module id.  Each value is a
             # queue buferring the received data:
-            self._in_data = {k: collections.deque() for k in self.in_ids}
-
-            # Initialize _out_port_dict and _in_port_dict attributes:
-            self._init_port_dicts()
+            self._in_data = {k: collections.deque() for k in self._in_ids}
 
             # Perform any pre-emulation operations:
             self.pre_run()
