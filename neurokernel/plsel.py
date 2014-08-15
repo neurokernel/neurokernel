@@ -1005,7 +1005,23 @@ class PathLikeSelector(object):
         assert cls.is_selector(selector)
 
         if type(selector) in [str, unicode]:
-            parse_list = cls.parse(selector)
+            try:
+                tks = cls.expand(selector)
+                # Check if interface is set for all values
+                if not df.ix[:]['interface'].isnull().any():
+                    tks = cls.expand(selector)
+                    return df.ix[tks]['interface'].dropna().index.tolist()
+                else:
+                    t = []
+                    for s in tks:
+                        try:
+                            df.ix[s]
+                            t.append(s)
+                        except:
+                            pass
+                    return t
+            except:
+                parse_list = cls.parse(selector)
         elif type(selector) in [list, tuple]:
             parse_list = selector
         else:
@@ -1161,8 +1177,7 @@ class PathLikeSelector(object):
 
         # Discard duplicate level values:
         levels = [sorted(set(level)) for level in levels]
-        print levels
-
+        
         # Start with at least one label so that a valid Index will be returned
         # if the selector is empty:        
         labels = [[]]
@@ -1210,13 +1225,29 @@ class PathLikeSelector(object):
 
         selectors = cls.expand(selector)
 
+        N_sel = len(selectors)
+        lens =  map(len, selectors)
+        max_levels = max(lens) if N_sel else 0
+        
+
+        # NaNs in index are not supported by MultiIndex. Create from tuples
+        # only if all selectors have same levels.
+        if len(set(lens)) == 1:
+            if not names:
+                names = range(max_levels)
+                
+            if selectors == [()]:
+                return pd.MultiIndex(levels=[[]], labels=[[]], names=names)
+            else:
+                return pd.MultiIndex.from_tuples(selectors, names=names)
+        
+
+        
         # Start with at least one level so that a valid Index will be returned
         # if the selector is empty:
         levels = [[]]
 
         # Accumulate unique values for each level of the MultiIndex:
-        N_sel = len(selectors)
-        max_levels = max(map(len, selectors)) if N_sel else 0
         for i in xrange(N_sel):
 
             # Pad expanded selectors:
@@ -1269,8 +1300,13 @@ class PathLikeSelector(object):
         """
 
         assert cls.is_selector(selector)
-
         if type(selector) in [str, unicode]:
+            if len(df.index.names[start:stop])>1:
+                try:
+                    tks = cls.expand(selector)
+                    return df[tks]
+                except:
+                    pass
             parse_list = cls.parse(selector)
         elif type(selector) in [list, tuple]:
             parse_list = selector
@@ -1378,7 +1414,6 @@ class PortMapper(object):
         result : numpy.ndarray
             Selected data.
         """
-
         return self.data[self.sel.select(self.portmap, selector).values]
 
     def get_ports(self, f):

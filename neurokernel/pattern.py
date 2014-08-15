@@ -77,7 +77,7 @@ class Interface(object):
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
-
+        
     def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
@@ -482,8 +482,18 @@ class Interface(object):
         result : bool
             True if the comprised ports are in any of the stored interfaces.
         """
-
-        return self.sel.is_in(s, self.index.tolist())
+        try:
+            idx = self.sel.expand(s)
+            d = self.data['interface'].ix[idx]
+            if isinstance(d, int):
+                return True
+            if np.any(d.isnull().tolist()):
+                return False
+            else:
+                return True
+        except:
+            return self.sel.is_in(s, self.index.tolist())
+        #return self.sel.is_in(s, self.index.tolist())
 
     def out_ports(self, i=None):
         """
@@ -642,15 +652,22 @@ class Interface(object):
             Set of identifiers for interfaces that contain ports comprised by
             the selector.
         """
-        
-        try:
-            s = set(self[s, 'interface'].values.flatten())
 
-            # Ignore unset entries:
+        try:
+            t = self.sel.expand(s)
+            d = self.data['interface'][t]
+            s = set(d)
             s.discard(np.nan)
             return s
-        except KeyError:
-            return set()
+        except:
+            try:
+                s = set(self[s, 'interface'].values.flatten())
+
+                # Ignore unset entries:
+                s.discard(np.nan)
+                return s
+            except KeyError:
+                return set()
 
     def __copy__(self):
         """
@@ -757,7 +774,7 @@ class Pattern(object):
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
                             
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
-
+        
     @property
     def from_slice(self):
         """
@@ -993,7 +1010,7 @@ class Pattern(object):
         """
         Check whether a selector is supported by any stored interface.
         """
-
+        return self.interface.is_in_interfaces(selector)
         if len(self.interface[selector]) > 0:
             return True
         else:
