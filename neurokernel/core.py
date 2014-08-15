@@ -238,7 +238,7 @@ class Module(BaseModule):
                 # data array:
                 self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
                 # Clear all input spike port data..
-                self.pm['spike'][self._in_port_dict['spike'][in_id]] = 0
+                self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = 0
                     
                 # ..and then set the port data using the transmitted
                 # information about source module spikes:
@@ -532,10 +532,10 @@ if __name__ == '__main__':
         man = Manager(get_random_port(), get_random_port())
         man.add_brok()
 
-        m1_int_sel_in_gpot = '/aingpot0,/aingpot1'
-        m1_int_sel_out_gpot = '/aoutgpot0,/aoutgpot1'
-        m1_int_sel_in_spike = '/ainspike0,/ainspike1'
-        m1_int_sel_out_spike = '/aoutspike0,/aoutspike1'
+        m1_int_sel_in_gpot = '/a/in/gpot0,/a/in/gpot1'
+        m1_int_sel_out_gpot = '/a/out/gpot0,/a/out/gpot1'
+        m1_int_sel_in_spike = '/a/in/spike0,/a/in/spike1'
+        m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
         m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                                m1_int_sel_in_spike, m1_int_sel_out_spike])
         N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
@@ -550,10 +550,10 @@ if __name__ == '__main__':
                       man.port_data, man.port_ctrl, 'm1')
         man.add_mod(m1)
 
-        m2_int_sel_in_gpot = '/bingpot0,/bingpot1'
-        m2_int_sel_out_gpot = '/boutgpot0,/boutgpot1'
-        m2_int_sel_in_spike = '/binspike0,/binspike1'
-        m2_int_sel_out_spike = '/boutspike0,/boutspike1'
+        m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
+        m2_int_sel_out_gpot = '/b/out/gpot0,/b/out/gpot1'
+        m2_int_sel_in_spike = '/b/in/spike0,/b/in/spike1'
+        m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
         m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                                m2_int_sel_in_spike, m2_int_sel_out_spike])
         N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
@@ -578,14 +578,14 @@ if __name__ == '__main__':
         pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
         pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
         pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-        pat12['/aoutgpot0', '/bingpot0'] = 1
-        pat12['/aoutgpot1', '/bingpot1'] = 1
-        pat12['/boutgpot0', '/aingpot0'] = 1
-        pat12['/boutgpot1', '/aingpot1'] = 1
-        pat12['/aoutspike0', '/binspike0'] = 1
-        pat12['/aoutspike1', '/binspike1'] = 1
-        pat12['/boutspike0', '/ainspike0'] = 1
-        pat12['/boutspike1', '/ainspike1'] = 1
+        pat12['/a/out/gpot0', '/b/in/gpot0'] = 1
+        pat12['/a/out/gpot1', '/b/in/gpot1'] = 1
+        pat12['/b/out/gpot0', '/a/in/gpot0'] = 1
+        pat12['/b/out/gpot1', '/a/in/gpot1'] = 1
+        pat12['/a/out/spike0', '/b/in/spike0'] = 1
+        pat12['/a/out/spike1', '/b/in/spike1'] = 1
+        pat12['/b/out/spike0', '/a/in/spike0'] = 1
+        pat12['/b/out/spike1', '/a/in/spike1'] = 1
         man.connect(m1, m2, pat12, 0, 1)
 
         # To set the emulation to exit after executing a fixed number of steps,
@@ -594,7 +594,8 @@ if __name__ == '__main__':
         # man.start()
         # time.sleep(2)
         man.stop()
-
+        return m1
+        
     # Set up logging:
     logger = setup_logger(screen=False)
     steps = 100
@@ -602,7 +603,7 @@ if __name__ == '__main__':
     # Emulation 1
     start_time = time.time()
     size = 2
-    emulate(size, steps)
+    m1 = emulate(size, steps)
     print('Simulation of size {} complete: Duration {} seconds'.format(
         size, time.time() - start_time))
     # Emulation 2
