@@ -37,7 +37,6 @@ from transform.imagetransform import ImageTransform
 
 PORT_IN_GPOT = 'port_in_gpot'
 
-import time
 
 class EyeGeomImpl(NeuronGeometry, Image2Signal):
     # used by static and non static methods and should
@@ -645,10 +644,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                     'include': 'R1toR6',
                                                     'add_dummy': False})
 
-        
-        ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
-                                                photorlat,photorlong,
-                                                screenlat,screenlong)
         if type == 'image':
             mx = mx - mx.min()  # start from 0
             my = my - my.min()
@@ -657,7 +652,10 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
             # shape (M, P)*self._nrings
             transimage = transform.interpolate((mx, my))
-            intensities = self._get_intensities(transimage, ind_weights)
+            
+            intensities = self._get_intensities(transimage, photorlat, 
+                                                photorlong, screenlat, 
+                                                screenlong)
             intensities = np.tile(intensities, (time_steps, 1))
             # Equal or almost equal parts of the array equal with the
             # factors are multiplied by the respective factor
@@ -694,8 +692,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 
                 
                 transimage = transform.interpolate((mx, my))
-                
-                intensities[i] = self._get_intensities(transimage, ind_weights)
+                intensities[i] = self._get_intensities(transimage, photorlat, 
+                                                       photorlong, screenlat, 
+                                                       screenlong)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
 
         # get interpolated image values on these positions
@@ -711,27 +710,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                         intensities=intensities)
         return intensities
 
-    def _get_intensities(self, transimage, ind_weights):
-        intensities = np.empty(len(ind_weights), dtype='float32')
-        for i, (indlong, indlat, weights) in enumerate(ind_weights):
-            try:
-                pixels = transimage[indlong, indlat]  # nxn np array
-            except IndexError:
-                print('Array size is {}'.format(transimage.shape))
-                print('Indexes are {} and {}'.format(indlat, indlong))
-                raise
+    def _get_intensities(self, transimage, photorlat, photorlong,
+                         screenlat, screenlong):
 
-            # works with >=1.8 numpy
-            intensities[i] = np.sum(pixels*weights)
-
-        return intensities
-
-    def _pre_get_intensities(self, h_tim, w_tim, photorlat, photorlong,
-                             screenlat, screenlong):
+        # shape (M, P)*self._nrings
+        # h meridians, w parallels
+        h_tim, w_tim = transimage.shape
         dlat = screenlat[0, 1] - screenlat[0, 0]
         dlong = screenlong[1, 0] - screenlong[0, 0]
         
-        ind_weights = [0] * len(photorlat) 
+        intensities = np.empty(len(photorlat), dtype='float32')
         for i, (lat, long) in enumerate(zip(photorlat, photorlong)):
 
             # position in grid (float values)
@@ -744,13 +732,21 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                        min1=0, min2=0,
                                                        max1=w_tim, max2=h_tim,
                                                        n=self.get_min_points())
+            try:
+                pixels = transimage[indlong, indlat]  # nxn np array
+            except IndexError:
+                print('Array size is {}'.format(transimage.shape))
+                print('Indexes are {} and {}'.format(indlat, indlong))
+                raise
+
             weights = self.get_gaussian_sphere(screenlat[indlong, indlat],
                                                screenlong[indlong, indlat],
                                                lat, long, dlat, dlong,
                                                self.get_kappa())
-            ind_weights[i] = (indlong, indlat, weights)
+            # works with >=1.8 numpy
+            intensities[i] = np.sum(pixels*weights)
 
-        return ind_weights
+        return intensities
             
     def get_kappa(self):
         try:
@@ -837,7 +833,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             + np.cos(lats)*np.cos(reflat)
         #approximate e^kappa - e^-kappa as e^-kappa as kappa is generally large
         func3 = (kappa/2*PI)*np.exp(kappa*(in_prod-1))*np.sin(lats)*dlat*dlong
-        #total = sum(sum(func3))
+        total = sum(sum(func3))
         #print(total)
         return func3
 
@@ -893,7 +889,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         imfactors = self.input_config.factors
         intensities = self.input_config.intensities
 
-        writer = FFMpegFileWriter(fps=5, codec='mpeg4')
+        writer = AVConvFileWriter(fps=5, codec='mpeg4')
         writer.setup(
             fig, media_file, dpi=80,
             frame_prefix=os.path.splitext(media_file)[0]+'_')
@@ -984,15 +980,18 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         #.values or .tolist()
         print('Initializing selectors')
         # some workarounds
-        ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-        lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
-        
+        ret_sel = ','.join(['/'+sel for sel in ret_lpu.interface.index.tolist()])
+        lam_sel = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist()])
+
         print('Initializing pattern with selectors')
-        
         pat = Pattern(ret_sel, lam_sel)
-        ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-        lam_sel_in = ','.join(['/retin/' + str(sel[-1]) for sel in lam_lpu.interface.index.tolist() if sel[0] == 'retin'])
-        lam_sel_out = ','.join(['/lamout/' + str(sel[-1]) for sel in lam_lpu.interface.index.tolist() if not sel[0] == 'retin'])
+        # pattern gets input from retina
+        # HACK Pattern changes ret_sel, lam_sel so they are generated again
+        # selectors are converted to a format that is guaranteed to work,
+        # but the code could be simpler
+        ret_sel = ','.join(['/'+sel for sel in ret_lpu.interface.index.tolist()])
+        lam_sel_in = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist() if sel.startswith("ret")])
+        lam_sel_out = ','.join(['/'+sel for sel in lam_lpu.interface.index.tolist() if not sel.startswith("ret")])
 
         print('Setting selector attributes in pattern')
         pat.interface[ret_sel] = [0, 'in', 'gpot']
@@ -1001,7 +1000,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         for sel in lam_sel_in.split(','):
             pat[sel.replace('in', 'out'), sel] = 1
-            
+        
         print('Connecting LPUs with the pattern')
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
@@ -1020,7 +1019,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 'num_microvilli': 30000
             }
             if not retina_only:
-                G.node[i]['selector'] = '/retout/' + str(i)
+                G.node[i]['selector'] = '/retout' + str(i)
                 G.node[i]['public'] = True
         self._retina_graph = G
 
@@ -1055,7 +1054,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     photor_id = 6*i + j
                     # connected LPUs are not allowed to have the same name in
                     # ports in current implementation of pattern
-                    neuron.update_selector('/retin/' + str(photor_id))
+                    neuron.update_selector('/retin' + str(photor_id))
                     
         # renumber neurons to omit photoreceptors 
         # near the edge that have no input (no selector is set)
@@ -1141,7 +1140,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     n = Neuron(neuron_params)
                     n.num = len(n_list)
                     if neuron_params['output']:
-                        n.update_selector('/lamout/' + neuron_name + '_' + str(i))
+                        n.update_selector('/lam' + neuron_name + '_' + str(i))
                     n_list.append(n)
                     n_dict[(i, neuron_name)] = n
 
