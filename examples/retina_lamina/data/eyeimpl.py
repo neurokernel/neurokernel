@@ -323,8 +323,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         elif pos == 8:
             if ((quot_ring == 0) and (res_ring == 0)):
                 id = cls._get_globalid(ring+2, lid-1)  # lid = 0 ->
-                                                        # lid-1=-1 ->
-                                                        # 6*(ring+2)-1
+                                                       # lid-1 = -1 ->
+                                                       # 6*(ring+2)-1
             elif ((quot_ring == 0) and (res_ring > 0)) or \
                     ((quot_ring == 1) and (res_ring == 0)):
                 id = cls._get_globalid(ring+1, lid-1)
@@ -345,7 +345,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             elif (quot_ring == 5):
                 id = cls._get_globalid(ring+2, lid+11)
         else:
-            raise ValueError("Invalid position {}, should be 0-8")
+            raise ValueError("Invalid position {}, should be 0-8".format(pos))
 
         return id
 
@@ -475,19 +475,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                      the neighboring ommatidia in no particular order except
                      the first entry that is the reference ommatidium
         """
-        try:
-            rule = config['rule']
-            valid_values = ["superposition", "adjacency"]
-            if rule not in valid_values:
-                raise ValueError("rule attribute must be one of %s" % ", "
-                                 .join(str(x) for x in valid_values))
-        except KeyError:
-            rule = "superposition"
+        rule = self._getconfig(config, 'rule', 'superposition')
 
-        if rule == "superposition":
+        if rule == 'superposition':
             return self._supneighborslist
-        else:
+        elif rule == 'adjacency':
             return self._adjneighborslist
+        else:
+            valid_values = ['superposition', 'adjacency']
+            raise ValueError("rule attribute must be one of %s" % ", "
+                                 .join(str(x) for x in valid_values))
 
     def get_positions(self, config={'coord': 'spherical', 'include': 'center',
                                     'add_dummy': True}):
@@ -518,24 +515,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         """
         # the order of ommatidia in output is the exact order of
         # _ommatidia parameter
-        try:
-            coord = config['coord']
-            valid_values = ["spherical", "cartesian3D", "cartesian2D"]
-            if coord not in valid_values:
-                raise ValueError("coord attribute must be one of %s" % ", "
-                                 .join(str(x) for x in valid_values))
-        except KeyError:
-            coord = "spherical"
-
-        try:
-            include = config['include']
-        except KeyError:
-            include = 'center'
-
-        try:
-            add_dummy = config['add_dummy']
-        except KeyError:
-            add_dummy = True
+        coord = self._getconfig(config, 'coord', 'spherical')
+        include = self._getconfig(config, 'include', 'center')
+        add_dummy = self._getconfig(config, 'add_dummy', True)
 
         latitudes = []
         longitudes = []
@@ -552,16 +534,20 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     screenlats, screenlongs = ommatidium.get_R1toR6points()
                     latitudes.extend(screenlats)
                     longitudes.extend(screenlongs)
-        else:
+        elif include == 'center':
             for ommatidium in self._ommatidia:
                 if add_dummy or not ommatidium.is_dummy():
                     eyelat, eyelong = ommatidium.get_eyepoint()
                     latitudes.append(eyelat)
                     longitudes.append(eyelong)
+        else:
+            valid_values = ['all', 'R1toR6', 'center']
+            raise ValueError("include attribute must be one of %s" % ", "
+                             .join(str(x) for x in valid_values))
 
-        if coord == "spherical":
+        if coord == 'spherical':
             return (np.array(latitudes), np.array(longitudes))
-        elif coord == "cartesian3D":
+        elif coord == 'cartesian3D':
             nplatitudes = np.array(latitudes)
             nplongitudes = np.array(longitudes)
             sinlats = np.sin(nplatitudes)
@@ -569,15 +555,137 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             sinlongs = np.sin(nplongitudes)
             coslongs = np.cos(nplongitudes)
             return (sinlats*coslongs, sinlats*sinlongs, coslats)
-        elif coord == "cartesian2D":
+        elif coord == 'cartesian2D':
             nplatitudes = np.array(latitudes)
             nplongitudes = np.array(longitudes)
             r2d = nplatitudes/(PI/2)
             sinlongs = np.sin(nplongitudes)
             coslongs = np.cos(nplongitudes)
             return (r2d*coslongs, r2d*sinlongs)
+        else:
+            valid_values = ['spherical', 'cartesian3D', 'cartesian2D']
+            raise ValueError("coord attribute must be one of %s" % ", "
+                             .join(str(x) for x in valid_values))
 
+
+    # TODO add more types and custom attributes in config for each one, 
     def get_intensities(self, file, config={}):
+        """ If file is not None then intensities are generated from the file
+            otherwise they are generated from information in configuration
+        """
+        # the order of ommatidia in output is the exact order of
+        # _ommatidia parameter
+        if file is None:
+            return self.get_intensities_from_generatedimage(config)
+        else:
+            return self.get_intensities_from_fileimage(file, config)
+
+    # TODO remove repeated parts
+    def get_intensities_from_generatedimage(self, config={}):
+        """ generates input image programmatically
+            config: {
+                'type': 'bar'
+                        'steps': number of simulation steps, 
+                                 also determines the size of output
+                        'dt':    needed for the correct scaling of speed (s)
+                        'width': width of the bar (pixels)
+                        'dir':   0 top to bottom, 1 left to right
+                        'speed': how fast the bar is moving (pixels/s)
+                        'shape': image dimensions
+                        'levels': tuple (default value, bar value)
+                'type': 'grating'
+                        'steps': number of simulation steps, 
+                                 also determines the size of output
+                        'dt':    needed for the correct scaling of speed (s)
+                        'x_freq': frequency in x direction (higher -> more bars)
+                        'y_freq': frequency in y direction (higher -> more bars)
+                        'x_speed': speed that the grating is moving in x dir
+                                   (pixels/s)
+                        'y_speed': speed that the grating is moving in y dir
+                                   (pixels/s)
+                        'shape': image dimensions
+                        'sinusoidal': if True grating is a sine function
+                                      otherwise only the sign of this function 
+                                      is computed
+                        'levels': if sinusoidal is True these are the limits of
+                                  the sine function (low, high)
+                'type': 'ball'
+                        'steps': number of simulation steps, 
+                                 also determines the size of output
+                        'dt':    needed for the correct scaling of speed (s)
+                        'center': center of ball
+                        'speed': speed of expansion (pixels/s)
+                        'white_in_side': if True ball is black(high value) and 
+                                         side is white(low value) 
+                                         and conversely
+                        'shape': image dimensions
+                        'levels': (low value, high value)
+                'output_file':<filename>
+            }
+        """
+        type = self._getconfig(config, 'type', 'bar')
+        # same for all
+        dt = self._getconfig(config, 'dt', 1e-4)
+        time_steps = self._getconfig(config, 'steps', 1000)
+        shape = self._getconfig(config, 'shape', (100, 100))
+        levels = self._getconfig(config, 'levels', (0, 1))
+
+        intensities = np.empty((time_steps, len(photorlat)),
+                                dtype='float32')
+        if type == 'bar':
+            width = self._getconfig(config, 'width', 5)
+            dir = self._getconfig(config, 'dir', 0)
+            speed = self._getconfig(config, 'speed', 1000)
+
+            for i in range(time_steps):
+                image = np.ones(shape, dtype=np.double)*levels[0]
+                if dir == 1:
+                    st = int(np.mod(i*speed*dt, shape[1]))
+                    en = min(int(st+width), shape[1])
+                    image[:,st:en] = levels[1]
+                else:
+                    st = int(np.mod(i*speed*dt, shape[0]))
+                    en = min(int(st+width), shape[0])
+                    image[st:en, :] = levels[1]
+                #TODO compute intensities as if type == image
+        elif type == 'grating':
+            x_freq = self._getconfig(config, 'x_freq', 0.1)
+            y_freq = self._getconfig(config, 'y_freq', 0)
+            x_speed = self._getconfig(config, 'x_speed', -10)
+            y_speed = self._getconfig(config, 'y_speed', 5)
+            sinusoidal = self._getconfig(config, 'sinusoidal', False)
+
+            for i in range(time_steps):
+                image = np.ones(shape, dtype=np.double)*levels[0]
+                #TODO
+        elif type == 'ball':
+            center = self._getconfig(config, 'center', None)
+            speed = self._getconfig(config, 'speed', 100)
+            white_in_side = self._getconfig(config, 'white_in_side', True)
+
+            for i in range(time_steps):
+                image = np.ones(shape, dtype=np.double)*levels[0]
+                #TODO
+        else:
+            raise ValueError("Invalid type {}, should be ball, bar or grating"
+                             .format(type))
+
+        if output_file:
+            # intensities will be stored in 2 files if output file is set
+            with h5py.File(output_file, 'w') as f:
+                f.create_dataset('array', intensities.shape,
+                                 dtype=np.float64,
+                                 data=intensities)
+        with h5py.File(self.INTENSITIES_FILE, 'w') as f:
+            f.create_dataset('array', intensities.shape,
+                             dtype=np.float64,
+                             data=intensities)
+        with h5py.File(self.FACTORS_FILE, 'w') as f:
+            f.create_dataset('array', (len(factors),),
+                             dtype=np.float32,
+                             data=np.array(factors))
+
+    def get_intensities_from_fileimage(self, file, config={}):
         """ file: input image file, mat file is assumed with a variable im in it
             config: {'type': 'image'(default)/'video',
                      'steps':<simulation steps>,
@@ -590,37 +698,18 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                      in get_positions, with 'include'
                      configuration parameter set to 'R1toR6'
         """
-        # the order of ommatidia in output is the exact order of
-        # _ommatidia parameter
-        try:
-            dt = config['dt']
-        except KeyError:
-            dt = 1e-4
+        dt = self._getconfig(config, 'dt', 1e-4)
+        time_steps = self._getconfig(config, 'steps', 1000)
+        type = self._getconfig(config, 'type', 'image')
+        output_file = self._getconfig(config, 'output_file', None)
 
-        try:
-            time_steps = config['steps']
-        except KeyError:
-            time_steps = 1000
+        if output_file in [self.POSITIONS_FILE, self.FACTORS_FILE, 
+                       self.IMAGE_FILE]:
+        raise ValueError('Invalid value for intensities file: {}'
+                         ', filename is reserved for another purpose'
+                         .format(output_file))
 
-        try:
-            type = config['type']
-        except KeyError:
-            type = 'image'
-
-        try:
-            output_file = config['output_file']
-            if output_file in [self.POSITIONS_FILE, self.FACTORS_FILE, 
-                               self.IMAGE_FILE]:
-                raise ValueError('Invalid value for intensities file: {}'
-                                 ', filename is reserved for another purpose'
-                                 .format(output_file))
-        except KeyError:
-            output_file = None
-
-        try:
-            factors = config['factors']
-        except KeyError:
-            factors = [1]
+        factors = self._getconfig(config, 'factors', [1])
 
         mat = loadmat(file)
         try:
@@ -860,26 +949,24 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             + np.cos(lats)*np.cos(reflat)
         #approximate e^kappa - e^-kappa as e^-kappa as kappa is generally large
         func3 = (kappa/(2*PI))*np.exp(kappa*(in_prod-1))*np.sin(lats)*dlat*dlong
-        #total = sum(sum(func3))
-        #print(total)
         return func3
 
     def visualise_output(self, model_output, media_file, config={}):
-        """ config: { LPU: 'retina'(default)/'lamina'
-                      type: 'image'(default)/'video'
+        """ media_file: the file where output video is written
+            config: { LPU: 'retina'(default)/'lamina'
+                      type: 'image'(default)/'video'/
+                            'bar'/ 'grating'/'ball'
+                            see documentation of 
+                            get_intensities_from_generatedimage
+                            for the rest of the configuration values
+                            corresponding to each type
                       neuron: the id of the neuron to plot(for lamina)
                               e.g L1
                     }
         """
-        try:
-            lpu = config['LPU']
-        except KeyError:
-            lpu = 'retina'
-
-        try:
-            type = config['type']
-        except KeyError:
-            type = 'image'
+        lpu = self._getconfig(config, 'LPU', 'retina')
+        type = self._getconfig(config, 'type', 'image')
+        filetypes = ['image', 'video']
 
         with h5py.File(model_output, 'r') as f:
             data = f['array'].value
@@ -889,20 +976,26 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     {'coord': 'spherical', 'include': 'R1toR6',
                      'add_dummy': False})
 
-            self._plot_output(type, latpositions, longpositions, data, media_file)
+            if type in filetypes:  # if input generated from a file
+                self._plot_output(type, latpositions, longpositions, data,
+                                  media_file)
+            else:
+                self._plot_output_generated(type, latpositions, longpositions,
+                                            data, media_file, config)
         elif lpu == 'lamina':
             latpositions, longpositions = self.get_positions(
                     {'coord': 'spherical', 'include': 'center',
                      'add_dummy': False})
-            try:
-                neuron = config['neuron']
-            except KeyError:
-                neuron = 'L1'
+            neuron = self._getconfig(config, 'neuron', 'L1')
 
             n_ids = self._get_lamina_ids(neuron)
 
-            self._plot_output(type, latpositions, longpositions, data[:, n_ids],
-                              media_file)
+            if type in filetypes:  # if input generated from a file
+                self._plot_output(type, latpositions, longpositions,
+                                  data[:, n_ids], media_file)
+            else:
+                self._plot_output_generated(type, latpositions, longpositions,
+                                            data[:, n_ids], media_file, config)
         else:
             raise ValueError('Invalid value for lpu: {}'
                              ', valid values retina, lamina'.format(lpu))
@@ -970,6 +1063,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 fig.canvas.draw()
                 writer.grab_frame()
         writer.finish()
+
+    # plot output when input is programmatically generated
+    def _plot_output_generated(self, type, latpositions, longpositions,
+                               data, media_file, config):
+        pass
 
     @staticmethod
     def compute_colors(gridlats, gridlongs, lats, longs, values):
@@ -1221,24 +1319,14 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     def write_lamina(self, output_file):
         nx.write_gexf(self._lamina_graph, output_file, prettyprint=True)
 
+    def _getconfig(config, key, default):
+        try:
+            return config[key]
+        except KeyError:
+            return default
+
 
 if __name__ == '__main__':
-    hemisphere = EyeGeomImpl(2)
-    kappa = hemisphere.get_kappa()
-    M = 10000
-    N = 2
-    screenlat, screenlong = np.meshgrid(np.linspace((PI/2)/M, PI/2, M),
-                                        np.linspace(-PI, PI*(N-2)/N, N))
-    dlat = (screenlat[0, 1] - screenlat[0, 0])
-    dlong = (screenlong[1, 0] - screenlong[0, 0])
-    #print(screenlong)
-    #print(dlong)
-
-    weights = EyeGeomImpl.get_gaussian_sphere(screenlat, screenlong,
-                                              0, 0, dlat, dlong,
-                                              kappa)
-    print(sum(sum(weights)))
-    print(weights[0,0:40])
 #    from matplotlib.collections import LineCollection
 #    import time
 #
