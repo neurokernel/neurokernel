@@ -435,8 +435,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     v[pos] -= 1
                     v[0] -=1
             rem-=1
-        if ring==2:
-            print v
         return d1*v[0] + d2*v[1] + d3*v[2]
 
     def _get_proj_omm_loc(self, ring, lid):
@@ -704,10 +702,10 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             x, y = np.meshgrid(np.arange(float(shape[1])),
                                np.arange(float(shape[0])))
             if sinusoidal:
-                sinfunc = lambda x: ((np.sin(x)+1)/2)*(levels[1]-levels[0]) +
+                sinfunc = lambda x: ((np.sin(x)+1)/2)*(levels[1]-levels[0]) + \
                                     levels[0]
             else:
-                sinfunc = lambda x: np.sign(np.sin(x))*((levels[1]-levels[0])/2)
+                sinfunc = lambda x: np.sign(np.sin(x))*((levels[1]-levels[0])/2) \
                                     + (levels[1]+levels[0])/2
 
             for i in range(time_steps):
@@ -1302,8 +1300,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 'public': False,  # True if it's an output neuron
                 'spiking': False,
                 'num_microvilli': 30000,
-                'lat': latpositions[i],
-                'long': longpositions[i]
+                'lat': float(latpositions[i]),
+                'long': float(longpositions[i])
             }
             if not retina_only:
                 G.node[i]['selector'] = '/retout/' + str(i)
@@ -1390,8 +1388,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 # create amacrine neurons
                 for i in range(am_num):
                     n = Neuron(neuron_params)
-                    n.add_param('lat', am_lats[i])
-                    n.add_param('long', am_long[i])
+                    n.add_param('lat', float(am_lats[i]))
+                    n.add_param('long', float(am_longs[i]))
                     n.num = len(n_list)
                     n_list.append(n)
                     n_dict[(i, 'Am')] = n
@@ -1431,8 +1429,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 for i in range(cartridge_num):
                     n = Neuron(neuron_params)
                     n.num = len(n_list)
-                    n.add_param('lat', latpositions[i])
-                    n.add_param('long', longpositions[i])
+                    n.add_param('lat', float(latpositions[i]))
+                    n.add_param('long', float(longpositions[i]))
                     if neuron_params['output']:
                         n.update_selector('/lamout/' + neuron_name + '_' + str(i))
                     n_list.append(n)
