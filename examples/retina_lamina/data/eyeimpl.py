@@ -701,17 +701,31 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             y_speed = self._getconfig(config, 'y_speed', 5)
             sinusoidal = self._getconfig(config, 'sinusoidal', False)
 
+            x, y = np.meshgrid(np.arange(float(shape[1])),
+                               np.arange(float(shape[0])))
+            if sinusoidal:
+                sinfunc = lambda x: ((np.sin(x)+1)/2)*(levels[1]-levels[0]) +
+                                    levels[0]
+            else:
+                sinfunc = lambda x: np.sign(np.sin(x))*((levels[1]-levels[0])/2)
+                                    + (levels[1]+levels[0])/2
+
             for i in range(time_steps):
-                image = np.ones(shape, dtype=np.double)*levels[0]
-                #TODO
+                image = (sinfunc(x_freq*2*np.pi*(x - x_speed*i*dt)) + 
+                        sinfunc(y_freq*2*np.pi*(y - y_speed*i*dt)))
         elif type == 'ball':
             center = self._getconfig(config, 'center', None)
             speed = self._getconfig(config, 'speed', 100)
             white_in_side = self._getconfig(config, 'white_in_side', True)
 
+            x, y = np.meshgrid(np.arange(float(shape[1])),
+                               np.arange(float(shape[0])))
+
             for i in range(time_steps):
-                image = np.ones(shape, dtype=np.double)*levels[0]
-                #TODO
+                image = (-1 if white_in_side else 1) * np.sign(
+                        np.sqrt((x-center[0])**2+(y-center[1])**2)
+                        - i*self._dt*self._speed).astype(np.double)
+                image = image*((levels[1]-levels[0])/2)+(levels[1]+levels[0])/2
         else:
             raise ValueError("Invalid type {}, should be ball, bar or grating"
                              .format(type))
@@ -804,12 +818,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             transimage = transform.interpolate((mx, my))
             intensities = self._get_intensities(transimage, ind_weights)
             intensities = np.tile(intensities, (time_steps, 1))
-            # Equal or almost equal parts of the array equal with the
-            # factors are multiplied by the respective factor
-            ilen = len(intensities)
-            flen = len(factors)
-            for i, factor in enumerate(factors):
-                intensities[(i*ilen)//flen:((i+1)*ilen)//flen] *= factor
 
             positions = None
         elif type == 'video':
@@ -841,6 +849,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
                 intensities[i] = self._get_intensities(transimage, ind_weights)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
+
+        # Equal or almost equal parts of the array
+        # are multiplied by the respective factor
+        ilen = len(intensities)
+        flen = len(factors)
+        for i, factor in enumerate(factors):
+            intensities[(i*ilen)//flen:((i+1)*ilen)//flen] *= factor
 
         if output_file:
             # intensities will be stored in 2 files if output file is set
@@ -1138,6 +1153,20 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         handles = []
         for i in range(0,len(data),step):
             
+            if type == 'image':
+                ax1.imshow(image, cmap=cm.Greys_r)
+            elif type == 'video':
+                # TODO show red rectangle
+                xind = impositions[i, 0:2]
+                yind = impositions[i, 2:4]
+                if not i:
+                    handles.append(ax1.imshow(image[int(xind[0]):int(xind[1]),
+                                                    int(yind[0]):int(yind[1])],
+                                              cmap=cm.Greys_r))
+        for i in range(0, len(data), step):
+            ax1 = fig.add_subplot(1, 3, 1)
+            ax1.set_title('Image')
+            #factor =
             if type == 'image':
                 ax1.imshow(image, cmap=cm.Greys_r)
             elif type == 'video':
