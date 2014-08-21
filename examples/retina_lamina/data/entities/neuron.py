@@ -39,3 +39,6 @@ class Neuron(object):
     def update_selector(self, selector):
         # print("sel:{}".format(selector))
         self._params.update({'selector': selector})
+
+    def add_param(self, key, val):
+        self._params[key] = val
