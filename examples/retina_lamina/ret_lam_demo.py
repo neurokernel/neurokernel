@@ -89,10 +89,6 @@ LAM_OUTPUT_MPEG = 'lamina_output.mp4'
 
 eyemodel = EyeGeomImpl(args.num_layers, retina_only=args.retina_only)
 
-#current implementation of output manipulation depends on input
-if args.output:
-    args.input = True
-
 if args.input:
     print('Generating input of model from image file')
     _dummy = eyemodel.get_intensities(IMAGE_FILE,
