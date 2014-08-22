@@ -13,6 +13,7 @@ import simpleio as sio
 from collections import OrderedDict
 import os
 
+import collections
 import itertools
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
@@ -66,7 +67,8 @@ class visualizer(object):
         self._title = None
         self._FFMpeg = False
         
-    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None):
+    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None,
+                is_input=False):
         '''
         Add data associated with a specific LPU to a visualization.
         To add a plot containing neurons from a particular LPU,
@@ -101,7 +103,7 @@ class visualizer(object):
             Can be used to limit the visualization to a specific time window.
         
         '''
-        if gexf_file:
+        if gexf_file and not is_input:
             self._graph[LPU] = nx.read_gexf(gexf_file)
 
             # Map neuron ids to index into output data array:
@@ -113,6 +115,8 @@ class visualizer(object):
                 LPU = 'input_' + str(LPU)
             else:
                 LPU = 'input_' + str(len(self._data))
+            if gexf_file:
+                self._graph[LPU] = nx.read_gexf(gexf_file)
         if not LPU:
             LPU = len(self._data)
         self._data[LPU] = np.transpose(sio.read_array(data_file))
@@ -195,7 +199,6 @@ class visualizer(object):
         cnt = 0
         self.handles = []
         self.types = []
-        self._norm = {}
         keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
         # TODO: Irregular grid in U will make the plot better
         U, V = np.mgrid[0:np.pi/2:complex(0, 60),
@@ -206,7 +209,6 @@ class visualizer(object):
         self._dome_pos_flat = (X.flatten(), Y.flatten(), Z.flatten())
         self._dome_pos = (X, Y, Z)
         self._dome_arr_shape = X.shape
-        self._positions = {}
         if not isinstance(self.axarr, np.ndarray):
             self.axarr = np.asarray([self.axarr])
         for LPU, configs in self._config.iteritems():
@@ -237,7 +239,7 @@ class visualizer(object):
                     else:
                         raise ValueError('Plot type not supported')
                 else:
-                    if str(LPU).startswith('input') or not self._graph[LPU][str(config['ids'][0])]['spiking']:
+                    if str(LPU).startswith('input') and not self._graph[LPU].node[str(config['ids'][0][0])]['spiking']:
                         config['type'] = 2
                     else:
                         config['type'] = 4
@@ -311,33 +313,42 @@ class visualizer(object):
                     config['handle'].axes.set_yticks([])
                     config['handle'].axes.set_xticks([])
                 elif config['type'] == 6:
-                    self.axarr[ind] = self._f.add_subplot(self.axarr.shape[0],
-                                                          self.axarr.shape[1],
-                                                          ind,
-                                                          projection='3d')
+                    self.axarr[ind] = self.f.add_subplot(self._rows,
+                                                         self._cols,
+                                                         cnt,
+                                                         projection='3d')
                     self.axarr[ind].xaxis.set_ticks([])
                     self.axarr[ind].yaxis.set_ticks([])
                     self.axarr[ind].zaxis.set_ticks([])
-                    try:
-                        self._norm[ind] = config['norm']
-                    except KeyError:
-                        self._norm[ind] = Normalize(vmin=-0.08, vmax=0, clip=True)
-                    latpositions = self._graph[LPU][str(config['ids'])]['lat']
-                    longpositions = self._graph[LPU][str(config['ids'])]['long']
+                    if 'norm' not in config.keys():
+                        config['norm'] = Normalize(vmin=-0.08, vmax=0, clip=True)
+                    node_dict = collections.OrderedDict(sorted(self._graph[LPU].node.items()))
+                    if str(LPU).startswith('input'):
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat']
+                                                    for nid in node_dict.iterkeys() ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long']
+                                                    for nid in node_dict.iterkeys() ])
+
+                    else:
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat']
+                                                    for nid in config['ids'][0] ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long']
+                                                     for nid in config['ids'][0] ])
                     xx = np.cos(longpositions) * np.sin(latpositions)
                     yy = np.sin(longpositions) * np.sin(latpositions)
                     zz = np.cos(latpositions)
-                    self._positions[ind] = (xx, yy, zz)
-                    colors = griddata(self._positions[ind], self._data[LPU][config['ids'][0],0],
+                    config['positions'] = (xx, yy, zz)
+                    colors = griddata(config['positions'], self._data[LPU][config['ids'][0],0],
                                       self._dome_pos_flat, 'nearest').reshape(self._dome_arr_shape)
-                    colors = self._norm[ind](colors).data
+                    colors = config['norm'](colors).data
                     colors = np.tile(np.reshape(colors,
-                                                [self._dome_arr_shape[0],self,_dome_arr_shape[1],1])
+                                                [self._dome_arr_shape[0],self._dome_arr_shape[1],1])
                                      ,[1,1,4])
                     colors[:,:,3] = 1.0
-                    config['handle'] =  plot_surface(self._dome_pos[0], self._dome_pos[1],
-                                                     self._dome_pos[2], rstride=1, cstride=1,
-                                                     facecolors=colors, antialiased=False, shade=False)
+                    config['handle'] =  self.axarr[ind].plot_surface(self._dome_pos[0], self._dome_pos[1],
+                                                                     self._dome_pos[2], rstride=1, cstride=1,
+                                                                     facecolors=colors, antialiased=False,
+                                                                     shade=False)
                     
                     
                 for key in config.iterkeys():
@@ -431,11 +442,11 @@ class visualizer(object):
                 elif config['type'] == 6:
                     ids = config['ids']
                     d = data[ids[0], t]
-                    colors = griddata(self._positions[ind], d,
+                    colors = griddata(config['positions'], d,
                                       self._dome_pos_flat, 'nearest').reshape(self._dome_arr_shape)
-                    colors = self._norm[ind](colors).data
+                    colors = config['norm'](colors).data
                     colors = np.tile(np.reshape(colors,
-                                                [self._dome_arr_shape[0],self,_dome_arr_shape[1],1])
+                                                [self._dome_arr_shape[0],self._dome_arr_shape[1],1])
                                      ,[1,1,4])
                     colors[:,:,3] = 1.0
                     C = [colors[i,j] for (i,j) in itertools.product(range(colors.shape[0]),
@@ -529,6 +540,7 @@ class visualizer(object):
         elif str(LPU).startswith('input'):
             config['ids'] = [range(0, self._data[LPU].shape[0])]
             self._config[LPU].append(config)
+            print LPU, config['ids']
         else:
             config['ids'] = {}
             for i,name in enumerate(names):
@@ -537,6 +549,7 @@ class visualizer(object):
                     if self._graph[LPU].node[str(id)]['name'] == name:
                         config['ids'][i].append(id-shift)
             self._config[LPU].append(config)
+            print LPU, config['ids']
         if not 'title' in config:
             if names[0]:
                 config['title'] = "{0} - {1}".format(str(LPU),str(names[0]))
@@ -587,7 +600,7 @@ class visualizer(object):
     def FFMpeg(self): return self._FFMpeg
     
     @FFMpeg.setter
-    def imlim(self, value):
+    def FFMpeg(self, value):
         self._FFMpeg = value
 
     @property
