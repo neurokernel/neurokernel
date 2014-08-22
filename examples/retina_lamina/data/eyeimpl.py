@@ -698,43 +698,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 
                 # photons were stored for 1ms
                 image[i] *= (dt/1e-3)
-
-                h_im, w_im = shape
-                transform = ImageTransform(image[i])
-
-                # screen positions
-                # should be much more than the number of photoreceptors
-                # shape (M, P)*self._nrings
-                M = self.MERIDIANS
-                P = self.PARALLELS
-                screenlat, screenlong = np.meshgrid(np.linspace((PI/2)/P,
-                                                                PI/2, P),
-                                                    np.linspace(-PI, PI*(M-2)/M, M))
-
-                mapscreen = self.OMMATIDIUM_CLS.MAP_SCREEN
-                # plane positions
-                # shape (M, P)*self._nrings
-                mx, my = mapscreen.map(screenlat, screenlong)   # map from spherical
-                                                                # grid to plane
-
-                # photoreceptor positions
-                photorlat, photorlong = self.get_positions({'coord': 'spherical',
-                                                            'include': 'R1toR6',
-                                                            'add_dummy': False})
-
-
-                ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
-                                                        photorlat,photorlong,
-                                                        screenlat,screenlong)
-                mx = mx - mx.min()  # start from 0
-                my = my - my.min()
-                mx *= h_im/mx.max()  # scale to image size
-                my *= w_im/my.max()
-
-                # shape (M, P)*self._nrings
-                transimage = transform.interpolate((mx, my))
-                intensities[i] = self._get_intensities(transimage, 
-                                                          ind_weights)
+                intensities[i] = self._get_intensities_from_image(image[i])
         elif type == 'grating':
             x_freq = self._getconfig(config, 'x_freq', 0.1)
             y_freq = self._getconfig(config, 'y_freq', 0)
@@ -754,7 +718,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             for i in range(time_steps):
                 image[i] = (sinfunc(x_freq*2*np.pi*(x - x_speed*i*dt)) + 
                         sinfunc(y_freq*2*np.pi*(y - y_speed*i*dt)))
-                #TODO compute intensities as if type == image
+                # photons were stored for 1ms
+                image[i] *= (dt/1e-3)
+                intensities[i] = self._get_intensities_from_image(image[i])
 
         elif type == 'ball':
             center = self._getconfig(config, 'center', None)
@@ -769,7 +735,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                         np.sqrt((x-center[0])**2+(y-center[1])**2)
                         - i*self._dt*self._speed).astype(np.double)
                 image[i] = image*((levels[1]-levels[0])/2)+(levels[1]+levels[0])/2
-                #TODO compute intensities as if type == image
+                # photons were stored for 1ms
+                image[i] *= (dt/1e-3)
+                intensities[i] = self._get_intensities_from_image(image[i])
         else:
             raise ValueError("Invalid type {}, should be ball, bar or grating"
                              .format(type))
@@ -900,19 +868,63 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         with h5py.File(self.INTENSITIES_FILE, 'w') as f:
             f.create_dataset('array', intensities.shape,
-                             dtype=np.float64,
-                             data=intensities)
+                             dtype=np.float64, data=intensities)
         if positions is not None:
+            #TODO
             with h5py.File(self.POSITIONS_FILE, 'w') as f:
                 f.create_dataset('array', positions.shape,
-                                 dtype=np.float32,
-                                 data=positions)
-        with h5py.File(self.IMAGE_FILE, 'w') as f:
-            f.create_dataset('array', image.shape,
-                             dtype=np.float32,
-                             data=image)
+                                 dtype=np.float32, data=positions)
+            for i, position in enumerate(positions):
+                print i
+                assert(positions[i-1,1]-positions[i-1,0] == positions[i,1]-positions[i,0])
+
+            with h5py.File(self.IMAGE_FILE, 'w') as f:
+                f.create_dataset('array', image.shape,
+                                 dtype=np.float32, data=image)
+        else:
+            image = np.tile(image, (time_steps, 1, 1))
+            with h5py.File(self.IMAGE_FILE, 'w') as f:
+                f.create_dataset('array', image.shape,
+                                 dtype=np.float32, data=image)
 
         return intensities
+
+    def _get_intensities_from_image(self, image):
+        h_im, w_im = image.shape
+        transform = ImageTransform(image)
+
+        # screen positions
+        # should be much more than the number of photoreceptors
+        # shape (M, P)*self._nrings
+        M = self.MERIDIANS
+        P = self.PARALLELS
+        screenlat, screenlong = np.meshgrid(np.linspace((PI/2)/P,
+                                                        PI/2, P),
+                                            np.linspace(-PI, PI*(M-2)/M, M))
+
+        mapscreen = self.OMMATIDIUM_CLS.MAP_SCREEN
+        # plane positions
+        # shape (M, P)*self._nrings
+        mx, my = mapscreen.map(screenlat, screenlong)   # map from spherical
+                                                        # grid to plane
+
+        # photoreceptor positions
+        photorlat, photorlong = self.get_positions({'coord': 'spherical',
+                                                    'include': 'R1toR6',
+                                                    'add_dummy': False})
+
+
+        ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
+                                                photorlat,photorlong,
+                                                screenlat,screenlong)
+        mx = mx - mx.min()  # start from 0
+        my = my - my.min()
+        mx *= h_im/mx.max()  # scale to image size
+        my *= w_im/my.max()
+
+        # shape (M, P)*self._nrings
+        transimage = transform.interpolate((mx, my))
+        return self._get_intensities(transimage, ind_weights)
 
     def _get_intensities(self, transimage, ind_weights):
         intensities = np.empty(len(ind_weights), dtype='float32')
@@ -1057,7 +1069,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         ax2.plot_surface(X, Y, Z,facecolors=C, antialiased=False, shade=False)
         fig.canvas.draw()
         fig.savefig(fname)
-        
+
+    #TODO delete
     def visualise_output(self, model_output, media_file, config={}):
         """ media_file: the file where output video is written
             config: { LPU: 'retina'(default)/'lamina'
@@ -1107,7 +1120,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             raise ValueError('Invalid value for lpu: {}'
                              ', valid values retina, lamina'.format(lpu))
 
-
+    #TODO delete
     def _plot_output(self, type, latpositions, longpositions, data, media_file):
         fig = plt.figure(figsize=plt.figaspect(0.3))
         
@@ -1216,6 +1229,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             writer.grab_frame()
         writer.finish()
 
+    #TODO delete
     # plot output when input is programmatically generated
     def _plot_output_generated(self, type, latpositions, longpositions,
                                data, media_file, config):
@@ -1263,6 +1277,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 writer.grab_frame()
         writer.finish()
     
+    #TODO delete
     @staticmethod
     def compute_colors(gridlats, gridlongs, lats, longs, values):
         """
