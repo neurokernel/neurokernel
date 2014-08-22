@@ -3,6 +3,9 @@
 import argparse
 import time
 
+import matplotlib as mpl
+mpl.use('Agg')
+
 import neurokernel.core as core
 import neurokernel.base as base
 from neurokernel.LPU.LPU import LPU
@@ -10,7 +13,11 @@ from neurokernel.tools.comm import get_random_port
 
 from data.eyeimpl import EyeGeomImpl
 
-
+import networkx as nx
+nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
+                                       'true':True, 'True':True}
+import numpy as np
+import neurokernel.LPU.utils.visualizer as vis
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--rec-micro', dest='record_microvilli',
@@ -121,7 +128,7 @@ if not args.suppress:
                   input_file=INPUT_FILE,
                   output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
                   port_data=port_data, device=args.ret_dev, id='retina',
-                  debug=True)
+                  debug=False)
     man.add_mod(lpu_ret)
 
     if not args.retina_only:
@@ -147,6 +154,7 @@ if not args.suppress:
                                                             start_time))
 
 if args.output:
+    '''
     eyemodel.visualise_output(media_file=RET_OUTPUT_MPEG,
                               model_output=RET_OUTPUT_GPOT,
                               config = {'LPU': 'retina',
@@ -157,3 +165,24 @@ if args.output:
                                   config = {'LPU': 'lamina',
                                             'type':args.video_type,
                                             'neuron': 'L1'} )
+    '''
+    V = vis.visualizer()
+    conf_R1 = {}
+    conf_R1['type'] = 'dome'
+    V.add_LPU(RET_OUTPUT_GPOT,'retina.gexf.gz', LPU='Retina')
+    V.add_plot(conf_R1, 'Retina', 'R1')
+    
+
+    conf_L1 = {}
+    conf_L1['type'] = 'dome'
+    V.add_LPU(LAM_OUTPUT_GPOT, 'lamina.gexf.gz', LPU='Lamina')
+    V.add_plot(conf_L1, 'Lamina', 'L1')
+    
+    V.fontsize = 22
+    V.fps = 5
+    V.update_interval = 50
+    V.out_filename = 'vision_output.avi'
+    V.codec = 'mpeg4'
+    V.dt = 0.0001
+    V.FFMpeg = True      # change to False to use LibAV fork instead( default on UBUNTU)
+    V.run()
