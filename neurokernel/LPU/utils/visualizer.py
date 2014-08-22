@@ -13,6 +13,7 @@ import simpleio as sio
 from collections import OrderedDict
 import os
 
+import collections
 import itertools
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
@@ -66,7 +67,8 @@ class visualizer(object):
         self._title = None
         self._FFMpeg = False
         
-    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None):
+    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None,
+                is_input=False):
         '''
         Add data associated with a specific LPU to a visualization.
         To add a plot containing neurons from a particular LPU,
@@ -101,7 +103,7 @@ class visualizer(object):
             Can be used to limit the visualization to a specific time window.
         
         '''
-        if gexf_file:
+        if gexf_file and not is_input:
             self._graph[LPU] = nx.read_gexf(gexf_file)
 
             # Map neuron ids to index into output data array:
@@ -113,6 +115,8 @@ class visualizer(object):
                 LPU = 'input_' + str(LPU)
             else:
                 LPU = 'input_' + str(len(self._data))
+            if gexf_file:
+                self._graph[LPU] = nx.read_gexf(gexf_file)
         if not LPU:
             LPU = len(self._data)
         self._data[LPU] = np.transpose(sio.read_array(data_file))
@@ -235,7 +239,7 @@ class visualizer(object):
                     else:
                         raise ValueError('Plot type not supported')
                 else:
-                    if str(LPU).startswith('input') or not self._graph[LPU].node[str(config['ids'][0][0])]['spiking']:
+                    if str(LPU).startswith('input') and not self._graph[LPU].node[str(config['ids'][0][0])]['spiking']:
                         config['type'] = 2
                     else:
                         config['type'] = 4
@@ -318,10 +322,18 @@ class visualizer(object):
                     self.axarr[ind].zaxis.set_ticks([])
                     if 'norm' not in config.keys():
                         config['norm'] = Normalize(vmin=-0.08, vmax=0, clip=True)
-                    latpositions = np.asarray([ self._graph[LPU].node[str(nid)]['lat']
-                                                for nid in config['ids'][0] ])
-                    longpositions = np.asarray([ self._graph[LPU].node[str(nid)]['long']
-                                                 for nid in config['ids'][0] ])
+                    node_dict = collections.OrderedDict(sorted(self._graph[LPU].node.items()))
+                    if str(LPU).startswith('input'):
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat']
+                                                    for nid in node_dict.iterkeys() ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long']
+                                                    for nid in node_dict.iterkeys() ])
+
+                    else:
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat']
+                                                    for nid in config['ids'][0] ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long']
+                                                     for nid in config['ids'][0] ])
                     xx = np.cos(longpositions) * np.sin(latpositions)
                     yy = np.sin(longpositions) * np.sin(latpositions)
                     zz = np.cos(latpositions)
@@ -528,6 +540,7 @@ class visualizer(object):
         elif str(LPU).startswith('input'):
             config['ids'] = [range(0, self._data[LPU].shape[0])]
             self._config[LPU].append(config)
+            print LPU, config['ids']
         else:
             config['ids'] = {}
             for i,name in enumerate(names):
@@ -536,6 +549,7 @@ class visualizer(object):
                     if self._graph[LPU].node[str(id)]['name'] == name:
                         config['ids'][i].append(id-shift)
             self._config[LPU].append(config)
+            print LPU, config['ids']
         if not 'title' in config:
             if names[0]:
                 config['title'] = "{0} - {1}".format(str(LPU),str(names[0]))
