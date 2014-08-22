@@ -52,17 +52,19 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     INTENSITIES_FILE = 'intensities.h5'
     POSITIONS_FILE = 'positions.h5'
-    FACTORS_FILE = 'factors.h5'
     IMAGE_FILE = 'image.h5'
 
+    #changed __init__, _get_neighborgids_adjacency,
+    #_get_neighborgid, description and
+    # _get_neighborgids_superposition source x->(x+3)%8 + 1
     def __init__(self, nrings, reye=1, retina_only=False):
         """ map to sphere based on a 2D hex geometry that is closer to a circle
             e.g for one ring there will be 7 neurons arranged like this:
-                4
-             3     5
-                0
-             2     6
                 1
+             6     2
+                0
+             5     3
+                4
             Every other ring will have +6 neurons
 
             nrings: number of rings
@@ -102,11 +104,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     def _get_neighborgids_adjacency(self, lid, ring):
         """ Gets adjacent ids in the following order
-                4
-            3       5
-                x
-            2       6
                 1
+            6       2
+                x
+            5       3
+                4
         """
         neighborgids = [0]*6
 
@@ -165,45 +167,45 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         out_neighborgids = [0]*6
 
         # **** in id1 out id5 ****
-        id = self._get_neighborgid(lid, ring, 2)
+        id = self._get_neighborgid(lid, ring, 6)
 
         in_neighborgids[0] = id
         out_neighborgids[4] = id
 
         # **** in id2 out id6 ****
-        id = self._get_neighborgid(lid, ring, 3)
+        id = self._get_neighborgid(lid, ring, 7)
 
         in_neighborgids[1] = id
         out_neighborgids[5] = id
 
         # **** in id3 ****
-        id = self._get_neighborgid(lid, ring, 4)
+        id = self._get_neighborgid(lid, ring, 8)
 
         in_neighborgids[2] = id
 
         # **** out id3 ****
-        id = self._get_neighborgid(lid, ring, 8)
+        id = self._get_neighborgid(lid, ring, 4)
 
         out_neighborgids[2] = id
 
         # **** in id4 ****
-        id = self._get_neighborgid(lid, ring, 5)
+        id = self._get_neighborgid(lid, ring, 1)
 
         in_neighborgids[3] = id
 
         # **** out id4 ****
-        id = self._get_neighborgid(lid, ring, 1)
+        id = self._get_neighborgid(lid, ring, 5)
 
         out_neighborgids[3] = id
 
         # **** in id5 out id1 ****
-        id = self._get_neighborgid(lid, ring, 6)
+        id = self._get_neighborgid(lid, ring, 2)
 
         in_neighborgids[4] = id
         out_neighborgids[0] = id
 
         # **** in id6 out id2 ****
-        id = self._get_neighborgid(lid, ring, 7)
+        id = self._get_neighborgid(lid, ring, 3)
 
         in_neighborgids[5] = id
         out_neighborgids[1] = id
@@ -214,13 +216,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     def _get_neighborgid(cls, lid, ring, pos):
         """ Return the global id of one neighbbor at relative position pos
             pos: the relative position which can be from 0 to 8
-            4
-                5
-            3       6
-                0
-            2       7
+            8
                 1
-                    8
+            7       2
+                0
+            6       3
+                5
+                    4
         """
         # note lid is from 0 to 6*ring-1
         quot_ring, res_ring = divmod(lid, ring)
@@ -487,7 +489,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             for i, neighborgid in enumerate(out_neighborgids):
                 if neighborgid < gid:
                     neighborommat = ommatidia[neighborgid]
-                    relative_neighborpos = 5 - i
+                    relative_neighborpos = i + 1
                     ommatidium.add_photoreceptor(neighborommat.get_direction(),
                                                  relative_neighborpos)
                     supneighbors.append(neighborommat)
@@ -612,7 +614,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              .join(str(x) for x in valid_values))
 
 
-    # TODO add more types and custom attributes in config for each one, 
     def get_intensities(self, file, config={}):
         """ If file is not None then intensities are generated from the file
             otherwise they are generated from information in configuration
@@ -667,6 +668,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 'output_file':<filename>
             }
         """
+        output_file = self._getconfig(config, 'output_file', None)
         type = self._getconfig(config, 'type', 'bar')
         # same for all
         dt = self._getconfig(config, 'dt', 1e-4)
@@ -674,7 +676,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         shape = self._getconfig(config, 'shape', (100, 100))
         levels = self._getconfig(config, 'levels', (0, 1))
 
-        intensities = np.empty((time_steps, len(photorlat)),
+        intensities = np.empty((time_steps, 6*self._nommatidia),
+                                dtype='float32')
+        image = np.empty((time_steps,) + shape,
                                 dtype='float32')
         if type == 'bar':
             width = self._getconfig(config, 'width', 5)
@@ -682,16 +686,55 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             speed = self._getconfig(config, 'speed', 1000)
 
             for i in range(time_steps):
-                image = np.ones(shape, dtype=np.double)*levels[0]
+                image[i] = np.ones(shape, dtype=np.double)*levels[0]
                 if dir == 1:
                     st = int(np.mod(i*speed*dt, shape[1]))
                     en = min(int(st+width), shape[1])
-                    image[:,st:en] = levels[1]
+                    image[i,:,st:en] = levels[1]
                 else:
                     st = int(np.mod(i*speed*dt, shape[0]))
                     en = min(int(st+width), shape[0])
-                    image[st:en, :] = levels[1]
-                #TODO compute intensities as if type == image
+                    image[i,st:en, :] = levels[1]
+                
+                # photons were stored for 1ms
+                image[i] *= (dt/1e-3)
+
+                h_im, w_im = shape
+                transform = ImageTransform(image[i])
+
+                # screen positions
+                # should be much more than the number of photoreceptors
+                # shape (M, P)*self._nrings
+                M = self.MERIDIANS
+                P = self.PARALLELS
+                screenlat, screenlong = np.meshgrid(np.linspace((PI/2)/P,
+                                                                PI/2, P),
+                                                    np.linspace(-PI, PI*(M-2)/M, M))
+
+                mapscreen = self.OMMATIDIUM_CLS.MAP_SCREEN
+                # plane positions
+                # shape (M, P)*self._nrings
+                mx, my = mapscreen.map(screenlat, screenlong)   # map from spherical
+                                                                # grid to plane
+
+                # photoreceptor positions
+                photorlat, photorlong = self.get_positions({'coord': 'spherical',
+                                                            'include': 'R1toR6',
+                                                            'add_dummy': False})
+
+
+                ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
+                                                        photorlat,photorlong,
+                                                        screenlat,screenlong)
+                mx = mx - mx.min()  # start from 0
+                my = my - my.min()
+                mx *= h_im/mx.max()  # scale to image size
+                my *= w_im/my.max()
+
+                # shape (M, P)*self._nrings
+                transimage = transform.interpolate((mx, my))
+                intensities[i] = self._get_intensities(transimage, 
+                                                          ind_weights)
         elif type == 'grating':
             x_freq = self._getconfig(config, 'x_freq', 0.1)
             y_freq = self._getconfig(config, 'y_freq', 0)
@@ -709,8 +752,10 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                     + (levels[1]+levels[0])/2
 
             for i in range(time_steps):
-                image = (sinfunc(x_freq*2*np.pi*(x - x_speed*i*dt)) + 
+                image[i] = (sinfunc(x_freq*2*np.pi*(x - x_speed*i*dt)) + 
                         sinfunc(y_freq*2*np.pi*(y - y_speed*i*dt)))
+                #TODO compute intensities as if type == image
+
         elif type == 'ball':
             center = self._getconfig(config, 'center', None)
             speed = self._getconfig(config, 'speed', 100)
@@ -720,10 +765,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                np.arange(float(shape[0])))
 
             for i in range(time_steps):
-                image = (-1 if white_in_side else 1) * np.sign(
+                image[i] = (-1 if white_in_side else 1) * np.sign(
                         np.sqrt((x-center[0])**2+(y-center[1])**2)
                         - i*self._dt*self._speed).astype(np.double)
-                image = image*((levels[1]-levels[0])/2)+(levels[1]+levels[0])/2
+                image[i] = image*((levels[1]-levels[0])/2)+(levels[1]+levels[0])/2
+                #TODO compute intensities as if type == image
         else:
             raise ValueError("Invalid type {}, should be ball, bar or grating"
                              .format(type))
@@ -738,18 +784,17 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             f.create_dataset('array', intensities.shape,
                              dtype=np.float64,
                              data=intensities)
-        with h5py.File(self.FACTORS_FILE, 'w') as f:
-            f.create_dataset('array', (len(factors),),
+        with h5py.File(self.IMAGE_FILE, 'w') as f:
+            f.create_dataset('array', image.shape,
                              dtype=np.float32,
-                             data=np.array(factors))
+                             data=image)
 
     def get_intensities_from_fileimage(self, file, config={}):
         """ file: input image file, mat file is assumed with a variable im in it
             config: {'type': 'image'(default)/'video',
                      'steps':<simulation steps>,
                      'dt':<time step>,
-                     'output_file':<filename>,
-                     'factors': list of factors for scaled image }
+                     'output_file':<filename>}
             returns: numpy array with with height the number of simulation
                      steps and width the number of neurons.
                      The order of neurons is the same as that returned
@@ -761,13 +806,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         type = self._getconfig(config, 'type', 'image')
         output_file = self._getconfig(config, 'output_file', None)
 
-        if output_file in [self.POSITIONS_FILE, self.FACTORS_FILE, 
+        if output_file in [self.POSITIONS_FILE, 
                        self.IMAGE_FILE]:
             raise ValueError('Invalid value for intensities file: {}'
                          ', filename is reserved for another purpose'
                          .format(output_file))
-
-        factors = self._getconfig(config, 'factors', [1])
 
         mat = loadmat(file)
         try:
@@ -848,13 +891,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 intensities[i] = self._get_intensities(transimage, ind_weights)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
 
-        # Equal or almost equal parts of the array
-        # are multiplied by the respective factor
-        ilen = len(intensities)
-        flen = len(factors)
-        for i, factor in enumerate(factors):
-            intensities[(i*ilen)//flen:((i+1)*ilen)//flen] *= factor
-
         if output_file:
             # intensities will be stored in 2 files if output file is set
             with h5py.File(output_file, 'w') as f:
@@ -871,10 +907,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 f.create_dataset('array', positions.shape,
                                  dtype=np.float32,
                                  data=positions)
-        with h5py.File(self.FACTORS_FILE, 'w') as f:
-            f.create_dataset('array', (len(factors),),
-                             dtype=np.float32,
-                             data=np.array(factors))
         with h5py.File(self.IMAGE_FILE, 'w') as f:
             f.create_dataset('array', image.shape,
                              dtype=np.float32,
@@ -978,22 +1010,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         return np.meshgrid(ind1, ind2)
 
     @staticmethod
-    def get_closest_indexes_old(f1, f2, min1, min2, max1, max2, n):
-        """ Given a point (f1, f2) return nxn closest points in the box
-            [min1, min2, max1, max2]
-        """
-        ind1 = np.linspace(np.floor(f1) + (1-n/2), np.ceil(f1) + (-1+n/2), n) \
-            .astype(int)
-        ind2 = np.linspace(np.floor(f2) + (1-n/2), np.ceil(f2) + (-1+n/2), n) \
-            .astype(int)
-        ind1 = np.minimum(ind1, max1)
-        ind2 = np.minimum(ind2, max2)
-
-        ind1 = np.maximum(ind1, min1)
-        ind2 = np.maximum(ind2, min2)
-        return np.meshgrid(ind1, ind2)
-
-    @staticmethod
     def get_gaussian_sphere(lats, longs, reflat, reflong, dlat, dlong, kappa):
         """ Computes gaussian function on sphere at points (lats, longs),
             with a given center (reflat, reflong).
@@ -1046,7 +1062,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         """ media_file: the file where output video is written
             config: { LPU: 'retina'(default)/'lamina'
                       type: 'image'(default)/'video'/
-                            'bar'/ 'grating'/'ball'
+                            'bar'/'grating'/'ball'
                             see documentation of 
                             get_intensities_from_generatedimage
                             for the rest of the configuration values
@@ -1102,8 +1118,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 impositions = f['array'].value
         except IOError:
             impositions = None
-        with h5py.File(self.FACTORS_FILE, 'r') as f:
-            imfactors = f['array'].value
         with h5py.File(self.INTENSITIES_FILE, 'r') as f:
             intensities = f['array'].value
 
@@ -1148,23 +1162,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         n = Normalize(vmin = rng[0], vmax = rng[1], clip=True)
         n_int = Normalize(vmin = rng_int[0], vmax = rng_int[1], clip=True)
 
-        handles = []
-        for i in range(0,len(data),step):
-            
-            if type == 'image':
-                ax1.imshow(image, cmap=cm.Greys_r)
-            elif type == 'video':
-                # TODO show red rectangle
-                xind = impositions[i, 0:2]
-                yind = impositions[i, 2:4]
-                if not i:
-                    handles.append(ax1.imshow(image[int(xind[0]):int(xind[1]),
-                                                    int(yind[0]):int(yind[1])],
-                                              cmap=cm.Greys_r))
         for i in range(0, len(data), step):
             ax1 = fig.add_subplot(1, 3, 1)
             ax1.set_title('Image')
-            #factor =
             if type == 'image':
                 ax1.imshow(image, cmap=cm.Greys_r)
             elif type == 'video':
@@ -1219,8 +1219,50 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     # plot output when input is programmatically generated
     def _plot_output_generated(self, type, latpositions, longpositions,
                                data, media_file, config):
-        pass
+        fig = plt.figure(figsize=plt.figaspect(0.3))
+        
+        with h5py.File(self.IMAGE_FILE, 'r') as f:
+            image = f['array'].value
+        with h5py.File(self.INTENSITIES_FILE, 'r') as f:
+            intensities = f['array'].value
+            
+        writer = AVConvFileWriter(fps=5, codec='mpeg4')
+        writer.setup(
+            fig, media_file, dpi=80,
+            frame_prefix=os.path.splitext(media_file)[0]+'_')
+        writer.frame_format = 'png'
 
+        step = 10
+        plt.hold(False)
+        
+        U, V = np.mgrid[0:np.pi/2:complex(0, self.PARALLELS),
+                        0:2*np.pi:complex(0, self.MERIDIANS)]
+        X = np.cos(V)*np.sin(U)
+        Y = np.sin(V)*np.sin(U)
+        Z = np.cos(U)
+        for i, d in enumerate(data):
+            if i % step == 0:
+                ax1 = fig.add_subplot(1, 3, 1)
+                ax1.set_title('Image')
+                ax1.imshow(image[i], cmap=cm.Greys_r)
+                
+                
+                colors = self.compute_colors(U, V, latpositions, 
+                                             longpositions, intensities[i])
+                ax2 = fig.add_subplot(1, 3, 2, projection='3d')
+                ax2.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
+                                 antialiased=False, shade=False)
+                ax2.set_title('Intensities')
+                colors = self.compute_colors(U, V, latpositions, 
+                                             longpositions, data[i])
+                ax3 = fig.add_subplot(1, 3, 3, projection='3d')
+                ax3.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
+                                 antialiased=False, shade=False)
+                ax3.set_title('Photoreceptor outputs')
+                fig.canvas.draw()
+                writer.grab_frame()
+        writer.finish()
+    
     @staticmethod
     def compute_colors(gridlats, gridlongs, lats, longs, values):
         """
@@ -1247,7 +1289,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         if gridvalues.max() > 0:
             gridvalues /= gridvalues.max()
         #print('min, max: {}, {}'.format(gridvalues.min(), gridvalues.max()))
-        return gvalues.reshape(gridlats.shape)
+        return gridvalues.reshape(gridlats.shape)
 
     def _get_lamina_ids(self, neuron_name):
         G = self._lamina_graph
