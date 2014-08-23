@@ -31,7 +31,7 @@ from entities.neuron import Neuron
 from entities.synapse import Synapse
 from entities.hemisphere_ommatidium import (HemisphereOmmatidium,
                                             HemisphereNeuron)
-from models import model1
+from models import model_lamina, model_medulla
 
 from map.mapimpl import (AlbersProjectionMap, EquidistantProjectionMap,
                          SphereToSphereMap)
@@ -41,6 +41,7 @@ from transform.imagetransform import ImageTransform
 PORT_IN_GPOT = 'port_in_gpot'
 
 import time
+import pickle
 
 class EyeGeomImpl(NeuronGeometry, Image2Signal):
     # used by static and non static methods and should
@@ -54,6 +55,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     POSITIONS_FILE = 'positions.h5'
     IMAGE_FILE = 'image.h5'
 
+    RET_LAM_PAT_FILE = 'ret_lam_pat.pkl'
+    LAM_MED_PAT_FILE = 'lam_med_pat.pkl'
+    
     #changed __init__, _get_neighborgids_adjacency,
     #_get_neighborgid, description and
     # _get_neighborgids_superposition source x->(x+3)%8 + 1
@@ -83,7 +87,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         # TODO add retina only to state
         if not retina_only:
             self._generate_lamina()
-
+            self._generate_medulla()
+            
     @staticmethod
     def _get_globalid(ring, local_id):
         """ Gets a unique id of position based on the ring
@@ -412,9 +417,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
     def _get_cartesian_omm_loc(self, ring, lid):
         r = self._reye/np.sqrt(3)/self._nrings
-        d1 = np.asarray([0, -np.sqrt(3)*r])
-        d2 = np.asarray([-1.5*r, -np.sqrt(3)/2*r])
-        d3 = np.asarray([-1.5*r, np.sqrt(3)/2*r])
+        d1 = np.asarray([0, np.sqrt(3)*r])
+        d2 = np.asarray([1.5*r, np.sqrt(3)/2*r])
+        d3 = np.asarray([1.5*r, -np.sqrt(3)/2*r])
         ref_dirs = [[1,0,0],[0,1,0],[0,0,1],
                 [-1,0,0],[0,-1,0],[0,0,-1]]
         v = np.asarray(ref_dirs[int(np.floor(lid/ring))])*ring
@@ -615,7 +620,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              .join(str(x) for x in valid_values))
 
 
-    def get_intensities(self, file, config={}):
+    def get_intensities(self, file=None, config={}):
         """ If file is not None then intensities are generated from the file
             otherwise they are generated from information in configuration
         """
@@ -675,16 +680,45 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         dt = self._getconfig(config, 'dt', 1e-4)
         time_steps = self._getconfig(config, 'steps', 1000)
         shape = self._getconfig(config, 'shape', (100, 100))
-        levels = self._getconfig(config, 'levels', (0, 1))
+        levels = self._getconfig(config, 'levels', (0, 85))
 
         intensities = np.empty((time_steps, 6*self._nommatidia),
                                 dtype='float32')
         image = np.empty((time_steps,) + shape,
                                 dtype='float32')
+
+
+        # screen positions
+        # should be much more than the number of photoreceptors
+        # shape (M, P)*self._nrings
+        M = self.MERIDIANS
+        P = self.PARALLELS
+        screenlat, screenlong = np.meshgrid(np.linspace((PI/2)/P,
+                                                        PI/2, P),
+                                            np.linspace(-PI, PI*(M-2)/M, M))
+
+        mapscreen = self.OMMATIDIUM_CLS.MAP_SCREEN
+        # plane positions
+        # shape (M, P)*self._nrings
+        mx, my = mapscreen.map(screenlat, screenlong)   # map from spherical
+                                                        # grid to plane
+
+        # photoreceptor positions
+        photorlat, photorlong = self.get_positions({'coord': 'spherical',
+                                                    'include': 'R1toR6',
+                                                    'add_dummy': False})
+
+
+        self._pre_get_intensities(mx.shape[0], mx.shape[1],
+                                  photorlat,photorlong,
+                                  screenlat,screenlong)
+        mx = mx - mx.min()  # start from 0
+        my = my - my.min()
+        
         if type == 'bar':
-            width = self._getconfig(config, 'width', 5)
+            width = self._getconfig(config, 'width', 20)
             dir = self._getconfig(config, 'dir', 0)
-            speed = self._getconfig(config, 'speed', 1000)
+            speed = self._getconfig(config, 'speed', 500)
 
             for i in range(time_steps):
                 image[i] = np.ones(shape, dtype=np.double)*levels[0]
@@ -699,13 +733,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 
                 # photons were stored for 1ms
                 image[i] *= (dt/1e-3)
-                intensities[i] = self._get_intensities_from_image(image[i])
+                intensities[i] = self._get_intensities_from_image(image[i], mx, my)
         elif type == 'grating':
-            x_freq = self._getconfig(config, 'x_freq', 0.1)
+            x_freq = self._getconfig(config, 'x_freq', 0.05)
             y_freq = self._getconfig(config, 'y_freq', 0)
-            x_speed = self._getconfig(config, 'x_speed', -10)
-            y_speed = self._getconfig(config, 'y_speed', 5)
-            sinusoidal = self._getconfig(config, 'sinusoidal', False)
+            x_speed = self._getconfig(config, 'x_speed', 500)
+            y_speed = self._getconfig(config, 'y_speed', 0)
+            sinusoidal = self._getconfig(config, 'sinusoidal', True)
 
             x, y = np.meshgrid(np.arange(float(shape[1])),
                                np.arange(float(shape[0])))
@@ -721,7 +755,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                         sinfunc(y_freq*2*np.pi*(y - y_speed*i*dt)))
                 # photons were stored for 1ms
                 image[i] *= (dt/1e-3)
-                intensities[i] = self._get_intensities_from_image(image[i])
+                intensities[i] = self._get_intensities_from_image(image[i], mx, my)
 
         elif type == 'ball':
             center = self._getconfig(config, 'center', None)
@@ -738,7 +772,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 image[i] = image*((levels[1]-levels[0])/2)+(levels[1]+levels[0])/2
                 # photons were stored for 1ms
                 image[i] *= (dt/1e-3)
-                intensities[i] = self._get_intensities_from_image(image[i])
+                intensities[i] = self._get_intensities_from_image(image[i], mx, my)
         else:
             raise ValueError("Invalid type {}, should be ball, bar or grating"
                              .format(type))
@@ -815,9 +849,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                     'add_dummy': False})
 
 
-        ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
-                                                photorlat,photorlong,
-                                                screenlat,screenlong)
+        self._pre_get_intensities(mx.shape[0], mx.shape[1],
+                                  photorlat,photorlong,
+                                  screenlat,screenlong)
         if type == 'image':
             mx = mx - mx.min()  # start from 0
             my = my - my.min()
@@ -826,7 +860,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
             # shape (M, P)*self._nrings
             transimage = transform.interpolate((mx, my))
-            intensities = self._get_intensities(transimage, ind_weights)
+            intensities = self._get_intensities(transimage, self.ind_weights)
             intensities = np.tile(intensities, (time_steps, 1))
 
             positions = None
@@ -857,7 +891,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
                 transimage = transform.interpolate((mx, my))
 
-                intensities[i] = self._get_intensities(transimage, ind_weights)
+                intensities[i] = self._get_intensities(transimage, self.ind_weights)
                 positions[i] = [mx.min(), mx.max(), my.min(), my.max()]
 
         if output_file:
@@ -890,42 +924,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         return intensities
 
-    def _get_intensities_from_image(self, image):
+    def _get_intensities_from_image(self, image, mx, my):
         h_im, w_im = image.shape
         transform = ImageTransform(image)
 
-        # screen positions
-        # should be much more than the number of photoreceptors
-        # shape (M, P)*self._nrings
-        M = self.MERIDIANS
-        P = self.PARALLELS
-        screenlat, screenlong = np.meshgrid(np.linspace((PI/2)/P,
-                                                        PI/2, P),
-                                            np.linspace(-PI, PI*(M-2)/M, M))
-
-        mapscreen = self.OMMATIDIUM_CLS.MAP_SCREEN
-        # plane positions
-        # shape (M, P)*self._nrings
-        mx, my = mapscreen.map(screenlat, screenlong)   # map from spherical
-                                                        # grid to plane
-
-        # photoreceptor positions
-        photorlat, photorlong = self.get_positions({'coord': 'spherical',
-                                                    'include': 'R1toR6',
-                                                    'add_dummy': False})
-
-
-        ind_weights = self._pre_get_intensities(mx.shape[0], mx.shape[1],
-                                                photorlat,photorlong,
-                                                screenlat,screenlong)
-        mx = mx - mx.min()  # start from 0
-        my = my - my.min()
         mx *= h_im/mx.max()  # scale to image size
         my *= w_im/my.max()
 
         # shape (M, P)*self._nrings
         transimage = transform.interpolate((mx, my))
-        return self._get_intensities(transimage, ind_weights)
+        return self._get_intensities(transimage, self.ind_weights)
 
     def _get_intensities(self, transimage, ind_weights):
         intensities = np.empty(len(ind_weights), dtype='float32')
@@ -966,7 +974,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                                                self.get_kappa())
             ind_weights[i] = (indlong, indlat, weights)
 
-        return ind_weights
+        self.ind_weights = ind_weights
 
     def get_kappa(self):
         try:
@@ -1122,7 +1130,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                              ', valid values retina, lamina'.format(lpu))
 
     #TODO delete
-    def _plot_output(self, type, latpositions, longpositions, data, media_file):
+    def _plot_output(self, type, latpositions, longpositions, data, media_file, rng=[-0.08,0]):
         fig = plt.figure(figsize=plt.figaspect(0.3))
         
         with h5py.File(self.IMAGE_FILE, 'r') as f:
@@ -1255,22 +1263,24 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         X = np.cos(V)*np.sin(U)
         Y = np.sin(V)*np.sin(U)
         Z = np.cos(U)
+
+        ax1 = fig.add_subplot(1, 3, 1)
+        ax1.set_title('Image')
+        ax2 = fig.add_subplot(1, 3, 2, projection='3d')
+        ax3 = fig.add_subplot(1, 3, 3, projection='3d')
+        
         for i, d in enumerate(data):
             if i % step == 0:
-                ax1 = fig.add_subplot(1, 3, 1)
-                ax1.set_title('Image')
                 ax1.imshow(image[i], cmap=cm.Greys_r)
                 
                 
                 colors = self.compute_colors(U, V, latpositions, 
                                              longpositions, intensities[i])
-                ax2 = fig.add_subplot(1, 3, 2, projection='3d')
                 ax2.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
                                  antialiased=False, shade=False)
                 ax2.set_title('Intensities')
                 colors = self.compute_colors(U, V, latpositions, 
                                              longpositions, data[i])
-                ax3 = fig.add_subplot(1, 3, 3, projection='3d')
                 ax3.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
                                  antialiased=False, shade=False)
                 ax3.set_title('Photoreceptor outputs')
@@ -1317,32 +1327,98 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 ids.append(id)
         return ids
 
-    def connect_retina_lamina(self, manager, ret_lpu, lam_lpu):
-        #.values or .tolist()
-        print('Initializing selectors')
-        # some workarounds
-        ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-        lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
+    def connect_retina_lamina(self, manager, ret_lpu, lam_lpu, from_file=False):
+        if not from_file:
+            #.values or .tolist()
+            print('Initializing selectors')
+            # some workarounds
+            ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
+            lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
+            
+            print('Initializing pattern with selectors')
+            pat = Pattern(ret_sel, lam_sel)
+            ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
+            lam_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1])
+                                   for sel in lam_lpu.interface.index.tolist()
+                                   if str(sel[0])=='retin' or str(sel[0])=='medin'])
+            lam_sel_out = ','.join(['/lamout/' + str(sel[-1])
+                                    for sel in lam_lpu.interface.index.tolist()
+                                    if not str(sel[0]) == 'retin' and not str(sel[0])=='medin'])
+            print('Setting selector attributes in pattern')
+            pat.interface[ret_sel] = [0, 'in', 'gpot']
+            pat.interface[lam_sel_in] = [1, 'out', 'gpot']
+            pat.interface[lam_sel_out] = [1, 'in', 'gpot']
 
-        print('Initializing pattern with selectors')
-
-        pat = Pattern(ret_sel, lam_sel)
-        ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-        lam_sel_in = ','.join(['/retin/' + str(sel[-1]) for sel in lam_lpu.interface.index.tolist() if sel[0] == 'retin'])
-        lam_sel_out = ','.join(['/lamout/' + str(sel[-1]) for sel in lam_lpu.interface.index.tolist() if not sel[0] == 'retin'])
-
-        print('Setting selector attributes in pattern')
-        pat.interface[ret_sel] = [0, 'in', 'gpot']
-        pat.interface[lam_sel_in] = [1, 'out', 'gpot']
-        pat.interface[lam_sel_out] = [1, 'in', 'gpot']
-
-        for sel in lam_sel_in.split(','):
-            pat[sel.replace('in', 'out'), sel] = 1
-
+            
+            for sel in lam_sel_in.split(','):
+                if str(sel).startswith('/retin'):
+                    pat[sel.replace('in', 'out'), sel] = 1
+            print pat
+            pat_file = open(self.RET_LAM_PAT_FILE, 'wb')
+            pickle.dump(pat, pat_file)
+            pat_file.close()
+        else:
+            pat_file = open(self.RET_LAM_PAT_FILE, 'rb')
+            pat = pickle.load(pat_file)
+            pat_file.close()
+        
         print('Connecting LPUs with the pattern')
         print pat
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
+
+    def connect_lamina_medulla(self, manager, lam_lpu, med_lpu, from_file=False):
+        if not from_file:
+            #.values or .tolist()
+            print('Initializing selectors')
+            # some workarounds
+            lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
+            med_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in med_lpu.interface.index.tolist()])
+            
+            print('Initializing pattern with selectors')
+            
+            pat = Pattern(lam_sel, med_sel)
+            lam_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1])
+                                   for sel in lam_lpu.interface.index.tolist()
+                                   if str(sel[0])=='retin' or str(sel[0])=='medin'])
+            lam_sel_out = ','.join(['/lamout/' + str(sel[-1])
+                                    for sel in lam_lpu.interface.index.tolist()
+                                    if not str(sel[0]) == 'retin' and not str(sel[0])=='medin'])
+            med_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1])
+                                   for sel in med_lpu.interface.index.tolist()
+                                   if str(sel[0])=='retin' or str(sel[0])=='lamin'])
+            med_sel_out = ','.join(['/medout/' + str(sel[-1])
+                                    for sel in med_lpu.interface.index.tolist()
+                                    if not str(sel[0]) == 'retin' and not str(sel[0])=='lamin'])
+            
+            
+            print('Setting selector attributes in pattern')
+            pat.interface[med_sel_out] = [1, 'in', 'gpot']
+            pat.interface[med_sel_in] = [1, 'out', 'gpot']
+            pat.interface[lam_sel_in] = [0, 'out', 'gpot']
+            pat.interface[lam_sel_out] = [0, 'in', 'gpot']
+
+            for sel in med_sel_in.split(','):
+                if str(sel).startswith('/lamin'):
+                    pat[sel.replace('in', 'out'), sel] = 1
+
+            for sel in lam_sel_in.split(','):
+                if str(sel).startswith('/medin'):
+                    pat[sel.replace('in', 'out'), sel] = 1
+
+            print pat
+            pat_file = open(self.LAM_MED_PAT_FILE, 'wb')
+            pickle.dump(pat, pat_file)
+            pat_file.close()
+        else:
+            pat_file = open(self.LAM_MED_PAT_FILE, 'rb')
+            pat = pickle.load(pat_file)
+            pat_file.close()
         
+        print('Connecting LPUs with the pattern')
+        print pat
+        manager.connect(lam_lpu, med_lpu, pat, 0, 1)
+
+    
     def _generate_retina(self, retina_only=False):
         G = nx.DiGraph()
 
@@ -1417,7 +1493,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 count += 1
 
         self._generate_synapses(synapse_list, neuron_dict, cartridge_num)
-
+        
         # add nodes to graph
         for node in neuron_list:
             # if neuron is not dummy
@@ -1430,9 +1506,13 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
         self._lamina_graph = G
 
-    def _generate_neurons(self, n_list, n_dict, cartridge_num):
-        neuron_types = model1.NEURON_LIST
+    def _generate_neurons(self, n_list, n_dict, cartridge_num, LPU='lam'):
+        if LPU == 'lam':
+            neuron_types = model_lamina.NEURON_LIST
+        else:
+            neuron_types = model_medulla.NEURON_LIST
         alpha_profiles = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
+
         latpositions, longpositions = self.get_positions(
             {'coord': 'spherical', 'include': 'center',
              'add_dummy': False})
@@ -1491,13 +1571,25 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                     n.num = len(n_list)
                     n.add_param('lat', float(latpositions[i]))
                     n.add_param('long', float(longpositions[i]))
-                    if neuron_params['output']:
-                        n.update_selector('/lamout/' + neuron_name + '_' + str(i))
+                    if LPU == 'lam':
+                        if neuron_params['output']:
+                            n.update_selector('/lamout/' + neuron_name + '_' + str(i))
+                        if neuron_params['model'] == PORT_IN_GPOT and neuron_name in model_lamina.MED_INPUTS:
+                            n.update_selector('/medin/' + neuron_name + '_' + str(i))
+                    else:
+                        if neuron_params['output']:
+                            n.update_selector('/medout/' + neuron_name + '_' + str(i))
+                        if neuron_params['model'] == PORT_IN_GPOT:
+                            n.update_selector('/lamin/' + neuron_name + '_' + str(i))
                     n_list.append(n)
                     n_dict[(i, neuron_name)] = n
 
-    def _generate_synapses(self, s_list, n_dict, cartridge_num):
-        synapse_types = model1.SYNAPSE_LIST
+    def _generate_synapses(self, s_list, n_dict, cartridge_num, LPU='lam'):
+        if LPU=='lam':
+            synapse_types = model_lamina.SYNAPSE_LIST
+        else:
+            synapse_types = model_medulla.SYNAPSE_LIST
+        
         adjneighbors = self._adjneighborslist
 
         for synapse_params in synapse_types:
@@ -1537,11 +1629,47 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                         s.update_class(Synapse.get_class(npre, npost))
                         s_list.append(s)
 
+    def _generate_medulla(self):
+        G = nx.MultiDiGraph()
+
+        # ommatidia are equal with the cartridges
+        cartridge_num = self._nommatidia
+
+        # lists will have only one copy of
+        # neurons synapses
+        # dicts may have duplicates
+        neuron_list = []
+        synapse_list = []
+        neuron_dict = {}
+
+        self._generate_neurons(neuron_list, neuron_dict, cartridge_num, LPU='med')
+        
+        for (count,node) in enumerate(neuron_list):
+            node.num = count
+            
+        self._generate_synapses(synapse_list, neuron_dict, cartridge_num, LPU='med')
+        
+        # add nodes to graph
+        for node in neuron_list:
+            # if neuron is not dummy
+            if not node.is_dummy():
+                G.add_node(node.num, node.params)
+
+        for edge in synapse_list:
+            edge.process_before_export()
+            G.add_edge(edge.prenum, edge.postnum, attr_dict=edge.params)
+
+        self._medulla_graph = G
+
+
     def write_retina(self, output_file):
         nx.write_gexf(self._retina_graph, output_file)
 
     def write_lamina(self, output_file):
-        nx.write_gexf(self._lamina_graph, output_file, prettyprint=True)
+        nx.write_gexf(self._lamina_graph, output_file)
+
+    def write_medulla(self, output_file):
+        nx.write_gexf(self._medulla_graph, output_file)
 
     def _getconfig(self,config, key, default):
         try:
@@ -1549,7 +1677,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         except KeyError:
             return default
 
-
+        
 #if __name__ == '__main__':
 #    from matplotlib.collections import LineCollection
 #    import time
