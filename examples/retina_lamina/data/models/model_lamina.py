@@ -1,5 +1,7 @@
 # use of 0.0 instead of 0 where float is expected
 
+RET_INPUTS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6']
+MED_INPUTS = ['C2', 'C3', 'Mi1, 'Tm1', 'Tm2']
 NEURON_LIST = [
     {'name':'R1', 'model':'port_in_gpot', 'columnar':True, 'output':False,
      'extern':False, 'input':True, 'spiking':False},
