@@ -390,10 +390,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         lat = (ring/(nrings + 2))*(PI/2)  # lat: 0 to pi/2,
                                           # but we don't map near pi/2
         long = (lid/(6*ring))*2*PI - PI   # long: -pi to pi
+        
         '''
-
         x, y = self._get_cartesian_omm_loc(ring, lid)
         lat, long =  AlbersProjectionMap(self._reye).invmap(x, y)
+        
         # if ommatidium is outside the range of rings,
         # construct it without id
         if ring > nrings:
@@ -402,7 +403,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             gid = self._get_globalid(ring, lid)
             ommatidium = ommatidium_cls(lat, long, reye, gid)
             ommatidium.add_photoreceptor((lat, long), 0)
-            self._cart_coord[gid] = (x, y)
+            self._cart_coord[gid] = (lat, long)
             self._spher_coord[gid] = (lat, long)
             
         ommatidia.append(ommatidium)
@@ -487,7 +488,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             for i, neighborgid in enumerate(out_neighborgids):
                 if neighborgid < gid:
                     neighborommat = ommatidia[neighborgid]
-                    relative_neighborpos = 5 - i
+                    relative_neighborpos = i + 1
                     ommatidium.add_photoreceptor(neighborommat.get_direction(),
                                                  relative_neighborpos)
                     supneighbors.append(neighborommat)
@@ -1282,8 +1283,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat[sel.replace('in', 'out'), sel] = 1
 
         print('Connecting LPUs with the pattern')
+        print pat
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
-
+        
     def _generate_retina(self, retina_only=False):
         G = nx.DiGraph()
 
@@ -1292,10 +1294,11 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         latpositions, longpositions = self.get_positions(
             {'coord': 'spherical', 'include': 'R1toR6',
              'add_dummy': False})
+        print len(latpositions)
         for i in range(photoreceptor_num):
             G.node[i] = {
                 'model': 'Photoreceptor',
-                'name': 'R' + str(int(np.mod(i,6))),
+                'name': 'R' + str(int(np.mod(i,6)) + 1),
                 'extern': True,  # gets input from file
                 'public': False,  # True if it's an output neuron
                 'spiking': False,
