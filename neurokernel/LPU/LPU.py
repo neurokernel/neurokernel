@@ -446,7 +446,8 @@ class LPU(Module, object):
         self._init_objects()
         self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
         self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
-
+        self.first_step = True
+        
     def post_run(self):
         super(LPU, self).post_run()
         if self.output:
@@ -476,9 +477,12 @@ class LPU(Module, object):
         if self.input_file is not None:
             self._read_external_input()
 
-        for neuron in self.neurons:
-            neuron.update_I(self.synapse_state.gpudata)
-            neuron.eval()
+        if not self.first_step:
+            for neuron in self.neurons:
+                neuron.update_I(self.synapse_state.gpudata)
+                neuron.eval()
+        else:
+             self.first_step = False
 
         self._update_buffer()
         for synapse in self.synapses:
