@@ -160,7 +160,8 @@ class Photoreceptor(BaseNeuron):
                     for i in range(4)]
         # self.V.fill(-71.1358)
         V_init = np.empty((1, self.num_neurons), dtype=np.double)
-        V_init.fill(-0.0711358)
+        #V_init.fill(-0.0711358)
+        V_init.fill(-0.0711358*1000)
         cuda.memcpy_htod(int(self.V), V_init)
 
         self.hhx[0].fill(0.3566)
@@ -717,7 +718,8 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
     if(tid < num_neurons)
     {
         %(type)s I = I_all[tid] * 1.0;  // rescale the input as temporary remedy
-        %(type)s V = 1000*d_V[tid];  //[V -> mV]
+        // %(type)s V = 1000*d_V[tid];  //[V -> mV]
+        %(type)s V = d_V[tid];
         %(type)s sa = d_sa[tid];
         %(type)s si = d_si[tid];
         %(type)s dra = d_dra[tid];
@@ -753,7 +755,8 @@ hh(%(type)s* I_all, %(type)s* d_V, %(type)s* d_sa, %(type)s* d_si,
                   G_dr * dra * dri * (V-E_K) - 0.093*(V-10) ) /C;
             V += dt * dx;
         }
-        d_V[tid] = 0.001*V;
+        //d_V[tid] = 0.001*V;
+        d_V[tid] = V;
         d_sa[tid] = sa;
         d_si[tid] = si;
         d_dra[tid] = dra;
@@ -823,7 +826,8 @@ sum_current(short2* d_Tstar, int ld, int num_microvilli, %(type)s* I_all,
 
     if(tid == 0)
     {
-        %(type)s Vm = d_Vm[bid];
+        // %(type)s Vm = d_Vm[bid];
+        %(type)s Vm = d_Vm[bid] * 0.001;
         %(type)s I_in;
         if(Vm < 0)
         {
