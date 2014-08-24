@@ -202,7 +202,7 @@ class visualizer(object):
         keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
         # TODO: Irregular grid in U will make the plot better
         U, V = np.mgrid[0:np.pi/2:complex(0, 60),
-                                    0:2*np.pi:complex(0, 60)]
+                        0:2*np.pi:complex(0, 60)]
         X = np.cos(V)*np.sin(U)
         Y = np.sin(V)*np.sin(U)
         Z = np.cos(U)
@@ -313,22 +313,28 @@ class visualizer(object):
                     config['handle'].axes.set_yticks([])
                     config['handle'].axes.set_xticks([])
                 elif config['type'] == 6:
+                    self.axarr[ind].axes.set_yticks([])
+                    self.axarr[ind].axes.set_xticks([])
                     self.axarr[ind] = self.f.add_subplot(self._rows,
                                                          self._cols,
                                                          cnt,
                                                          projection='3d')
-                    self.axarr[ind].xaxis.set_ticks([])
-                    self.axarr[ind].yaxis.set_ticks([])
-                    self.axarr[ind].zaxis.set_ticks([])
+                    config['handle' ] = self.axarr[ind]
+                    config['handle'].axes.set_yticks([])
+                    config['handle'].axes.set_xticks([])
+                    config['handle'].xaxis.set_ticks([])
+                    config['handle'].yaxis.set_ticks([])
+                    config['handle'].zaxis.set_ticks([])
                     if 'norm' not in config.keys():
-                        config['norm'] = Normalize(vmin=-0.08, vmax=0, clip=True)
-                    node_dict = collections.OrderedDict(sorted(self._graph[LPU].node.items()))
+                        config['norm'] = Normalize(vmin=-70, vmax=0, clip=True)
+                    node_dict = self._graph[LPU].node
                     if str(LPU).startswith('input'):
-                        latpositions = np.asarray([ node_dict[str(nid)]['lat']
-                                                    for nid in node_dict.iterkeys() ])
-                        longpositions = np.asarray([ node_dict[str(nid)]['long']
-                                                    for nid in node_dict.iterkeys() ])
-
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat'] \
+                                                    for nid in range(len(node_dict)) \
+                                                    if node_dict[str(nid)]['extern'] ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long'] \
+                                                     for nid in range(len(node_dict)) \
+                                                     if node_dict[str(nid)]['extern'] ])
                     else:
                         latpositions = np.asarray([ node_dict[str(nid)]['lat']
                                                     for nid in config['ids'][0] ])
@@ -345,10 +351,10 @@ class visualizer(object):
                                                 [self._dome_arr_shape[0],self._dome_arr_shape[1],1])
                                      ,[1,1,4])
                     colors[:,:,3] = 1.0
-                    config['handle'] =  self.axarr[ind].plot_surface(self._dome_pos[0], self._dome_pos[1],
-                                                                     self._dome_pos[2], rstride=1, cstride=1,
-                                                                     facecolors=colors, antialiased=False,
-                                                                     shade=False)
+                    config['handle'].plot_surface(self._dome_pos[0], self._dome_pos[1],
+                                                  self._dome_pos[2], rstride=1, cstride=1,
+                                                  facecolors=colors, antialiased=False,
+                                                  shade=False)
                     
                     
                 for key in config.iterkeys():
@@ -450,10 +456,16 @@ class visualizer(object):
                                      ,[1,1,4])
                     colors[:,:,3] = 1.0
                     C = [colors[i,j] for (i,j) in itertools.product(range(colors.shape[0]),
-                                                                range(colors.shape[1]))]
-                    config['handle'].set_facecolors(C)
-                    config['handle'].set_edgecolors(C)
+                                                                    range(colors.shape[1]))]
+                    config['handle'].clear()
+                    config['handle'].xaxis.set_ticks([])
+                    config['handle'].yaxis.set_ticks([])
+                    config['handle'].zaxis.set_ticks([])
                     
+                    config['handle'].plot_surface(self._dome_pos[0], self._dome_pos[1],
+                                                  self._dome_pos[2], rstride=1, cstride=1,
+                                                  facecolors=colors, antialiased=False,
+                                                  shade=False)
                             
         self.f.canvas.draw()
         if self.out_filename:
@@ -540,7 +552,6 @@ class visualizer(object):
         elif str(LPU).startswith('input'):
             config['ids'] = [range(0, self._data[LPU].shape[0])]
             self._config[LPU].append(config)
-            print LPU, config['ids']
         else:
             config['ids'] = {}
             for i,name in enumerate(names):
@@ -549,7 +560,6 @@ class visualizer(object):
                     if self._graph[LPU].node[str(id)]['name'] == name:
                         config['ids'][i].append(id-shift)
             self._config[LPU].append(config)
-            print LPU, config['ids']
         if not 'title' in config:
             if names[0]:
                 config['title'] = "{0} - {1}".format(str(LPU),str(names[0]))
