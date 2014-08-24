@@ -478,7 +478,7 @@ transduction(curandStateXORWOW_t *state, int ld1,
 
     if(tid == 0)
     {
-        Vm = d_Vm[bid];  // V
+        Vm = d_Vm[bid] * 0.001;  // V
     }
 
     __syncthreads();
