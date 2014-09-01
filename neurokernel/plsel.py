@@ -1109,9 +1109,45 @@ class PathLikeSelector(object):
             return [(i,) for i in idx.tolist()]
 
     @classmethod
-    def make_index_two(cls, sel_0, sel_1, names=[]):
+    def pad_selector(cls, selector, max_len=None):
         """
-        Create an index from two selectors.
+        Expand and pad a selector with blank tokens.
+
+        Expand a selector and pad those port identifier token sequences
+        that contain fewer tokens than the specified maximum.
+
+        Parameters
+        ----------
+        selector : str or sequence
+            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]).
+        max_len : int
+            Maximum token sequence length to obtain with padding.
+            If None, each sequence is padded to the maximum number of tokens
+            per port identifier.
+
+        Returns
+        -------
+        padded : sequence
+            Sequence of token sequences padded with blank strings.
+        """
+
+        selector_expanded = cls.expand(selector)
+        N = len(selector_expanded)        
+        if max_len is None:
+            max_len = max(map(len, selector_expanded)) if N else 0
+
+        for i in xrange(N):
+            n = len(selector_expanded[i])
+            selector_expanded[i] = list(selector_expanded[i])
+            if n < max_len:
+                selector_expanded[i].extend(['' for k in xrange(max_len-n)])
+        return selector_expanded
+
+    @classmethod
+    def make_index_two_concat(cls, sel_0, sel_1, names=[]):
+        """
+        Create an index from two selectors concatenated elementwise.
 
         Parameters
         ----------
@@ -1170,19 +1206,104 @@ class PathLikeSelector(object):
             selectors.append(sels_0[i]+sels_1[i])
 
             # Extract level values:
-            for j in xrange(max_levels*2):
-                if len(levels) < j+1:
+            for k in xrange(max_levels*2):
+                if len(levels) < k+1:
                     levels.append([])
-                levels[j].append(selectors[i][j])
+                levels[k].append(selectors[-1][k])
 
         # Discard duplicate level values:
         levels = [sorted(set(level)) for level in levels]
-        
+
         # Start with at least one label so that a valid Index will be returned
         # if the selector is empty:        
         labels = [[]]
 
         # Construct label indices:
+        for i in xrange(N_sel):
+            for j in xrange(max_levels*2):
+                if len(labels) < j+1:
+                    labels.append([])
+                labels[j].append(levels[j].index(selectors[i][j]))
+                    
+        if not names:
+            names = range(len(levels))
+        return pd.MultiIndex(levels=levels, labels=labels, names=names)
+
+    @classmethod
+    def make_index_two_prod(cls, sel_0, sel_1, names=[]):
+        """
+        Create an index from the product of two selectors.
+
+        Parameters
+        ----------
+        sel_0, sel_1 : str or sequence
+            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]).
+        names : list
+            Names of levels to use in generated MultiIndex. If no names are
+            specified, the levels are assigned increasing integers starting with
+            0 as their names.
+
+        Returns
+        -------
+        result : pandas.MultiIndex
+            MultiIndex whose rows are the product of the corresponding rows in
+            `sel_0` and `sel_1`. Each row contains twice the maximum number of
+            tokens in the two selectors.
+
+        Notes
+        -----
+        The selectors may not contain ambiguous symbols such as '*' or '[:]'.
+        """
+
+        assert cls.is_selector(sel_0)
+        assert not cls.is_ambiguous(sel_0)
+        assert cls.is_selector(sel_1)
+        assert not cls.is_ambiguous(sel_1)
+
+        sels_0 = cls.expand(sel_0)
+        sels_1 = cls.expand(sel_1)
+
+        N_sel_0 = len(sels_0)
+        N_sel_1 = len(sels_1)
+
+        levels = [[]]
+        max_levels_0 = max(map(len, sels_0)) if N_sel_0 else 0
+        max_levels_1 = max(map(len, sels_1)) if N_sel_1 else 0
+        max_levels = max(max_levels_0, max_levels_1)
+
+        selectors = []
+        for i, j in itertools.product(xrange(N_sel_0), xrange(N_sel_1)):
+
+            # Pad expanded selectors:
+            sels_0[i] = list(sels_0[i])
+            sels_1[j] = list(sels_1[j])
+
+            n = len(sels_0[i])
+            if n < max_levels:
+                sels_0[i].extend(['' for k in xrange(max_levels-n)])
+            m = len(sels_1[j])
+            if m < max_levels:
+                sels_1[j].extend(['' for k in xrange(max_levels-m)])
+
+            # Concatenate:
+            selectors.append(sels_0[i]+sels_1[j])
+
+            # Extract level values:
+            for k in xrange(max_levels*2):
+                if len(levels) < k+1:
+                    levels.append([])
+                levels[k].append(selectors[-1][k])
+
+        # Discard duplicate level values:
+        levels = [sorted(set(level)) for level in levels]
+
+        # Start with at least one label so that a valid Index will be returned
+        # if the selector is empty:        
+        labels = [[]]
+
+        # Construct label indices:
+        N_sel = N_sel_0*N_sel_1
         for i in xrange(N_sel):
             for j in xrange(max_levels*2):
                 if len(labels) < j+1:

@@ -493,7 +493,6 @@ class Interface(object):
                 return True
         except:
             return self.sel.is_in(s, self.index.tolist())
-        #return self.sel.is_in(s, self.index.tolist())
 
     def out_ports(self, i=None):
         """
@@ -1274,11 +1273,14 @@ class Pattern(object):
         assert from_int != to_int
         assert from_int in self.interface.interface_ids
         assert to_int in self.interface.interface_ids
-        
+
+        # Get indices of the 'from' and 'to' interfaces as lists to speed up the
+        # check below [*]:
+        from_idx = self.interface.interface_ports(from_int).index.tolist()
+        to_idx = self.interface.interface_ports(to_int).index.tolist()
+
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
-        from_ind_list = self.interface.interface_ports(from_int).index
-        to_ind_list = self.interface.interface_ports(to_int).index
         for t in idx.tolist():
             
             # Split tuple into 'from' and 'to' identifiers; since the interface
@@ -1294,8 +1296,8 @@ class Pattern(object):
             else:
                 to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
 
-            if from_id in from_ind_list and \
-               to_id in to_ind_list:
+            # Check whether port identifiers are in the interface indices [*]:
+            if from_id in from_idx and to_id in to_idx:
                 return True
         return False
 
