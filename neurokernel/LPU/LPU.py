@@ -439,13 +439,13 @@ class LPU(Module, object):
         self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
         self.interface[sel_in_spk, 'io', 'type'] = ['in', 'spike']
         self.interface[sel_out_spk, 'io', 'type'] = ['out', 'spike']
+        self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
+        self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
         
     def pre_run(self):
         super(LPU, self).pre_run()
         self._initialize_gpu_ds()
         self._init_objects()
-        self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
-        self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
         self.first_step = True
         
     def post_run(self):
@@ -481,12 +481,15 @@ class LPU(Module, object):
             for neuron in self.neurons:
                 neuron.update_I(self.synapse_state.gpudata)
                 neuron.eval()
+                
+            self._update_buffer()
+        
+            for synapse in self.synapses:
+                synapse.update_state(self.buffer)
+
+            self.buffer.step()
         else:
              self.first_step = False
-
-        self._update_buffer()
-        for synapse in self.synapses:
-            synapse.update_state(self.buffer)
 
         if self.debug:
             self.gpot_buffer_file.root.array.append(
@@ -494,9 +497,7 @@ class LPU(Module, object):
                     .reshape(1, self.gpot_delay_steps, -1))
             self.synapse_state_file.root.array.append(
                 self.synapse_state.get().reshape(1, -1))
-
-        self.buffer.step()
-
+            
         self._extract_output()
 
         # Save output data to disk:
