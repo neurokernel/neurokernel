@@ -66,7 +66,7 @@ class MorrisLecar_a(BaseNeuron):
         return dn;
     }
 
-    __device__ %(type)s compute_V(%(type)s V, %(type)s n, %(type)s I, %(type)s V_1, %(type)s V_2, %(type)s offset, %(type)s V_L, %(type)s V_Ca, %(type)s V_K, %(type)s g_L, %(type)s g_Ca, %(type)s g_K)
+    __device__ %(type)s compute_V(%(type)s V, %(type)s n, %(type)s I, %(type)s V_1, %(type)s V_2, %(type)s V_L, %(type)s V_Ca, %(type)s V_K, %(type)s g_L, %(type)s g_Ca, %(type)s g_K, %(type)s offset)
     {
         %(type)s m_inf = 0.5 * (1+tanh((V - V_1)/V_2));
         %(type)s dV = (I - g_L * (V - V_L) - g_K * n * (V - V_K) - g_Ca * m_inf * (V - V_Ca) + offset);
