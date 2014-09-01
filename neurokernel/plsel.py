@@ -1309,6 +1309,11 @@ class PathLikeSelector(object):
                     pass
             parse_list = cls.parse(selector)
         elif type(selector) in [list, tuple]:
+            try:
+                tks = cls.expand(selector)
+                return df[tks]
+            except:
+                pass
             parse_list = selector
         else:
             raise ValueError('invalid selector type')
@@ -1414,7 +1419,7 @@ class PortMapper(object):
         result : numpy.ndarray
             Selected data.
         """
-        return self.data[self.sel.select(self.portmap, selector).values]
+        return self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)]
 
     def get_ports(self, f):
         """
@@ -1530,7 +1535,7 @@ class PortMapper(object):
             Integer indices of ports comprised by selector. 
         """
 
-        return self.sel.select(self.portmap, selector).values
+        return self.sel.select(self.portmap, selector).dropna().values
 
     def set(self, selector, data):
         """
@@ -1544,8 +1549,9 @@ class PortMapper(object):
         data : numpy.ndarray
             Array of data to save.
         """
-
-        self.data[self.sel.select(self.portmap, selector).values] = data
+        # sel.select will return a Series with nan for selector [()], hence dropna
+        # is necessary here
+        self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
 
     __getitem__ = get
     __setitem__ = set
