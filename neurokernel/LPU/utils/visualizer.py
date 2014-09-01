@@ -327,6 +327,16 @@ class visualizer(object):
                     config['handle'].zaxis.set_ticks([])
                     if 'norm' not in config.keys():
                         config['norm'] = Normalize(vmin=-70, vmax=0, clip=True)
+                    elif config['norm'] == 'auto':
+                        if self._data[LPU].shape[1] > 100:
+                            config['norm'] = Normalize(vmin = np.min(self._data[LPU][config['ids'][0],100:]),
+                                                       vmax = np.max(self._data[LPU][config['ids'][0],100:]),
+                                                       clip = True)
+                        else:
+                            config['norm'] = Normalize(vmin = np.min(self._data[LPU][config['ids'][0],:]),
+                                                       vmax = np.max(self._data[LPU][config['ids'][0],:]),
+                                                       clip = True)
+                            
                     node_dict = self._graph[LPU].node
                     if str(LPU).startswith('input'):
                         latpositions = np.asarray([ node_dict[str(nid)]['lat'] \
@@ -356,17 +366,12 @@ class visualizer(object):
                                                   facecolors=colors, antialiased=False,
                                                   shade=False)
                     
-                    
-                for key in config.iterkeys():
-                    if key not in keywds:
-                        try:
-                            self._set_wrapper(self.axarr[ind],key, config[key])
-                        except:
-                            pass
-                        try:
-                            self._set_wrapper(config['handle'],key, config[key])
-                        except:
-                            pass
+                    for key in config.iterkeys():
+                        if key not in keywds:
+                            try:
+                                self._set_wrapper(config['handle'],key, config[key])
+                            except:
+                                pass
                 if config['type']<3:
                     config['handle'].axes.set_xticks([])
                     config['handle'].axes.set_yticks([])
@@ -466,7 +471,13 @@ class visualizer(object):
                                                   self._dome_pos[2], rstride=1, cstride=1,
                                                   facecolors=colors, antialiased=False,
                                                   shade=False)
-                            
+                    keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
+                    for key in config.iterkeys():
+                        if key not in keywds:
+                            try:
+                                self._set_wrapper(config['handle'],key, config[key])
+                            except:
+                                pass
         self.f.canvas.draw()
         if self.out_filename:
             self.writer.grab_frame()
