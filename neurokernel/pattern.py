@@ -440,33 +440,35 @@ class Interface(object):
         """
 
         assert isinstance(i, Interface)
+        
+        # Merge the interface data on their indices (i.e., their port identifiers):
+        data_merged = pd.merge(self.data[self.data['interface'] == a], 
+                               i.data[i.data['interface'] == b], 
+                               left_index=True,
+                               right_index=True)
 
-        # Find 'type' attributes for specified interfaces:
-        type_a = self.data[self.data['interface'] == a]['type']
-        type_b = i.data[i.data['interface'] == b]['type']
-
-        # Exclude null entries from 'type' attribs:
-        type_a = type_a[type_a.notnull()]
-        type_b = type_b[type_b.notnull()]
-
-        # Find inverse of this instance's 'io' attributes 
-        # for interface 'a' and 'io' attributes for interface 'b':
-        f = lambda x: 'out' if x == 'in' else \
-            ('in' if x == 'out' else x)
-        io_a_inv = self.data[self.data['interface'] == a]['io'].apply(f)
-        io_b = i.data[i.data['interface'] == b]['io']
-        # Exclude null entries from inverted and original 'io' attribs:
-        io_a_inv = io_a_inv[io_a_inv.notnull()]
-        io_b = io_b[io_b.notnull()]
-
-        # Compare indices, non-null 'io' attribs, and non-null 'type' attribs:
-        idx_a = self.data[self.data['interface'] == a].index
-        idx_b = i.data[i.data['interface'] == b].index
-        if idx_a.equals(idx_b) and all(io_a_inv==io_b) \
-                and all(type_a==type_b):
-            return True
-        else:
+        # If one interface contains identifiers not in the other, they are
+        # incompatible:
+        if len(data_merged) < max(len(self.data), len(i.data)):
             return False
+
+        # If the 'type' attributes of the same identifiers in each interfaces
+        # are not equivalent, they are incompatible:
+        if not data_merged.apply(lambda row: (row['type_x'] == row['type_y']) or \
+                    (pd.isnull(row['type_x']) and pd.isnull(row['type_y'])),
+                                 axis=1).all():
+            return False
+
+        # If the 'io' attributes of the same identifiers in each interfaces
+        # are not the inverse of each other, they are incompatible:
+        if not data_merged.apply(lambda row: (row['io_x'] == 'out' and \
+                                              row['io_y'] == 'in') or \
+                                 (row['io_x'] == 'in' and \
+                                  row['io_y'] == 'out') or \
+                                 (pd.isnull(row['io_x']) and pd.isnull(row['io_y'])),
+                                 axis=1).all():
+            return False
+        return True
 
     def is_in_interfaces(self, s):
         """

@@ -199,6 +199,15 @@ class test_interface(TestCase):
         j['/foo[2:4]', 'interface', 'io'] = [1, 'out']
         assert_frame_equal(i.data, j.io_inv.data)
 
+    def test_is_compatible_sel_order(self):
+        i = Interface('/foo[0:2],/bar[0:2]')
+        i['/foo[0:2]', 'interface', 'io'] = [0, 'in']
+        i['/bar[0:2]', 'interface', 'io'] = [0, 'out']
+        j = Interface('/bar[0:2],/foo[0:2]')
+        j['/bar[0:2]', 'interface', 'io'] = [1, 'in']
+        j['/foo[0:2]', 'interface', 'io'] = [1, 'out']
+        assert i.is_compatible(0, j, 1)
+
     def test_is_compatible_both_dirs(self):
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
