@@ -430,6 +430,11 @@ class test_pattern(TestCase):
                                ('yyy', 2)])
         self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
 
+    def test_is_in_interfaces(self):
+        p = Pattern('/aaa/bbb', '/ccc/ddd')
+        assert p.is_in_interfaces('/aaa/bbb') == True
+        assert p.is_in_interfaces('/aaa') == False
+
     def test_is_connected_single_level(self):
         p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
         p['/aaa', '/ccc'] = 1
