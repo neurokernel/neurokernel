@@ -116,15 +116,16 @@ eyemodel = EyeGeomImpl(args.num_layers, model=args.model)
 if args.input:
     print('Generating input of model')
 
-    _dummy = eyemodel.get_intensities(None,
-                                      {'type': args.type, 'steps': args.steps,
-                                       'dt': dt, 'output_file': RET_INPUT})
+    config = {'type': args.type, 'steps': args.steps,
+              'dt': dt, 'output_file': RET_INPUT})
     '''
+    replace with above for bar generation
     config = {'type': 'bar', 'steps': args.steps,
               'dt': dt, 'shape': (100,100),
               'width': 20, 'speed': 100, 'dir':0}
-    _dummy = eyemodel.get_intensities(file=None, config=config)
     '''
+    _dummy = eyemodel.get_intensities(file=None, config=config)
+
 if args.gexf:
     print('Writing retina lpu')
     eyemodel.write_retina(RET_GEXF_FILE)
@@ -194,18 +195,7 @@ if not args.suppress:
                                                             start_time))
 
 if args.output:
-    '''
-    eyemodel.visualise_output(media_file=RET_OUTPUT_MPEG,
-                              model_output=RET_OUTPUT_GPOT,
-                              config = {'LPU': 'retina',
-                                        'type':args.type})
-    if not args.retina_only:
-        eyemodel.visualise_output(media_file=LAM_OUTPUT_MPEG,
-                                  model_output=LAM_OUTPUT_GPOT,
-                                  config = {'LPU': 'lamina',
-                                            'type':args.type,
-                                            'neuron': 'L1'} )
-    '''
+
     V = vis.visualizer()
 
     n = Normalize(vmin=0, vmax=30, clip=True)
