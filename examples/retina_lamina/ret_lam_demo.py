@@ -44,7 +44,7 @@ parser.add_argument('-a', '--ret_dev', default=0, type=int,
 parser.add_argument('-b', '--lam_dev', default=1, type=int,
                     help='GPU for lamina lobe [default: 1]')
 parser.add_argument('-e', '--med_dev', default=1, type=int,
-                    help='GPU for lamina lobe [default: 1]')
+                    help='GPU for medulla [default: 1]')
 
 parser.add_argument('-i', '--input', action="store_true",
                     help='generates input if set')
@@ -65,8 +65,10 @@ parser.add_argument('--log', default='file', type=str,
 parser.add_argument('--steps', default=10, type=int,
                     help='simulation steps')
                     
-parser.add_argument('--retina-only', action="store_true",
-                    help='if set only retina simulation takes place')
+parser.add_argument('--model', default='r', type=str,
+                    help='set the initials of the LPUs to simulate: r(etina)'
+                         ' l(amina) m(edulla), default "r", checks for'
+                         ' validity will be applied'
 
 args = parser.parse_args()
 
@@ -85,8 +87,12 @@ RET_GEXF_FILE = 'retina.gexf.gz'
 LAM_GEXF_FILE = 'lamina.gexf.gz'
 MED_GEXF_FILE = 'medulla.gexf.gz'
 
-INPUT_FILE = 'vision_input.h5'
 IMAGE_FILE = 'image1.mat'
+
+RET_INPUT = 'vision_input.h5'
+#TODO KP depends on Nikul's work
+LAM_INPUT = None
+MED_INPUT = None
 RET_OUTPUT_FILE = 'retina_output'
 LAM_OUTPUT_FILE = 'lamina_output'
 MED_OUTPUT_FILE = 'medulla_output'
@@ -100,32 +106,32 @@ LAM_OUTPUT_AVI = 'lamina_output.avi'
 RET_OUTPUT_MPEG = 'retina_output.mp4'
 LAM_OUTPUT_MPEG = 'lamina_output.mp4'
 
+# XXX eyemodel's calculations that depend on model are checked internally
+# that will cause some messages to be printed, like  'Writing retina lpu'
+# without that necessarily taking place
+
 print('Instantiating eye geometry')
-eyemodel = EyeGeomImpl(args.num_layers, retina_only=args.retina_only)
+eyemodel = EyeGeomImpl(args.num_layers, model=args.model)
 
 if args.input:
     print('Generating input of model')
-    
+
     _dummy = eyemodel.get_intensities(None,
-                                      {'type': args.type,
-                                       'steps': args.steps,
-                                       'dt': dt, 'output_file': INPUT_FILE})
+                                      {'type': args.type, 'steps': args.steps,
+                                       'dt': dt, 'output_file': RET_INPUT})
     '''
     config = {'type': 'bar', 'steps': args.steps,
               'dt': dt, 'shape': (100,100),
               'width': 20, 'speed': 100, 'dir':0}
     _dummy = eyemodel.get_intensities(file=None, config=config)
     '''
-from_file = True
 if args.gexf:
-    from_file = False
     print('Writing retina lpu')
     eyemodel.write_retina(RET_GEXF_FILE)
-    if not args.retina_only:
-        print('Writing lamina lpu')
-        eyemodel.write_lamina(LAM_GEXF_FILE)
-        print('Writing medulla lpu')
-        eyemodel.write_medulla(MED_GEXF_FILE)
+    print('Writing lamina lpu')
+    eyemodel.write_lamina(LAM_GEXF_FILE)
+    print('Writing medulla lpu')
+    eyemodel.write_medulla(MED_GEXF_FILE)
 
 if args.port_data is None and args.port_ctrl is None:
     port_data = get_random_port()
@@ -138,42 +144,46 @@ if not args.suppress:
     man = core.Manager(port_data, port_ctrl)
     man.add_brok()
 
-    print('Parsing retina lpu data')
-    n_dict_ret, s_dict_ret = LPU.lpu_parser(RET_GEXF_FILE)
-    print('Initializing retina LPU')
-    lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
-                  input_file=INPUT_FILE,
-                  output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
-                  port_data=port_data, device=args.ret_dev, id='retina',
-                  debug=True)
-    man.add_mod(lpu_ret)
+    if 'r' in args.model:
+        print('Parsing retina LPU data')
+        n_dict_ret, s_dict_ret = LPU.lpu_parser(RET_GEXF_FILE)
+        print('Initializing retina LPU')
+        lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
+                      input_file=RET_INPUT,
+                      output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
+                      port_data=port_data, device=args.ret_dev, id='retina',
+                      debug=True)
+        man.add_mod(lpu_ret)
 
-    if not args.retina_only:
-        print('Parsing lamina lpu data')
+    if 'l' in args.model:
+        print('Parsing lamina LPU data')
         n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
         print('Initializing lamina LPU')
         lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-                      input_file=None,
+                      input_file=LAMINA_INPUT,
                       output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
                       port_data=port_data, device=args.lam_dev, id='lamina',
                       debug=True)
-
         man.add_mod(lpu_lam)
 
-        print('Parsing medulla lpu data')
+    if 'm' in args.model:
+        print('Parsing medulla LPU data')
         n_dict_med, s_dict_med = LPU.lpu_parser(MED_GEXF_FILE)
-        print('Initializing lamina LPU')
+        print('Initializing medulla LPU')
         lpu_med = LPU(dt, n_dict_med, s_dict_med,
-                      input_file=None,
+                      input_file=MEDULLA_INPUT,
                       output_file=MED_OUTPUT_FILE, port_ctrl=port_ctrl,
                       port_data=port_data, device=args.med_dev, id='medulla',
                       debug=True)
+        man.add_mod(lpu_med)
 
-        print('Connecting retina and lamina')
-        eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam, from_file)
-
-        print('Connecting lamina and medulla')
-        eyemodel.connect_lamina_medulla(man, lpu_lam, lpu_med, from_file)
+    # if gexf files are not written again, 
+    # patterns are loaded from previous files too
+    from_file = not args.gexf
+    print('Connecting retina and lamina')
+    eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam, from_file)
+    print('Connecting lamina and medulla')
+    eyemodel.connect_lamina_medulla(man, lpu_lam, lpu_med, from_file)
 
     print('Starting simulation')
     start_time = time.time()

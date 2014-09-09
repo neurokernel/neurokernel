@@ -55,13 +55,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     POSITIONS_FILE = 'positions.h5'
     IMAGE_FILE = 'image.h5'
 
+    # TODO pass the names as parameters in case more configurations need to be stored
     RET_LAM_PAT_FILE = 'ret_lam_pat.pkl'
     LAM_MED_PAT_FILE = 'lam_med_pat.pkl'
+
+    LPU_ORDER = {'r':0, 'l':1, 'm':2}
     
     #changed __init__, _get_neighborgids_adjacency,
     #_get_neighborgid, description and
     # _get_neighborgids_superposition source x->(x+3)%8 + 1
-    def __init__(self, nrings, reye=1, retina_only=False):
+    def __init__(self, nrings, reye=1, model='r'):
         """ map to sphere based on a 2D hex geometry that is closer to a circle
             e.g for one ring there will be 7 neurons arranged like this:
                 1
@@ -74,6 +77,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             nrings: number of rings
             r_eye: radius of eye hemisphere
                    (radius of screen is fixed to 10 right now)
+            model: should be a string with characters corresponding to the
+                   LPUs to be simulated: r(etina), l(amina), m(edulla)
         """
         self._nrings = nrings
         self._reye = reye
@@ -83,10 +88,27 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         self._supneighborslist = []
         self._adjneighborslist = []
         self._init_neurons()
-        self._generate_retina(retina_only)
-        # TODO add retina only to state
-        if not retina_only:
+        
+        # find first and last lpu according to the order they are connected
+        first_lpu = LPU_ORDER['m']
+        last_lpu = LPU_ORDER['r']
+        for c in model:
+            ord_c = LPU_ORDER[c]
+            if ord_c < first_lpu:
+                first_lpu = ord_c
+            if ord_c > last_lpu:
+                last_lpu = ord_c
+
+        assert(last_lpu-first_lpu+1 == len(model))
+        # numbers not characters    
+        self._first_lpu = first_lpu
+        self._last_lpu = last_lpu
+
+        if first_lpu <= LPU_ORDER['r'] and last_lpu >= LPU_ORDER['r']:
+            self._generate_retina()
+        if first_lpu <= LPU_ORDER['l'] and last_lpu >= LPU_ORDER['l']:
             self._generate_lamina()
+        if first_lpu <= LPU_ORDER['m'] and last_lpu >= LPU_ORDER['m']:
             self._generate_medulla()
             
     @staticmethod
@@ -1327,13 +1349,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 ids.append(id)
         return ids
 
+    # TODO KP is use of -1 and 1 consistent? use only one of them maybe?
     def connect_retina_lamina(self, manager, ret_lpu, lam_lpu, from_file=False):
+        if first_lpu > LPU_ORDER['r'] or last_lpu < LPU_ORDER['l']:
+            return
         if not from_file:
             #.values or .tolist()
             print('Initializing selectors')
             # some workarounds
             ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-            lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
+            lam_sel = ','.join(['/' + str(sel[0]) + '/' + str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
             
             print('Initializing pattern with selectors')
             pat = Pattern(ret_sel, lam_sel)
@@ -1349,11 +1374,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat.interface[lam_sel_in] = [1, 'out', 'gpot']
             pat.interface[lam_sel_out] = [1, 'in', 'gpot']
 
-            
             for sel in lam_sel_in.split(','):
                 if str(sel).startswith('/retin'):
                     pat[sel.replace('in', 'out'), sel] = 1
-            print pat
             pat_file = open(self.RET_LAM_PAT_FILE, 'wb')
             pickle.dump(pat, pat_file)
             pat_file.close()
@@ -1363,10 +1386,12 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat_file.close()
         
         print('Connecting LPUs with the pattern')
-        print pat
+        print(pat)
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
     def connect_lamina_medulla(self, manager, lam_lpu, med_lpu, from_file=False):
+        if first_lpu > LPU_ORDER['l'] or last_lpu < LPU_ORDER['m']:
+            return
         if not from_file:
             #.values or .tolist()
             print('Initializing selectors')
@@ -1405,7 +1430,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 if str(sel).startswith('/medin'):
                     pat[sel.replace('in', 'out'), sel] = 1
 
-            print pat
             pat_file = open(self.LAM_MED_PAT_FILE, 'wb')
             pickle.dump(pat, pat_file)
             pat_file.close()
@@ -1415,7 +1439,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat_file.close()
         
         print('Connecting LPUs with the pattern')
-        print pat
+        print(pat)
         manager.connect(lam_lpu, med_lpu, pat, 0, 1)
 
     
@@ -1663,13 +1687,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
 
     def write_retina(self, output_file):
-        nx.write_gexf(self._retina_graph, output_file)
+        if first_lpu <= LPU_ORDER['r'] and last_lpu >= LPU_ORDER['r']:
+            nx.write_gexf(self._retina_graph, output_file)
 
     def write_lamina(self, output_file):
-        nx.write_gexf(self._lamina_graph, output_file)
+        if first_lpu <= LPU_ORDER['l'] and last_lpu >= LPU_ORDER['l']:
+            nx.write_gexf(self._lamina_graph, output_file)
 
     def write_medulla(self, output_file):
-        nx.write_gexf(self._medulla_graph, output_file)
+        if first_lpu <= LPU_ORDER['m'] and last_lpu >= LPU_ORDER['m']:
+            nx.write_gexf(self._medulla_graph, output_file)
 
     def _getconfig(self,config, key, default):
         try:
