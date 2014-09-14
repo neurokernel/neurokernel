@@ -68,7 +68,7 @@ parser.add_argument('--steps', default=10, type=int,
 parser.add_argument('--model', default='r', type=str,
                     help='set the initials of the LPUs to simulate: r(etina)'
                          ' l(amina) m(edulla), default "r", checks for'
-                         ' validity will be applied'
+                         ' validity will be applied')
 
 args = parser.parse_args()
 
@@ -117,7 +117,7 @@ if args.input:
     print('Generating input of model')
 
     config = {'type': args.type, 'steps': args.steps,
-              'dt': dt, 'output_file': RET_INPUT})
+              'dt': dt, 'output_file': RET_INPUT}
     '''
     replace with above for bar generation
     config = {'type': 'bar', 'steps': args.steps,
