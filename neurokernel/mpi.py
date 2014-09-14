@@ -14,75 +14,12 @@ import psutil
 import shortuuid
 import twiggy
 import zmq
-import zmq.log.handlers
 
-from tools.comm import ZMQOutput
-
-def format_name(name, width=20):
-    """
-    Pad process name with spaces.
-
-    Parameters
-    ----------
-    name : str
-        Name to pad.
-    width : int
-        Total width of padded name.
-
-    Returns
-    -------
-    padded : str
-        Padded name.
-    """
-
-    return ('{name:%s}' % width).format(name=name)
-
-def setup_logger(name='', level=twiggy.levels.DEBUG,
-                 fmt=twiggy.formats.line_format,
-                 stdout=None, file_name=None, sock=None):
-    """
-    Setup a twiggy logger.
-
-    Parameters
-    ----------
-    name : str
-        Logger name.
-    level : twiggy.levels.LogLevel
-        Logging level.
-    fmt : str
-        Format string.
-    stdout : bool
-        Create output stream handler to stdout if True.
-    file_name : str
-        Create output handler to specified file.
-    sock : str
-        ZeroMQ socket address.
-
-    Returns
-    -------
-    logger : twiggy.logger.Logger
-        Configured logger.
-    """
-
-    if file_name:
-        file_output = \
-          twiggy.outputs.FileOutput(file_name, fmt, 'w')
-        twiggy.addEmitters(('file', level, None, file_output))
-
-    if stdout:
-        stdout_output = \
-          twiggy.outputs.StreamOutput(fmt, stream=stdout)   
-        twiggy.addEmitters(('stdout', level, None, stdout_output))
-
-    if sock:
-        port_output = ZMQOutput(sock, fmt)
-        twiggy.addEmitters(('sock', level, None, sock_output))
-
-    return twiggy.log.name(format_name(name))
+from tools.logging import format_name, setup_logger
 
 class PollerChecker(object):
-    """                                                                    
-    Wrapper class to facilitate creation and use of ZMQ pollers.               
+    """
+    Wrapper class to facilitate creation and use of ZMQ pollers.
 
     Parameters
     ----------
@@ -146,7 +83,7 @@ class Worker(object):
 
         This method is repeatedly executed by the Worker instance after the
         instance receives a 'start' control message and until it receives a 'stop'
-        control message. It should check for the presence of 
+        control message. It should check for the presence of
         """
 
         self.logger.info('executing run_step')
@@ -201,7 +138,7 @@ class Manager(object):
     """
     Self-launching MPI worker manager.
 
-    This class may be used to construct an MPI application consisting of 
+    This class may be used to construct an MPI application consisting of
 
     - a launcher process with methods for specifying Worker class instances as
       the bodies of MPI nodes and for starting and stopping the application's
@@ -210,7 +147,7 @@ class Manager(object):
     - a master process that relays control messages from the launcher process to the
       worker processes.
 
-    This class does not require MPI-2 dynamic processing management.
+    The application should NOT be started via mpiexec.
 
     Parameters
     ----------
@@ -223,6 +160,10 @@ class Manager(object):
     ctrl_tag : int
         MPI tag to identify control messages transmitted to worker nodes.
 
+    Notes
+    -----
+    This class does not require MPI-2 dynamic processing management.
+
     See Also
     --------
     Worker
@@ -230,7 +171,7 @@ class Manager(object):
 
     def __init__(self, mpiexec='mpiexec', mpiargs=(), data_tag=0, ctrl_tag=1):
         assert data_tag != ctrl_tag and data_tag != MPI.ANY_TAG and \
-                           ctrl_tag != MPI.ANY_TAG        
+                           ctrl_tag != MPI.ANY_TAG
 
         # MPI launch info:
         self._mpiexec = mpiexec
@@ -238,11 +179,11 @@ class Manager(object):
 
         # Make logger name reflect process identity:
         if self._is_launcher():
-            self.logger = twiggy.log.name(format_name('manager/launcher'))
+            self.logger = twiggy.log.name(format_name('launcher/manager'))
         elif self._is_master():
-            self.logger = twiggy.log.name(format_name('manager/master'))
+            self.logger = twiggy.log.name(format_name('master/manager'))
         else:
-            self.logger = twiggy.log.name(format_name('manager/worker %s' % MPI.COMM_WORLD.Get_rank()))
+            self.logger = twiggy.log.name(format_name('worker %s/manager' % MPI.COMM_WORLD.Get_rank()))
 
         # Tags used to distinguish MPI messages:
         self._data_tag = data_tag
@@ -254,7 +195,7 @@ class Manager(object):
         # Reserve node 0 for use as master:
         self._rank = 1
 
-    def add(self, target=None, args=(), kwargs={}):
+    def add(self, target, *args, **kwargs):
         """
         Add a worker to an MPI application.
 
@@ -262,41 +203,59 @@ class Manager(object):
         ----------
         target : Worker
             Worker class to instantiate and run.
-        args : list
+        args : sequence
             Sequential arguments to pass to target class constructor.
         kwargs : dict
             Named arguments to pass to target class constructor.
+
+        Returns
+        -------
+        rank : int
+            MPI rank assigned to class.
         """
 
-        if not self._is_launcher():
-            self.logger.info('not in launcher - skipping add')
-        else:
-            self.logger.info('adding worker')
+        # The contents of this method need to run on the launcher (so that it
+        # knows how many MPI processes to start) and the workers (so that they
+        # know how to instantiate their respective classes), but not on the master:
+        if self._is_master():
+            self.logger.info('in master - skipping add')
+            return
+        self.logger.info('adding class %s' % target.__name__)
 
         assert issubclass(target, Worker)
-        self._targets[self._rank] = target
-        self._args[self._rank] = tuple(args)
-        self._kwargs[self._rank] = kwargs
+        rank = self._rank
+        self._targets[rank] = target
+        self._args[rank] = tuple(args)
+        self._kwargs[rank] = kwargs
         self._rank += 1
+        return rank
+
+    def _in_mpi(self):
+        """
+        Return True if the current process is an MPI process.
+        """
+
+        # Get name of parent process:
+        parent_name = psutil.Process(os.getppid()).name()
+
+        # All MPI processes must be children of the launcher process:
+        return bool(re.search(os.path.basename(self._mpiexec), parent_name))
 
     def _is_launcher(self):
         """
         Return True if the current process is the launching process.
         """
 
-        # Get name of parent process:
-        parent_name = psutil.Process(os.getppid()).name()
-
-        # All processes launched by the master process must be children of the
-        # launcher:
-        return not bool(re.search(os.path.basename(self._mpiexec), parent_name))
+        return not self._in_mpi()
 
     def _is_master(self):
         """
         Return True if the current process is the master MPI process.
         """
-        
-        return MPI.COMM_WORLD.Get_rank() == 0
+
+        # We need to check if MPI is active because Get_rank() will return zero 
+        # in the launcher too:
+        return self._in_mpi() and (MPI.COMM_WORLD.Get_rank() == 0)
 
     def _run_launcher(self):
         """
@@ -307,7 +266,7 @@ class Manager(object):
             self.logger.info('not in launcher - skipping launch')
             return
         else:
-            self.logger.info('launching application')
+            self.logger.info('launching application (%s)' % self._rank)
 
         # Create random IPC interface name:
         env = os.environ.copy()
@@ -324,7 +283,8 @@ class Manager(object):
         python_path = sys.executable
         script_name = os.path.basename(__file__)
         self._mpiexec_proc = subprocess.Popen((self._mpiexec,)+self._mpiargs+\
-                                              ('-np', str(self._rank), python_path, script_name),
+                                              ('-np', str(self._rank), 
+                                               python_path, script_name),
                                               stdout=sys.stdout,
                                               stderr=sys.stderr,
                                               stdin=sys.stdin,
@@ -396,7 +356,7 @@ class Manager(object):
 
     def run(self):
         """
-        Run MPI application. 
+        Run MPI application.
 
         Notes
         -----
@@ -460,7 +420,7 @@ class Manager(object):
             self.logger.info('not in launcher - skipping kill')
             return
         self.logger.info('killing launcher')
-        self._mpiexec_proc.kill()       
+        self._mpiexec_proc.kill()
 
     def wait(self):
         """
@@ -471,7 +431,7 @@ class Manager(object):
             self.logger.info('not in launcher - skipping wait')
             return
         self.logger.info('waiting for launcher to exit')
-        self._mpiexec_proc.wait()            
+        self._mpiexec_proc.wait()
 
     def terminate(self):
         """
@@ -479,7 +439,8 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            raise RuntimeError('not in launcher - skipping')
+            self.logger.info('not in launcher - skipping')
+            return
         self.logger.info('terminating launcher')
         self._mpiexec_proc.terminate()
 
@@ -488,20 +449,23 @@ if __name__ == '__main__':
 
     setup_logger(stdout=sys.stdout)
 
+    # Define a class whose constructor takes arguments so as to test
+    # instantiation of the class by the manager:
     class MyWorker(Worker):
-        def __init__(self):
+        def __init__(self, x, y, z=None):
             super(MyWorker, self).__init__()
             comm = MPI.COMM_WORLD
             size = comm.Get_size()
             rank = comm.Get_rank()
             name = MPI.Get_processor_name()
             self.logger.info('I am process %d of %d on %s.' % (rank, size, name))
-            
+            self.logger.info('init args: %s, %s, %s' % (x, y, z))
+
     man = Manager()
-    man.add(target=MyWorker)
-    man.add(target=MyWorker)
+    man.add(target=MyWorker, x=1, y=2, z=3)
+    man.add(target=MyWorker, x=3, y=4, z=5)
     man.run()
     man.start()
-    time.sleep(1)
+    time.sleep(0.01)
     man.stop()
     man.quit()
