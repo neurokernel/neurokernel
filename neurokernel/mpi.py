@@ -4,6 +4,7 @@
 MPI support classes.
 """
 
+import inspect
 import os
 import re
 import subprocess
@@ -16,6 +17,40 @@ import twiggy
 import zmq
 
 from tools.logging import format_name, setup_logger
+
+def args_to_dict(f, *args, **kwargs):
+    """
+    Combine sequential and named arguments in single dictionary.
+
+    Parameters
+    ----------
+    f : function or instancemethod
+        Function to which the arguments will be passed.
+    args : tuple
+        Sequential arguments.
+    kwargs : dict
+        Named arguments.
+
+    Returns
+    -------
+    d : dict
+        Maps argument names to values.
+    """
+
+    spec = inspect.getargspec(f)
+    d = {}
+    if inspect.ismethod(f):
+        assert len(spec.args)-1 <= args
+        for arg, val in zip(spec.args[1:], args):
+            d[arg] = val
+    else:
+        assert len(spec.args) <= args
+        for arg, val in zip(spec.args, args):
+            d[arg] = val
+    for arg, val in kwargs.iteritems():
+        assert arg not in d
+        d[arg] = val
+    return d
 
 class PollerChecker(object):
     """
@@ -188,8 +223,11 @@ class Manager(object):
         # Tags used to distinguish MPI messages:
         self._data_tag = data_tag
         self._ctrl_tag = ctrl_tag
+
+        # Worker classes to instantiate:
         self._targets = {}
-        self._args = {}
+
+        # Arguments to pass to worker class constructors:
         self._kwargs = {}
 
         # Reserve node 0 for use as master:
@@ -225,8 +263,7 @@ class Manager(object):
         assert issubclass(target, Worker)
         rank = self._rank
         self._targets[rank] = target
-        self._args[rank] = tuple(args)
-        self._kwargs[rank] = kwargs
+        self._kwargs[rank] = args_to_dict(target.__init__, *args, **kwargs)
         self._rank += 1
         return rank
 
@@ -374,7 +411,7 @@ class Manager(object):
             # Instantiate each target using the specified parameters and
             # execute the target's run() method:
             rank = MPI.COMM_WORLD.Get_rank()
-            t = self._targets[rank](*self._args[rank], **self._kwargs[rank])
+            t = self._targets[rank](**self._kwargs[rank])
             t.run()
             self.logger.info('finished running %s' % rank)
 
@@ -463,7 +500,7 @@ if __name__ == '__main__':
 
     man = Manager()
     man.add(target=MyWorker, x=1, y=2, z=3)
-    man.add(target=MyWorker, x=3, y=4, z=5)
+    man.add(MyWorker, 3, 4, 5)
     man.run()
     man.start()
     time.sleep(0.01)
