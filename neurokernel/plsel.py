@@ -314,8 +314,8 @@ class PathLikeSelector(object):
                     else:
                         return False
 
-            # If all entries are iterable non-strings, try to expand:
-            elif all([(np.iterable(x) and type(x) not in [str, unicode]) for x in s]):
+            # If all entries are lists or tuples, try to expand:
+            elif all([(type(x) in [list, tuple]) for x in s]):
                 if len(cls.expand(s)) == 1:
                     return True
                 else:
@@ -353,7 +353,7 @@ class PathLikeSelector(object):
         a sequence of tokens is not a valid selector).
         """
 
-        assert np.iterable(s) and type(s) not in [str, unicode]
+        assert type(s) in [list, tuple]
         if set(map(type, s)).issubset([int, str, unicode]):
             tokens = s
         else:
@@ -395,7 +395,7 @@ class PathLikeSelector(object):
                 return True
             else:
                 return False
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
             for tokens in selector:
                 for token in tokens:
                     if token == '*' or \
@@ -406,7 +406,7 @@ class PathLikeSelector(object):
             raise ValueError('invalid selector type')
 
     @classmethod
-    def is_selector_empty(cls, s):
+    def is_selector_empty(cls, selector):
         """
         Check whether a string or sequence is an empty selector.
 
@@ -420,21 +420,19 @@ class PathLikeSelector(object):
         result : bool
             True if `s` is a sequence containing empty sequences or a null
             string, False otherwise.
+
+        Notes
+        -----
+        Ambiguous selectors are not deemed to be empty.
         """
         
-        if type(s) in [str, unicode]:
-            if re.search('^\s*$', s):
+        if type(selector) in [str, unicode] and \
+           re.search('^\s*$', selector):
+            return True
+        if type(selector) in [list, tuple] and \
+             all([len(x) == 0 for x in selector]):
                 return True
-            else:
-                return False
-        elif np.iterable(s):
-            if all(map(np.iterable, s)) and \
-               all(map(lambda e: len(e) == 0, s)):
-                return True
-            else:
-                return False
-        else:
-            return False
+        return False
 
     @classmethod
     def is_selector_seq(cls, s):
@@ -597,7 +595,7 @@ class PathLikeSelector(object):
             return False
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
             p = selector
         else:
             raise ValueError('invalid selector type')
@@ -751,6 +749,8 @@ class PathLikeSelector(object):
         Notes
         -----
         The selectors must not be ambiguous.
+
+        The empty selector is deemed to be disjoint to all other selectors.
         """
 
         assert len(selectors) >= 1
@@ -762,9 +762,14 @@ class PathLikeSelector(object):
         ids = set()
         for selector in selectors:
 
+            # Skip empty selectors; they are seemed to be disjoint to all
+            # selectors:
+            ids_new = set(map(tuple, cls.expand(selector)))
+            if ids_new == set([()]):
+                continue
+
             # If some identifiers are present in both the previous expanded
             # selectors and the current selector, the selectors cannot be disjoint:
-            ids_new = set(map(tuple, cls.expand(selector)))
             if ids.intersection(ids_new):
                 return False
             else:
@@ -829,7 +834,7 @@ class PathLikeSelector(object):
                     count = max(map(len, cls.parse(selector)))
                 except:
                     count = 0
-            elif np.iterable(selector):
+            elif type(selector) in [list, tuple]:
                 try:
                     count = max(map(len, selector))
                 except:
@@ -1000,8 +1005,24 @@ class PathLikeSelector(object):
         assert cls.is_selector(selector)
 
         if type(selector) in [str, unicode]:
-            parse_list = cls.parse(selector)
-        elif np.iterable(selector):
+            try:
+                tks = cls.expand(selector)
+                # Check if interface is set for all values
+                if not df.ix[:]['interface'].isnull().any():
+                    tks = cls.expand(selector)
+                    return df.ix[tks]['interface'].dropna().index.tolist()
+                else:
+                    t = []
+                    for s in tks:
+                        try:
+                            df.ix[s]
+                            t.append(s)
+                        except:
+                            pass
+                    return t
+            except:
+                parse_list = cls.parse(selector)
+        elif type(selector) in [list, tuple]:
             parse_list = selector
         else:
             raise ValueError('invalid selector type')        
@@ -1088,6 +1109,212 @@ class PathLikeSelector(object):
             return [(i,) for i in idx.tolist()]
 
     @classmethod
+    def pad_selector(cls, selector, max_len=None):
+        """
+        Expand and pad a selector with blank tokens.
+
+        Expand a selector and pad those port identifier token sequences
+        that contain fewer tokens than the specified maximum.
+
+        Parameters
+        ----------
+        selector : str or sequence
+            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]).
+        max_len : int
+            Maximum token sequence length to obtain with padding.
+            If None, each sequence is padded to the maximum number of tokens
+            per port identifier.
+
+        Returns
+        -------
+        padded : sequence
+            Sequence of token sequences padded with blank strings.
+        """
+
+        selector_expanded = cls.expand(selector)
+        N = len(selector_expanded)        
+        if max_len is None:
+            max_len = max(map(len, selector_expanded)) if N else 0
+
+        for i in xrange(N):
+            n = len(selector_expanded[i])
+            selector_expanded[i] = list(selector_expanded[i])
+            if n < max_len:
+                selector_expanded[i].extend(['' for k in xrange(max_len-n)])
+        return selector_expanded
+
+    @classmethod
+    def make_index_two_concat(cls, sel_0, sel_1, names=[]):
+        """
+        Create an index from two selectors concatenated elementwise.
+
+        Parameters
+        ----------
+        sel_0, sel_1 : str or sequence
+            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]). Both of the selectors must
+            comprise the same number of port identifiers.
+        names : list
+            Names of levels to use in generated MultiIndex. If no names are
+            specified, the levels are assigned increasing integers starting with
+            0 as their names.
+
+        Returns
+        -------
+        result : pandas.MultiIndex
+            MultiIndex whose rows are each the concatenation of the
+            corresponding rows in `sel_0` and `sel_1`. Each row contains twice
+            the maximum number of tokens in the two selectors.
+
+        Notes
+        -----
+        The selectors may not contain ambiguous symbols such as '*' or '[:]'.
+        """
+
+        assert cls.is_selector(sel_0)
+        assert not cls.is_ambiguous(sel_0)
+        assert cls.is_selector(sel_1)
+        assert not cls.is_ambiguous(sel_1)
+
+        sels_0 = cls.expand(sel_0)
+        sels_1 = cls.expand(sel_1)
+
+        assert len(sels_0) == len(sels_1)
+        N_sel = len(sels_0)
+
+        levels = [[]]
+        max_levels_0 = max(map(len, sels_0)) if N_sel else 0
+        max_levels_1 = max(map(len, sels_1)) if N_sel else 0
+        max_levels = max(max_levels_0, max_levels_1)
+
+        selectors = []
+        for i in xrange(N_sel):
+
+            # Pad expanded selectors:
+            sels_0[i] = list(sels_0[i])
+            sels_1[i] = list(sels_1[i])
+
+            n = len(sels_0[i])
+            if n < max_levels:
+                sels_0[i].extend(['' for k in xrange(max_levels-n)])
+            m = len(sels_1[i])
+            if m < max_levels:
+                sels_1[i].extend(['' for k in xrange(max_levels-m)])
+
+            # Concatenate:
+            selectors.append(sels_0[i]+sels_1[i])
+
+            # Extract level values:
+            for k in xrange(max_levels*2):
+                if len(levels) < k+1:
+                    levels.append([])
+                levels[k].append(selectors[-1][k])
+
+        # Discard duplicate level values:
+        levels = [sorted(set(level)) for level in levels]
+
+        # Start with at least one label so that a valid Index will be returned
+        # if the selector is empty:        
+        labels = [[]]
+
+        # Construct label indices:
+        for i in xrange(N_sel):
+            for j in xrange(max_levels*2):
+                if len(labels) < j+1:
+                    labels.append([])
+                labels[j].append(levels[j].index(selectors[i][j]))
+                    
+        if not names:
+            names = range(len(levels))
+        return pd.MultiIndex(levels=levels, labels=labels, names=names)
+
+    @classmethod
+    def make_index_two_prod(cls, sel_0, sel_1, names=[]):
+        """
+        Create an index from the product of two selectors.
+
+        Parameters
+        ----------
+        sel_0, sel_1 : str or sequence
+            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            sequences (e.g., [['foo', (0, 2)]]).
+        names : list
+            Names of levels to use in generated MultiIndex. If no names are
+            specified, the levels are assigned increasing integers starting with
+            0 as their names.
+
+        Returns
+        -------
+        result : pandas.MultiIndex
+            MultiIndex whose rows are the product of the corresponding rows in
+            `sel_0` and `sel_1`. Each row contains twice the maximum number of
+            tokens in the two selectors.
+
+        Notes
+        -----
+        The selectors may not contain ambiguous symbols such as '*' or '[:]'.
+        """
+
+        assert cls.is_selector(sel_0)
+        assert not cls.is_ambiguous(sel_0)
+        assert cls.is_selector(sel_1)
+        assert not cls.is_ambiguous(sel_1)
+
+        sels_0 = cls.expand(sel_0)
+        sels_1 = cls.expand(sel_1)
+
+        N_sel_0 = len(sels_0)
+        N_sel_1 = len(sels_1)
+
+        levels = [[]]
+        max_levels_0 = max(map(len, sels_0)) if N_sel_0 else 0
+        max_levels_1 = max(map(len, sels_1)) if N_sel_1 else 0
+        max_levels = max(max_levels_0, max_levels_1)
+
+        selectors = []
+        for i, j in itertools.product(xrange(N_sel_0), xrange(N_sel_1)):
+
+            # Pad expanded selectors:
+            sels_0[i] = list(sels_0[i])
+            sels_1[j] = list(sels_1[j])
+
+            n = len(sels_0[i])
+            if n < max_levels:
+                sels_0[i].extend(['' for k in xrange(max_levels-n)])
+            m = len(sels_1[j])
+            if m < max_levels:
+                sels_1[j].extend(['' for k in xrange(max_levels-m)])
+
+            # Concatenate:
+            selectors.append(sels_0[i]+sels_1[j])
+
+            # Extract level values:
+            for k in xrange(max_levels*2):
+                if len(levels) < k+1:
+                    levels.append([])
+                levels[k].append(selectors[-1][k])
+
+        # Discard duplicate level values:
+        levels = [sorted(set(level)) for level in levels]
+
+        # Start with at least one label so that a valid Index will be returned
+        # if the selector is empty:        
+        labels = [[]]
+
+        # Construct label indices:
+        N_sel = N_sel_0*N_sel_1
+        for i in xrange(N_sel):
+            for j in xrange(max_levels*2):
+                if len(labels) < j+1:
+                    labels.append([])
+                labels[j].append(levels[j].index(selectors[i][j]))
+                    
+        if not names:
+            names = range(len(levels))
+        return pd.MultiIndex(levels=levels, labels=labels, names=names)
+
+    @classmethod
     def make_index(cls, selector, names=[]):
         """
         Create an index from the specified selector.
@@ -1111,8 +1338,7 @@ class PathLikeSelector(object):
 
         Notes
         -----
-        The selector may not contain ambiguous symbols such as '*' or 
-        '[:]'. 
+        The selector may not contain ambiguous symbols such as '*' or '[:]'.
         """
 
         assert cls.is_selector(selector)
@@ -1120,13 +1346,30 @@ class PathLikeSelector(object):
 
         selectors = cls.expand(selector)
 
+        N_sel = len(selectors)
+        lens =  map(len, selectors)
+        max_levels = max(lens) if N_sel else 0
+        
+
+        # NaNs in index are not supported by MultiIndex. Create from tuples
+        # only if all selectors have same levels.
+        if len(set(lens)) == 1:
+            if not names:
+                names = range(max_levels)
+                
+            if selectors == [()]:
+                return pd.MultiIndex(levels=[[]], labels=[[]], names=names)
+            else:
+                return pd.MultiIndex.from_tuples(selectors, names=names)
+        
+
+        
         # Start with at least one level so that a valid Index will be returned
         # if the selector is empty:
         levels = [[]]
 
         # Accumulate unique values for each level of the MultiIndex:
-        max_levels = max(map(len, selectors)) if len(selectors) else 0
-        for i in xrange(len(selectors)):
+        for i in xrange(N_sel):
 
             # Pad expanded selectors:
             selectors[i] = list(selectors[i])
@@ -1146,7 +1389,7 @@ class PathLikeSelector(object):
         labels = [[]]
 
         # Construct label indices:
-        for i in xrange(len(selectors)):
+        for i in xrange(N_sel):
             for j in xrange(max_levels):
                 if len(labels) < j+1:
                     labels.append([])
@@ -1178,10 +1421,20 @@ class PathLikeSelector(object):
         """
 
         assert cls.is_selector(selector)
-
         if type(selector) in [str, unicode]:
+            if len(df.index.names[start:stop])>1:
+                try:
+                    tks = cls.expand(selector)
+                    return df[tks]
+                except:
+                    pass
             parse_list = cls.parse(selector)
-        elif np.iterable(selector):
+        elif type(selector) in [list, tuple]:
+            try:
+                tks = cls.expand(selector)
+                return df[tks]
+            except:
+                pass
             parse_list = selector
         else:
             raise ValueError('invalid selector type')
@@ -1287,8 +1540,7 @@ class PortMapper(object):
         result : numpy.ndarray
             Selected data.
         """
-
-        return self.data[self.sel.select(self.portmap, selector).values]
+        return self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)]
 
     def get_ports(self, f):
         """
@@ -1404,7 +1656,7 @@ class PortMapper(object):
             Integer indices of ports comprised by selector. 
         """
 
-        return self.sel.select(self.portmap, selector).values
+        return self.sel.select(self.portmap, selector).dropna().values
 
     def set(self, selector, data):
         """
@@ -1418,8 +1670,9 @@ class PortMapper(object):
         data : numpy.ndarray
             Array of data to save.
         """
-
-        self.data[self.sel.select(self.portmap, selector).values] = data
+        # sel.select will return a Series with nan for selector [()], hence dropna
+        # is necessary here
+        self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
 
     __getitem__ = get
     __setitem__ = set

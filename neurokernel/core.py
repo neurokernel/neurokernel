@@ -9,15 +9,15 @@ import collections
 import numpy as np
 import time
 
-#import pycuda.driver as drv
-#import pycuda.gpuarray as gpuarray
+import pycuda.driver as drv
+import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
 from base import BaseModule, Manager, Broker, PORT_DATA, PORT_CTRL, setup_logger
 
-from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
-     ExceptionOnSignal, TryExceptionOnSignal
+from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
+                          ExceptionOnSignal, TryExceptionOnSignal)
 
 from tools.comm import get_random_port
 from tools.misc import catch_exception
@@ -105,7 +105,8 @@ class Module(BaseModule):
         # Create module interface given the specified ports:
         self.interface = Interface(selector, columns)
 
-        # Set the interface ID to 0; we assume that a module only has one interface:
+        # Set the interface ID to 0
+        # we assume that a module only has one interface:
         self.interface[selector, 'interface'] = 0
 
         # Set port types:
@@ -151,6 +152,7 @@ class Module(BaseModule):
         # send output to this module. Must be initialized immediately before
         # an emulation begins running. Keyed on source module ID:
         self._in_port_dict = {}
+        self._in_port_dict_ids = {}
         self._in_port_dict['gpot'] = {}
         self._in_port_dict['spike'] = {}
 
@@ -158,8 +160,12 @@ class Module(BaseModule):
         # receive input from this module. Must be initialized immediately before
         # an emulation begins running. Keyed on destination module ID:
         self._out_port_dict = {}
+        self._out_port_dict_ids = {}
         self._out_port_dict['gpot'] = {}
         self._out_port_dict['spike'] = {}
+
+        self._out_ids = []
+        self._in_ids = []
         
     def _init_gpu(self):
         """
@@ -209,13 +215,11 @@ class Module(BaseModule):
         """
 
         self.logger.info('retrieving from input buffer')
-
         # Since fan-in is not permitted, the data from all source modules
         # must necessarily map to different ports; we can therefore write each
         # of the received data to the array associated with the module's ports
         # here without worry of overwriting the data from each source module:
-        for in_id in self.in_ids:
-
+        for in_id in self._in_ids:
             # Check for exceptions so as to not fail on the first emulation
             # step when there is no input data to retrieve:
             try:
@@ -232,11 +236,10 @@ class Module(BaseModule):
 
                 # Assign transmitted graded potential values directly to port
                 # data array:
-                self.pm['gpot'][self._in_port_dict['gpot'][in_id]] = data[0]
-
+                self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
                 # Clear all input spike port data..
-                self.pm['spike'][self._in_port_dict['spike'][in_id]] = 0
-                
+                self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = 0
+                    
                 # ..and then set the port data using the transmitted
                 # information about source module spikes:
                 #self.pm['spike'][self.pm['spike'].inds_to_ports(data[1])] = 1
@@ -257,12 +260,11 @@ class Module(BaseModule):
 
         # Select data that should be sent to each destination module and append
         # it to the outgoing queue:
-        for out_id in self.out_ids:
-
+        for out_id in self._out_ids:
             # Select graded potential data using list of 
             # graded potential ports that can transmit output:
-            gpot_data = self.pm['gpot'][self._out_port_dict['gpot'][out_id]]
-
+            gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                
             # Select spiking ports that can transmit output:
             out_spike_ports_all = self._out_port_dict['spike'][out_id]
 
@@ -293,7 +295,7 @@ class Module(BaseModule):
                 self.logger.info('no output data to [%s] sent' % out_id)
             else:
                 self.logger.info('output data to [%s] sent' % out_id)
-
+                
     def run_step(self):
         """
         Module work method.
@@ -315,7 +317,11 @@ class Module(BaseModule):
         # for all modules receiving output from the current module:
         self._out_port_dict['gpot'] = {}
         self._out_port_dict['spike'] = {}
-        for out_id in self.out_ids:
+        self._out_port_dict_ids['gpot'] = {}
+        self._out_port_dict_ids['spike'] = {}
+
+        self._out_ids = self.out_ids
+        for out_id in self._out_ids:
             self.logger.info('extracting output ports for %s' % out_id)
 
             # Get interfaces of pattern connecting the current module to
@@ -328,15 +334,23 @@ class Module(BaseModule):
             self._out_port_dict['gpot'][out_id] = \
                 self.patterns[out_id].src_idx(from_int, to_int,
                                               'gpot', 'gpot')
+            self._out_port_dict_ids['gpot'][out_id] = \
+                self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id])
             self._out_port_dict['spike'][out_id] = \
                 self.patterns[out_id].src_idx(from_int, to_int,
                                               'spike', 'spike')
+            self._out_port_dict_ids['spike'][out_id] = \
+                self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id])
                                                               
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
         self._in_port_dict['gpot'] = {}
         self._in_port_dict['spike'] = {}
-        for in_id in self.in_ids:
+        self._in_port_dict_ids['gpot'] = {}
+        self._in_port_dict_ids['spike'] = {}
+
+        self._in_ids = self.in_ids
+        for in_id in self._in_ids:
             self.logger.info('extracting input ports for %s' % in_id)
 
             # Get interfaces of pattern connecting the current module to
@@ -349,10 +363,14 @@ class Module(BaseModule):
             self._in_port_dict['gpot'][in_id] = \
                 self.patterns[in_id].dest_idx(from_int, to_int,
                                               'gpot', 'gpot')
+            self._in_port_dict_ids['gpot'][in_id] = \
+                self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id])
             self._in_port_dict['spike'][in_id] = \
                 self.patterns[in_id].dest_idx(from_int, to_int,
                                               'spike', 'spike')
-
+            self._in_port_dict_ids['spike'][in_id] = \
+                self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
+            
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
@@ -362,7 +380,7 @@ class Module(BaseModule):
         main run loop begins.
         """
         
-        #self._init_gpu()
+        self._init_gpu()
         pass
 
     def run(self):
@@ -373,17 +391,17 @@ class Module(BaseModule):
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
-                                  
             # Initialize environment:
             self._init_net()
+            
+            # Initialize _out_port_dict and _in_port_dict attributes:
+            self._init_port_dicts()
 
+            
             # Initialize Buffer for incoming data.  Dict used to store the
             # incoming data keyed by the source module id.  Each value is a
             # queue buferring the received data:
-            self._in_data = {k: collections.deque() for k in self.in_ids}
-
-            # Initialize _out_port_dict and _in_port_dict attributes:
-            self._init_port_dicts()
+            self._in_data = {k: collections.deque() for k in self._in_ids}
 
             # Perform any pre-emulation operations:
             self.pre_run()
@@ -392,7 +410,6 @@ class Module(BaseModule):
             curr_steps = 0
             while curr_steps < self._steps:
                 self.logger.info('execution step: %s' % curr_steps)
-
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
                 if self.debug:
@@ -446,6 +463,7 @@ class Module(BaseModule):
         
 
 if __name__ == '__main__':
+    import time
 
     class MyModule(Module):
         """
@@ -507,69 +525,91 @@ if __name__ == '__main__':
             np.random.seed(id(self))
             super(MyModule, self).run()
 
+    def emulate(n, steps):
+        assert(n>1)
+        n = str(n)
+        # Set up emulation:
+        man = Manager(get_random_port(), get_random_port())
+        man.add_brok()
+
+        m1_int_sel_in_gpot = '/a/in/gpot0,/a/in/gpot1'
+        m1_int_sel_out_gpot = '/a/out/gpot0,/a/out/gpot1'
+        m1_int_sel_in_spike = '/a/in/spike0,/a/in/spike1'
+        m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
+        m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
+                               m1_int_sel_in_spike, m1_int_sel_out_spike])
+        N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
+                                                         m1_int_sel_out_gpot]))
+        N1_spike = PathLikeSelector.count_ports(','.join([m1_int_sel_in_spike,
+                                                          m1_int_sel_out_spike]))
+        m1 = MyModule(m1_int_sel, 
+                      m1_int_sel_in_gpot, m1_int_sel_in_spike,
+                      m1_int_sel_out_gpot, m1_int_sel_out_spike,
+                      np.zeros(N1_gpot, np.float64),
+                      np.zeros(N1_spike, int), ['interface', 'io', 'type'],
+                      man.port_data, man.port_ctrl, 'm1')
+        man.add_mod(m1)
+
+        m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
+        m2_int_sel_out_gpot = '/b/out/gpot0,/b/out/gpot1'
+        m2_int_sel_in_spike = '/b/in/spike0,/b/in/spike1'
+        m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
+        m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
+                               m2_int_sel_in_spike, m2_int_sel_out_spike])
+        N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
+                                                         m2_int_sel_out_gpot]))
+        N2_spike = PathLikeSelector.count_ports(','.join([m2_int_sel_in_spike,
+                                                          m2_int_sel_out_spike]))
+        m2 = MyModule(m2_int_sel,
+                      m2_int_sel_in_gpot, m2_int_sel_in_spike,
+                      m2_int_sel_out_gpot, m2_int_sel_out_spike,
+                      np.zeros(N2_gpot, np.float64),
+                      np.zeros(N2_spike, int), ['interface', 'io', 'type'],
+                      man.port_data, man.port_ctrl, 'm2')
+                                             
+        # Make sure that all ports in the patterns' interfaces are set so 
+        # that they match those of the modules:
+        pat12 = Pattern(m1_int_sel, m2_int_sel)
+        pat12.interface[m1_int_sel_out_gpot] = [0, 'in', 'gpot']
+        pat12.interface[m1_int_sel_in_gpot] = [0, 'out', 'gpot']
+        pat12.interface[m1_int_sel_out_spike] = [0, 'in', 'spike']
+        pat12.interface[m1_int_sel_in_spike] = [0, 'out', 'spike']
+        pat12.interface[m2_int_sel_in_gpot] = [1, 'out', 'gpot']
+        pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
+        pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
+        pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
+        pat12['/a/out/gpot0', '/b/in/gpot0'] = 1
+        pat12['/a/out/gpot1', '/b/in/gpot1'] = 1
+        pat12['/b/out/gpot0', '/a/in/gpot0'] = 1
+        pat12['/b/out/gpot1', '/a/in/gpot1'] = 1
+        pat12['/a/out/spike0', '/b/in/spike0'] = 1
+        pat12['/a/out/spike1', '/b/in/spike1'] = 1
+        pat12['/b/out/spike0', '/a/in/spike0'] = 1
+        pat12['/b/out/spike1', '/a/in/spike1'] = 1
+        man.connect(m1, m2, pat12, 0, 1)
+
+        # To set the emulation to exit after executing a fixed number of steps,
+        # start it as follows and remove the sleep statement:
+        man.start(steps=steps)
+        # man.start()
+        # time.sleep(2)
+        man.stop()
+        return m1
+        
     # Set up logging:
-    logger = setup_logger()
+    logger = setup_logger(screen=False)
+    steps = 100
 
-    # Set up emulation:
-    man = Manager(get_random_port(), get_random_port())
-    man.add_brok()
-
-    m1_int_sel_in_gpot = '/a/in/gpot[0:2]'; m1_int_sel_out_gpot = '/a/out/gpot[0:2]'
-    m1_int_sel_in_spike = '/a/in/spike[0:2]'; m1_int_sel_out_spike = '/a/out/spike[0:2]'
-    m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
-                           m1_int_sel_in_spike, m1_int_sel_out_spike])
-    N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
-                                                     m1_int_sel_out_gpot]))
-    N1_spike = PathLikeSelector.count_ports(','.join([m1_int_sel_in_spike,
-                                                      m1_int_sel_out_spike]))
-    m1 = MyModule(m1_int_sel, 
-                  m1_int_sel_in_gpot, m1_int_sel_in_spike,
-                  m1_int_sel_out_gpot, m1_int_sel_out_spike,
-                  np.zeros(N1_gpot, np.float64),
-                  np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm1   ')
-    man.add_mod(m1)
-
-    m2_int_sel_in_gpot = '/b/in/gpot[0:2]'; m2_int_sel_out_gpot = '/b/out/gpot[0:2]'
-    m2_int_sel_in_spike = '/b/in/spike[0:2]'; m2_int_sel_out_spike = '/b/out/spike[0:2]'
-    m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
-                           m2_int_sel_in_spike, m2_int_sel_out_spike])
-    N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
-                                                     m2_int_sel_out_gpot]))
-    N2_spike = PathLikeSelector.count_ports(','.join([m2_int_sel_in_spike,
-                                            m2_int_sel_out_spike]))
-    m2 = MyModule(m2_int_sel,
-                  m2_int_sel_in_gpot, m2_int_sel_in_spike,
-                  m2_int_sel_out_gpot, m2_int_sel_out_spike,
-                  np.zeros(N2_gpot, np.float64),
-                  np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm2   ')
-                                         
-    # Make sure that all ports in the patterns' interfaces are set so 
-    # that they match those of the modules:
-    pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12.interface[m1_int_sel_out_gpot] = [0, 'in', 'gpot']
-    pat12.interface[m1_int_sel_in_gpot] = [0, 'out', 'gpot']
-    pat12.interface[m1_int_sel_out_spike] = [0, 'in', 'spike']
-    pat12.interface[m1_int_sel_in_spike] = [0, 'out', 'spike']
-    pat12.interface[m2_int_sel_in_gpot] = [1, 'out', 'gpot']
-    pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
-    pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
-    pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-    pat12['/a/out/gpot[0]', '/b/in/gpot[0]'] = 1
-    pat12['/a/out/gpot[1]', '/b/in/gpot[1]'] = 1
-    pat12['/b/out/gpot[0]', '/a/in/gpot[0]'] = 1
-    pat12['/b/out/gpot[1]', '/a/in/gpot[1]'] = 1
-    pat12['/a/out/spike[0]', '/b/in/spike[0]'] = 1
-    pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
-    pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
-    pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
-    man.connect(m1, m2, pat12, 0, 1)
-
-    # To set the emulation to exit after executing a fixed number of steps,
-    # start it as follows and remove the sleep statement:    
-    # man.start(steps=500)    
-    man.start()
-    time.sleep(2)
-    man.stop()
+    # Emulation 1
+    start_time = time.time()
+    size = 2
+    m1 = emulate(size, steps)
+    print('Simulation of size {} complete: Duration {} seconds'.format(
+        size, time.time() - start_time))
+    # Emulation 2
+    start_time = time.time()
+    size = 100
+    emulate(size, steps)
+    print('Simulation of size {} complete: Duration {} seconds'.format(
+        size, time.time() - start_time))
     logger.info('all done')

@@ -40,7 +40,7 @@ class test_interface(TestCase):
                                   '/foo[2]',
                                   '/foo[3]'])
 
-    def test_to_tuples(self):
+    def test_to_tuples_multi_levels(self):
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
@@ -53,6 +53,7 @@ class test_interface(TestCase):
                                   ('foo', 2),
                                   ('foo', 3)])
 
+    def test_to_tuples_single_level(self):
         i = Interface('[0:4]')
         i['[0:2]', 'interface'] = 0
         i['[2:4]', 'interface'] = 1
@@ -197,6 +198,15 @@ class test_interface(TestCase):
         j['/foo[0:2]', 'interface', 'io'] = [0, 'in']
         j['/foo[2:4]', 'interface', 'io'] = [1, 'out']
         assert_frame_equal(i.data, j.io_inv.data)
+
+    def test_is_compatible_sel_order(self):
+        i = Interface('/foo[0:2],/bar[0:2]')
+        i['/foo[0:2]', 'interface', 'io'] = [0, 'in']
+        i['/bar[0:2]', 'interface', 'io'] = [0, 'out']
+        j = Interface('/bar[0:2],/foo[0:2]')
+        j['/bar[0:2]', 'interface', 'io'] = [1, 'in']
+        j['/foo[0:2]', 'interface', 'io'] = [1, 'out']
+        assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_both_dirs(self):
         i = Interface('/foo[0:4]')
@@ -420,7 +430,18 @@ class test_pattern(TestCase):
                                ('yyy', 2)])
         self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
 
-    def test_is_connected(self):
+    def test_is_in_interfaces(self):
+        p = Pattern('/aaa/bbb', '/ccc/ddd')
+        assert p.is_in_interfaces('/aaa/bbb') == True
+        assert p.is_in_interfaces('/aaa') == False
+
+    def test_is_connected_single_level(self):
+        p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
+        p['/aaa', '/ccc'] = 1
+        assert p.is_connected(0, 1) == True
+        assert p.is_connected(1, 0) == False
+
+    def test_is_connected_multi_level(self):
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
         p['/aaa[0]', '/bbb[2]'] = 1
         assert p.is_connected(0, 1) == True

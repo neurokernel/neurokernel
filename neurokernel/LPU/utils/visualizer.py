@@ -6,12 +6,20 @@ LPU output visualization.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FFMpegWriter, FFMpegFileWriter
+from matplotlib.animation import FFMpegFileWriter, AVConvFileWriter
 from matplotlib.colors import hsv_to_rgb
 import networkx as nx
 import simpleio as sio
 from collections import OrderedDict
 import os
+
+import collections
+import itertools
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+
+from scipy.interpolate import griddata
+from matplotlib.colors import Normalize
 
 class visualizer(object):
     """
@@ -57,8 +65,10 @@ class visualizer(object):
         self._id_to_data_idx = {}
         self._maxt = None
         self._title = None
-
-    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None):
+        self._FFMpeg = False
+        
+    def add_LPU(self, data_file, gexf_file=None, LPU=None, win=None,
+                is_input=False):
         '''
         Add data associated with a specific LPU to a visualization.
         To add a plot containing neurons from a particular LPU,
@@ -93,7 +103,7 @@ class visualizer(object):
             Can be used to limit the visualization to a specific time window.
         
         '''
-        if gexf_file:
+        if gexf_file and not is_input:
             self._graph[LPU] = nx.read_gexf(gexf_file)
 
             # Map neuron ids to index into output data array:
@@ -105,6 +115,8 @@ class visualizer(object):
                 LPU = 'input_' + str(LPU)
             else:
                 LPU = 'input_' + str(len(self._data))
+            if gexf_file:
+                self._graph[LPU] = nx.read_gexf(gexf_file)
         if not LPU:
             LPU = len(self._data)
         self._data[LPU] = np.transpose(sio.read_array(data_file))
@@ -146,8 +158,9 @@ class visualizer(object):
         self._initialize()
         if not self._update_interval:
             self._update_interval = self._maxt - 1
-        self._t = self._update_interval+1
-        for i in range(self._update_interval,self._maxt, self._update_interval):
+        self._t = self._update_interval + 1
+        for _ in range(self._update_interval, 
+                       self._maxt, self._update_interval):
             self._update()
         if final_frame_name is not None:
             self.f.savefig(final_frame_name, dpi=dpi)
@@ -186,7 +199,16 @@ class visualizer(object):
         cnt = 0
         self.handles = []
         self.types = []
-        keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape'] 
+        keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
+        # TODO: Irregular grid in U will make the plot better
+        U, V = np.mgrid[0:np.pi/2:complex(0, 60),
+                        0:2*np.pi:complex(0, 60)]
+        X = np.cos(V)*np.sin(U)
+        Y = np.sin(V)*np.sin(U)
+        Z = np.cos(U)
+        self._dome_pos_flat = (X.flatten(), Y.flatten(), Z.flatten())
+        self._dome_pos = (X, Y, Z)
+        self._dome_arr_shape = X.shape
         if not isinstance(self.axarr, np.ndarray):
             self.axarr = np.asarray([self.axarr])
         for LPU, configs in self._config.iteritems():
@@ -212,10 +234,12 @@ class visualizer(object):
                         config['type'] = 4
                     elif config['type'] == 'rate':
                         config['type'] = 5
+                    elif config['type'] == 'dome':
+                        config['type'] = 6
                     else:
                         raise ValueError('Plot type not supported')
                 else:
-                    if str(LPU).startswith('input') or not self._graph[LPU][str(config['ids'][0])]['spiking']:
+                    if str(LPU).startswith('input') and not self._graph[LPU].node[str(config['ids'][0][0])]['spiking']:
                         config['type'] = 2
                     else:
                         config['type'] = 4
@@ -288,16 +312,66 @@ class visualizer(object):
                     config['handle'].set_xlim([0,len(self._data[LPU][min_idx,:])*self._dt])
                     config['handle'].axes.set_yticks([])
                     config['handle'].axes.set_xticks([])
-                for key in config.iterkeys():
-                    if key not in keywds:
-                        try:
-                            self._set_wrapper(self.axarr[ind],key, config[key])
-                        except:
-                            pass
-                        try:
-                            self._set_wrapper(config['handle'],key, config[key])
-                        except:
-                            pass
+                elif config['type'] == 6:
+                    self.axarr[ind].axes.set_yticks([])
+                    self.axarr[ind].axes.set_xticks([])
+                    self.axarr[ind] = self.f.add_subplot(self._rows,
+                                                         self._cols,
+                                                         cnt,
+                                                         projection='3d')
+                    config['handle' ] = self.axarr[ind]
+                    config['handle'].axes.set_yticks([])
+                    config['handle'].axes.set_xticks([])
+                    config['handle'].xaxis.set_ticks([])
+                    config['handle'].yaxis.set_ticks([])
+                    config['handle'].zaxis.set_ticks([])
+                    if 'norm' not in config.keys():
+                        config['norm'] = Normalize(vmin=-70, vmax=0, clip=True)
+                    elif config['norm'] == 'auto':
+                        if self._data[LPU].shape[1] > 100:
+                            config['norm'] = Normalize(vmin = np.min(self._data[LPU][config['ids'][0],100:]),
+                                                       vmax = np.max(self._data[LPU][config['ids'][0],100:]),
+                                                       clip = True)
+                        else:
+                            config['norm'] = Normalize(vmin = np.min(self._data[LPU][config['ids'][0],:]),
+                                                       vmax = np.max(self._data[LPU][config['ids'][0],:]),
+                                                       clip = True)
+                            
+                    node_dict = self._graph[LPU].node
+                    if str(LPU).startswith('input'):
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat'] \
+                                                    for nid in range(len(node_dict)) \
+                                                    if node_dict[str(nid)]['extern'] ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long'] \
+                                                     for nid in range(len(node_dict)) \
+                                                     if node_dict[str(nid)]['extern'] ])
+                    else:
+                        latpositions = np.asarray([ node_dict[str(nid)]['lat']
+                                                    for nid in config['ids'][0] ])
+                        longpositions = np.asarray([ node_dict[str(nid)]['long']
+                                                     for nid in config['ids'][0] ])
+                    xx = np.cos(longpositions) * np.sin(latpositions)
+                    yy = np.sin(longpositions) * np.sin(latpositions)
+                    zz = np.cos(latpositions)
+                    config['positions'] = (xx, yy, zz)
+                    colors = griddata(config['positions'], self._data[LPU][config['ids'][0],0],
+                                      self._dome_pos_flat, 'nearest').reshape(self._dome_arr_shape)
+                    colors = config['norm'](colors).data
+                    colors = np.tile(np.reshape(colors,
+                                                [self._dome_arr_shape[0],self._dome_arr_shape[1],1])
+                                     ,[1,1,4])
+                    colors[:,:,3] = 1.0
+                    config['handle'].plot_surface(self._dome_pos[0], self._dome_pos[1],
+                                                  self._dome_pos[2], rstride=1, cstride=1,
+                                                  facecolors=colors, antialiased=False,
+                                                  shade=False)
+                    
+                    for key in config.iterkeys():
+                        if key not in keywds:
+                            try:
+                                self._set_wrapper(config['handle'],key, config[key])
+                            except:
+                                pass
                 if config['type']<3:
                     config['handle'].axes.set_xticks([])
                     config['handle'].axes.set_yticks([])
@@ -308,8 +382,10 @@ class visualizer(object):
         plt.tight_layout()
 
         if self.out_filename:
-            self.writer = FFMpegFileWriter(fps=self.fps, codec=self.codec)
-
+            if self.FFMpeg == True:
+                self.writer = FFMpegFileWriter(fps=self.fps, codec=self.codec)
+            else:
+                self.writer = AVConvFileWriter(fps=self.fps, codec=self.codec)
             # Use the output file to determine the name of the temporary frame
             # files so that two concurrently run visualizations don't clobber
             # each other's frames:
@@ -329,13 +405,13 @@ class visualizer(object):
                 if config['type'] == 3:
                     if len(config['ids'][0])==1:
                         config['ydata'].extend(np.reshape(np.double(\
-                                        data[config['ids'][0], \
-                                                  max(0,t-self._update_interval):t]),(-1,)))
+                                                                    data[config['ids'][0], \
+                                                                         max(0,t-self._update_interval):t]),(-1,)))
                         config['handle'].set_xdata(dt*np.arange(0, t))
                         config['handle'].set_ydata(np.asarray(config['ydata']))
                     else:
                         config['handle'].set_ydata(\
-                                        data[config['ids'][0], t])
+                                                   data[config['ids'][0], t])
 
                 elif config['type']==4:
 
@@ -349,39 +425,65 @@ class visualizer(object):
                         else:
                             for time in np.where(data[idx, max(0,t-self._update_interval):t])[0]:
                                 config['handle'].vlines(float(t-time)*self._dt,j+0.75, j+1.25)
-                else:
-                    if config['type'] == 0:
-                        shape = config['shape']
-                        ids = config['ids']
-                        config['handle'].U = np.reshape(data[ids[0], t],shape)
-                        config['handle'].V = np.reshape(data[ids[1], t],shape)
-                    elif config['type']==1:
-                        shape = config['shape']
-                        ids = config['ids']
-                        X = np.reshape(data[ids[0], t],shape)
-                        Y = np.reshape(data[ids[1], t],shape)
-                        V = (X**2 + Y**2)**0.5
-                        H = (np.arctan2(X,Y)+np.pi)/(2*np.pi)
-                        S = np.ones_like(V)
-                        HSV = np.dstack((H,S,V))
-                        RGB = hsv_to_rgb(HSV)
-                        config['handle'].set_data(RGB)
-                    elif config['type'] == 2:
-                        ids = config['ids']
-                        if config['trans']:
-                            config['handle'].set_data(
-                                np.transpose(np.reshape(data[ids[0], t], config['shape'
-                            ])))
-                        else:
-                            config['handle'].set_data(
-                                np.reshape(data[ids[0], t], config['shape']))
+                elif config['type'] == 0:
+                    shape = config['shape']
+                    ids = config['ids']
+                    config['handle'].U = np.reshape(data[ids[0], t],shape)
+                    config['handle'].V = np.reshape(data[ids[1], t],shape)
+                elif config['type']==1:
+                    shape = config['shape']
+                    ids = config['ids']
+                    X = np.reshape(data[ids[0], t],shape)
+                    Y = np.reshape(data[ids[1], t],shape)
+                    V = (X**2 + Y**2)**0.5
+                    H = (np.arctan2(X,Y)+np.pi)/(2*np.pi)
+                    S = np.ones_like(V)
+                    HSV = np.dstack((H,S,V))
+                    RGB = hsv_to_rgb(HSV)
+                    config['handle'].set_data(RGB)
+                elif config['type'] == 2:
+                    ids = config['ids']
+                    if config['trans']:
+                        config['handle'].set_data(
+                            np.transpose(np.reshape(data[ids[0], t], config['shape'
+                                                                        ])))
+                    else:
+                        config['handle'].set_data(
+                            np.reshape(data[ids[0], t], config['shape']))
+                elif config['type'] == 6:
+                    ids = config['ids']
+                    d = data[ids[0], t]
+                    colors = griddata(config['positions'], d,
+                                      self._dome_pos_flat, 'nearest').reshape(self._dome_arr_shape)
+                    colors = config['norm'](colors).data
+                    colors = np.tile(np.reshape(colors,
+                                                [self._dome_arr_shape[0],self._dome_arr_shape[1],1])
+                                     ,[1,1,4])
+                    colors[:,:,3] = 1.0
+                    C = [colors[i,j] for (i,j) in itertools.product(range(colors.shape[0]),
+                                                                    range(colors.shape[1]))]
+                    config['handle'].clear()
+                    config['handle'].xaxis.set_ticks([])
+                    config['handle'].yaxis.set_ticks([])
+                    config['handle'].zaxis.set_ticks([])
                     
+                    config['handle'].plot_surface(self._dome_pos[0], self._dome_pos[1],
+                                                  self._dome_pos[2], rstride=1, cstride=1,
+                                                  facecolors=colors, antialiased=False,
+                                                  shade=False)
+                    keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
+                    for key in config.iterkeys():
+                        if key not in keywds:
+                            try:
+                                self._set_wrapper(config['handle'],key, config[key])
+                            except:
+                                pass
         self.f.canvas.draw()
         if self.out_filename:
             self.writer.grab_frame()
 
         self._t+=self._update_interval
-            
+        
     def add_plot(self, config_dict, LPU, names=[''], shift=0):
         '''
         Add a plot to the visualizer
@@ -397,8 +499,9 @@ class visualizer(object):
 
             type - str
                 This specifies the type of the plot. Has to be one of
-                ['waveform', 'raster', 'image','hsv','quiver']
-            
+                ['waveform', 'raster', 'image','hsv','quiver', 'dome']
+                For plots of type 'dome', lat and long are required
+                to be specified in the gexf file.
             ids - dict with either 1 or 2 entries
                 Specifies the neuron ids from the associated LPU.
                 The keys should be in [0,1] and the values
@@ -513,6 +616,13 @@ class visualizer(object):
     @ylim.setter
     def ylim(self, value):
         self._ylim = value
+
+    @property
+    def FFMpeg(self): return self._FFMpeg
+    
+    @FFMpeg.setter
+    def FFMpeg(self, value):
+        self._FFMpeg = value
 
     @property
     def imlim(self): return self._imlim

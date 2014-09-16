@@ -7,31 +7,34 @@ Represent connectivity pattern using pandas DataFrame.
 from collections import OrderedDict
 import itertools
 
-from cachetools import lfu_cache
+from chash import lfu_cache_method
 import networkx as nx
 import numpy as np
 import pandas as pd
 
 from plsel import PathLikeSelector
 
+from chash import chash
+_hash_func = chash
+
 class Interface(object):
     """
     Container for set of interface comprising ports.
 
     This class contains information about a set of interfaces comprising
-    path-like identifiers and the attributes associated with them. 
-    By default, each port must have at least the following attributes; 
+    path-like identifiers and the attributes associated with them.
+    By default, each port must have at least the following attributes;
     other attributes may be added:
 
     - interface - indicates which interface a port is associated with.
-    - io - indicates whether the port receives input ('in') or 
+    - io - indicates whether the port receives input ('in') or
       emits output ('out').
-    - type - indicates whether the port emits/receives spikes or 
+    - type - indicates whether the port emits/receives spikes or
       graded potentials.
 
-    All port identifiers in an interface must be unique. For two interfaces 
+    All port identifiers in an interface must be unique. For two interfaces
     to be deemed compatible, they must contain the same port identifiers and
-    their identifiers' 'io' attributes must be the inverse of each other 
+    their identifiers' 'io' attributes must be the inverse of each other
     (i.e., every 'in' port in one interface must be mirrored by an 'out' port
     in the other interface.
 
@@ -51,8 +54,8 @@ class Interface(object):
     Parameters
     ----------
     selector : str, unicode, or sequence
-            Selector string (e.g., 'foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]) describing the port 
+            Selector string (e.g., 'foo[0:2]') or sequence of token
+            sequences (e.g., [['foo', (0, 2)]]) describing the port
             identifiers comprised by the interface.
     columns : list, default = ['interface', 'io', 'type']
         Data column names.
@@ -74,14 +77,14 @@ class Interface(object):
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
-
+        
     def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
         """
 
         if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
-           len(idx.unique()) < len(idx):
+                len(idx.unique()) < len(idx):
             raise ValueError('Duplicate interface index entries detected.')
 
     def __getitem__(self, key):
@@ -103,7 +106,7 @@ class Interface(object):
 
         # If the select fails, try to create new rows with the index specified
         # by the selector and load them with the specified data:
-        except:
+        except ValueError:
             try:
                 idx = self.sel.make_index(selector, self.data.index.names)
             except:
@@ -155,6 +158,7 @@ class Interface(object):
         """
 
         return self.data.index
+
     @index.setter
     def index(self, i):
         self.data.index = i
@@ -164,7 +168,7 @@ class Interface(object):
         """
         Interface identifiers.
         """
-        
+
         return set(self.data['interface'])
 
     @property
@@ -178,7 +182,7 @@ class Interface(object):
             Interface instance whose 'io' attributes are the inverse of those of
         the current instance.
         """
-        
+
         data_inv = self.data.copy()
         f = lambda x: 'out' if x == 'in' else \
             ('in' if x == 'out' else x)
@@ -226,7 +230,7 @@ class Interface(object):
     def from_df(cls, df):
         """
         Create an Interface from a properly formatted DataFrame.
-        
+
         Examples
         --------
         >>> import plsel
@@ -379,7 +383,6 @@ class Interface(object):
             except:
                 return Interface()
 
-    @lfu_cache(maxsize=2)
     def interface_ports(self, i=None):
         """
         Restrict Interface ports to specific interface.
@@ -437,34 +440,35 @@ class Interface(object):
         """
 
         assert isinstance(i, Interface)
-
-        # Find 'type' attributes for specified interfaces:
-        type_a = self.data[self.data['interface'] == a]['type']
-        type_b = i.data[i.data['interface'] == b]['type']
         
-        # Exclude null entries from 'type' attribs:
-        type_a = type_a[type_a.notnull()]
-        type_b = type_b[type_b.notnull()]
+        # Merge the interface data on their indices (i.e., their port identifiers):
+        data_merged = pd.merge(self.data[self.data['interface'] == a], 
+                               i.data[i.data['interface'] == b], 
+                               left_index=True,
+                               right_index=True)
 
-        # Find inverse of this instance's 'io' attributes 
-        # for interface 'a' and 'io' attributes for interface 'b':
-        f = lambda x: 'out' if x == 'in' else \
-            ('in' if x == 'out' else x)
-        io_a_inv = self.data[self.data['interface'] == a]['io'].apply(f)
-        io_b = i.data[i.data['interface'] == b]['io']
-
-        # Exclude null entries from inverted and original 'io' attribs:
-        io_a_inv = io_a_inv[io_a_inv.notnull()]
-        io_b = io_b[io_b.notnull()]
-
-        # Compare indices, non-null 'io' attribs, and non-null 'type' attribs:
-        idx_a = self.data[self.data['interface'] == a].index
-        idx_b = i.data[i.data['interface'] == b].index
-        if idx_a.equals(idx_b) and all(io_a_inv==io_b) \
-           and all(type_a==type_b):
-            return True
-        else:
+        # If one interface contains identifiers not in the other, they are
+        # incompatible:
+        if len(data_merged) < max(len(self.data), len(i.data)):
             return False
+
+        # If the 'type' attributes of the same identifiers in each interfaces
+        # are not equivalent, they are incompatible:
+        if not data_merged.apply(lambda row: (row['type_x'] == row['type_y']) or \
+                    (pd.isnull(row['type_x']) and pd.isnull(row['type_y'])),
+                                 axis=1).all():
+            return False
+
+        # If the 'io' attributes of the same identifiers in each interfaces
+        # are not the inverse of each other, they are incompatible:
+        if not data_merged.apply(lambda row: (row['io_x'] == 'out' and \
+                                              row['io_y'] == 'in') or \
+                                 (row['io_x'] == 'in' and \
+                                  row['io_y'] == 'out') or \
+                                 (pd.isnull(row['io_x']) and pd.isnull(row['io_y'])),
+                                 axis=1).all():
+            return False
+        return True
 
     def is_in_interfaces(self, s):
         """
@@ -480,8 +484,17 @@ class Interface(object):
         result : bool
             True if the comprised ports are in any of the stored interfaces.
         """
-
-        return self.sel.is_in(s, self.index.tolist())
+        try:
+            idx = self.sel.expand(s)
+            d = self.data['interface'].ix[idx]
+            if isinstance(d, int):
+                return True
+            if np.any(d.isnull().tolist()):
+                return False
+            else:
+                return True
+        except:
+            return self.sel.is_in(s, self.index.tolist())
 
     def out_ports(self, i=None):
         """
@@ -640,15 +653,22 @@ class Interface(object):
             Set of identifiers for interfaces that contain ports comprised by
             the selector.
         """
-        
-        try:
-            s = set(self[s, 'interface'].values.flatten())
 
-            # Ignore unset entries:
+        try:
+            t = self.sel.expand(s)
+            d = self.data['interface'][t]
+            s = set(d)
             s.discard(np.nan)
             return s
-        except KeyError:
-            return set()
+        except:
+            try:
+                s = set(self[s, 'interface'].values.flatten())
+
+                # Ignore unset entries:
+                s.discard(np.nan)
+                return s
+            except KeyError:
+                return set()
 
     def __copy__(self):
         """
@@ -755,7 +775,7 @@ class Pattern(object):
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
                             
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
-
+        
     @property
     def from_slice(self):
         """
@@ -991,7 +1011,7 @@ class Pattern(object):
         """
         Check whether a selector is supported by any stored interface.
         """
-
+        return self.interface.is_in_interfaces(selector)
         if len(self.interface[selector]) > 0:
             return True
         else:
@@ -1256,15 +1276,30 @@ class Pattern(object):
         assert from_int in self.interface.interface_ids
         assert to_int in self.interface.interface_ids
 
+        # Get indices of the 'from' and 'to' interfaces as lists to speed up the
+        # check below [*]:
+        from_idx = self.interface.interface_ports(from_int).index.tolist()
+        to_idx = self.interface.interface_ports(to_int).index.tolist()
+
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
         for t in idx.tolist():
             
-            # Split tuple into 'from' and 'to' identifiers:
-            from_id = t[0:self.num_levels['from']]
-            to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
-            if from_id in self.interface.interface_ports(from_int).index and \
-               to_id in self.interface.interface_ports(to_int).index:
+            # Split tuple into 'from' and 'to' identifiers; since the interface
+            # index for a 'from' or 'to' identifier is an Index rather than a
+            # MultiIndex, we need to extract a scalar rather than a tuple in the
+            # former case:
+            if self.num_levels['from'] == 1:
+                from_id = t[0]
+            else:
+                from_id = t[0:self.num_levels['from']]
+            if self.num_levels['to'] == 1:
+                to_id = t[self.num_levels['from']]
+            else:
+                to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
+
+            # Check whether port identifiers are in the interface indices [*]:
+            if from_id in from_idx and to_id in to_idx:
                 return True
         return False
 

@@ -185,6 +185,9 @@ class BaseModule(ControlledProcess):
         # an emulation begins running. Keyed on destination module ID:
         self._out_port_dict = {}
 
+        self._out_ids = []
+        self._in_ids = []
+        
     @property
     def N_ports(self):
         """
@@ -366,7 +369,7 @@ class BaseModule(ControlledProcess):
         # must necessarily map to different ports; we can therefore write each
         # of the received data to the array associated with the module's ports
         # here without worry of overwriting the data from each source module:
-        for in_id in self.in_ids:
+        for in_id in self._in_ids:
 
             # Check for exceptions so as to not fail on the first emulation
             # step when there is no input data to retrieve:
@@ -392,7 +395,7 @@ class BaseModule(ControlledProcess):
 
         # Select data that should be sent to each destination module and append
         # it to the outgoing queue:
-        for out_id in self.out_ids:
+        for out_id in self._out_ids:
             try:
                 self._out_data.append((out_id, self.pm[self._out_port_dict[out_id]]))
             except:
@@ -425,7 +428,7 @@ class BaseModule(ControlledProcess):
             if self.net in ['out', 'full']:
 
                 # Send all data in outbound buffer:
-                send_ids = self.out_ids
+                send_ids = [out_id for out_id in self._out_ids]
                 for out_id, data in self._out_data:
                     self.sock_data.send(msgpack.packb((out_id, data)))
                     send_ids.remove(out_id)
@@ -445,7 +448,6 @@ class BaseModule(ControlledProcess):
 
                 # Wait until inbound data is received from all source modules:  
                 while not all((q for q in self._in_data.itervalues())):
-
                     # Use poller to avoid blocking:
                     if is_poll_in(self.sock_data, self.data_poller):
                         in_id, data = msgpack.unpackb(self.sock_data.recv())
@@ -460,7 +462,7 @@ class BaseModule(ControlledProcess):
                         self.logger.info('run loop stopped - stopping sync')
                         break
                 self.logger.info('recv data from all input IDs')
-
+                
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
@@ -502,7 +504,8 @@ class BaseModule(ControlledProcess):
         # Extract identifiers of source ports in the current module's interface
         # for all modules receiving output from the current module:
         self._out_port_dict = {}
-        for out_id in self.out_ids:
+        self._out_ids = self.out_ids
+        for out_id in self._out_ids:
             self.logger.info('extracting output ports for %s' % out_id)
 
             # Get interfaces of pattern connecting the current module to
@@ -518,7 +521,8 @@ class BaseModule(ControlledProcess):
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
         self._in_port_dict = {}
-        for in_id in self.in_ids:
+        self._in_ids = self.in_ids
+        for in_id in self._in_ids:
             self.logger.info('extracting input ports for %s' % in_id)
 
             # Get interfaces of pattern connecting the current module to
@@ -543,13 +547,13 @@ class BaseModule(ControlledProcess):
             # Initialize environment:
             self._init_net()
 
+            # Initialize _out_port_dict and _in_port_dict attributes:
+            self._init_port_dicts()
+
             # Initialize Buffer for incoming data.  Dict used to store the
             # incoming data keyed by the source module id.  Each value is a
             # queue buffering the received data:
             self._in_data = {k: collections.deque() for k in self.in_ids}
-
-            # Initialize _out_port_dict and _in_port_dict attributes:
-            self._init_port_dicts()
 
             # Perform any pre-emulation operations:
             self.pre_run()
@@ -685,7 +689,7 @@ class Broker(ControlledProcess):
             # Increase the appropriate count in recv_counts by 1
             self._recv_counts[(in_id, out_id)] += 1
             self._data_to_route.append((in_id, out_id, data))
-
+            
             # When data with source/destination IDs corresponding to
             # every entry in the routing table has been received up to
             # the current time step, deliver the data in the buffer:
@@ -762,7 +766,7 @@ class Broker(ControlledProcess):
         with IgnoreKeyboardInterrupt():
             conn = self.routing_table.connections
             self._recv_counts = dict(zip(conn,
-                np.zeros(len(conn), dtype=np.int32)))
+                np.zeros(len(conn), dtype=np.int32))) 
             self._init_net()
         self.logger.info('exiting')
         
@@ -837,13 +841,19 @@ class Manager(object):
             Which of the pattern's interfaces to connect to `m_0` and `m_1`,
             respectively.
         """
-    
+
+
         assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
         assert isinstance(pat, Pattern)
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
+        self.logger.info('connecting modules {0} and {1}'
+                         .format(m_0.id, m_1.id))
+
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
+        self.logger.info('checking compatibility of modules {0} and {1} and'
+                         ' assigned pattern'.format(m_0.id, m_1.id))
         assert m_0.interface.is_compatible(0, pat.interface, int_0)
         assert m_1.interface.is_compatible(0, pat.interface, int_1)
 
@@ -855,14 +865,20 @@ class Manager(object):
             self.add_mod(m_1)
 
         # Pass the pattern to the modules being connected:
+        self.logger.info('passing connection pattern to modules {0} and {1}'
+            .format(m_0.id, m_1.id))
         m_0.connect(m_1, pat, int_0, int_1)
         m_1.connect(m_0, pat, int_1, int_0)
 
         # Update the routing table:
+        self.logger.info('updating routing table')
         if pat.is_connected(0, 1):
             self.routing_table[m_0.id, m_1.id] = 1
         if pat.is_connected(1, 0):
             self.routing_table[m_1.id, m_0.id] = 1
+
+        self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
+
 
     @property
     def N_brok(self):
@@ -924,11 +940,17 @@ class Manager(object):
 
         self.steps = steps
         with IgnoreKeyboardInterrupt():
+            bi = 0
+            mi = 0
             for b in self.brokers.values():
+                self.logger.info(str(bi) + ' broker about to start')
                 b.start()
+                self.logger.info(str(bi) + ' started')
             for m in self.modules.values():
                 m.steps = steps
+                self.logger.info(str(mi) + ' module about to start')
                 m.start()
+                self.logger.info(str(mi) + ' module started')
 
     def send_ctrl_msg(self, i, *msg):
         """
