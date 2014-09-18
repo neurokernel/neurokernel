@@ -488,6 +488,30 @@ class test_pattern(TestCase):
                                          labels=[[0, 0, 1, 1], [0, 1, 0, 1],
                                                  [0, 1, 1, 2]]))
 
+    def test_from_df(self):
+        p = Pattern('/[aaa,bbb]/0', '/[ccc,ddd]/0')
+        p['/aaa/0', '/ccc/0'] = 1
+        p['/aaa/0', '/ddd/0'] = 1
+
+        df_int = pd.DataFrame(data=[(0, 'in', np.nan),
+                                    (0, np.nan, np.nan),
+                                    (1, 'out', np.nan),
+                                    (1, 'out', np.nan)],
+                index=pd.MultiIndex(levels=[['aaa', 'bbb', 'ccc', 'ddd'], [0]], 
+                                    labels=[[0, 1, 2, 3], [0, 0, 0, 0]],
+                                    names=['0', '1']),
+                              columns=['interface', 'io', 'type'],
+                              dtype=object)
+        df_pat = pd.DataFrame(data=[(1,), (1,)],
+                index=pd.MultiIndex(levels=[['aaa'], [0], ['ccc', 'ddd'], [0]],
+                                    labels=[[0, 0], [0, 0], [0, 1], [0, 0]],
+                                    names=['from_0', 'from_1', 'to_0', 'to_1']),
+                              columns=['conn'],
+                              dtype=object)
+        q = Pattern.from_df(df_int, df_pat)
+        assert_frame_equal(p.data, q.data)
+        assert_frame_equal(p.interface.data, q.interface.data)
+
     def test_to_graph(self):
         p = Pattern('/foo[0:4]', '/bar[0:4]')
         p['/foo[0]', '/bar[0]'] = 1
