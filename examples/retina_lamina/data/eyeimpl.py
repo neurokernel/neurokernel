@@ -43,7 +43,7 @@ PORT_IN_GPOT = 'port_in_gpot'
 import time
 import pickle
 
-class EyeGeomImpl(NeuronGeometry, Image2Signal):
+class EyeGeomImpl(NeuronGeometry):
     # used by static and non static methods and should
     # be consistent among all of them
     OMMATIDIUM_CLS = HemisphereOmmatidium
@@ -55,13 +55,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
     POSITIONS_FILE = 'positions.h5'
     IMAGE_FILE = 'image.h5'
 
+    # TODO pass the names as parameters in case more configurations need to be stored
     RET_LAM_PAT_FILE = 'ret_lam_pat.pkl'
     LAM_MED_PAT_FILE = 'lam_med_pat.pkl'
+
+    LPU_ORDER = {'r':0, 'l':1, 'm':2}
     
     #changed __init__, _get_neighborgids_adjacency,
     #_get_neighborgid, description and
     # _get_neighborgids_superposition source x->(x+3)%8 + 1
-    def __init__(self, nrings, reye=1, retina_only=False):
+    def __init__(self, nrings, reye=1, model='r'):
         """ map to sphere based on a 2D hex geometry that is closer to a circle
             e.g for one ring there will be 7 neurons arranged like this:
                 1
@@ -74,6 +77,8 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             nrings: number of rings
             r_eye: radius of eye hemisphere
                    (radius of screen is fixed to 10 right now)
+            model: should be a string with characters corresponding to the
+                   LPUs to be simulated: r(etina), l(amina), m(edulla)
         """
         self._nrings = nrings
         self._reye = reye
@@ -83,10 +88,27 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         self._supneighborslist = []
         self._adjneighborslist = []
         self._init_neurons()
-        self._generate_retina(retina_only)
-        # TODO add retina only to state
-        if not retina_only:
+        
+        # find first and last lpu according to the order they are connected
+        first_lpu = LPU_ORDER['m']
+        last_lpu = LPU_ORDER['r']
+        for c in model:
+            ord_c = LPU_ORDER[c]
+            if ord_c < first_lpu:
+                first_lpu = ord_c
+            if ord_c > last_lpu:
+                last_lpu = ord_c
+
+        assert(last_lpu-first_lpu+1 == len(model))
+        # numbers not characters    
+        self._first_lpu = first_lpu
+        self._last_lpu = last_lpu
+
+        if first_lpu <= LPU_ORDER['r'] and last_lpu >= LPU_ORDER['r']:
+            self._generate_retina()
+        if first_lpu <= LPU_ORDER['l'] and last_lpu >= LPU_ORDER['l']:
             self._generate_lamina()
+        if first_lpu <= LPU_ORDER['m'] and last_lpu >= LPU_ORDER['m']:
             self._generate_medulla()
             
     @staticmethod
@@ -1079,244 +1101,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
         fig.canvas.draw()
         fig.savefig(fname)
 
-    #TODO delete
-    def visualise_output(self, model_output, media_file, config={}):
-        """ media_file: the file where output video is written
-            config: { LPU: 'retina'(default)/'lamina'
-                      type: 'image'(default)/'video'/
-                            'bar'/'grating'/'ball'
-                            see documentation of 
-                            get_intensities_from_generatedimage
-                            for the rest of the configuration values
-                            corresponding to each type
-                      neuron: the id of the neuron to plot(for lamina)
-                              e.g L1
-                    }
-        """
-        lpu = self._getconfig(config, 'LPU', 'retina')
-        type = self._getconfig(config, 'type', 'image')
-        filetypes = ['image', 'video']
-
-        with h5py.File(model_output, 'r') as f:
-            data = f['array'].value
-
-        if lpu == 'retina':
-            latpositions, longpositions = self.get_positions(
-                    {'coord': 'spherical', 'include': 'R1toR6',
-                     'add_dummy': False})
-
-            if type in filetypes:  # if input generated from a file
-                self._plot_output(type, latpositions, longpositions, data,
-                                  media_file)
-            else:
-                self._plot_output_generated(type, latpositions, longpositions,
-                                            data, media_file, config)
-        elif lpu == 'lamina':
-            latpositions, longpositions = self.get_positions(
-                    {'coord': 'spherical', 'include': 'center',
-                     'add_dummy': False})
-            neuron = self._getconfig(config, 'neuron', 'L1')
-
-            n_ids = self._get_lamina_ids(neuron)
-
-            if type in filetypes:  # if input generated from a file
-                self._plot_output(type, latpositions, longpositions,
-                                  data[:, n_ids], media_file)
-            else:
-                self._plot_output_generated(type, latpositions, longpositions,
-                                            data[:, n_ids], media_file, config)
-        else:
-            raise ValueError('Invalid value for lpu: {}'
-                             ', valid values retina, lamina'.format(lpu))
-
-    #TODO delete
-    def _plot_output(self, type, latpositions, longpositions, data, media_file, rng=[-0.08,0]):
-        fig = plt.figure(figsize=plt.figaspect(0.3))
-        
-        with h5py.File(self.IMAGE_FILE, 'r') as f:
-            image = f['array'].value
-        try:
-            with h5py.File(self.POSITIONS_FILE, 'r') as f:
-                impositions = f['array'].value
-        except IOError:
-            impositions = None
-        with h5py.File(self.INTENSITIES_FILE, 'r') as f:
-            intensities = f['array'].value
-
-        writer = AVConvFileWriter(fps=5, codec='mpeg4')
-        writer.setup(
-            fig, media_file, dpi=80,
-            frame_prefix=os.path.splitext(media_file)[0]+'_')
-        writer.frame_format = 'png'
-
-        step = 10
-        plt.hold(False)
-
-        #TODO keep DRY
-        U, V = np.mgrid[0:np.pi/2:complex(0, 60),
-                        0:2*np.pi:complex(0, 60)]
-        X = np.cos(V)*np.sin(U)
-        Y = np.sin(V)*np.sin(U)
-        Z = np.cos(U)
-        x = X.flatten()
-        y = Y.flatten()
-        z = Z.flatten()
-        xx = np.cos(longpositions) * np.sin(latpositions)
-        yy = np.sin(longpositions) * np.sin(latpositions)
-        zz = np.cos(latpositions)
-        X_shape = X.shape
-
-        ax1 = fig.add_subplot(1, 3, 1)
-        ax1.set_title('Input')
-        ax2 = fig.add_subplot(1, 3, 2, projection='3d')
-        ax2.set_title('Intensities')
-        ax3 = fig.add_subplot(1, 3, 3, projection='3d')
-        ax3.set_title('Photoreceptor outputs')
-
-        ax2.xaxis.set_ticks([])
-        ax2.yaxis.set_ticks([])
-        ax2.zaxis.set_ticks([])
-        
-        ax3.xaxis.set_ticks([])
-        ax3.yaxis.set_ticks([])
-        ax3.zaxis.set_ticks([])
-        
-        n = Normalize(vmin = rng[0], vmax = rng[1], clip=True)
-        n_int = Normalize(vmin = rng_int[0], vmax = rng_int[1], clip=True)
-
-        for i in range(0, len(data), step):
-            ax1 = fig.add_subplot(1, 3, 1)
-            ax1.set_title('Image')
-            if type == 'image':
-                ax1.imshow(image, cmap=cm.Greys_r)
-            elif type == 'video':
-                # TODO show red rectangle
-                xind = impositions[i, 0:2]
-                yind = impositions[i, 2:4]
-                if not i:
-                    handles.append(ax1.imshow(image[int(xind[0]):int(xind[1]),
-                                                    int(yind[0]):int(yind[1])],
-                                              cmap=cm.Greys_r))
-                else:
-                    handles[0].set_data(image[int(xind[0]):int(xind[1]),
-                                              int(yind[0]):int(yind[1])])
-            else:
-                raise ValueError('Invalid value for media type: {}'
-                                     ', valid values image, video'.format(type))
-                
-            #colors = self.compute_colors(U, V, latpositions, 
-            #                             longpositions, intensities[i])
-            colors = griddata((xx,yy,zz), intensities[i], (x,y,z),'nearest').reshape(X_shape)
-            
-            
-            colors = n_int(colors).data
-            colors = np.tile(np.reshape(colors,[X_shape[0],X_shape[1],1]),[1,1,4])
-            colors[:,:,3] = 1.0
-            if not i:
-                handles.append(ax2.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=colors,
-                                 antialiased=False, shade=False))
-            else:
-                C = [colors[i,j] for (i,j) in itertools.product(range(colors.shape[0]),
-                                                                range(colors.shape[1]))]
-                handles[1].set_facecolors(C)
-                handles[1].set_facecolors(C)
-            #colors = self.compute_colors(U, V, latpositions, 
-            #                             longpositions, data[i])
-            colors = griddata((xx,yy,zz), data[i], (x,y,z), 'nearest').reshape(X_shape)
-            colors = n(colors).data
-            colors = np.tile(np.reshape(colors,[X_shape[0],X_shape[1],1]),[1,1,4])
-            colors[:,:,3] = 1.0
-            if not i:
-                ax3.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=colors,
-                                 antialiased=False, shade=False)
-            else:
-                C = [colors[i,j] for (i,j) in itertools.product(range(colors.shape[0]),
-                                                                range(colors.shape[1]))]
-                handles[2].set_facecolors(C)
-                handles[2].set_facecolors(C)
-            fig.canvas.draw()
-            writer.grab_frame()
-        writer.finish()
-
-    #TODO delete
-    # plot output when input is programmatically generated
-    def _plot_output_generated(self, type, latpositions, longpositions,
-                               data, media_file, config):
-        fig = plt.figure(figsize=plt.figaspect(0.3))
-        
-        with h5py.File(self.IMAGE_FILE, 'r') as f:
-            image = f['array'].value
-        with h5py.File(self.INTENSITIES_FILE, 'r') as f:
-            intensities = f['array'].value
-            
-        writer = AVConvFileWriter(fps=5, codec='mpeg4')
-        writer.setup(
-            fig, media_file, dpi=80,
-            frame_prefix=os.path.splitext(media_file)[0]+'_')
-        writer.frame_format = 'png'
-
-        step = 10
-        plt.hold(False)
-        
-        U, V = np.mgrid[0:np.pi/2:complex(0, self.PARALLELS),
-                        0:2*np.pi:complex(0, self.MERIDIANS)]
-        X = np.cos(V)*np.sin(U)
-        Y = np.sin(V)*np.sin(U)
-        Z = np.cos(U)
-
-        ax1 = fig.add_subplot(1, 3, 1)
-        ax1.set_title('Image')
-        ax2 = fig.add_subplot(1, 3, 2, projection='3d')
-        ax3 = fig.add_subplot(1, 3, 3, projection='3d')
-        
-        for i, d in enumerate(data):
-            if i % step == 0:
-                ax1.imshow(image[i], cmap=cm.Greys_r)
-                
-                
-                colors = self.compute_colors(U, V, latpositions, 
-                                             longpositions, intensities[i])
-                ax2.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
-                                 antialiased=False, shade=False)
-                ax2.set_title('Intensities')
-                colors = self.compute_colors(U, V, latpositions, 
-                                             longpositions, data[i])
-                ax3.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=cm.gray(colors),
-                                 antialiased=False, shade=False)
-                ax3.set_title('Photoreceptor outputs')
-                fig.canvas.draw()
-                writer.grab_frame()
-        writer.finish()
-    
-    #TODO delete
-    @staticmethod
-    def compute_colors(gridlats, gridlongs, lats, longs, values):
-        """
-            computes values at positions gridlat, gridlong based on values at
-            positions lat, long given by 'values' array
-            Result is normalized in interval [0, 1]
-            gridlats:
-            gridlongs:
-            lats: flat array of latitudes
-            longs: flat array of longitudes
-            values: flat array of values corresponding to the positions (lats, longs)
-            return: interpolated values at grid positions
-        """
-        gridvalues = np.empty(gridlats.size)
-        coords = zip(gridlats.flatten(), gridlongs.flatten())
-        for i,(glat, glong) in enumerate(coords):
-            # assign value of the closest point
-            in_prod = np.sin(lats)*np.sin(glat)*np.cos(glong-longs) \
-                    + np.cos(lats)*np.cos(glat)
-            maxpos = in_prod.argmax()
-            gridvalues[i] = values[maxpos]
-        # normalize result
-        gridvalues -= gridvalues.min()
-        if gridvalues.max() > 0:
-            gridvalues /= gridvalues.max()
-        #print('min, max: {}, {}'.format(gridvalues.min(), gridvalues.max()))
-        return gridvalues.reshape(gridlats.shape)
-
     def _get_lamina_ids(self, neuron_name):
         G = self._lamina_graph
         neurons = G.node.items()
@@ -1327,13 +1111,16 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 ids.append(id)
         return ids
 
+    # TODO KP is use of -1 and 1 consistent? use only one of them maybe?
     def connect_retina_lamina(self, manager, ret_lpu, lam_lpu, from_file=False):
+        if first_lpu > LPU_ORDER['r'] or last_lpu < LPU_ORDER['l']:
+            return
         if not from_file:
             #.values or .tolist()
             print('Initializing selectors')
             # some workarounds
             ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-            lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
+            lam_sel = ','.join(['/' + str(sel[0]) + '/' + str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
             
             print('Initializing pattern with selectors')
             pat = Pattern(ret_sel, lam_sel)
@@ -1349,11 +1136,9 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat.interface[lam_sel_in] = [1, 'out', 'gpot']
             pat.interface[lam_sel_out] = [1, 'in', 'gpot']
 
-            
             for sel in lam_sel_in.split(','):
                 if str(sel).startswith('/retin'):
                     pat[sel.replace('in', 'out'), sel] = 1
-            print pat
             pat_file = open(self.RET_LAM_PAT_FILE, 'wb')
             pickle.dump(pat, pat_file)
             pat_file.close()
@@ -1363,10 +1148,12 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat_file.close()
         
         print('Connecting LPUs with the pattern')
-        print pat
+        print(pat)
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
     def connect_lamina_medulla(self, manager, lam_lpu, med_lpu, from_file=False):
+        if first_lpu > LPU_ORDER['l'] or last_lpu < LPU_ORDER['m']:
+            return
         if not from_file:
             #.values or .tolist()
             print('Initializing selectors')
@@ -1405,7 +1192,6 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
                 if str(sel).startswith('/medin'):
                     pat[sel.replace('in', 'out'), sel] = 1
 
-            print pat
             pat_file = open(self.LAM_MED_PAT_FILE, 'wb')
             pickle.dump(pat, pat_file)
             pat_file.close()
@@ -1415,7 +1201,7 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
             pat_file.close()
         
         print('Connecting LPUs with the pattern')
-        print pat
+        print(pat)
         manager.connect(lam_lpu, med_lpu, pat, 0, 1)
 
     
@@ -1663,111 +1449,19 @@ class EyeGeomImpl(NeuronGeometry, Image2Signal):
 
 
     def write_retina(self, output_file):
-        nx.write_gexf(self._retina_graph, output_file)
+        if first_lpu <= LPU_ORDER['r'] and last_lpu >= LPU_ORDER['r']:
+            nx.write_gexf(self._retina_graph, output_file)
 
     def write_lamina(self, output_file):
-        nx.write_gexf(self._lamina_graph, output_file)
+        if first_lpu <= LPU_ORDER['l'] and last_lpu >= LPU_ORDER['l']:
+            nx.write_gexf(self._lamina_graph, output_file)
 
     def write_medulla(self, output_file):
-        nx.write_gexf(self._medulla_graph, output_file)
+        if first_lpu <= LPU_ORDER['m'] and last_lpu >= LPU_ORDER['m']:
+            nx.write_gexf(self._medulla_graph, output_file)
 
     def _getconfig(self,config, key, default):
         try:
             return config[key]
         except KeyError:
             return default
-
-        
-#if __name__ == '__main__':
-#    from matplotlib.collections import LineCollection
-#    import time
-#
-#    N_RINGS = 25
-#    INPUT_TYPE = 'image'
-#
-#    print('Initializing geometry')
-#    hemisphere = EyeGeomImpl(N_RINGS)
-#    print('Getting positions')
-#    positions = hemisphere.get_positions({'coord': 'cartesian3D'})
-#    print('Getting neighbors')
-#    neighbors = hemisphere.get_neighbors({'rule': 'superposition'})
-#
-#    print('Getting intensities')
-#    start_time = time.time()
-#    intensities = hemisphere.get_intensities('image1.mat',
-#                                             {'type': INPUT_TYPE,
-#                                              'steps': 10})
-#    print('--- Duration {} seconds ---'.format(time.time() - start_time))
-#
-#    print('Setting up plot 1: Ommatidia on 3D sphere')
-#    fig1 = plt.figure()
-#    ax1 = fig1.gca(projection='3d')
-#    ax1.set_title('Ommatidia on 3D sphere')
-#    ax1.plot_trisurf(positions[0], positions[1], positions[2],
-#                     cmap=cm.coolwarm, linewidth=0.2)
-#
-#    #
-#
-#    print('Setting up plot 2: a) 2d projection of ommatidia and their'
-#          ' connections with neighbors, b) projections of screen positions')
-#    fig2 = plt.figure()
-#    ax2_1 = fig2.add_subplot(121)
-#    ax2_1.set_title('2d projection of ommatidia and their'
-#                    ' connections with neighbors')
-#
-#    xpositions, ypositions = hemisphere.get_positions({'coord': "cartesian2D"})
-#
-#    segmentlist = []
-#    for neighborlist in neighbors:
-#        original = neighborlist[0]
-#        original = original.id
-#        for neighbor in neighborlist[1:]:
-#            neighbor = neighbor.id
-#            if (not neighbor is None):  # some edges are added twice
-#                segmentlist.append([[xpositions[original],
-#                                     ypositions[original]],
-#                                    [xpositions[neighbor],
-#                                     ypositions[neighbor]]])
-#
-#    linesegments = LineCollection(segmentlist, linestyles='solid')
-#    ax2_1.add_collection(linesegments)
-#    ax2_1.set_xlim((-1, 1))
-#    ax2_1.set_ylim((-1, 1))
-#
-#    ax2_2 = fig2.add_subplot(122)
-#    ax2_2.set_title('2d projection of ommatidia and their'
-#                    ' projections of screen positions')
-#    xpositions, ypositions = hemisphere.get_positions({'coord': "cartesian2D",
-#                                                       'include': 'all',
-#                                                       'add_dummy': False})
-#
-#    ax2_2.scatter(xpositions, ypositions)
-#
-#    print('Setting up plot 3: greyscale image and intensities')
-#
-#    mat = loadmat('image1.mat')
-#    try:
-#        image = np.array(mat['im'])
-#    except KeyError:
-#        print('No variable "im" in given mat file')
-#        print('Available variables (and meta-data): {}'.format(mat.keys()))
-#
-#    fig3 = plt.figure()
-#    ax3_1 = fig3.add_subplot(121)
-#    ax3_1.set_title('greyscale image')
-#    ax3_1.imshow(image, cmap=cm.Greys_r)
-#
-#    print(intensities.shape)
-#    print(intensities)
-#    print(intensities.max(), intensities.min())
-#    ax3_2 = fig3.add_subplot(122)
-#    ax3_2.set_title('intensities')
-#    xpositions, ypositions = hemisphere.get_positions({'coord': "cartesian2D",
-#                                                       'include': 'R1toR6',
-#                                                       'add_dummy': False})
-#    print(xpositions.shape)
-#
-#    ax3_2.scatter(xpositions, -ypositions, c=intensities[0], cmap=cm.gray, s=10,
-#                  edgecolors='none')
-#
-#    fig3.savefig('figure3.png', bbox_inches='tight')
