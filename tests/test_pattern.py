@@ -123,9 +123,17 @@ class test_interface(TestCase):
         assert_index_equal(i.data.index, ig.data.index)
         assert_frame_equal(i.data, ig.data)
 
-    def test_is_in_interfaces(self):
+    def test_is_in_interfaces_single(self):
+        i = Interface('/[foo,bar]')
+        i['/foo'] = [0, 'in', 'gpot']
+        i['/bar'] = [1, 'out', 'gpot']
+        assert i.is_in_interfaces('/foo') == True
+        assert i.is_in_interfaces('/qux') == False
+
+    def test_is_in_interfaces_multi(self):
         assert self.interface.is_in_interfaces('/foo[0:3]') == True
         assert self.interface.is_in_interfaces('/foo[0:4]') == False
+        assert self.interface.is_in_interfaces('/foo') == False
 
     def test_in_ports(self):
         i = Interface('/foo[0]')
