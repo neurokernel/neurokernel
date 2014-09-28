@@ -2,6 +2,9 @@
 
 import numpy as np
 import pycuda.driver as drv
+from pycuda.compiler import SourceModule
+import pycuda.gpuarray as gpuarray
+import pytools
 
 # List of available numerical types provided by numpy: 
 num_types = [np.typeDict[t] for t in \
@@ -61,3 +64,73 @@ def set_realloc(x_gpu, data):
     # Update the GPU memory:
     x_gpu.set(data)
 
+@pytools.memoize
+def _get_extract_kernel():
+    return SourceModule("""
+    __global__ void func(double *x, double *y, unsigned int *idx, unsigned int M) {
+        unsigned int tid = threadIdx.x;
+        unsigned int total_threads = gridDim.x*blockDim.x;
+        unsigned int block_start = blockDim.x*blockIdx.x;
+        unsigned int i;
+
+        for (i = block_start+tid; i < M; i += total_threads)
+            y[i] = x[idx[i]];
+      }
+    """)
+
+@pytools.memoize
+def _get_unextract_kernel():
+    return SourceModule("""
+    __global__ void func(double *x, double *y, unsigned int *idx, unsigned int M) {
+        unsigned int tid = threadIdx.x;
+        unsigned int total_threads = gridDim.x*blockDim.x;
+        unsigned int block_start = blockDim.x*blockIdx.x;
+        unsigned int i;
+
+        for (i = block_start+tid; i < M; i += total_threads)
+            y[idx[i]] = x[i];
+       }
+    """)
+
+def extract_contiguous(from_gpu, to_gpu, idx_gpu, dev):
+    """
+    Copy select discontiguous elements to a contiguous array.
+
+    Parameters
+    ----------
+    from_gpu : pycuda.GPUArray
+        Source array.
+    to_gpu : pycuda.GPUArray
+        Destination array.
+    idx_gpu : pycuda.GPUArray
+        Indices of elements from `from_gpu` to copy to `to_gpu`.
+    dev : pycuda.driver.Device
+        GPU device hosting `from_gpu` and `to_gpu`.
+    """
+
+    M = np.uint32(len(idx_gpu))
+    grid, block = gpuarray.splay(M, dev)
+    func = _get_extract_kernel().get_function('func')
+    func(from_gpu, to_gpu, idx_gpu, M, block=block, grid=grid)
+
+def unextract_contiguous(from_gpu, to_gpu, idx_gpu, dev):
+    """
+    Copy contiguous elements to a select elements in a discontiguous array.
+
+    Parameters
+    ----------
+    from_gpu : pycuda.GPUArray
+        Source array.
+    to_gpu : pycuda.GPUArray
+        Destination array.
+    idx_gpu : pycuda.GPUArray
+        Indices of elements in `to_gpu` to which the contents of 
+        `from_gpu` are to be copied.
+    dev : pycuda.driver.Device
+        GPU device hosting `from_gpu` and `to_gpu`.
+    """
+
+    M = np.uint32(len(idx_gpu))
+    grid, block = gpuarray.splay(M, dev)
+    func = _get_unextract_kernel().get_function('func')
+    func(from_gpu, to_gpu, idx_gpu, M, block=block, grid=grid)
