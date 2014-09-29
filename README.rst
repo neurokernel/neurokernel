@@ -10,6 +10,9 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
 Quick Start
 -----------
+Neurokernel requires at least one NVIDIA GPU and `CUDA 
+<http://www.nvidia.com/object/cuda_home_new.html>`_.
+
 Make sure you have `pip <http://pip.pypa.io>`_ installed (preferably
 in a `virtualenv <http://virtualenv.pypa.io>`_); once you do, install the
 following dependencies as follows::
@@ -40,6 +43,12 @@ it)::
 Check out the demos in ``neurokernel/examples`` subdirectory and 
 their corresponding `IPython notebooks <http://ipython.org/notebook.html>`_ 
 in ``neurokernel/notebooks``.
+
+Supported Platforms
+-------------------
+Neurokernel has been tested and installed on Linux. It may run on other
+platforms too; if you encounter problems, submit a bug report on
+`GitHub <https://github.com/neurokernel/neurokernel/issues>`_.
 
 More Information
 ----------------
