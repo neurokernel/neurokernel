@@ -10,7 +10,7 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
 .. image:: http://prime4commit.com/projects/98.svg
     :target: http://prime4commit.com/projects/98
-    :alt-text: Support the project
+    :alt: Support the project
 
 Quick Start
 -----------
