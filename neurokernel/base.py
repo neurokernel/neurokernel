@@ -940,17 +940,19 @@ class Manager(object):
 
         self.steps = steps
         with IgnoreKeyboardInterrupt():
-            bi = 0
-            mi = 0
+            bi = 1
+            mi = 1
             for b in self.brokers.values():
-                self.logger.info(str(bi) + ' broker about to start')
+                self.logger.info('broker ' + str(bi) + ' about to start')
                 b.start()
-                self.logger.info(str(bi) + ' started')
+                self.logger.info('broker ' + str(bi) + ' started')
+                bi+=1
             for m in self.modules.values():
                 m.steps = steps
-                self.logger.info(str(mi) + ' module about to start')
+                self.logger.info('module ' + str(mi) + ' about to start')
                 m.start()
-                self.logger.info(str(mi) + ' module started')
+                self.logger.info('module ' + str(mi) + ' started')
+                mi+=1
 
     def send_ctrl_msg(self, i, *msg):
         """
