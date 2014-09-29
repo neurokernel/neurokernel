@@ -5,6 +5,9 @@ Installation
 
 Quick Start
 -----------
+Neurokernel requires at least one NVIDIA GPU and 
+`CUDA <http://www.nvidia.com/object/cuda_home_new.html`_.
+
 Make sure you have `pip <http://pip.pypa.io>`_ installed (preferably
 in a `virtualenv <http://virtualenv.pypa.io>`_); once you do, install the
 following dependencies as follows::
@@ -20,10 +23,16 @@ latest Neurokernel code::
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
 
+Supported Platforms
+-------------------
+Neurokernel has been tested and installed on Linux. It may run on other
+platforms too; if you encounter problems, submit a bug report on
+`GitHub <https://github.com/neurokernel/neurokernel/issues>`_.
+
 Installation Dependencies
 -------------------------
-In addition to Python 2.7, Neurokernel currently requires the following
-packages:
+In addition to Python 2.7 and NVIDIA CUDA, Neurokernel currently requires the
+following packages:
 
 * `bidict <http://pypi.python.org/pypi/bidict/>`_ 0.1.0 or later.
 * `bottleneck <http://pypi.python.org/pypi/bottleneck/>`_ 0.7.0 or later.
@@ -32,6 +41,7 @@ packages:
 * `matplotlib <http://matplotlib.org/>`_ 1.3.0 or later.
 * `msgpack-numpy <http://pypi.python.org/pypi/msgpack-numpy>`_ 0.3.1.1 or later.
 * `networkx <https://networkx.github.io>`_ 1.8 or later
+* `numexpr <https://github.com/pydata/numexpr>`_ 2.3 or later.
 * `numpy <http://numpy.scipy.org>`_ 1.2.0 or later.
 * `pycuda <http://mathema.tician.de/software/pycuda>`_ 2012.1 or
   later.
