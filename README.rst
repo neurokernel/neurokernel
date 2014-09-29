@@ -10,8 +10,8 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
 Quick Start
 -----------
-Neurokernel requires at least one NVIDIA GPU and 
-`CUDA <http://www.nvidia.com/object/cuda_home_new.html`_.
+Neurokernel requires at least one NVIDIA GPU and `CUDA 
+<http://www.nvidia.com/object/cuda_home_new.html>`_.
 
 Make sure you have `pip <http://pip.pypa.io>`_ installed (preferably
 in a `virtualenv <http://virtualenv.pypa.io>`_); once you do, install the
