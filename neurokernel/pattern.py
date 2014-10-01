@@ -6,6 +6,7 @@ Represent connectivity pattern using pandas DataFrame.
 
 from collections import OrderedDict
 import itertools
+import re
 
 from chash import lfu_cache_method
 import networkx as nx
@@ -449,7 +450,8 @@ class Interface(object):
 
         # If one interface contains identifiers not in the other, they are
         # incompatible:
-        if len(data_merged) < max(len(self.data), len(i.data)):
+        if len(data_merged) < max(len(self.data[self.data['interface'] == a]),
+                                  len(i.data[i.data['interface'] == b])):
             return False
 
         # If the 'type' attributes of the same identifiers in each interfaces
@@ -484,6 +486,7 @@ class Interface(object):
         result : bool
             True if the comprised ports are in any of the stored interfaces.
         """
+
         try:
             idx = self.sel.expand(s)
             d = self.data['interface'].ix[idx]
@@ -876,6 +879,57 @@ class Pattern(object):
 
         self.interface.clear()
         self.data.drop(self.data.index, inplace=True)
+
+    @classmethod
+    def from_df(cls, df_int, df_pat):
+        """
+        Create a Pattern from properly formatted DataFrames.
+
+        Parameters
+        ----------
+        df_int : pandas.DataFrame
+            DataFrame with a MultiIndex and data columns 'interface', 
+            'io', and 'type' (additional columns may also be present) that
+            describes the pattern's interfaces. The index's rows must correspond
+            to individual port identifiers.
+        df_pat : pandas.DataFrame
+            DataFrame with a MultiIndex and a data column 'conn' (additional
+            columns may also be present) that describes the connections between
+            ports in the pattern's interfaces. The index's level names must be
+            'from_0'..'from_N', 'to_0'..'to_M', where N and M are the maximum 
+            number of levels in the pattern's two interfaces.
+        """
+
+        # Create pattern with phony selectors:
+        pat = cls('/foo[0]', '/bar[0]')
+
+        # Check that the 'interface' column of the interface DataFrame is set:
+        if any(df_int['interface'].isnull()):
+            raise ValueError('interface column must be set')
+
+        # Create interface:
+        pat.interface = Interface.from_df(df_int)
+
+        # The pattern DataFrame's index must contain at least two levels:
+        assert isinstance(df_pat.index, pd.MultiIndex)
+
+        # Check that pattern DataFrame index levels are named correctly,
+        # i.e., from_0..from_N and to_0..to_N, where N is equal to
+        # pat.interface.num_levels:
+        num_levels = pat.interface.num_levels
+        if df_pat.index.names != ['from_%i' % i for i in xrange(num_levels)]+\
+           ['to_%i' % i for i in xrange(num_levels)]:
+            raise ValueError('incorrectly named pattern index levels')
+
+        for t in df_pat.index.tolist():
+            from_t = t[0:num_levels]
+            to_t = t[num_levels:2*num_levels]
+            if from_t not in df_int.index or to_t not in df_int.index:
+                raise ValueError('pattern DataFrame contains identifiers '
+                                 'not in interface DataFrame')
+
+        pat.data = df_pat.copy()
+        return pat
 
     @classmethod
     def from_product(cls, *selectors, **kwargs):
