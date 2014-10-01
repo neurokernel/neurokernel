@@ -1109,9 +1109,6 @@ if __name__ == '__main__':
             self.logger.info('output port data: '+str(self.pm[out_ports]))
 
         def run(self):
-
-            # Make every class instance generate a different pseudorandom sequence:
-            np.random.seed(id(self))
             super(MyModule, self).run()
             
     # Set up logging:
