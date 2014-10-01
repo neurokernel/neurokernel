@@ -450,7 +450,8 @@ class Interface(object):
 
         # If one interface contains identifiers not in the other, they are
         # incompatible:
-        if len(data_merged) < max(len(self.data), len(i.data)):
+        if len(data_merged) < max(len(self.data[self.data['interface'] == a]),
+                                  len(i.data[i.data['interface'] == b])):
             return False
 
         # If the 'type' attributes of the same identifiers in each interfaces
