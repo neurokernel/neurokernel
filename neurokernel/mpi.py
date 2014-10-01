@@ -112,7 +112,7 @@ class Worker(object):
         self._data_tag = data_tag
         self._ctrl_tag = ctrl_tag
 
-    def run_step(self):
+    def do_work(self):
         """
         Work method.
 
@@ -121,7 +121,7 @@ class Worker(object):
         control message. It should check for the presence of
         """
 
-        self.logger.info('executing run_step')
+        self.logger.info('executing do_work')
 
     def run(self):
         """
@@ -167,7 +167,7 @@ class Worker(object):
 
             # Execute work method:
             if running:
-                self.run_step()
+                self.do_work()
 
 class Manager(object):
     """
@@ -232,6 +232,14 @@ class Manager(object):
 
         # Reserve node 0 for use as master:
         self._rank = 1
+
+    @property
+    def num_workers(self):
+        """
+        Number of workers known to manager.
+        """
+
+        return len(self._targets)
 
     def add(self, target, *args, **kwargs):
         """
