@@ -81,7 +81,7 @@ if __name__ == "__main__":
             'numpy',
             'pandas >= 0.13.1',
             'ply',
-            'psutil',
+            'psutil >= 2.0',
             'pycuda >= 2012.1',
             'pyzmq',
             'scipy',
