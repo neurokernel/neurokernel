@@ -488,7 +488,10 @@ class Interface(object):
         """
 
         try:
-            idx = self.sel.expand(s)
+            idx_temp = self.sel.expand(s)
+
+            #Fix for one level selectors
+            idx = [x if len(x)>1 else x[0] for x in idx_temp]
             d = self.data['interface'].ix[idx]
             if isinstance(d, int):
                 return True
