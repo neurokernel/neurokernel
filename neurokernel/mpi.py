@@ -18,13 +18,38 @@ import zmq
 
 from tools.logging import format_name, setup_logger
 
+def getargnames(f):
+    """
+    Get names of a callable's arguments.
+
+    Parameters
+    ----------
+    f : callable
+        Function to examine.
+
+    Results
+    -------
+    args : list of str
+        Argument names.
+    
+    Notes
+    -----
+    For instance methods, the `self` argument is omitted.
+    """
+
+    spec = inspect.getargspec(f)
+    if inspect.ismethod(f):
+        return spec.args[1:]
+    else:
+        return spec.args
+
 def args_to_dict(f, *args, **kwargs):
     """
     Combine sequential and named arguments in single dictionary.
 
     Parameters
     ----------
-    f : function or instancemethod
+    f : callable
         Function to which the arguments will be passed.
     args : tuple
         Sequential arguments.
@@ -39,16 +64,14 @@ def args_to_dict(f, *args, **kwargs):
 
     spec = inspect.getargspec(f)
     d = {}
-    if inspect.ismethod(f):
-        assert len(spec.args)-1 <= args
-        for arg, val in zip(spec.args[1:], args):
-            d[arg] = val
-    else:
-        assert len(spec.args) <= args
-        for arg, val in zip(spec.args, args):
-            d[arg] = val
+
+    arg_names = getargnames(f)
+    assert len(arg_names) <= args
+    for arg, val in zip(arg_names, args):
+        d[arg] = val
     for arg, val in kwargs.iteritems():
-        assert arg not in d
+        if arg in d:
+            raise ValueError('\'%s\' already specified in positional args' % arg)
         d[arg] = val
     return d
 
