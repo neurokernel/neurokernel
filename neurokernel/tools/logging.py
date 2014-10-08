@@ -30,19 +30,28 @@ def format_name(name, width=20):
 
     return ('{name:%s}' % width).format(name=name)
 
-def log_exception(type, value, tb):
+def log_exception(type, value, tb, multiline=False):
     """
     Log the specified exception data using twiggy.
+
+    Notes
+    -----
+    Logs the exception data on multiple lines if `multiline` is set to True.
     """
 
-    msg = '|'.join([': '.join([y.strip() for y in x.strip('\n ').split('\n')]) for x in \
-                    traceback.format_exception(type, value, tb)[1:]])
-    twiggy.log.error('Uncaught exception: %s' % str(msg))
+    if multiline:
+        for x in traceback.format_exception(type, value, tb)[1:]:
+            for y in x.strip('\n ').split('\n'):                
+                twiggy.log.error(y)
+    else:
+        msg = '|'.join([': '.join([y.strip() for y in x.strip('\n ').split('\n')]) for x in \
+                        traceback.format_exception(type, value, tb)[1:]])
+        twiggy.log.error('Uncaught exception: %s' % str(msg))
 
 def setup_logger(name='', level=twiggy.levels.DEBUG,
                  fmt=twiggy.formats.line_format,
                  stdout=None, file_name=None, sock=None,
-                 log_exceptions=True):
+                 log_exceptions=True, multiline=False):
     """
     Setup a twiggy logger.
 
@@ -62,6 +71,8 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         ZeroMQ socket address.
     log_exceptions : bool
         If True, exception messages are written to the logger.
+    multiline : bool
+        If True, log exception messages on multiple lines.
 
     Returns
     -------
@@ -84,6 +95,7 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         twiggy.addEmitters(('sock', level, None, sock_output))
 
     if log_exceptions:
-        sys.excepthook = log_exception
+        sys.excepthook = \
+            lambda type, value, tb: log_exception(type, value, tb, multiline)
 
     return twiggy.log.name(format_name(name))
