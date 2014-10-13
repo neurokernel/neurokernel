@@ -16,9 +16,12 @@ following dependencies as follows::
   pip install cython
   pip install numexpr
   pip install tables
-  
-Run the following to install the remaining dependencies and the 
-latest Neurokernel code::
+
+You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
+<http://libav.org>`_ installed to generate some of the demo visualizations.
+
+Run the following to install the remaining dependencies and the latest 
+Neurokernel code::
 
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
