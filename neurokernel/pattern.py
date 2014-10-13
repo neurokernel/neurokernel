@@ -327,6 +327,43 @@ class Interface(object):
         assert isinstance(g, nx.Graph)
         return cls.from_dict(g.node)
 
+    @classmethod
+    def from_selectors(cls, sel, sel_in='', sel_out='',
+                       sel_spike='', sel_gpot='', *sel_int_list):
+        """
+        Create an Interface instance from selectors.
+
+        Parameters
+        ----------
+        sel : str, unicode, or sequence
+            Selector describing all ports comprised by interface.
+        sel_in : str, unicode, or sequence
+            Selector describing the interface's input ports.
+        sel_out : str, unicode, or sequence
+            Selector describing the interface's output ports.
+        sel_spike : str, unicode, or sequence
+            Selector describing the interface's spiking ports.
+        sel_gpot : str, unicode, or sequence
+            Selector describing the interface's graded potential ports.
+        sel_int_list : list of str, unicode, or sequence
+            Selectors consecutively describing the ports associated with interface 0,
+            interface 1, etc.
+
+        Returns
+        -------
+        i : Interface
+            Generated interface instance.
+        """
+
+        i = cls(sel)
+        i[sel_in, 'io'] = 'in'
+        i[sel_out, 'io'] = 'out'
+        i[sel_spike, 'type'] = 'spike'
+        i[sel_gpot, 'type'] = 'gpot'
+        for n, sel_int in enumerate(sel_int_list):
+            i[sel_int, 'interface'] = n
+        return i
+
     def gpot_ports(self, i=None):
         """
         Restrict Interface ports to graded potential ports.
