@@ -44,6 +44,9 @@ packages:
 * `tables <http://www.pytables.org>`_ 2.4.0 or later.
 * `twiggy <http://twiggy.readthedocs.org/>`_ 0.4.0 or later.
 
+You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
+<http://libav.org>`_ installed to generate some of the demo visualizations.
+
 If you have all of the above requirements installed, you can install 
 the downloaded code using::
 
