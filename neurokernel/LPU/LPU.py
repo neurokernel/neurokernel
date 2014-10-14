@@ -613,16 +613,16 @@ class LPU(Module, object):
         """
         if self.ports_in_gpot_mem_ind is not None:
             cuda.memcpy_htod(
-                int(self.V.gpudata) +
+                int(int(self.V.gpudata) +
                 self.V.dtype.itemsize*
-                self.idx_start_gpot[self.ports_in_gpot_mem_ind],
+                self.idx_start_gpot[self.ports_in_gpot_mem_ind]),
                 self.pm['gpot'].data[self.sel_in_gpot_ids])
         if self.ports_in_spk_mem_ind is not None:
             cuda.memcpy_htod(
                 int(int(self.spike_state.gpudata) +
                 self.spike_state.dtype.itemsize*
-                self.idx_start_spike[self.ports_in_spk_mem_ind],
-                self.pm['spike'][self.sel_in_spk]))
+                self.idx_start_spike[self.ports_in_spk_mem_ind]),
+                self.pm['spike'][self.sel_in_spk])
 
     def _extract_output(self, st=None):
         """
