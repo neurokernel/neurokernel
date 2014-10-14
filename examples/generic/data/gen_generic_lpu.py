@@ -232,12 +232,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('lpu_file_name', nargs='?', default='generic_lpu.gexf.gz',
                         help='LPU file name')
-    parser.add_argument('lpu_name', nargs='?', default='gen',
-                        help='LPU name')
     parser.add_argument('in_file_name', nargs='?', default='generic_input.h5',
                         help='Input file name')
     parser.add_argument('-s', type=int,
                         help='Seed random number generator')
+    parser.add_argument('-l', '--lpu', type=str, default='gen',
+                        help='LPU name')
+
     args = parser.parse_args()
 
     if args.s is not None:
@@ -250,4 +251,4 @@ if __name__ == '__main__':
     neu_num = [np.random.randint(31, 40) for i in xrange(3)]
 
     create_input(args.in_file_name, neu_num[0], dt, dur, start, stop, I_max)
-    create_lpu(args.lpu_file_name, args.lpu_name, *neu_num)
+    create_lpu(args.lpu_file_name, args.lpu, *neu_num)
