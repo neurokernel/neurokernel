@@ -76,8 +76,8 @@ def graph_to_df(g):
                              for m, v in g.edge[k1][k2].iteritems()}
         
     # Construct DataFrame instances:
-    df_node = pandas.DataFrame.from_dict(node_data, orient='index')
-    df_edge = pandas.DataFrame.from_dict(edge_data, orient='index')
+    df_node = pandas.DataFrame.from_dict(node_data).T
+    df_edge = pandas.DataFrame.from_dict(edge_data).T
 
     # Convert edge index to MultiIndex to facilitate access using edge endpoints
     # and number (for multigraphs):
