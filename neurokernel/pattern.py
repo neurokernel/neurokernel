@@ -646,7 +646,7 @@ class Interface(object):
         for t in ids:
             selector = ''
             for s in t:
-                if type(s) == str:
+                if type(s) in [str, unicode]:
                     selector += '/'+s
                 else:
                     selector += '[%s]' % s
