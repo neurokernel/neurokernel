@@ -120,9 +120,7 @@ man.add_brok()
 
 random.seed(0)
 
-# Since each connectivity pattern between two LPUs contains the synapses in both
-# directions, create connectivity patterns between each combination of LPU
-# pairs:
+# Create connectivity patterns between each combination of LPU pairs:
 for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
 
     lpu_0 = lpu_dict[id_0]['lpu']
