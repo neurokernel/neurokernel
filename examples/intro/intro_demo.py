@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+>#!/usr/bin/env python
 
 """
 Introductory Neurokernel demo
@@ -8,8 +8,8 @@ Notes
 Generate input files and LPU configurations by running
 
 cd data
-python gen_generic_lpu.py -s 1 -l a a.gexf.gz a_input_0.h5
-python gen_generic_lpu.py -s 2 -l b b.gexf.gz b_input_1.h5
+python gen_generic_lpu.py -s 0 -l lpu_0 generic_lpu_0.gexf.gz generic_lpu_0_input.h5
+python gen_generic_lpu.py -s 1 -l lpu_1 generic_lpu_1.gexf.gz generic_lpu_1_input.h5
 
 Other seed values may be specified, but note that some may result in a network
 that generates no meaningful responses to the input signal.
@@ -69,51 +69,51 @@ def run(connected):
     man = core.Manager(port_data, port_ctrl)
     man.add_brok()
 
-    lpu_file_0 = './data/a.gexf.gz'
-    lpu_file_1 = './data/b.gexf.gz'
+    lpu_file_0 = './data/generic_lpu_0.gexf.gz'
+    lpu_file_1 = './data/generic_lpu_1.gexf.gz'
     (n_dict_0, s_dict_0) = LPU.lpu_parser(lpu_file_0)
     (n_dict_1, s_dict_1) = LPU.lpu_parser(lpu_file_1)
 
-    ge_0_id = 'ge_0'
-    ge_0 = LPU(dt, n_dict_0, s_dict_0,
-               input_file='./data/a_input.h5',
-               output_file='a_output_%s.h5' % out_name,
+    lpu_0_id = 'lpu_0'
+    lpu_0 = LPU(dt, n_dict_0, s_dict_0,
+               input_file='./data/generic_lpu_0_input.h5',
+               output_file='generic_lpu_0_%s_output.h5' % out_name,
                port_ctrl=port_ctrl, port_data=port_data,
-               device=args.gpu_dev[0], id=ge_0_id,
+               device=args.gpu_dev[0], id=lpu_0_id,
                debug=args.debug)
-    man.add_mod(ge_0)
+    man.add_mod(lpu_0)
 
-    ge_1_id = 'ge_1'
-    ge_1 = LPU(dt, n_dict_1, s_dict_1,
-               input_file='./data/b_input.h5',
-               output_file='b_output_%s.h5' % out_name,
+    lpu_1_id = 'lpu_1'
+    lpu_1 = LPU(dt, n_dict_1, s_dict_1,
+               input_file='./data/generic_lpu_1_input.h5',
+               output_file='generic_lpu_1_%s_output.h5' % out_name,
                port_ctrl=port_ctrl, port_data=port_data,
-               device=args.gpu_dev[1], id=ge_1_id,
+               device=args.gpu_dev[1], id=lpu_1_id,
                debug=args.debug)
-    man.add_mod(ge_1)
+    man.add_mod(lpu_1)
 
     # Create random connections between the input and output ports if the LPUs
     # are to be connected:
     if connected:
 
         # Find all output and input port selectors in each LPU:
-        out_ports_0 = ge_0.interface.out_ports().to_selectors()
-        out_ports_1 = ge_1.interface.out_ports().to_selectors()
+        out_ports_0 = lpu_0.interface.out_ports().to_selectors()
+        out_ports_1 = lpu_1.interface.out_ports().to_selectors()
 
-        in_ports_0 = ge_0.interface.in_ports().to_selectors()
-        in_ports_1 = ge_1.interface.in_ports().to_selectors()
+        in_ports_0 = lpu_0.interface.in_ports().to_selectors()
+        in_ports_1 = lpu_1.interface.in_ports().to_selectors()
 
-        out_ports_spk_0 = ge_0.interface.out_ports().spike_ports().to_selectors()
-        out_ports_gpot_0 = ge_0.interface.out_ports().gpot_ports().to_selectors()
+        out_ports_spk_0 = lpu_0.interface.out_ports().spike_ports().to_selectors()
+        out_ports_gpot_0 = lpu_0.interface.out_ports().gpot_ports().to_selectors()
 
-        out_ports_spk_1 = ge_1.interface.out_ports().spike_ports().to_selectors()
-        out_ports_gpot_1 = ge_1.interface.out_ports().gpot_ports().to_selectors()
+        out_ports_spk_1 = lpu_1.interface.out_ports().spike_ports().to_selectors()
+        out_ports_gpot_1 = lpu_1.interface.out_ports().gpot_ports().to_selectors()
 
-        in_ports_spk_0 = ge_0.interface.in_ports().spike_ports().to_selectors()
-        in_ports_gpot_0 = ge_0.interface.in_ports().gpot_ports().to_selectors()
+        in_ports_spk_0 = lpu_0.interface.in_ports().spike_ports().to_selectors()
+        in_ports_gpot_0 = lpu_0.interface.in_ports().gpot_ports().to_selectors()
 
-        in_ports_spk_1 = ge_1.interface.in_ports().spike_ports().to_selectors()
-        in_ports_gpot_1 = ge_1.interface.in_ports().gpot_ports().to_selectors()
+        in_ports_spk_1 = lpu_1.interface.in_ports().spike_ports().to_selectors()
+        in_ports_gpot_1 = lpu_1.interface.in_ports().gpot_ports().to_selectors()
 
         # Initialize a connectivity pattern between the two sets of port
         # selectors:
@@ -136,14 +136,12 @@ def run(connected):
             pat.interface[src, 'type'] = 'gpot'
             pat.interface[dest, 'type'] = 'gpot'
 
-        man.connect(ge_0, ge_1, pat, 0, 1)
-        #import ipdb; ipdb.set_trace()
+        man.connect(lpu_0, lpu_1, pat, 0, 1)
 
     man.start(steps=args.steps)
     man.stop()
 
 random.seed(0)
-#run(True)
 with futures.ProcessPoolExecutor() as executor:
     for connected in [False, True]:
         executor.submit(run, connected)
