@@ -8,8 +8,8 @@ Notes
 Generate input files and LPU configurations by running
 
 cd data
-python gen_generic_lpu.py -s 1 generic_lpu_0.gexf.gz generic_input_0.h5
-python gen_generic_lpu.py -s 2 generic_lpu_1.gexf.gz generic_input_1.h5
+python gen_generic_lpu.py -s 1 -l a a.gexf.gz a_input_0.h5
+python gen_generic_lpu.py -s 2 -l b b.gexf.gz b_input_1.h5
 
 Other seed values may be specified, but note that some may result in a network
 that generates no meaningful responses to the input signal.
@@ -18,6 +18,7 @@ that generates no meaningful responses to the input signal.
 import argparse
 import futures
 import itertools
+import random
 
 import networkx as nx
 
@@ -25,9 +26,8 @@ import neurokernel.core as core
 import neurokernel.base as base
 from neurokernel.tools.comm import get_random_port
 
+import neurokernel.pattern as pattern
 from neurokernel.LPU.LPU import LPU
-
-import neurokernel.tools.graph
 
 dt = 1e-4
 dur = 1.0
@@ -69,15 +69,15 @@ def run(connected):
     man = core.Manager(port_data, port_ctrl)
     man.add_brok()
 
-    lpu_file_0 = './data/generic_lpu_0.gexf.gz'
-    lpu_file_1 = './data/generic_lpu_1.gexf.gz'
+    lpu_file_0 = './data/a.gexf.gz'
+    lpu_file_1 = './data/b.gexf.gz'
     (n_dict_0, s_dict_0) = LPU.lpu_parser(lpu_file_0)
     (n_dict_1, s_dict_1) = LPU.lpu_parser(lpu_file_1)
 
     ge_0_id = 'ge_0'
     ge_0 = LPU(dt, n_dict_0, s_dict_0,
-               input_file='./data/generic_input_0.h5',
-               output_file='generic_output_0_%s.h5' % out_name,
+               input_file='./data/a_input.h5',
+               output_file='a_output_%s.h5' % out_name,
                port_ctrl=port_ctrl, port_data=port_data,
                device=args.gpu_dev[0], id=ge_0_id,
                debug=args.debug)
@@ -85,49 +85,65 @@ def run(connected):
 
     ge_1_id = 'ge_1'
     ge_1 = LPU(dt, n_dict_1, s_dict_1,
-               input_file='./data/generic_input_1.h5',
-               output_file='generic_output_1_%s.h5' % out_name,
+               input_file='./data/b_input.h5',
+               output_file='b_output_%s.h5' % out_name,
                port_ctrl=port_ctrl, port_data=port_data,
                device=args.gpu_dev[1], id=ge_1_id,
                debug=args.debug)
     man.add_mod(ge_1)
 
-    # Connect the public neurons in the two LPUs:
-    df_neu_0, df_syn_0 = neurokernel.tools.graph.graph_to_df(nx.read_gexf(lpu_file_0))
-    df_neu_1, df_syn_1 = neurokernel.tools.graph.graph_to_df(nx.read_gexf(lpu_file_1))
-
-    # Number of public neurons in each LPU:
-    N_spike_0 = len(df_neu_0[(df_neu_0['spiking']==True)&(df_neu_0['public']==True)])
-    N_gpot_0 = len(df_neu_0[(df_neu_0['spiking']==False)&(df_neu_0['public']==True)])
-
-    N_spike_1 = len(df_neu_1[(df_neu_1['spiking']==True)&(df_neu_1['public']==True)])
-    N_gpot_1 = len(df_neu_1[(df_neu_1['spiking']==False)&(df_neu_1['public']==True)])
-
-    # Alpha function synaptic parameters:
-    alphasynapse_type_params = {'AlphaSynapse': ['ad', 'ar', 'gmax', 'id', 'class', 'conductance',
-                                                 'reverse']}
-
+    # Create random connections between the input and output ports if the LPUs
+    # are to be connected:
     if connected:
-        conn = core.Connectivity(N_gpot_0, N_spike_0, N_gpot_1, N_spike_1, 1,
-                                 ge_0.id, ge_1.id, alphasynapse_type_params)
-        for id, (i, j) in enumerate(itertools.product(xrange(N_spike_0), xrange(N_spike_1))):
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j] = 1
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'name'] = 'int_0to1_%s_%s' % (i, j)
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'model'] = 'AlphaSynapse'
 
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'ad'] = 0.19*1000
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'ar'] = 1.1*100
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'class'] = 0
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'conductance'] = True
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'gmax'] = 0.003
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'id'] = id
-            conn[ge_0_id, 'spike', i, ge_1_id, 'spike', j, 0, 'reverse'] = 0.065
+        # Find all output and input port selectors in each LPU:
+        out_ports_0 = ge_0.interface.out_ports().to_selectors()
+        out_ports_1 = ge_1.interface.out_ports().to_selectors()
 
-        man.connect(ge_0, ge_1, conn)
+        in_ports_0 = ge_0.interface.in_ports().to_selectors()
+        in_ports_1 = ge_1.interface.in_ports().to_selectors()
+
+        out_ports_spk_0 = ge_0.interface.out_ports().spike_ports().to_selectors()
+        out_ports_gpot_0 = ge_0.interface.out_ports().gpot_ports().to_selectors()
+
+        out_ports_spk_1 = ge_1.interface.out_ports().spike_ports().to_selectors()
+        out_ports_gpot_1 = ge_1.interface.out_ports().gpot_ports().to_selectors()
+
+        in_ports_spk_0 = ge_0.interface.in_ports().spike_ports().to_selectors()
+        in_ports_gpot_0 = ge_0.interface.in_ports().gpot_ports().to_selectors()
+
+        in_ports_spk_1 = ge_1.interface.in_ports().spike_ports().to_selectors()
+        in_ports_gpot_1 = ge_1.interface.in_ports().gpot_ports().to_selectors()
+
+        # Initialize a connectivity pattern between the two sets of port
+        # selectors:
+        pat = pattern.Pattern(','.join(out_ports_0+in_ports_0),
+                              ','.join(out_ports_1+in_ports_1))
+
+        # Create connections from the ports with identifiers matching the output
+        # ports of one LPU to the ports with identifiers matching the input
+        # ports of the other LPU:
+        N_conn_spk_0_1 = min(len(out_ports_spk_0), len(in_ports_spk_1))
+        N_conn_gpot_0_1 = min(len(out_ports_gpot_0), len(in_ports_gpot_1))
+        for src, dest in zip(random.sample(out_ports_spk_0, N_conn_spk_0_1), 
+                             random.sample(in_ports_spk_1, N_conn_spk_0_1)):
+            pat[src, dest] = 1
+            pat.interface[src, 'type'] = 'spike'
+            pat.interface[dest, 'type'] = 'spike'
+        for src, dest in zip(random.sample(out_ports_gpot_0, N_conn_gpot_0_1),
+                             random.sample(in_ports_gpot_1, N_conn_gpot_0_1)):
+            pat[src, dest] = 1
+            pat.interface[src, 'type'] = 'gpot'
+            pat.interface[dest, 'type'] = 'gpot'
+
+        man.connect(ge_0, ge_1, pat, 0, 1)
+        #import ipdb; ipdb.set_trace()
 
     man.start(steps=args.steps)
     man.stop()
 
+random.seed(0)
+#run(True)
 with futures.ProcessPoolExecutor() as executor:
     for connected in [False, True]:
         executor.submit(run, connected)
