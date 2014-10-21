@@ -6,16 +6,17 @@ Generate and run generic LPU on multiple GPUs.
 
 import argparse
 import itertools
+import random
 
-import numpy as np
 import networkx as nx
 
 import data.gen_generic_lpu as g
 
-from neurokernel.tools.graph import graph_to_df
+import neurokernel.core as core
+import neurokernel.base as base
 from neurokernel.tools.comm import get_random_port
-from neurokernel.base import setup_logger
-from neurokernel.core import Connectivity, Manager
+
+import neurokernel.pattern as pattern
 from neurokernel.LPU.LPU import LPU
 
 # Execution parameters:
@@ -60,7 +61,7 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = setup_logger(file_name, screen)
+logger = base.setup_logger(file_name, screen)
 
 # Set number of local and projection neurons in each LPU:
 N = args.num_lpus
@@ -93,12 +94,13 @@ for i, neu_num in neu_dict.iteritems():
     else:
         in_file_name = None
     lpu_file_name = 'generic_lpu_%s.gexf.gz' % i
-    out_file_name = 'generic_output_%s.h5' % i
-
-    g.create_lpu(lpu_file_name, *neu_num)
-    (n_dict, s_dict) = LPU.lpu_parser(lpu_file_name)
+    out_file_name = 'generic_lpu_%s_output.h5' % i
 
     id = 'lpu_%s' % i
+
+    g.create_lpu(lpu_file_name, id, *neu_num)
+    (n_dict, s_dict) = LPU.lpu_parser(lpu_file_name)
+
     lpu = LPU(dt, n_dict, s_dict, input_file=in_file_name,
               output_file=out_file_name,
               port_ctrl=port_ctrl, port_data=port_data,
@@ -113,51 +115,74 @@ for i, neu_num in neu_dict.iteritems():
 
     lpu_dict[i] = lpu_entry
 
-syn_params = {'AlphaSynapse': ['ad', 'ar', 'gmax', 'id', 'class', 'conductance', 'reverse']}
-
-man = Manager(port_data, port_ctrl)
+man = core.Manager(port_data, port_ctrl)
 man.add_brok()
+
+random.seed(0)
 
 # Since each connectivity pattern between two LPUs contains the synapses in both
 # directions, create connectivity patterns between each combination of LPU
 # pairs:
-for lpu_0, lpu_1 in itertools.combinations(lpu_dict.keys(), 2):
+for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
 
-    df_neu_0, df_syn_0 = graph_to_df(nx.read_gexf(lpu_dict[lpu_0]['lpu_file_name']))
-    df_neu_1, df_syn_1 = graph_to_df(nx.read_gexf(lpu_dict[lpu_1]['lpu_file_name']))
+    lpu_0 = lpu_dict[id_0]['lpu']
+    lpu_1 = lpu_dict[id_1]['lpu']
 
-    N_spike_0 = len(df_neu_0[(df_neu_0['spiking']==True)&(df_neu_0['public']==True)])
-    N_gpot_0 = len(df_neu_0[(df_neu_0['spiking']==False)&(df_neu_0['public']==True)])
+    # Find all output and input port selectors in each LPU:
+    out_ports_0 = lpu_0.interface.out_ports().to_selectors()
+    out_ports_1 = lpu_1.interface.out_ports().to_selectors()
 
-    N_spike_1 = len(df_neu_1[(df_neu_1['spiking']==True)&(df_neu_1['public']==True)])
-    N_gpot_1 = len(df_neu_1[(df_neu_1['spiking']==False)&(df_neu_1['public']==True)])
+    in_ports_0 = lpu_0.interface.in_ports().to_selectors()
+    in_ports_1 = lpu_1.interface.in_ports().to_selectors()
 
-    conn = Connectivity(N_gpot_0, N_spike_0, N_gpot_1, N_spike_1, 1,
-                        lpu_dict[lpu_0]['id'], lpu_dict[lpu_1]['id'],
-                        syn_params)
+    out_ports_spk_0 = lpu_0.interface.out_ports().spike_ports().to_selectors()
+    out_ports_gpot_0 = lpu_0.interface.out_ports().gpot_ports().to_selectors()
 
-    # Define synapses between spiking neurons in both directions:
-    for id_src, id_dest, N_spike_src, N_spike_dest in \
-      [(lpu_dict[lpu_0]['id'], lpu_dict[lpu_1]['id'], N_spike_0, N_spike_1),
-        (lpu_dict[lpu_1]['id'], lpu_dict[lpu_0]['id'], N_spike_1, N_spike_0)]:
-        id_start = 0
-        for id, (i, j) in enumerate(itertools.product(xrange(N_spike_src),
-                                                      xrange(N_spike_dest)), id_start):
-            conn[id_src, 'spike', i, id_dest, 'spike', j] = 1
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'name'] = \
-                'syn_%s:%s_%s:%s' % (id_src, i, id_dest, j)
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'model'] = 'AlphaSynapse'
+    out_ports_spk_1 = lpu_1.interface.out_ports().spike_ports().to_selectors()
+    out_ports_gpot_1 = lpu_1.interface.out_ports().gpot_ports().to_selectors()
 
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'ad'] = 0.19*1000
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'ar'] = 1.1*100
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'class'] = 0 # spike->spike            
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'conductance'] = True
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'gmax'] = 0.003
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'id'] = id
-            conn[id_src, 'spike', i, id_dest, 'spike', j, 0, 'reverse'] = 0.065
-        id_start = id+1
+    in_ports_spk_0 = lpu_0.interface.in_ports().spike_ports().to_selectors()
+    in_ports_gpot_0 = lpu_0.interface.in_ports().gpot_ports().to_selectors()
 
-    man.connect(lpu_dict[lpu_0]['lpu'], lpu_dict[lpu_1]['lpu'], conn)
+    in_ports_spk_1 = lpu_1.interface.in_ports().spike_ports().to_selectors()
+    in_ports_gpot_1 = lpu_1.interface.in_ports().gpot_ports().to_selectors()
+
+    # Initialize a connectivity pattern between the two sets of port
+    # selectors:
+    pat = pattern.Pattern(','.join(out_ports_0+in_ports_0),
+                          ','.join(out_ports_1+in_ports_1))
+
+    # Create connections from the ports with identifiers matching the output
+    # ports of one LPU to the ports with identifiers matching the input
+    # ports of the other LPU. First, define connections from LPU0 to LPU1:
+    N_conn_spk_0_1 = min(len(out_ports_spk_0), len(in_ports_spk_1))
+    N_conn_gpot_0_1 = min(len(out_ports_gpot_0), len(in_ports_gpot_1))
+    for src, dest in zip(random.sample(out_ports_spk_0, N_conn_spk_0_1), 
+                         random.sample(in_ports_spk_1, N_conn_spk_0_1)):
+        pat[src, dest] = 1
+        pat.interface[src, 'type'] = 'spike'
+        pat.interface[dest, 'type'] = 'spike'
+    for src, dest in zip(random.sample(out_ports_gpot_0, N_conn_gpot_0_1),
+                         random.sample(in_ports_gpot_1, N_conn_gpot_0_1)):
+        pat[src, dest] = 1
+        pat.interface[src, 'type'] = 'gpot'
+        pat.interface[dest, 'type'] = 'gpot'
+
+    # Next, define connections from LPU1 to LPU0:
+    N_conn_spk_1_0 = min(len(out_ports_spk_1), len(in_ports_spk_0))
+    N_conn_gpot_1_0 = min(len(out_ports_gpot_1), len(in_ports_gpot_0))
+    for src, dest in zip(random.sample(out_ports_spk_1, N_conn_spk_1_0), 
+                         random.sample(in_ports_spk_0, N_conn_spk_1_0)):
+        pat[src, dest] = 1
+        pat.interface[src, 'type'] = 'spike'
+        pat.interface[dest, 'type'] = 'spike'
+    for src, dest in zip(random.sample(out_ports_gpot_1, N_conn_gpot_1_0),
+                         random.sample(in_ports_gpot_0, N_conn_gpot_1_0)):
+        pat[src, dest] = 1
+        pat.interface[src, 'type'] = 'gpot'
+        pat.interface[dest, 'type'] = 'gpot'
+
+    man.connect(lpu_0, lpu_1, pat, 0, 1)
 
 man.start(steps=steps)
 man.stop()
