@@ -116,8 +116,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'extern': False
                 })
                 spk_in_id += 1
-                G.add_edge(i, idx, type='directed', attr_dict={
-                    'name': G.node[i]['name']+'-'+G.node[idx]['name'],
+                G.add_edge(idx, i, type='directed', attr_dict={
+                    'name': G.node[idx]['name']+'-'+G.node[i]['name'],
                     'model': 'AlphaSynapse',
                     'class': 0,
                     'conductance': True,
@@ -135,8 +135,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'extern': False
                 })
                 gpot_in_id += 1
-                G.add_edge(i, idx, type='directed', attr_dict={
-                    'name': G.node[i]['name']+'-'+G.node[idx]['name'],
+                G.add_edge(idx, i, type='directed', attr_dict={
+                    'name': G.node[idx]['name']+'-'+G.node[i]['name'],
                     'model': 'power_gpot_gpot',
                     'class': 3,
                     'conductance': True,
