@@ -208,6 +208,11 @@ class test_interface(TestCase):
         assert_frame_equal(i.data, j.io_inv.data)
 
     def test_is_compatible_sel_order(self):
+        """
+        Interfaces with individually compatible ports that are ordered in
+        different ways should still be deemed compatible.
+        """
+
         i = Interface('/foo[0:2],/bar[0:2]')
         i['/foo[0:2]', 'interface', 'io'] = [0, 'in']
         i['/bar[0:2]', 'interface', 'io'] = [0, 'out']
@@ -217,6 +222,11 @@ class test_interface(TestCase):
         assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_both_dirs(self):
+        """
+        It should be possible to define compatible interfaces containing both
+        input and output ports.
+        """
+
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
         i['/foo[2:4]', 'interface', 'io'] = [0, 'in']
@@ -226,6 +236,11 @@ class test_interface(TestCase):
         assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_both_dirs_types(self):
+        """
+        It should be possible to define compatible interfaces containing both
+        input and output ports with specified types.
+        """
+
         i = Interface('/foo[0:4]')
         i['/foo[0:2]'] = [0, 'out', 'gpot']
         i['/foo[2:4]'] = [0, 'in', 'spike']
@@ -249,6 +264,11 @@ class test_interface(TestCase):
         assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_with_nulls(self):
+        """
+        Interfaces can be compatible even if some of their ports do not have a
+        set input or output status.
+        """
+
         i = Interface('/foo[0:3]')
         i['/foo[0:2]', 'interface', 'io'] = [0, 'out']
         i['/foo[2]', 'interface'] = 0
@@ -258,6 +278,11 @@ class test_interface(TestCase):
         assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_with_nulls_types(self):
+        """
+        Interfaces can be compatible even if some of their ports do not have a
+        set type.
+        """
+
         i = Interface('/foo[0:3]')
         i['/foo[0:2]'] = [0, 'out', 'gpot']
         i['/foo[2]', 'interface'] = 0
@@ -265,6 +290,22 @@ class test_interface(TestCase):
         j['/foo[0:2]'] = [1, 'in', 'gpot']
         j['/foo[2]', 'interface'] = 1
         assert i.is_compatible(0, j, 1)
+
+    def test_is_compatible_subsets(self):
+        """
+        Interfaces that both share a subset of compatible ports can be deemed
+        compatible by setting the `allow_subsets` option of the compatibility test.
+        """
+
+        i = Interface('/foo[0:6]')
+        i['/foo[0:3]'] = [0, 'out', 'gpot']
+        i['/foo[3:6]'] = [0, 'out', 'spike']
+        j = Interface('/foo[0:6]')
+        j['/foo[0:2]'] = [1, 'in', 'gpot']
+        j['/foo[3:5]'] = [1, 'in', 'spike']
+        k = Interface('/foo[0:6]')
+        assert i.is_compatible(0, j, 1, True)
+        assert i.is_compatible(0, k, 1, True) == False
 
     def test_which_int_unset(self):
         i = Interface('/foo[0:4]')

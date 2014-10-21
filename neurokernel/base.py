@@ -246,8 +246,8 @@ class BaseModule(ControlledProcess):
 
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
-        assert self.interface.is_compatible(0, pat.interface, int_0)
-        assert m.interface.is_compatible(0, pat.interface, int_1)
+        assert self.interface.is_compatible(0, pat.interface, int_0, True)
+        assert m.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Check that no fan-in from different source modules occurs as a result
         # of the new connection by getting the union of all input ports for the
@@ -850,12 +850,12 @@ class Manager(object):
         self.logger.info('connecting modules {0} and {1}'
                          .format(m_0.id, m_1.id))
 
-        # Check compatibility of the interfaces exposed by the modules and the
-        # pattern:
+        # Check whether the interfaces exposed by the modules and the
+        # pattern share compatible subsets of ports:
         self.logger.info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(m_0.id, m_1.id))
-        assert m_0.interface.is_compatible(0, pat.interface, int_0)
-        assert m_1.interface.is_compatible(0, pat.interface, int_1)
+        assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
+        assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Add the module and pattern instances to the internal dictionaries of
         # the manager instance if they are not already there:
