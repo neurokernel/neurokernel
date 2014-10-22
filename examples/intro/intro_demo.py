@@ -1,4 +1,4 @@
->#!/usr/bin/env python
+#!/usr/bin/env python
 
 """
 Introductory Neurokernel demo
