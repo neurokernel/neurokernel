@@ -66,6 +66,8 @@ class LPU(Module, object):
     debug : boolean
         Passed to all the neuron and synapse objects instantiated by this LPU
         for debugging purposes. False by default.
+    cuda_verbose : boolean
+        If True, compile kernels with option '--ptxas-options=-v'.
     """
 
     @staticmethod
@@ -193,15 +195,16 @@ class LPU(Module, object):
                 s_dict[model][key].append(syn[2][key])
             s_dict[model]['pre'].append(syn[0])
             s_dict[model]['post'].append(syn[1])
-        for val in s_dict.itervalues(): 
+        for val in s_dict.itervalues():
             val.pop('model')
-        if not s_dict: 
+        if not s_dict:
             s_dict = {}
         return n_dict, s_dict
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
-                 device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA, 
-                 id=None, debug=False, columns = ['io', 'type', 'interface']):
+                 device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA,
+                 id=None, debug=False, columns = ['io', 'type', 'interface'],
+                 cuda_verbose=False):
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
@@ -209,6 +212,10 @@ class LPU(Module, object):
         self.dt = dt
         self.debug = debug
         self.device = device
+        if cuda_verbose:
+            self.compile_options = ['--ptxas-options=-v']
+        else:
+            self.compile_options = []
 
         # handle file I/O
         self.output_file = output_file
@@ -632,16 +639,16 @@ class LPU(Module, object):
         """
         if len(self.out_ports_ids_gpot) > 0:
             self._extract_gpot.prepared_async_call(
-                self.grid_extract_gpot, 
+                self.grid_extract_gpot,
                 self.block_extract, st, self.V.gpudata,
-                self.out_port_data_gpot.gpudata, 
+                self.out_port_data_gpot.gpudata,
                 self.out_ports_ids_gpot_g.gpudata,
                 self.num_public_gpot)
         if len(self.out_ports_ids_spk) > 0:
             self._extract_spike.prepared_async_call(
-                self.grid_extract_spike, 
+                self.grid_extract_spike,
                 self.block_extract, st, self.spike_state.gpudata,
-                self.out_port_data_spk.gpudata, 
+                self.out_port_data_spk.gpudata,
                 self.out_ports_ids_spk_g.gpudata,
                 len(self.out_ports_ids_spk))
 
@@ -673,22 +680,22 @@ class LPU(Module, object):
             cuda.memcpy_dtod(
                 int(int(self.synapse_state.gpudata) +
                 self.total_synapses*self.synapse_state.dtype.itemsize),
-                int(int(self.I_ext.gpudata) + 
+                int(int(self.I_ext.gpudata) +
                 self.frame_count*self.I_ext.ld*self.I_ext.dtype.itemsize),
                 self.num_input*self.synapse_state.dtype.itemsize)
             self.frame_count += 1
         else:
-            self.logger.info('Input end of file reached. ' 
+            self.logger.info('Input end of file reached. '
                              'Subsequent behaviour is undefined.')
         # if all buffer frames were read from file
         if self.frame_count >= self._one_time_import and not self.input_eof:
             input_ld = self.input_h5file.root.array.shape[0]
             if input_ld - self.file_pointer < self._one_time_import:
-                h_ext = self.input_h5file.root.array.read(self.file_pointer, 
+                h_ext = self.input_h5file.root.array.read(self.file_pointer,
                                                           input_ld)
             else:
                 h_ext = self.input_h5file.root.array.read(
-                    self.file_pointer, 
+                    self.file_pointer,
                     self.file_pointer + self._one_time_import)
             if h_ext.shape[0] == self.I_ext.shape[0]:
                 self.I_ext.set(h_ext)
@@ -701,10 +708,9 @@ class LPU(Module, object):
                 h_ext = np.concatenate((h_ext, np.zeros(pad_shape)), axis=0)
                 self.I_ext.set(h_ext)
                 self.file_pointer = input_ld
-                
+
             if self.file_pointer == self.input_h5file.root.array.shape[0]:
                 self.input_eof = True
-                    
 
     #TODO
     def _update_buffer(self):
@@ -739,8 +745,8 @@ class LPU(Module, object):
         }
 
         """
-        mod = SourceModule(template % {"type": dtype_to_ctype(self.V.dtype)}, 
-                           options = ["--ptxas-options=-v"])
+        mod = SourceModule(template % {"type": dtype_to_ctype(self.V.dtype)},
+                           options=self.compile_options)
         func = mod.get_function("extract_projection")
         func.prepare([np.intp, np.intp, np.intp, np.int32])
         self.block_extract = (256, 1, 1)
@@ -748,12 +754,11 @@ class LPU(Module, object):
                             (self.num_public_gpot-1) / 256 + 1), 1)
         return func
 
-
     #TODO
     def _extract_projection_spike_func(self):
         template = """
-        __global__ void extract_projection(%(type)s* all_V, 
-                                           %(type)s* projection_V, 
+        __global__ void extract_projection(%(type)s* all_V,
+                                           %(type)s* projection_V,
                                            int* projection_list, int N)
         {
               int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -769,8 +774,8 @@ class LPU(Module, object):
 
         """
         mod = SourceModule(
-            template % {"type": dtype_to_ctype(self.spike_state.dtype)}, 
-            options = ["--ptxas-options=-v"])
+            template % {"type": dtype_to_ctype(self.spike_state.dtype)},
+            options=self.compile_options)
         func = mod.get_function("extract_projection")
         func.prepare([np.intp, np.intp, np.intp, np.int32])
         self.block_extract = (256, 1, 1)
