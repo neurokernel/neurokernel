@@ -8,8 +8,6 @@ import argparse
 import itertools
 import random
 
-import networkx as nx
-
 import data.gen_generic_lpu as g
 
 import neurokernel.core as core
