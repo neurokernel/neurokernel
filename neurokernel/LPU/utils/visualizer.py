@@ -366,12 +366,13 @@ class visualizer(object):
                                                   facecolors=colors, antialiased=False,
                                                   shade=False)
                     
-                    for key in config.iterkeys():
-                        if key not in keywds:
-                            try:
-                                self._set_wrapper(config['handle'],key, config[key])
-                            except:
-                                pass
+                for key in config.iterkeys():
+                    if key not in keywds:
+                        try:
+                            self._set_wrapper(config['handle'],key, config[key])
+                        except:
+                            pass
+                
                 if config['type']<3:
                     config['handle'].axes.set_xticks([])
                     config['handle'].axes.set_yticks([])
