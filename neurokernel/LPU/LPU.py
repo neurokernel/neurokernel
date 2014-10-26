@@ -687,7 +687,7 @@ class LPU(Module, object):
         else:
             self.logger.info('Input end of file reached. '
                              'Subsequent behaviour is undefined.')
-        # if all buffer frames were read from file
+        # if all buffer frames were read, read from file
         if self.frame_count >= self._one_time_import and not self.input_eof:
             input_ld = self.input_h5file.root.array.shape[0]
             if input_ld - self.file_pointer < self._one_time_import:
