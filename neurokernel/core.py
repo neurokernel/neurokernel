@@ -542,7 +542,7 @@ if __name__ == '__main__':
                                                          m1_int_sel_out_gpot]))
         N1_spike = PathLikeSelector.count_ports(','.join([m1_int_sel_in_spike,
                                                           m1_int_sel_out_spike]))
-        m1 = MyModule(m1_int_sel, 
+        m1 = MyModule(m1_int_sel,
                       m1_int_sel_in_gpot, m1_int_sel_in_spike,
                       m1_int_sel_out_gpot, m1_int_sel_out_spike,
                       np.zeros(N1_gpot, np.float64),
@@ -566,7 +566,7 @@ if __name__ == '__main__':
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
                       man.port_data, man.port_ctrl, 'm2')
-                                             
+
         # Make sure that all ports in the patterns' interfaces are set so 
         # that they match those of the modules:
         pat12 = Pattern(m1_int_sel, m2_int_sel)
@@ -595,7 +595,7 @@ if __name__ == '__main__':
         # time.sleep(2)
         man.stop()
         return m1
-        
+
     # Set up logging:
     logger = setup_logger(screen=False)
     steps = 100
