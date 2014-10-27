@@ -30,23 +30,44 @@ def format_name(name, width=20):
 
     return ('{name:%s}' % width).format(name=name)
 
-def log_exception(type, value, tb, multiline=False):
+def log_exception(type, value, tb, logger=twiggy.log, multiline=False):
     """
     Log the specified exception data using twiggy.
 
-    Notes
-    -----
-    Logs the exception data on multiple lines if `multiline` is set to True.
+    Parameters
+    ----------
+    value, tb : object
+        Parameters expected by traceback.print_exception.
+    logger : twiggy.logger.Logger
+        Logger to use. twiggy.log is assumed by default.
+    multiline : bool
+        If True, print exception using multiple log lines.
     """
 
     if multiline:
         for x in traceback.format_exception(type, value, tb)[1:]:
-            for y in x.strip('\n ').split('\n'):                
-                twiggy.log.error(y)
+            for y in x.strip('\n ').split('\n'):
+                logger.error(y)
     else:
         msg = '|'.join([': '.join([y.strip() for y in x.strip('\n ').split('\n')]) for x in \
                         traceback.format_exception(type, value, tb)[1:]])
-        twiggy.log.error('Uncaught exception: %s' % str(msg))
+        logger.error('Uncaught exception: %s' % str(msg))
+
+def set_excepthook(logger, multiline=False):
+    """
+    Set the exception hook to use the specified logger.
+
+    Parameters
+    ----------
+    logger : twiggy.logger.Logger
+        Configured logger.
+    multiline : bool
+        If True, log exception messages on multiple lines.
+
+    """
+
+    sys.excepthook = \
+        lambda type, value, tb: log_exception(type, value, tb, logger, multiline)
 
 def setup_logger(name='', level=twiggy.levels.DEBUG,
                  fmt=twiggy.formats.line_format,
@@ -87,15 +108,15 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
 
     if stdout:
         stdout_output = \
-          twiggy.outputs.StreamOutput(fmt, stream=stdout)   
+          twiggy.outputs.StreamOutput(fmt, stream=stdout)
         twiggy.addEmitters(('stdout', level, None, stdout_output))
 
     if sock:
         port_output = ZMQOutput(sock, fmt)
         twiggy.addEmitters(('sock', level, None, sock_output))
 
+    logger = twiggy.log.name(format_name(name))
     if log_exceptions:
-        sys.excepthook = \
-            lambda type, value, tb: log_exception(type, value, tb, multiline)
+        set_excepthook(logger, multiline)
 
-    return twiggy.log.name(format_name(name))
+    return logger

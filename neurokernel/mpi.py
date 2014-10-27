@@ -16,7 +16,7 @@ import shortuuid
 import twiggy
 import zmq
 
-from tools.logging import format_name, setup_logger
+from tools.logging import format_name, setup_logger, set_excepthook
 
 def getargnames(f):
     """
@@ -31,7 +31,7 @@ def getargnames(f):
     -------
     args : list of str
         Argument names.
-    
+
     Notes
     -----
     For instance methods, the `self` argument is omitted.
@@ -93,9 +93,9 @@ class PollerChecker(object):
         self._poller.register(sock, direction)
 
     def check(self, timeout=None):
-        """                                               
+        """
         Check for I/O.
-             
+
         Parameters
         ----------
         timeout : float, int
@@ -130,6 +130,7 @@ class Worker(object):
     def __init__(self, data_tag=0, ctrl_tag=1):
         rank = MPI.COMM_WORLD.Get_rank()
         self.logger = twiggy.log.name(format_name('worker %s' % rank))
+        set_excepthook(self.logger, True)
 
         # Tags used to distinguish MPI messages:
         self._data_tag = data_tag
@@ -242,6 +243,7 @@ class Manager(object):
             self.logger = twiggy.log.name(format_name('master/manager'))
         else:
             self.logger = twiggy.log.name(format_name('worker %s/manager' % MPI.COMM_WORLD.Get_rank()))
+        set_excepthook(self.logger, True)
 
         # Tags used to distinguish MPI messages:
         self._data_tag = data_tag
@@ -351,12 +353,13 @@ class Manager(object):
         python_path = sys.executable
         script_name = os.path.basename(__file__)
         self._mpiexec_proc = subprocess.Popen((self._mpiexec,)+self._mpiargs+\
-                                              ('-np', str(self._rank), 
+                                              ('-np', str(self._rank),
                                                python_path, script_name),
                                               stdout=sys.stdout,
                                               stderr=sys.stderr,
                                               stdin=sys.stdin,
                                               env=env)
+        self.logger.info('application launched')
 
         # Synchronize connection:
         while True:
