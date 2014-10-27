@@ -246,8 +246,8 @@ class BaseModule(ControlledProcess):
 
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
-        assert self.interface.is_compatible(0, pat.interface, int_0)
-        assert m.interface.is_compatible(0, pat.interface, int_1)
+        assert self.interface.is_compatible(0, pat.interface, int_0, True)
+        assert m.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Check that no fan-in from different source modules occurs as a result
         # of the new connection by getting the union of all input ports for the
@@ -850,12 +850,12 @@ class Manager(object):
         self.logger.info('connecting modules {0} and {1}'
                          .format(m_0.id, m_1.id))
 
-        # Check compatibility of the interfaces exposed by the modules and the
-        # pattern:
+        # Check whether the interfaces exposed by the modules and the
+        # pattern share compatible subsets of ports:
         self.logger.info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(m_0.id, m_1.id))
-        assert m_0.interface.is_compatible(0, pat.interface, int_0)
-        assert m_1.interface.is_compatible(0, pat.interface, int_1)
+        assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
+        assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Add the module and pattern instances to the internal dictionaries of
         # the manager instance if they are not already there:
@@ -940,17 +940,19 @@ class Manager(object):
 
         self.steps = steps
         with IgnoreKeyboardInterrupt():
-            bi = 0
-            mi = 0
+            bi = 1
+            mi = 1
             for b in self.brokers.values():
-                self.logger.info(str(bi) + ' broker about to start')
+                self.logger.info('broker ' + str(bi) + ' about to start')
                 b.start()
-                self.logger.info(str(bi) + ' started')
+                self.logger.info('broker ' + str(bi) + ' started')
+                bi+=1
             for m in self.modules.values():
                 m.steps = steps
-                self.logger.info(str(mi) + ' module about to start')
+                self.logger.info('module ' + str(mi) + ' about to start')
                 m.start()
-                self.logger.info(str(mi) + ' module started')
+                self.logger.info('module ' + str(mi) + ' started')
+                mi+=1
 
     def send_ctrl_msg(self, i, *msg):
         """
@@ -1091,8 +1093,8 @@ if __name__ == '__main__':
             assert PathLikeSelector.is_in(sel_out, sel)
             assert PathLikeSelector.are_disjoint(sel_in, sel_out)
 
-            self.interface[sel_in, 'io'] = 'in'            
-            self.interface[sel_out, 'io'] = 'out'
+            self.interface[sel_in, 'io', 'type'] = ['in', 'x']
+            self.interface[sel_out, 'io', 'type'] = ['out', 'x']
 
         def run_step(self):
             super(MyModule, self).run_step()
@@ -1106,12 +1108,6 @@ if __name__ == '__main__':
             self.pm[out_ports] = np.random.rand(len(out_ports))
             self.logger.info('output port data: '+str(self.pm[out_ports]))
 
-        def run(self):
-
-            # Make every class instance generate a different pseudorandom sequence:
-            np.random.seed(id(self))
-            super(MyModule, self).run()
-            
     # Set up logging:
     logger = setup_logger()
 
@@ -1142,29 +1138,29 @@ if __name__ == '__main__':
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:
     pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12.interface[m1_int_sel_out, 'io'] = 'in'
-    pat12.interface[m1_int_sel_in, 'io'] = 'out'
-    pat12.interface[m2_int_sel_in, 'io'] = 'out'
-    pat12.interface[m2_int_sel_out, 'io'] = 'in'
+    pat12.interface[m1_int_sel_out] = [0, 'in', 'x']
+    pat12.interface[m1_int_sel_in] = [0, 'out', 'x']
+    pat12.interface[m2_int_sel_in] = [1, 'out', 'x']
+    pat12.interface[m2_int_sel_out] = [1, 'in', 'x']
     pat12['/a[2]', '/b[0]'] = 1
     pat12['/a[3]', '/b[1]'] = 1
     pat12['/b[3]', '/a[0]'] = 1
     man.connect(m1, m2, pat12, 0, 1)
 
     pat23 = Pattern(m2_int_sel, m3_int_sel)
-    pat23.interface[m2_int_sel_out, 'io'] = 'in'
-    pat23.interface[m2_int_sel_in, 'io'] = 'out'
-    pat23.interface[m3_int_sel_in, 'io'] = 'out'
-    pat23.interface[m3_int_sel_out, 'io'] = 'in'
+    pat23.interface[m2_int_sel_out] = [0, 'in', 'x']
+    pat23.interface[m2_int_sel_in] = [0, 'out', 'x']
+    pat23.interface[m3_int_sel_in] = [1, 'out', 'x']
+    pat23.interface[m3_int_sel_out] = [1, 'in', 'x']
     pat23['/b[4]', '/c[0]'] = 1
     pat23['/c[2]', '/b[2]'] = 1
     man.connect(m2, m3, pat23, 0, 1)
 
     pat31 = Pattern(m3_int_sel, m1_int_sel)
-    pat31.interface[m3_int_sel_out, 'io'] = 'in'
-    pat31.interface[m1_int_sel_in, 'io'] = 'out'
-    pat31.interface[m3_int_sel_in, 'io'] = 'out'
-    pat31.interface[m1_int_sel_out, 'io'] = 'in'
+    pat31.interface[m3_int_sel_out] = [0, 'in', 'x']
+    pat31.interface[m1_int_sel_in] = [1, 'out', 'x']
+    pat31.interface[m3_int_sel_in] = [0, 'out', 'x']
+    pat31.interface[m1_int_sel_out] = [1, 'in', 'x']
     pat31['/c[3]', '/a[1]'] = 1
     pat31['/a[4]', '/c[1]'] = 1
     man.connect(m3, m1, pat31, 0, 1)

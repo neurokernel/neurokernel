@@ -446,7 +446,7 @@ class Interface(object):
             except:
                 return Interface()
 
-    def is_compatible(self, a, i, b):
+    def is_compatible(self, a, i, b, allow_subsets=False):
         """
         Check whether two interfaces can be connected.
 
@@ -461,6 +461,10 @@ class Interface(object):
             Interface instance containing the other interface.
         b : int
             Identifier of interface in instance `i`.
+        allow_subsets : bool
+            If True, interfaces that contain a compatible subset of ports are
+            deemed to be compatible; otherwise, all ports in the two interfaces
+            must be compatible.
 
         Returns
         -------
@@ -485,28 +489,51 @@ class Interface(object):
                                left_index=True,
                                right_index=True)
 
-        # If one interface contains identifiers not in the other, they are
-        # incompatible:
-        if len(data_merged) < max(len(self.data[self.data['interface'] == a]),
-                                  len(i.data[i.data['interface'] == b])):
-            return False
+        # Check whether there are compatible subsets, i.e., at least one pair of
+        # ports from the two interfaces that are compatible with each other:
+        if allow_subsets:
 
-        # If the 'type' attributes of the same identifiers in each interfaces
-        # are not equivalent, they are incompatible:
-        if not data_merged.apply(lambda row: (row['type_x'] == row['type_y']) or \
+            # If the interfaces share no identical port identifiers, they are
+            # incompatible:
+            if not len(data_merged):
+                return False
+
+            # Compatible identifiers must have the same 'type' attribute
+            # and their 'io' attributes must be the inverse of each other;:
+            if not data_merged.apply(lambda row: \
+                    (row['type_x'] == row['type_y']) and \
+                    ((row['io_x'] == 'out' and row['io_y'] == 'in') or \
+                     (row['io_x'] == 'in' and row['io_y'] == 'out')),
+                                     axis=1).any():
+                return False
+
+        # Require that all ports in the two interfaces be compatible:
+        else:
+            
+            # If one interface contains identifiers not in the other, they are
+            # incompatible:
+            if len(data_merged) < max(len(self.data[self.data['interface'] == a]),
+                                      len(i.data[i.data['interface'] == b])):
+                return False
+
+            # If the 'type' attributes of the same identifiers in each
+            # interfaces are not equivalent, they are incompatible:
+            if not data_merged.apply(lambda row: \
+                    (row['type_x'] == row['type_y']) or \
                     (pd.isnull(row['type_x']) and pd.isnull(row['type_y'])),
-                                 axis=1).all():
-            return False
+                                     axis=1).all():
+                return False
 
-        # If the 'io' attributes of the same identifiers in each interfaces
-        # are not the inverse of each other, they are incompatible:
-        if not data_merged.apply(lambda row: (row['io_x'] == 'out' and \
-                                              row['io_y'] == 'in') or \
-                                 (row['io_x'] == 'in' and \
-                                  row['io_y'] == 'out') or \
-                                 (pd.isnull(row['io_x']) and pd.isnull(row['io_y'])),
-                                 axis=1).all():
-            return False
+            # If the 'io' attributes of the same identifiers in each interfaces
+            # are not the inverse of each other, they are incompatible:
+            if not data_merged.apply(lambda row: \
+                    (row['io_x'] == 'out' and row['io_y'] == 'in') or \
+                    (row['io_x'] == 'in' and row['io_y'] == 'out') or \
+                    (pd.isnull(row['io_x']) and pd.isnull(row['io_y'])),
+                                     axis=1).all():
+                return False
+
+        # All tests passed:
         return True
 
     def is_in_interfaces(self, s):
@@ -646,7 +673,7 @@ class Interface(object):
         for t in ids:
             selector = ''
             for s in t:
-                if type(s) == str:
+                if type(s) in [str, unicode]:
                     selector += '/'+s
                 else:
                     selector += '[%s]' % s

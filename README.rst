@@ -8,8 +8,15 @@ Package Description
 Neurokernel is a Python framework for developing models of 
 the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
+.. image:: http://prime4commit.com/projects/98.svg
+    :target: http://prime4commit.com/projects/98
+    :alt: Support the project
+
 Quick Start
 -----------
+Neurokernel requires at least one NVIDIA GPU and `CUDA 
+<http://www.nvidia.com/object/cuda_home_new.html>`_.
+
 Make sure you have `pip <http://pip.pypa.io>`_ installed (preferably
 in a `virtualenv <http://virtualenv.pypa.io>`_); once you do, install the
 following dependencies as follows::
@@ -18,7 +25,10 @@ following dependencies as follows::
   pip install cython
   pip install numexpr
   pip install tables
-  
+
+You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
+<http://libav.org>`_ installed to generate some of the demo visualizations.
+
 Run the following to install the remaining dependencies and the 
 latest Neurokernel code::
 
@@ -40,6 +50,12 @@ it)::
 Check out the demos in ``neurokernel/examples`` subdirectory and 
 their corresponding `IPython notebooks <http://ipython.org/notebook.html>`_ 
 in ``neurokernel/notebooks``.
+
+Supported Platforms
+-------------------
+Neurokernel has been tested and installed on Linux. It may run on other
+platforms too; if you encounter problems, submit a bug report on
+`GitHub <https://github.com/neurokernel/neurokernel/issues>`_.
 
 More Information
 ----------------

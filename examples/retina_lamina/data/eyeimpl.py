@@ -90,10 +90,10 @@ class EyeGeomImpl(NeuronGeometry):
         self._init_neurons()
         
         # find first and last lpu according to the order they are connected
-        first_lpu = LPU_ORDER['m']
-        last_lpu = LPU_ORDER['r']
+        first_lpu = self.LPU_ORDER['m']
+        last_lpu = self.LPU_ORDER['r']
         for c in model:
-            ord_c = LPU_ORDER[c]
+            ord_c = self.LPU_ORDER[c]
             if ord_c < first_lpu:
                 first_lpu = ord_c
             if ord_c > last_lpu:
@@ -104,11 +104,11 @@ class EyeGeomImpl(NeuronGeometry):
         self._first_lpu = first_lpu
         self._last_lpu = last_lpu
 
-        if first_lpu <= LPU_ORDER['r'] and last_lpu >= LPU_ORDER['r']:
+        if first_lpu <= self.LPU_ORDER['r'] and last_lpu >= self.LPU_ORDER['r']:
             self._generate_retina()
-        if first_lpu <= LPU_ORDER['l'] and last_lpu >= LPU_ORDER['l']:
+        if first_lpu <= self.LPU_ORDER['l'] and last_lpu >= self.LPU_ORDER['l']:
             self._generate_lamina()
-        if first_lpu <= LPU_ORDER['m'] and last_lpu >= LPU_ORDER['m']:
+        if first_lpu <= self.LPU_ORDER['m'] and last_lpu >= self.LPU_ORDER['m']:
             self._generate_medulla()
             
     @staticmethod
@@ -1113,7 +1113,7 @@ class EyeGeomImpl(NeuronGeometry):
 
     # TODO KP is use of -1 and 1 consistent? use only one of them maybe?
     def connect_retina_lamina(self, manager, ret_lpu, lam_lpu, from_file=False):
-        if first_lpu > LPU_ORDER['r'] or last_lpu < LPU_ORDER['l']:
+        if self._first_lpu > self.LPU_ORDER['r'] or self._last_lpu < self.LPU_ORDER['l']:
             return
         if not from_file:
             #.values or .tolist()
@@ -1152,7 +1152,7 @@ class EyeGeomImpl(NeuronGeometry):
         manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
 
     def connect_lamina_medulla(self, manager, lam_lpu, med_lpu, from_file=False):
-        if first_lpu > LPU_ORDER['l'] or last_lpu < LPU_ORDER['m']:
+        if self._first_lpu > self.LPU_ORDER['l'] or self._last_lpu < self.LPU_ORDER['m']:
             return
         if not from_file:
             #.values or .tolist()
@@ -1449,15 +1449,15 @@ class EyeGeomImpl(NeuronGeometry):
 
 
     def write_retina(self, output_file):
-        if first_lpu <= LPU_ORDER['r'] and last_lpu >= LPU_ORDER['r']:
+        if self._first_lpu <= self.LPU_ORDER['r'] and self._last_lpu >= self.LPU_ORDER['r']:
             nx.write_gexf(self._retina_graph, output_file)
 
     def write_lamina(self, output_file):
-        if first_lpu <= LPU_ORDER['l'] and last_lpu >= LPU_ORDER['l']:
+        if self._first_lpu <= self.LPU_ORDER['l'] and self._last_lpu >= self.LPU_ORDER['l']:
             nx.write_gexf(self._lamina_graph, output_file)
 
     def write_medulla(self, output_file):
-        if first_lpu <= LPU_ORDER['m'] and last_lpu >= LPU_ORDER['m']:
+        if self._first_lpu <= self.LPU_ORDER['m'] and self._last_lpu >= self.LPU_ORDER['m']:
             nx.write_gexf(self._medulla_graph, output_file)
 
     def _getconfig(self,config, key, default):

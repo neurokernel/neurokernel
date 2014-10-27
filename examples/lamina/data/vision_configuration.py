@@ -506,6 +506,10 @@ class Neuron(object):
         self.params.update({'n_dendrites': len(self.incoming_synapses),
                             'n_outputs': len(self.outgoing_synapses)})
         if 'dummy' in self.params.keys():
+            if self.params['dummy'] == 0:
+                # num is different for every neuron
+                selector = '/ret/{0}'.format(self.num)
+                self.params['selector'] = selector
             del self.params['dummy']
         if 'columnar' in self.params.keys():
             del self.params['columnar']

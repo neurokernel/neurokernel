@@ -61,7 +61,8 @@ man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
 (n_dict, s_dict) = LPU.lpu_parser('./data/generic_lpu.gexf.gz')
-
+import sys
+sys.exit()
 ge = LPU(dt, n_dict, s_dict,
          input_file='./data/generic_input.h5',
          output_file='generic_output.h5', port_ctrl=port_ctrl,

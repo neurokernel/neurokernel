@@ -161,7 +161,7 @@ if not args.suppress:
         n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
         print('Initializing lamina LPU')
         lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-                      input_file=LAMINA_INPUT,
+                      input_file=LAM_INPUT,
                       output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
                       port_data=port_data, device=args.lam_dev, id='lamina',
                       debug=True)
@@ -172,7 +172,7 @@ if not args.suppress:
         n_dict_med, s_dict_med = LPU.lpu_parser(MED_GEXF_FILE)
         print('Initializing medulla LPU')
         lpu_med = LPU(dt, n_dict_med, s_dict_med,
-                      input_file=MEDULLA_INPUT,
+                      input_file=MED_INPUT,
                       output_file=MED_OUTPUT_FILE, port_ctrl=port_ctrl,
                       port_data=port_data, device=args.med_dev, id='medulla',
                       debug=True)
