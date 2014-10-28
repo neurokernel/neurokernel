@@ -313,14 +313,12 @@ class Manager(object):
         """
 
         # The contents of this method need to run on the launcher (so that it
-        # knows how many MPI processes to start) and the workers (so that they
-        # know how to instantiate their respective classes), but not on the master:
-        if self._is_master():
-            self.logger.info('in master - skipping add')
-            return
+        # knows how many MPI processes to start), the workers (so that they
+        # know how to instantiate their respective classes), and the master (so
+        # that it will be aware of all of the MPI processes):
         self.logger.info('adding class %s' % target.__name__)
-
         assert issubclass(target, Worker)
+
         rank = self._rank
         self._targets[rank] = target
         self._kwargs[rank] = args_to_dict(target.__init__, *args, **kwargs)
