@@ -3,42 +3,34 @@
 """
 Base Neurokernel classes.
 """
-
-from contextlib import contextmanager
+import pickle
 import copy
 import multiprocessing as mp
 import os
 import re
 import string
 import sys
-import threading
 import time
 import collections
 
 import bidict
+from mpi4py import MPI
 import numpy as np
-import scipy.sparse
-import scipy as sp
 import twiggy
-import zmq
-from zmq.eventloop.ioloop import IOLoop
-from zmq.eventloop.zmqstream import ZMQStream
-import msgpack_numpy as msgpack
 
-from ctrl_proc import ControlledProcess, LINGER_TIME
+import mpi
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from tools.comm import is_poll_in, get_random_port
 from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
 from pattern import Interface, Pattern
 from plsel import PathLikeSelector, PortMapper
 
-PORT_DATA = 5000
-PORT_CTRL = 5001
+DATA_TAG = 0
+CTRL_TAG = 1
 
-class BaseModule(ControlledProcess):
+class BaseModule(mpi.Worker):
     """
     Processing module.
 
@@ -55,13 +47,13 @@ class BaseModule(ControlledProcess):
         of ports in a module's interface.    
     columns : list of str
         Interface port attributes.
-    port_data : int
-        Network port for transmitting data.
-    port_ctrl : int
         Network port for controlling the module instance.
     id : str
         Module identifier. If no identifier is specified, a unique 
         identifier is automatically generated.
+    routing_table : neurokernel.routing_table.RoutingTable
+        Routing table describing data connections between modules. If no routing
+        table is specified, the module will be executed in isolation.   
     debug : bool
         Debug flag. When True, exceptions raised during the work method
         are not be suppressed.
@@ -70,39 +62,11 @@ class BaseModule(ControlledProcess):
     ----------
     interface : Interface
         Object containing information about a module's ports.    
-    patterns : dict of Pattern
-        Pattern objects connecting the module instance with 
-        other module instances. Keyed on the ID of the other module 
-        instances.
-    pat_ints : dict of tuple of int
-        Interface of each pattern that is connected to the module instance.
-        Keyed on the ID of the other module instances.   
     pm : plsel.PortMapper
         Map between a module's ports and the contents of the `data` attribute.
     data : numpy.ndarray
         Array of data associated with a module's ports.
-
-    Notes
-    -----
-    If the network ports specified upon instantiation are None, the module
-    instance ignores the network entirely.
     """
-
-    # Define properties to perform validation when connectivity status
-    # is set:
-    _net = 'none'
-    @property
-    def net(self):
-        """
-        Network connectivity.
-        """
-        return self._net
-    @net.setter
-    def net(self, value):
-        if value not in ['none', 'ctrl', 'in', 'out', 'full']:
-            raise ValueError('invalid network connectivity value')
-        self.logger.info('net status changed: %s -> %s' % (self._net, value))
-        self._net = value
 
     # Define properties to perform validation when the maximum number of
     # execution steps set:
@@ -121,26 +85,29 @@ class BaseModule(ControlledProcess):
         self._steps = value
 
     def __init__(self, selector, data, columns=['interface', 'io', 'type'],
-                 port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
-                 id=None, debug=False):
+                 data_tag=DATA_TAG, ctrl_tag=CTRL_TAG,
+                 id=None, routing_table=None, rank_to_id=None, 
+                 debug=False):
+        super(BaseModule, self).__init__(data_tag, ctrl_tag)
         self.debug = debug
+
+        # Save routing table and mapping between MPI ranks and module IDs:
+        self.routing_table = routing_table
+        self.rank_to_id = rank_to_id
 
         # Generate a unique ID if none is specified:
         if id is None:
-            id = uid()
+            self.id = uid()
+        else:
 
-        super(BaseModule, self).__init__(port_ctrl, id)
-
+            # Save routing table; if a unique ID was specified, it must be a node in
+            # the routing table:
+            if routing_table is not None and not routing_table.has_node(id):
+                raise ValueError('routing table must contain specified module ID')
+            self.id = id
+                    
         # Logging:
-        self.logger = twiggy.log.name('module %s' % self.id)
-
-        # Data port:
-        if port_data == port_ctrl:
-            raise ValueError('data and control ports must differ')
-        self.port_data = port_data
-
-        # Initial network connectivity:
-        self.net = 'none'
+        self.logger = twiggy.log.name(mpi.format_name('module %s' % self.id))
 
         # Create module interface given the specified ports:
         self.interface = Interface(selector, columns)
@@ -153,316 +120,61 @@ class BaseModule(ControlledProcess):
         self.data = data
         self.pm = PortMapper(self.data, selector)
 
-        # Patterns connecting this module instance with other modules instances.
-        # Keyed on the IDs of those modules:
-        self.patterns = {}
-
-        # Each entry in pat_ints is a tuple containing the identifiers of which 
-        # of a pattern's identifiers are connected to the current module (first
-        # entry) and the modules to which it is connected (second entry).
-        # Keyed on the IDs of those modules:
-        self.pat_ints = {}
-
-        # Dict for storing incoming data; each entry (corresponding to each
-        # module that sends input to the current module) is a deque containing
-        # incoming data, which in turn contains transmitted data arrays. Deques
-        # are used here to accommodate situations when multiple data from a
-        # single source arrive:
-        self._in_data = {}
-
-        # List for storing outgoing data; each entry is a tuple whose first
-        # entry is the source or destination module ID and whose second entry is
-        # the data to transmit:
-        self._out_data = []
-
-        # Dictionary containing ports of source modules that
-        # send output to this module. Must be initialized immediately before
-        # an emulation begins running. Keyed on source module ID:
-        self._in_port_dict = {}
-
-        # Dictionary containing ports of destination modules that
-        # receive input from this module. Must be initialized immediately before
-        # an emulation begins running. Keyed on destination module ID:
-        self._out_port_dict = {}
-
-        self._out_ids = []
-        self._in_ids = []
-        
-    @property
-    def N_ports(self):
-        """
-        Number of ports exposed by module's interface.
-        """
-
-        return len(self.interface.ports())
-
-    @property
-    def all_ids(self):
-        """
-        IDs of modules to which the current module is connected.
-        """
-
-        return self.patterns.keys()
-
-    @property
-    def in_ids(self):
-        """
-        IDs of modules that send data to this module.
-        """
-
-        return [m for m in self.patterns.keys() \
-                if self.patterns[m].is_connected(self.pat_ints[m][1],
-                                                 self.pat_ints[m][0])]
-
-    @property
-    def out_ids(self):
-        """
-        IDs of modules that receive data from this module.
-        """
-
-        return [m for m in self.patterns.keys() \
-                if self.patterns[m].is_connected(self.pat_ints[m][0],
-                                                 self.pat_ints[m][1])]
-
-    def connect(self, m, pat, int_0, int_1):
-        """
-        Connect the current module instance to another module with a pattern instance.
-
-        Parameters
-        ----------
-        m : BaseModule
-            Module instance to connect.
-        pat : Pattern
-            Pattern instance.
-        int_0, int_1 : int
-            Which of the pattern's interface to connect to the current module
-            and the specified module, respectively.
-        """
-
-        assert isinstance(m, BaseModule)
-        assert isinstance(pat, Pattern)
-        assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
-        self.logger.info('connecting to %s' % m.id)
-
-        # Check compatibility of the interfaces exposed by the modules and the
-        # pattern:
-        assert self.interface.is_compatible(0, pat.interface, int_0, True)
-        assert m.interface.is_compatible(0, pat.interface, int_1, True)
-
-        # Check that no fan-in from different source modules occurs as a result
-        # of the new connection by getting the union of all input ports for the
-        # interfaces of all existing patterns connected to the current module
-        # and ensuring that the input ports from the new pattern don't overlap:
-        if self.patterns:
-            curr_in_ports = reduce(set.union, 
-                [set(self.patterns[i].in_ports(self.pat_ints[i][0]).to_tuples()) \
-                 for i in self.patterns.keys()])
-            assert curr_in_ports.intersection(pat.in_ports(int_0).to_tuples())
-            
-        # The pattern instances associated with the current
-        # module are keyed on the IDs of the modules to which they connect:
-        self.patterns[m.id] = pat
-        self.pat_ints[m.id] = (int_0, int_1)
-
-        # Update internal connectivity based upon contents of connectivity
-        # object. When this method is invoked, the module's internal
-        # connectivity is always upgraded to at least 'ctrl':
-        if self.net == 'none':
-            self.net = 'ctrl'
-        if pat.is_connected(int_0, int_1):
-            old_net = self.net
-            if self.net == 'ctrl':
-                self.net = 'out'
-            elif self.net == 'in':
-                self.net = 'full'
-            self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
-        if pat.is_connected(int_1, int_0):
-            old_net = self.net
-            if self.net == 'ctrl':
-                self.net = 'in'
-            elif self.net == 'out':
-                self.net = 'full'
-            self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
-
-    def _ctrl_stream_shutdown(self):
-        """
-        Shut down control port handler's stream and ioloop.
-        """
-
-        try:
-            self.stream_ctrl.flush()
-            self.stream_ctrl.stop_on_recv()
-            self.ioloop_ctrl.stop()
-        except IOError:
-            self.logger.info('streams already closed')
-        except:
-            self.logger.info('other error occurred')
-        else:
-            self.logger.info('ctrl stream shut down')
-
-    def _ctrl_handler(self, msg):
-        """
-        Control port handler.
-        """
-
-        self.logger.info('recv ctrl message: %s' % str(msg))
-        if msg[0] == 'quit':
-            self._ctrl_stream_shutdown()
-
-            # Force the module's main loop to exit:
-            self.running = False
-            ack = 'shutdown'
-
-        # One can define additional messages to be recognized by the control
-        # handler:        
-        # elif msg[0] == 'conn':
-        #     self.logger.info('conn payload: '+str(msgpack.unpackb(msg[1])))
-        #     ack = 'ack'
-        else:
-            ack = 'ack'
-
-        self.sock_ctrl.send(ack)
-        self.logger.info('sent to manager: %s' % ack)
-
-    def _init_net(self):
-        """
-        Initialize network connection.
-        """
-
-        # Initialize control port handler:
-        self.logger.info('initializing ctrl network connection')
-        super(BaseModule, self)._init_net()
-
-        if self.net == 'none':
-            self.logger.info('not initializing data network connection')
-        else:
-
-            # Don't allow interrupts to prevent the handler from
-            # completely executing each time it is called:
-            with IgnoreKeyboardInterrupt():
-                self.logger.info('initializing data network connection')
-
-                # Use a nonblocking port for the data interface; set
-                # the linger period to prevent hanging on unsent
-                # messages when shutting down:
-                self.sock_data = self.zmq_ctx.socket(zmq.DEALER)
-                self.sock_data.setsockopt(zmq.IDENTITY, self.id)
-                self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
-                self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-                self.logger.info('network connection initialized')
-
-                # Set up a poller for detecting incoming data:
-                self.data_poller = zmq.Poller()
-                self.data_poller.register(self.sock_data, zmq.POLLIN)
-
-    def _get_in_data(self):
-        """
-        Get input data from incoming transmission buffer.
-
-        Populate the data array associated with a module's ports using input
-        data received from other modules.
-        """
-
-        self.logger.info('retrieving from input buffer')
-
-        # Since fan-in is not permitted, the data from all source modules
-        # must necessarily map to different ports; we can therefore write each
-        # of the received data to the array associated with the module's ports
-        # here without worry of overwriting the data from each source module:
-        for in_id in self._in_ids:
-
-            # Check for exceptions so as to not fail on the first emulation
-            # step when there is no input data to retrieve:
-            try:
-                self.pm[self._in_port_dict[in_id]] = self._in_data[in_id].popleft()
-            except:
-                self.logger.info('no input data from [%s] retrieved' % in_id)
-            else:
-                self.logger.info('input data from [%s] retrieved' % in_id)
-
-    def _put_out_data(self):
-        """
-        Put output data in outgoing transmission buffer.
-
-        Stage data from the data array associated with a module's ports for
-        output to other modules.
-        """
-
-        self.logger.info('populating output buffer')
-
-        # Clear output buffer before populating it:
-        self._out_data = []
-
-        # Select data that should be sent to each destination module and append
-        # it to the outgoing queue:
-        for out_id in self._out_ids:
-            try:
-                self._out_data.append((out_id, self.pm[self._out_port_dict[out_id]]))
-            except:
-                self.logger.info('no output data to [%s] sent' % out_id)
-            else:
-                self.logger.info('output data to [%s] sent' % out_id)
-
     def _sync(self):
         """
         Send output data and receive input data.
-
-        Notes
-        -----
-        Assumes that the attributes used for input and output already
-        exist.
-
-        Each message is a tuple containing a module ID and data; for
-        outbound messages, the ID is that of the destination module.
-        for inbound messages, the ID is that of the source module.
-        Data is serialized before being sent and unserialized when
-        received.
         """
 
-        if self.net in ['none', 'ctrl']:
-            self.logger.info('not synchronizing with network')
-        else:
-            self.logger.info('synchronizing with network')
+        req = MPI.Request()
+        requests = []
+        received = []
+        idx_in_list = []
 
-            # Send outbound data:
-            if self.net in ['out', 'full']:
+        # Get destination module IDs:
+        dest_ids = self.routing_table.dest_ids(self.id)
 
-                # Send all data in outbound buffer:
-                send_ids = [out_id for out_id in self._out_ids]
-                for out_id, data in self._out_data:
-                    self.sock_data.send(msgpack.packb((out_id, data)))
-                    send_ids.remove(out_id)
-                    self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+        # For each destination, extract elements from the current module's data
+        # array, copy them to a contiguous array, and transmit the latter:
+        for dest_id in dest_ids:            
+            pat = self.routing_table[self.id, dest_id]['pattern']
+            int_0 = self.routing_table[self.id, dest_id]['int_0']
+            int_1 = self.routing_table[self.id, dest_id]['int_1']
 
-                # Send data tuples containing None to those modules for which no
-                # actual data was generated to satisfy the barrier condition:
-                for out_id in send_ids:
-                    self.sock_data.send(msgpack.packb((out_id, None)))
-                    self.logger.info('sent to   %s: %s' % (out_id, None))
+            idx_out = pat.dest_idx(int_0, int_1)
+            data = self.pm[idx_out]
+            dest_rank = self.rank_to_id[:dest_id]
+            r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
+                                     dest_rank)
+            requests.append(r)
+            self.logger.info('sending to %s' % dest_id)
+        self.logger.info('sent all data from %s' % self.id)
 
-                # All output IDs should be sent data by this point:
-                self.logger.info('sent data to all output IDs')
+        # Get source module IDs:
+        src_ids = self.routing_table.src_ids(self.id)
 
-            # Receive inbound data:
-            if self.net in ['in', 'full']:
+        # For each source, receive elements:
+        for src_id in src_ids:
+            pat = self.routing_table[self.id, dest_id]['pattern']
+            int_0 = self.routing_table[self.id, dest_id]['int_0']
+            int_1 = self.routing_table[self.id, dest_id]['int_1']
 
-                # Wait until inbound data is received from all source modules:  
-                while not all((q for q in self._in_data.itervalues())):
-                    # Use poller to avoid blocking:
-                    if is_poll_in(self.sock_data, self.data_poller):
-                        in_id, data = msgpack.unpackb(self.sock_data.recv())
-                        self.logger.info('recv from %s: %s ' % (in_id, str(data)))
+            idx_in = pat.src_idx(int_0, int_1)
+            data = np.empty(np.shape(idx_in), self.pm.dtype)
+            src_rank = self.rank_to_id[:src_id]
+            r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
+                                     source=src_rank)
+            requests.append(r)
+            received.append(data)
+            idx_in_list.append(idx_in)
+            self.logger.info('receiving from %s' % src_id)
+        req.Waitall(requests)
+        self.logger.info('received all data received by %s' % self.id)
 
-                        # Ignore incoming data containing None:
-                        if data is not None:
-                            self._in_data[in_id].append(data)
+        # Copy received elements into the current module's data array:
+        for data, idx_in in zip(received, idx_in_list):
+            self.pm[idx_in] = data
+        self.logger.info('saved all data received by %s' % self.id)
 
-                    # Stop the synchronization if a quit message has been received:
-                    if not self.running:
-                        self.logger.info('run loop stopped - stopping sync')
-                        break
-                self.logger.info('recv data from all input IDs')
-                
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
@@ -496,45 +208,6 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('running execution step')
 
-    def _init_port_dicts(self):
-        """
-        Initial dictionaries of source/destination ports in current module.
-        """
-
-        # Extract identifiers of source ports in the current module's interface
-        # for all modules receiving output from the current module:
-        self._out_port_dict = {}
-        self._out_ids = self.out_ids
-        for out_id in self._out_ids:
-            self.logger.info('extracting output ports for %s' % out_id)
-
-            # Get interfaces of pattern connecting the current module to
-            # destination module `out_id`; `from_int` is connected to the
-            # current module, `to_int` is connected to the other module:
-            from_int, to_int = self.pat_ints[out_id]
-
-            # Get ports in interface (`from_int`) connected to the current
-            # module that are connected to the other module via the pattern:
-            self._out_port_dict[out_id] = \
-                self.patterns[out_id].src_idx(from_int, to_int)
-
-        # Extract identifiers of destination ports in the current module's
-        # interface for all modules sending input to the current module:
-        self._in_port_dict = {}
-        self._in_ids = self.in_ids
-        for in_id in self._in_ids:
-            self.logger.info('extracting input ports for %s' % in_id)
-
-            # Get interfaces of pattern connecting the current module to
-            # source module `out_id`; `to_int` is connected to the current
-            # module, `from_int` is connected to the other module:
-            to_int, from_int = self.pat_ints[in_id]
-
-            # Get ports in interface (`to_int`) connected to the current
-            # module that are connected to the other module via the pattern:
-            self._in_port_dict[in_id] = \
-                self.patterns[in_id].dest_idx(from_int, to_int)
-
     def run(self):
         """
         Body of process.
@@ -543,17 +216,6 @@ class BaseModule(ControlledProcess):
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
-
-            # Initialize environment:
-            self._init_net()
-
-            # Initialize _out_port_dict and _in_port_dict attributes:
-            self._init_port_dicts()
-
-            # Initialize Buffer for incoming data.  Dict used to store the
-            # incoming data keyed by the source module id.  Each value is a
-            # queue buffering the received data:
-            self._in_data = {k: collections.deque() for k in self.in_ids}
 
             # Perform any pre-emulation operations:
             self.pre_run()
@@ -567,26 +229,15 @@ class BaseModule(ControlledProcess):
                 # errors will lead to visible failures:
                 if self.debug:
 
-                    # Get input data:
-                    self._get_in_data()
-
                     # Run the processing step:
                     self.run_step()
-
-                    # Prepare the generated data for output:
-                    self._put_out_data()
 
                     # Synchronize:
                     self._sync()
                 else:
-                    # Get input data:
-                    catch_exception(self._get_in_data, self.logger.info)
 
                     # Run the processing step:
                     catch_exception(self.run_step, self.logger.info)
-
-                    # Prepare the generated data for output:
-                    catch_exception(self._put_out_data, self.logger.info)
 
                     # Synchronize:
                     catch_exception(self._sync, self.logger.info)
@@ -610,567 +261,240 @@ class BaseModule(ControlledProcess):
 
         self.logger.info('exiting')
 
-class Broker(ControlledProcess):
-    """
-    Broker for communicating between modules.
-
-    Waits to receive data from all input modules before transmitting the
-    collected data to destination modules.
-
-    Parameters
-    ----------
-    port_data : int
-        Port to use for communication with modules.
-    port_ctrl : int
-        Port used to control modules.
-    routing_table : routing_table.RoutingTable
-        Directed graph of network connections between modules comprised by an
-        emulation.
-    """
-
-    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
-                 routing_table=None):
-        super(Broker, self).__init__(port_ctrl, uid())
-
-        # Logging:
-        self.logger = twiggy.log.name('broker %s' % self.id)
-
-        # Data port:
-        if port_data == port_ctrl:
-            raise ValueError('data and control ports must differ')
-        self.port_data = port_data
-
-        # Routing table:
-        self.routing_table = routing_table
-
-        # Buffers used to accumulate data to route:
-        self._data_to_route = []
-
-    def _ctrl_handler(self, msg):
-        """
-        Control port handler.
-        """
-
-        self.logger.info('recv: '+str(msg))
-        if msg[0] == 'quit':
-            try:
-                self.stream_ctrl.flush()
-                self.stream_data.flush()
-                self.stream_ctrl.stop_on_recv()
-                self.stream_data.stop_on_recv()
-                self.ioloop.stop()
-            except IOError:
-                self.logger.info('streams already closed')
-            except Exception as e:
-                self.logger.info('other error occurred: '+e.message)
-            self.sock_ctrl.send('ack')
-            self.logger.info('sent to  broker: ack')
-
-    def _data_handler(self, msg):
-        """
-        Data port handler.
-
-        Notes
-        -----
-        Assumes that each message contains a source module ID
-        (provided by zmq) and a serialized tuple; the tuple contains
-        the destination module ID and the data to be transmitted.
-        """
-
-        if len(msg) != 2:
-            self.logger.info('skipping malformed message: %s' % str(msg))
-        else:
-
-            # When a message arrives, increase the corresponding received_count
-            in_id = msg[0]
-            out_id, data = msgpack.unpackb(msg[1])
-            self.logger.info('recv from %s: %s' % (in_id, data))
-
-            # Increase the appropriate count in recv_counts by 1
-            self._recv_counts[(in_id, out_id)] += 1
-            self._data_to_route.append((in_id, out_id, data))
-            
-            # When data with source/destination IDs corresponding to
-            # every entry in the routing table has been received up to
-            # the current time step, deliver the data in the buffer:
-            if all(self._recv_counts.values()):
-                self.logger.info('recv from all modules')
-                for in_id, out_id, data in self._data_to_route:
-                    self.logger.info('sent to   %s: %s' % (out_id, data))
-
-                    # Route to the destination ID and send the source ID
-                    # along with the data:
-                    self.sock_data.send_multipart([out_id,
-                                                   msgpack.packb((in_id, data))])
-
-                # Reset the incoming data buffer
-                self._data_to_route = []
-
-                # Decrease all values in recv_counts to indicate that an
-                # execution time_step has been succesfully completed
-                for k in self._recv_counts.iterkeys(): 
-                    self._recv_counts[k]-=1
-                self.logger.info('----------------------')
-
-    def _init_ctrl_handler(self):
-        """
-        Initialize control port handler.
-        """
-
-        # Set the linger period to prevent hanging on unsent messages
-        # when shutting down:
-        self.logger.info('initializing ctrl handler')
-        self.sock_ctrl = self.zmq_ctx.socket(zmq.DEALER)
-        self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
-        self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
-        self.sock_ctrl.connect('tcp://localhost:%i' % self.port_ctrl)
-
-        self.stream_ctrl = ZMQStream(self.sock_ctrl, self.ioloop)
-        self.stream_ctrl.on_recv(self._ctrl_handler)
-
-    def _init_data_handler(self):
-        """
-        Initialize data port handler.
-        """
-
-        # Set the linger period to prevent hanging on unsent
-        # messages when shutting down:
-        self.logger.info('initializing data handler')
-        self.sock_data = self.zmq_ctx.socket(zmq.ROUTER)
-        self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
-        self.sock_data.bind("tcp://*:%i" % self.port_data)
-
-        self.stream_data = ZMQStream(self.sock_data, self.ioloop)
-        self.stream_data.on_recv(self._data_handler)
-
-    def _init_net(self):
-        """
-        Initialize the network connection.
-        """
-
-        # Since the broker must behave like a reactor, the event loop
-        # is started in the main thread:
-        self.zmq_ctx = zmq.Context()
-        self.ioloop = IOLoop.instance()
-        self._init_ctrl_handler()
-        self._init_data_handler()
-        self.ioloop.start()
-
-    def run(self):
-        """
-        Body of process.
-        """
-
-        # Don't allow keyboard interruption of process:
-        self.logger.info('starting')
-        with IgnoreKeyboardInterrupt():
-            conn = self.routing_table.connections
-            self._recv_counts = dict(zip(conn,
-                np.zeros(len(conn), dtype=np.int32))) 
-            self._init_net()
-        self.logger.info('exiting')
-        
-class Manager(object):
+class Manager(mpi.Manager):
     """
     Module manager.
 
-    Instantiates, connects, starts, and stops modules comprised by an 
-    emulation.
-
-    Parameters
-    ----------
-    port_data : int
-        Port to use for communication with modules.
-    port_ctrl : int
-        Port used to control modules.
+    Instantiates, connects, starts, and stops modules comprised by an
+    emulation. All modules and connections must be added to a module manager
+    instance before they can be run.
 
     Attributes
     ----------
-    brokers : dict
-        Communication brokers. Keyed by broker object ID.
+    data_tag : int
+        MPI tag to identify data messages.
+    ctrl_tag : int
+        MPI tag to identify control messages.
     modules : dict
         Module instances. Keyed by module object ID.
     routing_table : routing_table.RoutingTable
         Table of data transmission connections between modules.
-    """ 
+    rank_to_id : bidict.bidict
+        Mapping between MPI ranks and module object IDs.
+    """
 
-    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
+    def __init__(self, mpiexec='mpiexec', mpiargs=(), data_tag=0, ctrl_tag=1):
+        super(Manager, self).__init__(mpiexec, mpiargs, data_tag, ctrl_tag)
+
+        # One-to-one mapping between MPI rank and module ID:
+        self.rank_to_id = bidict.bidict()
 
         # Unique object ID:
         self.id = uid()
 
-        self.logger = twiggy.log.name('manage %s' % self.id)
-        self.port_data = port_data
-        self.port_ctrl = port_ctrl
-
-        # Set up a router socket to communicate with other topology
-        # components; linger period is set to 0 to prevent hanging on
-        # unsent messages when shutting down:
-        self.zmq_ctx = zmq.Context()
-        self.sock_ctrl = self.zmq_ctx.socket(zmq.ROUTER)
-        self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
-        self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
-
-        # Set up a poller for detecting acknowledgements to control messages:
-        self.ctrl_poller = zmq.Poller()
-        self.ctrl_poller.register(self.sock_ctrl, zmq.POLLIN)
+        # Logger object:
+        self.logger = twiggy.log.name(mpi.format_name('manage %s' % self.id))
         
-        # Data structures for instances of objects that correspond to processes
-        # keyed on object IDs (bidicts are used to enable retrieval of
-        # broker/module IDs from object instances):
-        self.brokers = bidict.bidict()
-        self.modules = bidict.bidict()
-
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
 
         # Number of emulation steps to run:
         self.steps = np.inf
 
-    def connect(self, m_0, m_1, pat, int_0=0, int_1=1):
+        self.logger.info('manager instantiated')
+
+    def add(self, target, id, *args, **kwargs):
         """
-        Connect two module instances with a Pattern instance.
+        Add a module class to the emulation.
 
         Parameters
         ----------
-        m_0, m_1 : BaseModule
-            Module instances to connect.
+        target : Module
+            Module class to instantiate and run.
+        id : str
+            Identifier to use when connecting an instance of this class
+            with an instance of some other class added to the emulation.
+        args : sequence
+            Sequential arguments to pass to the constructor of the class
+            associated with identifier `id`.
+        kwargs : dict
+            Named arguments to pass to the constructor of the class
+            associated with identifier `id`.
+        """
+
+        assert issubclass(target, BaseModule)
+        argnames = mpi.getargnames(target.__init__)
+
+        # Selectors must be passed to the module upon instantiation;
+        # the module manager must know about them to assess compatibility:
+        assert 'selector' in argnames
+        assert 'sel_in' in argnames
+        assert 'sel_out' in argnames
+
+        # Need to associate an ID and the routing table with each module class
+        # to instantiate:
+        kwargs['id'] = id
+        kwargs['routing_table'] = self.routing_table
+        kwargs['rank_to_id'] = self.rank_to_id
+        rank = super(Manager, self).add(target, *args, **kwargs)
+        self.rank_to_id[rank] = id
+
+    def connect(self, id_0, id_1, pat, int_0=0, int_1=1):
+        """
+        Specify connection between two module instances with a Pattern instance.
+
+        Parameters
+        ----------
+        id_0, id_1 : str
+            Identifiers of module instances to connect.
         pat : Pattern
             Pattern instance.
         int_0, int_1 : int
-            Which of the pattern's interfaces to connect to `m_0` and `m_1`,
+            Which of the pattern's interfaces to connect to `id_0` and `id_1`,
             respectively.
+
+        Notes
+        -----
+        Assumes that the constructors of the module types contain a `selector`
+        parameter.
         """
 
-
-        assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
         assert isinstance(pat, Pattern)
+        assert id_0 in self.rank_to_id.values()
+        assert id_1 in self.rank_to_id.values()
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
-        self.logger.info('connecting modules {0} and {1}'
-                         .format(m_0.id, m_1.id))
+        # Check compatibility of the interfaces exposed by the modules and the
+        # pattern; since the manager only contains module classes and not class
+        # instances, we need to create Interface instances from the selectors
+        # associated with the modules in order to test their compatibility:
+        rank_0 = self.rank_to_id.inv[id_0]
+        rank_1 = self.rank_to_id.inv[id_1]
 
-        # Check whether the interfaces exposed by the modules and the
-        # pattern share compatible subsets of ports:
         self.logger.info('checking compatibility of modules {0} and {1} and'
-                         ' assigned pattern'.format(m_0.id, m_1.id))
-        assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
-        assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
+                         ' assigned pattern'.format(id_0, id_1))
+        mod_int_0 = Interface(self._kwargs[rank_0]['selector'])
+        mod_int_0[self._kwargs[rank_0]['selector']] = 0
+        mod_int_1 = Interface(self._kwargs[rank_1]['selector'])
+        mod_int_1[self._kwargs[rank_1]['selector']] = 0
 
-        # Add the module and pattern instances to the internal dictionaries of
-        # the manager instance if they are not already there:
-        if m_0.id not in self.modules:
-            self.add_mod(m_0)
-        if m_1.id not in self.modules:
-            self.add_mod(m_1)
+        mod_int_0[self._kwargs[rank_0]['sel_in'], 'io'] = 'in'
+        mod_int_0[self._kwargs[rank_0]['sel_out'], 'io'] = 'out'
+        mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
+        mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
 
-        # Pass the pattern to the modules being connected:
-        self.logger.info('passing connection pattern to modules {0} and {1}'
-            .format(m_0.id, m_1.id))
-        m_0.connect(m_1, pat, int_0, int_1)
-        m_1.connect(m_0, pat, int_1, int_0)
+        assert mod_int_0.is_compatible(0, pat.interface, int_0)
+        assert mod_int_1.is_compatible(0, pat.interface, int_1)
 
-        # Update the routing table:
-        self.logger.info('updating routing table')
+        # XXX Need to check for fan-in XXX
+
+        # Store the pattern information in the routing table:
+        self.logger.info('updating routing table with pattern')
         if pat.is_connected(0, 1):
-            self.routing_table[m_0.id, m_1.id] = 1
+            self.routing_table[id_0, id_1] = {'pattern': pat, 
+                                              'int_0': int_0, 'int_1': int_1}
         if pat.is_connected(1, 0):
-            self.routing_table[m_1.id, m_0.id] = 1
-
-        self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
-
-
-    @property
-    def N_brok(self):
-        """
-        Number of brokers.
-        """
-        return len(self.brokers)
-
-    @property
-    def N_mod(self):
-        """
-        Number of modules.
-        """
-        return len(self.modules)
-
-
-    def add_brok(self, b=None):
-        """
-        Add or create a broker instance to the emulation.
-        """
-
-        # TEMPORARY: only allow one broker:
-        if self.N_brok == 1:
-            raise RuntimeError('only one broker allowed')
-
-        if not isinstance(b, Broker):
-            b = Broker(port_data=self.port_data,
-                       port_ctrl=self.port_ctrl,
-                       routing_table=self.routing_table)
-        self.brokers[b.id] = b
-        self.logger.info('added broker %s' % b.id)
-        return b
-
-    def add_mod(self, m=None):
-        """
-        Add or create a module instance to the emulation.
-
-        Parameters
-        ----------
-        m : str
-            ID of module to add.
-        """
-
-        if not isinstance(m, BaseModule):
-            m = BaseModule(port_data=self.port_data, port_ctrl=self.port_ctrl)
-        self.modules[m.id] = m
-        self.logger.info('added module %s' % m.id)
-        return m
-
-    def start(self, steps=np.inf):
-        """
-        Start execution of all processes.
-
-        Parameters
-        ----------
-        steps : number
-            Maximum number of steps to execute.
-        """
-
-        self.steps = steps
-        with IgnoreKeyboardInterrupt():
-            bi = 1
-            mi = 1
-            for b in self.brokers.values():
-                self.logger.info('broker ' + str(bi) + ' about to start')
-                b.start()
-                self.logger.info('broker ' + str(bi) + ' started')
-                bi+=1
-            for m in self.modules.values():
-                m.steps = steps
-                self.logger.info('module ' + str(mi) + ' about to start')
-                m.start()
-                self.logger.info('module ' + str(mi) + ' started')
-                mi+=1
-
-    def send_ctrl_msg(self, i, *msg):
-        """
-        Send control message(s) to a module.
-        """
-
-        self.sock_ctrl.send_multipart([i]+msg)
-        self.logger.info('sent to   %s: %s' % (i, msg))
-        while True:
-            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
-                j, data = self.sock_ctrl.recv_multipart()
-                self.logger.info('recv from %s: ack' % j)
-                break
-
-    def stop_brokers(self):
-        """
-        Stop execution of all brokers.
-        """
-
-        self.logger.info('stopping all brokers')
-        for i in self.brokers.keys():
-            self.logger.info('sent to   %s: quit' % i)
-            self.sock_ctrl.send_multipart([i, 'quit'])
-            self.brokers[i].join(1)
-        self.logger.info('all brokers stopped')
-        
-    def join_modules(self, send_quit=False):
-        """
-        Wait until all modules have stopped.
-
-        Parameters
-        ----------
-        send_quit : bool
-            If True, send quit messages to all modules.            
-        """
-
-        self.logger.info('waiting for modules to shut down')
-        recv_ids = self.modules.keys()
-        while recv_ids:
-            i = recv_ids[0]
-            
-            # Send quit messages to all live modules:
-            if send_quit:                
-                self.logger.info('live modules: '+str(recv_ids))
-                self.logger.info('sent to   %s: quit' % i)
-                self.sock_ctrl.send_multipart([i, 'quit'])
-
-            # If a module acknowledges receiving a quit message,
-            # wait for it to shutdown:
-            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
-                 j, data = self.sock_ctrl.recv_multipart()
-                 self.logger.info('recv from %s: %s' % (j, data))                 
-                 if j in recv_ids and data == 'shutdown':
-                     self.logger.info('waiting for module %s to shut down' % j)
-                     recv_ids.remove(j)
-                     self.modules[j].join(1)
-                     self.logger.info('module %s shut down' % j)
-                     
-            # Sometimes quit messages are received but the acknowledgements are
-            # lost; if so, the module will eventually shutdown:
-            # XXX this shouldn't be necessary XXX
-            if not self.modules[i].is_alive() and i in recv_ids:
-                self.logger.info('%s shutdown without ack' % i)
-                recv_ids.remove(i)                
-        self.logger.info('all modules stopped')
-
-    def stop(self):
-        """
-        Stop execution of an emulation.
-        """
-
-        if np.isinf(self.steps):
-            self.logger.info('stopping all modules')
-            send_quit = True
-        else:
-            send_quit = False
-        self.join_modules(send_quit)
-        self.stop_brokers()
-        
-def setup_logger(file_name='neurokernel.log', screen=True, port=None):
-    """
-    Convenience function for setting up logging with twiggy.
-
-    Parameters
-    ----------
-    file_name : str
-        Log file.
-    screen : bool
-        If true, write logging output to stdout.
-    port : int
-        If set to a ZeroMQ port number, publish 
-        logging output to that port.
-
-    Returns
-    -------
-    logger : twiggy.logger.Logger
-        Logger object.
-
-    Bug
-    ---
-    To use the ZeroMQ output class, it must be added as an emitter within each
-    process.
-    """
-
-    if file_name:
-        file_output = \
-          twiggy.outputs.FileOutput(file_name, twiggy.formats.line_format, 'w')
-        twiggy.addEmitters(('file', twiggy.levels.DEBUG, None, file_output))
-
-    if screen:
-        screen_output = \
-          twiggy.outputs.StreamOutput(twiggy.formats.line_format,
-                                      stream=sys.stdout)
-        twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output))
-
-    if port:
-        port_output = ZMQOutput('tcp://*:%i' % port,
-                               twiggy.formats.line_format)
-        twiggy.addEmitters(('port', twiggy.levels.DEBUG, None, port_output))
-
-    return twiggy.log.name(('{name:%s}' % 12).format(name='main'))
-
+            self.routing_table[id_1, id_0] = {'pattern': pat, 
+                                              'int_0': int_1, 'int_1': int_0}
 if __name__ == '__main__':
-    from neurokernel.tools.misc import rand_bin_matrix
-
     class MyModule(BaseModule):
         """
         Example of derived module class.
         """
 
-        def __init__(self, sel, sel_in, sel_out, data,
+        def __init__(self, selector, sel_in, sel_out, data,
                      columns=['interface', 'io', 'type'],
-                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
-            super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
-                                           id, True)
+                     data_tag=DATA_TAG, ctrl_tag=CTRL_TAG,
+                     id=None, routing_table=None, rank_to_id=None, debug=False):
+            super(MyModule, self).__init__(selector, data, columns, data_tag, ctrl_tag,
+                                           id, routing_table, rank_to_id, debug)
 
-            assert PathLikeSelector.is_in(sel_in, sel)
-            assert PathLikeSelector.is_in(sel_out, sel)
+            assert PathLikeSelector.is_in(sel_in, selector)
+            assert PathLikeSelector.is_in(sel_out, selector)
             assert PathLikeSelector.are_disjoint(sel_in, sel_out)
 
-            self.interface[sel_in, 'io', 'type'] = ['in', 'x']
-            self.interface[sel_out, 'io', 'type'] = ['out', 'x']
+            self.interface[sel_in, 'io'] = 'in'            
+            self.interface[sel_out, 'io'] = 'out'
+
+            # Find the input and output ports:
+            self.in_ports = self.interface.in_ports().to_tuples()
+            self.out_ports = self.interface.out_ports().to_tuples()
 
         def run_step(self):
+
             super(MyModule, self).run_step()
 
-            # Do something with input data:
-            in_ports = self.interface.in_ports().to_tuples()
-            self.logger.info('input port data: '+str(self.pm[in_ports]))
+            # Do something with input data; for the sake of illustration, we
+            # just record the current values:
+            self.logger.info('input port data: '+str(self.pm[self.in_ports]))
 
             # Output random data:
-            out_ports = self.interface.out_ports().to_tuples()
-            self.pm[out_ports] = np.random.rand(len(out_ports))
-            self.logger.info('output port data: '+str(self.pm[out_ports]))
+            self.pm[self.out_ports] = np.random.rand(len(self.out_ports))
+            self.logger.info('output port data: '+str(self.pm[self.out_ports]))
 
-    # Set up logging:
-    logger = setup_logger()
+    logger = mpi.setup_logger(stdout=sys.stdout, multiline=True)
 
-    # Set up emulation:
-    man = Manager(get_random_port(), get_random_port())
-    man.add_brok()
+    man = Manager()
 
     m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0:2]'; m1_int_sel_out = '/a[2:5]'
     m2_int_sel = '/b[0:5]'; m2_int_sel_in = '/b[0:3]'; m2_int_sel_out = '/b[3:5]'
     m3_int_sel = '/c[0:4]'; m3_int_sel_in = '/c[0:2]'; m3_int_sel_out = '/c[2:4]'
 
-    m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
-                  np.zeros(5, dtype=np.float),
-                  ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm1   ')
-    man.add_mod(m1)
-    m2 = MyModule(m2_int_sel, m2_int_sel_in, m2_int_sel_out,
-                  np.zeros(5, dtype=np.float),
-                  ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm2   ')
-    man.add_mod(m2)
-    m3 = MyModule(m3_int_sel, m3_int_sel_in, m3_int_sel_out,
-                  np.zeros(4, dtype=np.float),
-                  ['interface', 'io', 'type'], 
-                  man.port_data, man.port_ctrl, 'm3   ')
-    man.add_mod(m3)
+    # Note that the module ID doesn't need to be listed in the specified
+    # constructor arguments:
+    m1_id = 'm1   '
+    man.add(MyModule, m1_id, m1_int_sel, m1_int_sel_in, m1_int_sel_out,
+            np.zeros(5, dtype=np.float),
+            ['interface', 'io', 'type'],
+            DATA_TAG, CTRL_TAG)
+    m2_id = 'm2   '
+    man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
+            np.zeros(5, dtype=np.float),
+            ['interface', 'io', 'type'],
+            DATA_TAG, CTRL_TAG)
+    m3_id = 'm3   '
+    # man.add(MyModule, m3_id, m3_int_sel, m3_int_sel_in, m3_int_sel_out,
+    #         np.zeros(4, dtype=np.float),
+    #         ['interface', 'io', 'type'],
+    #         DATA_TAG, CTRL_TAG)
 
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:
     pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12.interface[m1_int_sel_out] = [0, 'in', 'x']
-    pat12.interface[m1_int_sel_in] = [0, 'out', 'x']
-    pat12.interface[m2_int_sel_in] = [1, 'out', 'x']
-    pat12.interface[m2_int_sel_out] = [1, 'in', 'x']
+    pat12.interface[m1_int_sel_out, 'io'] = 'in'
+    pat12.interface[m1_int_sel_in, 'io'] = 'out'
+    pat12.interface[m2_int_sel_in, 'io'] = 'out'
+    pat12.interface[m2_int_sel_out, 'io'] = 'in'
     pat12['/a[2]', '/b[0]'] = 1
     pat12['/a[3]', '/b[1]'] = 1
     pat12['/b[3]', '/a[0]'] = 1
-    man.connect(m1, m2, pat12, 0, 1)
+    man.connect(m1_id, m2_id, pat12, 0, 1)
 
-    pat23 = Pattern(m2_int_sel, m3_int_sel)
-    pat23.interface[m2_int_sel_out] = [0, 'in', 'x']
-    pat23.interface[m2_int_sel_in] = [0, 'out', 'x']
-    pat23.interface[m3_int_sel_in] = [1, 'out', 'x']
-    pat23.interface[m3_int_sel_out] = [1, 'in', 'x']
-    pat23['/b[4]', '/c[0]'] = 1
-    pat23['/c[2]', '/b[2]'] = 1
-    man.connect(m2, m3, pat23, 0, 1)
+    # pat23 = Pattern(m2_int_sel, m3_int_sel)
+    # pat23.interface[m2_int_sel_out, 'io'] = 'in'
+    # pat23.interface[m2_int_sel_in, 'io'] = 'out'
+    # pat23.interface[m3_int_sel_in, 'io'] = 'out'
+    # pat23.interface[m3_int_sel_out, 'io'] = 'in'
+    # pat23['/b[4]', '/c[0]'] = 1
+    # pat23['/c[2]', '/b[2]'] = 1
+    # man.connect(m2_id, m3_id, pat23, 0, 1)
 
-    pat31 = Pattern(m3_int_sel, m1_int_sel)
-    pat31.interface[m3_int_sel_out] = [0, 'in', 'x']
-    pat31.interface[m1_int_sel_in] = [1, 'out', 'x']
-    pat31.interface[m3_int_sel_in] = [0, 'out', 'x']
-    pat31.interface[m1_int_sel_out] = [1, 'in', 'x']
-    pat31['/c[3]', '/a[1]'] = 1
-    pat31['/a[4]', '/c[1]'] = 1
-    man.connect(m3, m1, pat31, 0, 1)
+    # pat31 = Pattern(m3_int_sel, m1_int_sel)
+    # pat31.interface[m3_int_sel_out, 'io'] = 'in'
+    # pat31.interface[m1_int_sel_in, 'io'] = 'out'
+    # pat31.interface[m3_int_sel_in, 'io'] = 'out'
+    # pat31.interface[m1_int_sel_out, 'io'] = 'in'
+    # pat31['/c[3]', '/a[1]'] = 1
+    # pat31['/a[4]', '/c[1]'] = 1
+    # man.connect(m3_id, m1_id, pat31, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting
     # down.  To set the emulation to exit after executing a fixed number of
     # steps, start it as follows and remove the sleep statement:
     # man.start(steps=500)
 
+    man.run()
     man.start()
-    time.sleep(2)
+    time.sleep(1)
     man.stop()
-    logger.info('all done')
+    man.quit()
