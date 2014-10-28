@@ -35,6 +35,8 @@ class RoutingTable(object):
         Return a copy of the routing table.
     dest_ids(src_id)
         Destination identifiers connected to the specified source identifier.
+    has_node(n)
+        Check whether the routing table contains the specified identifier.
     ids()
         IDs currently in routing
     src_ids(dest_id)
@@ -95,6 +97,13 @@ class RoutingTable(object):
         r.data = self.data.copy()
 
     copy = __copy__
+
+    def has_node(self, n):
+        """
+        Check whether the routing table contains the specified identifier.
+        """
+
+        return self.data.has_node(n)
 
     @property
     def ids(self):
