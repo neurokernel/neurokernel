@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 from mpi4py import MPI
+import msgpack
 import psutil
 import shortuuid
 import twiggy
@@ -136,13 +137,16 @@ class Worker(object):
         self._data_tag = data_tag
         self._ctrl_tag = ctrl_tag
 
+        # Maximum number of execution steps:
+        self.steps = float('inf')
+
     def do_work(self):
         """
         Work method.
 
         This method is repeatedly executed by the Worker instance after the
         instance receives a 'start' control message and until it receives a 'stop'
-        control message. It should check for the presence of
+        control message. It should be overridden by child classes.
         """
 
         self.logger.info('executing do_work')
@@ -161,11 +165,15 @@ class Worker(object):
 
         running = False
         req = MPI.Request()
+        steps = 0
         while True:
 
             # Handle control messages:
             flag, msg = req.testall(r_ctrl)
             if flag:
+
+                # Deserialize:
+                msg = msgpack.loads(msg[0])
 
                 # Start listening for data messages:
                 if msg[0] == 'start':
@@ -177,6 +185,14 @@ class Worker(object):
                     self.logger.info('stopped')
                     running = False
 
+                # Set maximum number of execution steps:
+                elif msg[0] == 'steps':
+                    if msg[1] == 'inf':
+                        self.steps = float('inf')
+                    else:
+                        self.steps = int(msg[1])
+                    self.logger.info('steps set to %s' % self.steps)
+                    
                 # Quit:
                 elif msg[0] == 'quit':
                     self.logger.info('acknowledging quit')
@@ -192,6 +208,17 @@ class Worker(object):
             # Execute work method:
             if running:
                 self.do_work()
+                steps += 1
+
+            # Send acknowledgment back to master if a finite number of steps was
+            # specified and then completed:
+            if steps > self.steps:
+                self.logger.info('acknowledging step')
+
+                # Block until acknowledgment message received:
+                MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
+                self.logger.info('step')
+                return
 
 class Manager(object):
     """
@@ -397,7 +424,7 @@ class Manager(object):
                 break
         self.logger.info('master synchronized')
 
-        # Relay messages from launcher to workers until a quit message is received:
+        # Relay messages from launcher to workers until a quit or step message is received:
         # XXX currently only broadcasts messages to workers; could be extended
         # to permit directed transmission to specific workers:
         size = MPI.COMM_WORLD.Get_size()
@@ -405,17 +432,19 @@ class Manager(object):
 
             # Check for messages from launcher:
             if self._pc.check(10):
-                msg = self._sock.recv()
+                msg = self._sock.recv_multipart()
 
                 # Pass any messages on to all of the workers:
+                self.logger.info('sending message to workers: '+str(msg))
                 for i in xrange(1, size):
-                    MPI.COMM_WORLD.isend(msg, dest=i, tag=self._ctrl_tag)
+                    MPI.COMM_WORLD.isend(msgpack.dumps(msg),
+                                         dest=i, tag=self._ctrl_tag)
 
-                # Wait for all workers to acknowledge quit message:
-                if msg == 'quit':
+                # Wait for all workers to acknowledge quit or step message:
+                if msg[0] == 'quit' or msg[0] == 'step':
                     req = MPI.Request()
                     r_quit = []
-                    self.logger.info('waiting for quit acknowledgments')
+                    self.logger.info('waiting for quit/step acknowledgments')
                     for i in xrange(1, size):
                         r_quit.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
                                                            tag=self._ctrl_tag))
@@ -470,6 +499,17 @@ class Manager(object):
             return
         self.logger.info('sending stop message')
         self._sock.send_multipart(['master', 'stop'])
+
+    def steps(self, n=float('inf')):
+        """
+        Tell the workers to run no more than the specified number of steps.
+        """
+
+        if not self._is_launcher():
+            self.logger.info('not in launcher - skipping steps')
+            return
+        self.logger.info('sending steps message (%s)' % n)
+        self._sock.send_multipart(['master', 'steps', str(n)])
 
     def quit(self):
         """
@@ -537,6 +577,6 @@ if __name__ == '__main__':
     man.add(MyWorker, 3, 4, 5)
     man.run()
     man.start()
-    time.sleep(0.01)
+    time.sleep(1)
     man.stop()
     man.quit()
