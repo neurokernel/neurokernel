@@ -15,7 +15,25 @@ class RoutingTable(object):
     Simple class that stores pairs of strings that can signify
     one-hop routes between entities in a graph. Assigning a value to a
     pair that isn't in the class instance will result in the pair and value
-    being added to the class instance.
+    being added to the class instance. All data associated with a specific 
+    connection is stored as a dict; if a non-dict is assigned to a connection,
+    it is stored in a dict with key 'data'. Specific values in the dict can be 
+    retrieved by passing the desired key directly to the [] operator.
+
+    Examples
+    --------
+    >>> r = RoutingTable()
+    >>> r['a', 'b'] = 1
+    >>> r['a', 'b']
+    1
+    >>> r['a', 'c'] = [1, 2]
+    >>> r['a', 'c']
+    [1, 2]
+    >>> r['a', 'c'] = {'x': 1}
+    >>> r['a', 'c', 'x']
+    1
+    >>> r['a', 'c']['x']
+    1
 
     Parameters
     ----------
@@ -70,27 +88,28 @@ class RoutingTable(object):
             else:
                 raise ValueError('cannot assign specified value')
         else:
-            if np.isscalar(value):
-                data = {'conn': value}
-            elif type(value) == dict:
-                data = value
+            if type(value) != dict:                
+                data = {'data': value}
             else:
-                raise ValueError('cannot assign specified value')
+                data = value
+
+        # Remove the edge before adding because networkx will update the edge's
+        # attributes if it already exists:
+        if self.data.has_edge(key[0], key[1]):
+            self.data.remove_edge(key[0], key[1])
         self.data.add_edge(key[0], key[1], data)
 
     def __getitem__(self, key):
         assert type(key) == tuple
         assert len(key) >= 2
         if len(key) > 2:
-            result = [self.data.edge[key[0]][key[1]][k] for k in key[2:]]
+            result = {k: self.data.edge[key[0]][key[1]][k] for k in key[2:]}
         else:
-            result = [self.data.edge[key[0]][key[1]][k] for k in \
-                      self.data.edge[key[0]][key[1]].keys()]
+            result = self.data.edge[key[0]][key[1]]
         if len(result) == 1:
-            return result[0]
+            return result[result.keys()[0]]
         else:
             return result
-            return self.data.edge[key[0]][key[1]]
 
     def __copy__(self):
         r = self.__class__()
@@ -144,7 +163,7 @@ class RoutingTable(object):
         data = []
         for t in self.data.edges_iter(data=True):
             tuples.append(t[0:2])
-            data.append(t[2])
+            data.append((t[2],))
         if tuples:
             idx = pd.MultiIndex.from_tuples(tuples)
             idx.names = ['from', 'to']
@@ -152,7 +171,7 @@ class RoutingTable(object):
             idx = pd.MultiIndex(levels=[[], []],
                                 labels=[[], []],
                                 names=['from', 'to'])
-        df = pd.DataFrame.from_dict(data)
+        df = pd.DataFrame.from_records(data)
         df.index = idx
         return df
 

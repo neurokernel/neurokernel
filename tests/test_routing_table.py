@@ -26,12 +26,29 @@ class test_routingtable(TestCase):
         assert t.data.has_node('b')
         assert t.data.has_edge('a', 'b')
 
-    def test_getitem(self):
+    def test_getitem_scalar(self):
         t = RoutingTable()
         t.data.add_node('a')
         t.data.add_node('b')
-        t.data.add_edge('a', 'b', {'data':1})
+        t.data.add_edge('a', 'b', {'data': 1})
         assert t['a', 'b'] == 1
+        assert t['a', 'b', 'data'] == 1
+
+    def test_getitem_non_dict(self):
+        t = RoutingTable()
+        t.data.add_node('a')
+        t.data.add_node('b')
+        t.data.add_edge('a', 'b', {'data': [1, 2]})
+        assert t['a', 'b'] == [1, 2]
+        assert t['a', 'b', 'data'] == [1, 2]
+
+    def test_getitem_dict(self):
+        t = RoutingTable()
+        t.data.add_node('a')
+        t.data.add_node('b')
+        t.data.add_edge('a', 'b', {'x': 1, 'y': 2})
+        assert t['a', 'b'] == {'x': 1, 'y': 2}
+        assert t['a', 'b', 'x'] == 1
 
     def test_src_ids(self):
         for i in self.connections_orig:
