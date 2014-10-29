@@ -130,38 +130,38 @@ class BaseModule(mpi.Worker):
         received = []
         idx_in_list = []
 
-        # Get destination module IDs:
+        # For each destination module, extract elements from the current
+        # module's port data array, copy them to a contiguous array, and
+        # transmit the latter:
         dest_ids = self.routing_table.dest_ids(self.id)
-
-        # For each destination, extract elements from the current module's data
-        # array, copy them to a contiguous array, and transmit the latter:
         for dest_id in dest_ids:            
             pat = self.routing_table[self.id, dest_id]['pattern']
             int_0 = self.routing_table[self.id, dest_id]['int_0']
             int_1 = self.routing_table[self.id, dest_id]['int_1']
 
-            idx_out = pat.dest_idx(int_0, int_1)
+            # Get source ports in current module that are connected to the
+            # destination module:
+            idx_out = pat.src_idx(int_0, int_1)
             data = self.pm[idx_out]
             dest_rank = self.rank_to_id[:dest_id]
-            self.logger.info('idx_out:' + str(idx_out))
-            self.logger.info('pm.data:' + str(self.pm.data))
             self.logger.info('data being sent to %s: %s' % (dest_id, str(data)))
             r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
                                      dest_rank)
             requests.append(r)
             self.logger.info('sending to %s' % dest_id)
         self.logger.info('sent all data from %s' % self.id)
-
-        # Get source module IDs:
+        
+        # For each source module, receive elements and copy them into the
+        # current module's port data array:
         src_ids = self.routing_table.src_ids(self.id)
-
-        # For each source, receive elements:
         for src_id in src_ids:
-            pat = self.routing_table[self.id, dest_id]['pattern']
-            int_0 = self.routing_table[self.id, dest_id]['int_0']
-            int_1 = self.routing_table[self.id, dest_id]['int_1']
+            pat = self.routing_table[src_id, self.id]['pattern']
+            int_0 = self.routing_table[src_id, self.id]['int_0']
+            int_1 = self.routing_table[src_id, self.id]['int_1']
 
-            idx_in = pat.src_idx(int_0, int_1)
+            # Get destination ports in current module that are connected to the
+            # source module:
+            idx_in = pat.dest_idx(int_0, int_1)
             data = np.empty(np.shape(idx_in), self.pm.dtype)
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
@@ -371,7 +371,6 @@ class Manager(mpi.Manager):
 
         self.logger.info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(id_0, id_1))
-        self.logger.info(str(self._kwargs.keys()))
         mod_int_0 = Interface(self._kwargs[rank_0]['selector'])
         mod_int_0[self._kwargs[rank_0]['selector']] = 0
         mod_int_1 = Interface(self._kwargs[rank_1]['selector'])
@@ -495,6 +494,6 @@ if __name__ == '__main__':
 
     man.run()
     man.start()
-    time.sleep(1)
+    time.sleep(3)
     man.stop()
     man.quit()
