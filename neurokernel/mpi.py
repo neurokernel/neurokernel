@@ -209,6 +209,7 @@ class Worker(object):
             if running:
                 self.do_work()
                 steps += 1
+                self.logger.info('execution step: %s' % steps)
 
             # Send acknowledgment back to master if a finite number of steps was
             # specified and then completed:

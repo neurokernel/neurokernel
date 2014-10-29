@@ -3,7 +3,7 @@
 """
 Base Neurokernel classes.
 """
-import pickle
+
 import copy
 import multiprocessing as mp
 import os
@@ -143,6 +143,9 @@ class BaseModule(mpi.Worker):
             idx_out = pat.dest_idx(int_0, int_1)
             data = self.pm[idx_out]
             dest_rank = self.rank_to_id[:dest_id]
+            self.logger.info('idx_out:' + str(idx_out))
+            self.logger.info('pm.data:' + str(self.pm.data))
+            self.logger.info('data being sent to %s: %s' % (dest_id, str(data)))
             r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
                                      dest_rank)
             requests.append(r)
@@ -214,53 +217,46 @@ class BaseModule(mpi.Worker):
         """
 
         # Don't allow keyboard interruption of process:
-        self.logger.info('starting')
+        self.logger.info('starting execution loop')
         with IgnoreKeyboardInterrupt():
 
             # Perform any pre-emulation operations:
             self.pre_run()
 
-            self.running = True
-            curr_steps = 0
-            while curr_steps < self._steps:
-                self.logger.info('execution step: %s' % curr_steps)
-
-                # If the debug flag is set, don't catch exceptions so that
-                # errors will lead to visible failures:
-                if self.debug:
-
-                    # Run the processing step:
-                    self.run_step()
-
-                    # Synchronize:
-                    self._sync()
-                else:
-
-                    # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info)
-
-                    # Synchronize:
-                    catch_exception(self._sync, self.logger.info)
-
-                # Exit run loop when a quit message has been received:
-                if not self.running:
-                    self.logger.info('run loop stopped')
-                    break
-
-                curr_steps += 1
+            # Activate execution loop:
+            super(BaseModule, self).run()
 
             # Perform any post-emulation operations:
             self.post_run()
 
-            # Shut down the control handler and inform the manager that the
-            # module has shut down:
-            self._ctrl_stream_shutdown()
-            ack = 'shutdown'
-            self.sock_ctrl.send(ack)
-            self.logger.info('sent to manager: %s' % ack)
+        self.logger.info('exiting execution loop')
 
-        self.logger.info('exiting')
+    def do_work(self):
+        """
+        Work method.
 
+        This method is repeatedly executed by the Worker instance after the
+        instance receives a 'start' control message and until it receives a 'stop'
+        control message.
+        """
+
+        # If the debug flag is set, don't catch exceptions so that
+        # errors will lead to visible failures:
+        if self.debug:
+
+            # Run the processing step:
+            self.run_step()
+
+            # Synchronize:
+            self._sync()
+        else:
+
+            # Run the processing step:
+            catch_exception(self.run_step, self.logger.info)
+
+            # Synchronize:
+            catch_exception(self._sync, self.logger.info)
+        
 class Manager(mpi.Manager):
     """
     Module manager.
@@ -291,9 +287,6 @@ class Manager(mpi.Manager):
 
         # Unique object ID:
         self.id = uid()
-
-        # Logger object:
-        self.logger = twiggy.log.name(mpi.format_name('manage %s' % self.id))
         
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
@@ -321,6 +314,10 @@ class Manager(mpi.Manager):
             Named arguments to pass to the constructor of the class
             associated with identifier `id`.
         """
+
+        # if self._is_master():
+        #     self.logger.info('in master! - skipping add')
+        #     return
 
         assert issubclass(target, BaseModule)
         argnames = mpi.getargnames(target.__init__)
@@ -360,6 +357,7 @@ class Manager(mpi.Manager):
         """
 
         assert isinstance(pat, Pattern)
+
         assert id_0 in self.rank_to_id.values()
         assert id_1 in self.rank_to_id.values()
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
@@ -373,6 +371,7 @@ class Manager(mpi.Manager):
 
         self.logger.info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(id_0, id_1))
+        self.logger.info(str(self._kwargs.keys()))
         mod_int_0 = Interface(self._kwargs[rank_0]['selector'])
         mod_int_0[self._kwargs[rank_0]['selector']] = 0
         mod_int_1 = Interface(self._kwargs[rank_1]['selector'])
@@ -468,6 +467,7 @@ if __name__ == '__main__':
     pat12['/a[2]', '/b[0]'] = 1
     pat12['/a[3]', '/b[1]'] = 1
     pat12['/b[3]', '/a[0]'] = 1
+    pat12['/b[4]', '/a[1]'] = 1
     man.connect(m1_id, m2_id, pat12, 0, 1)
 
     # pat23 = Pattern(m2_int_sel, m3_int_sel)
