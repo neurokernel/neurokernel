@@ -138,7 +138,7 @@ class Worker(object):
         self._ctrl_tag = ctrl_tag
 
         # Maximum number of execution steps:
-        self.steps = float('inf')
+        self.max_steps = float('inf')
 
     def do_work(self):
         """
@@ -188,10 +188,10 @@ class Worker(object):
                 # Set maximum number of execution steps:
                 elif msg[0] == 'steps':
                     if msg[1] == 'inf':
-                        self.steps = float('inf')
+                        self.max_steps = float('inf')
                     else:
-                        self.steps = int(msg[1])
-                    self.logger.info('steps set to %s' % self.steps)
+                        self.max_steps = int(msg[1])
+                    self.logger.info('maximum steps set to %s' % self.max_steps)
                     
                 # Quit:
                 elif msg[0] == 'quit':
@@ -213,12 +213,12 @@ class Worker(object):
 
             # Send acknowledgment back to master if a finite number of steps was
             # specified and then completed:
-            if steps > self.steps:
-                self.logger.info('acknowledging step')
+            if steps > self.max_steps:
+                self.logger.info('acknowledging steps')
 
                 # Block until acknowledgment message received:
                 MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
-                self.logger.info('step')
+                self.logger.info('steps')
                 return
 
 class Manager(object):
