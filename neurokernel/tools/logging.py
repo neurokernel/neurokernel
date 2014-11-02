@@ -7,9 +7,10 @@ Logging tools.
 import sys
 import traceback
 
+import mpi4py.MPI
 import twiggy
 
-from tools.comm import ZMQOutput
+from tools.comm import MPIOutput, ZMQOutput
 
 def format_name(name, width=20):
     """
@@ -71,7 +72,8 @@ def set_excepthook(logger, multiline=False):
 
 def setup_logger(name='', level=twiggy.levels.DEBUG,
                  fmt=twiggy.formats.line_format,
-                 stdout=None, file_name=None, sock=None,
+                 stdout=None, file_name=None,
+                 mpi_comm=None, sock=None,
                  log_exceptions=True, multiline=False):
     """
     Setup a twiggy logger.
@@ -88,6 +90,9 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         Create output stream handler to stdout if True.
     file_name : str
         Create output handler to specified file.
+    mpi_comm : mpi4py.MPI.Intracomm
+        If not None, use MPI I/O with the specified communicator for output file handler.
+        The `file_name` parameter must also be specified.
     sock : str
         ZeroMQ socket address.
     log_exceptions : bool
@@ -101,9 +106,16 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         Configured logger.
     """
 
+    if mpi_comm and not file_name:
+        raise ValueError('MPI I/O requires output file name')
+
     if file_name:
-        file_output = \
-          twiggy.outputs.FileOutput(file_name, fmt, 'w')
+        if mpi_comm:
+            assert isinstance(mpi_comm, mpi4py.MPI.Intracomm)
+            file_output = MPIOutput(file_name, fmt, mpi_comm)
+        else:
+            file_output = \
+                twiggy.outputs.FileOutput(file_name, fmt, 'w')
         twiggy.addEmitters(('file', level, None, file_output))
 
     if stdout:

@@ -557,7 +557,7 @@ class Manager(object):
 if __name__ == '__main__':
     import time
 
-    setup_logger(stdout=sys.stdout)
+    setup_logger(stdout=sys.stdout, file_name = 'log', mpi_comm=MPI.COMM_WORLD)
 
     # Define a class whose constructor takes arguments so as to test
     # instantiation of the class by the manager:

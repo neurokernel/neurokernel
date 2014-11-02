@@ -150,7 +150,7 @@ class BaseModule(mpi.Worker):
             requests.append(r)
             self.logger.info('sending to %s' % dest_id)
         self.logger.info('sent all data from %s' % self.id)
-        
+
         # For each source module, receive elements and copy them into the
         # current module's port data array:
         src_ids = self.routing_table.src_ids(self.id)
@@ -217,7 +217,6 @@ class BaseModule(mpi.Worker):
         """
 
         # Don't allow keyboard interruption of process:
-        self.logger.info('starting execution loop')
         with IgnoreKeyboardInterrupt():
 
             # Perform any pre-emulation operations:
@@ -228,8 +227,6 @@ class BaseModule(mpi.Worker):
 
             # Perform any post-emulation operations:
             self.post_run()
-
-        self.logger.info('exiting execution loop')
 
     def do_work(self):
         """
@@ -430,7 +427,8 @@ if __name__ == '__main__':
             self.pm[self.out_ports] = np.random.rand(len(self.out_ports))
             self.logger.info('output port data: '+str(self.pm[self.out_ports]))
 
-    logger = mpi.setup_logger(stdout=sys.stdout, multiline=True)
+    logger = mpi.setup_logger(stdout=sys.stdout, file_name='log',
+                              mpi_comm=MPI.COMM_WORLD, multiline=True)
 
     man = Manager()
 
@@ -450,7 +448,7 @@ if __name__ == '__main__':
             np.zeros(5, dtype=np.float),
             ['interface', 'io', 'type'],
             DATA_TAG, CTRL_TAG)
-    m3_id = 'm3   '
+    # m3_id = 'm3   '
     # man.add(MyModule, m3_id, m3_int_sel, m3_int_sel_in, m3_int_sel_out,
     #         np.zeros(4, dtype=np.float),
     #         ['interface', 'io', 'type'],
@@ -493,6 +491,8 @@ if __name__ == '__main__':
     # man.start(steps=500)
 
     man.run()
+    man.start()
+#    man.steps(10)
     man.start()
     time.sleep(3)
     man.stop()
