@@ -10,7 +10,7 @@ import traceback
 import mpi4py.MPI
 import twiggy
 
-from tools.comm import MPIOutput, ZMQOutput
+from comm import MPIOutput, ZMQOutput
 
 def format_name(name, width=20):
     """

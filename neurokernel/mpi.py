@@ -377,7 +377,7 @@ class Manager(object):
         # Pass the IPC interface name to the launched process via an
         # environmental variable:
         python_path = sys.executable
-        script_name = os.path.basename(sys.argv[0])
+        script_name = sys.argv[0]
         self._mpiexec_proc = subprocess.Popen((self._mpiexec,)+self._mpiargs+\
                                               ('-np', str(self._rank),
                                                python_path, script_name),
@@ -574,6 +574,7 @@ if __name__ == '__main__':
     man = Manager()
     man.add(target=MyWorker, x=1, y=2, z=3)
     man.add(MyWorker, 3, 4, 5)
+    man.add(MyWorker, 6, 7, 8)
     man.run()
     man.start()
     time.sleep(1)
