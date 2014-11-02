@@ -65,12 +65,9 @@ if __name__ == "__main__":
         # Force installation of __init__.py in namespace package:
         data_files = [('neurokernel', ['neurokernel/__init__.py'])],
         include_package_data = True,
-        dependency_links = [
-            'http://github.com/lebedov/chash/tarball/master#egg=chash'],
         install_requires = [
             'bidict',
             'bottleneck',
-            'chash',
             'futures',
             'h5py',
             'matplotlib',
