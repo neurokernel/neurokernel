@@ -210,7 +210,7 @@ class Worker(object):
                 # Get next message:
                 r_ctrl = []
                 r_ctrl.append(MPI.COMM_WORLD.irecv(source=0, tag=self._ctrl_tag))
-
+            
             # Execute work method:
             if running:
                 self.do_work()
@@ -224,7 +224,8 @@ class Worker(object):
                 break
 
         # Block until acknowledgment message received:
-        MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
+        MPI.COMM_WORLD.send(msgpack.dumps(['done', str(rank)]),
+                            dest=0, tag=self._ctrl_tag)
         self.logger.info('done')
 
 class Manager(object):
@@ -429,14 +430,19 @@ class Manager(object):
                 break
         self.logger.info('master synchronized')
 
-        # Relay messages from launcher to workers until a quit or step message is received:
-        # XXX currently only broadcasts messages to workers; could be extended
-        # to permit directed transmission to specific workers:
+        # Relay messages from launcher to workers until a quit or step
+        # message is received: XXX currently only broadcasts messages
+        # to workers; could be extended to permit directed
+        # transmission to specific workers:
+        r_ctrl = []
+        r_ctrl.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
+                                           tag=self._ctrl_tag))
         size = MPI.COMM_WORLD.Get_size()
+        workers = range(1, size)
         req = MPI.Request()
         while True:
 
-            # Check for messages from launcher:
+            # Check for control messages from launcher:
             if self._pc.check(10):
                 msg = self._sock.recv_multipart()
 
@@ -446,18 +452,25 @@ class Manager(object):
                     MPI.COMM_WORLD.isend(msgpack.dumps(msg),
                                          dest=i, tag=self._ctrl_tag)
 
-                # Wait for all workers to acknowledge quit or step message:
-                if msg[0] == 'quit' or msg[0] == 'step':
-                    r_quit = []
-                    self.logger.info('waiting for workers to return done ack')
-                    for i in xrange(1, size):
-                        r_quit.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
-                                                           tag=self._ctrl_tag))
-                    while not req.testall(r_quit):
-                        pass
+            # Check for control messages from workers:
+            flag, msg = req.testall(r_ctrl)
+            if flag:
+                msg = msgpack.loads(msg[0])
+                if msg[0] == 'done':
+                    self.logger.info('removing %s from worker list' % msg[1])
+                    workers.remove(int(msg[1]))
 
-                    self.logger.info('finished running master')
-                    break
+                # Additional control messages from the workers can be processed here.
+
+                # Get new control messages:
+                r_ctrl = []
+                r_ctrl.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
+                                                   tag=self._ctrl_tag))
+
+            # Exit when all workers are finished running:
+            if not workers:
+                self.logger.info('finished running master')
+                break
 
     def run(self):
         """
@@ -581,7 +594,7 @@ if __name__ == '__main__':
     man.add(target=MyWorker, x=1, y=2, z=3)
     man.add(MyWorker, 3, 4, 5)
     man.add(MyWorker, 6, 7, 8)
-    man.run()      
+    man.run()  
     man.start()
-    time.sleep(1)    
+    time.sleep(1)
     man.quit()
