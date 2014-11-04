@@ -15,6 +15,7 @@ import collections
 
 import bidict
 from mpi4py import MPI
+import msgpack
 import numpy as np
 import twiggy
 
@@ -67,22 +68,6 @@ class BaseModule(mpi.Worker):
     data : numpy.ndarray
         Array of data associated with a module's ports.
     """
-
-    # Define properties to perform validation when the maximum number of
-    # execution steps set:
-    _steps = np.inf
-    @property
-    def steps(self):
-        """
-        Maximum number of steps to execute.
-        """
-        return self._steps
-    @steps.setter
-    def steps(self, value):
-        if value <= 0:
-            raise ValueError('invalid maximum number of steps')
-        self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
-        self._steps = value
 
     def __init__(self, ports, ports_in, ports_out,
                  data, columns=['interface', 'io', 'type'],
@@ -141,6 +126,11 @@ class BaseModule(mpi.Worker):
         Send output data and receive input data.
         """
 
+        # If True, time and report the data receive portion of the sync; skip
+        # all logging when computing the timing so as to avoid introducing
+        # unnecessary I/O-related delays:
+        time_sync = True
+
         req = MPI.Request()
         requests = []
         received = []
@@ -160,15 +150,20 @@ class BaseModule(mpi.Worker):
             idx_out = pat.src_idx(int_0, int_1)
             data = self.pm[idx_out]
             dest_rank = self.rank_to_id[:dest_id]
-            self.logger.info('data being sent to %s: %s' % (dest_id, str(data)))
+            if not time_sync:
+                self.logger.info('data being sent to %s: %s' % (dest_id, str(data)))
             r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
                                      dest_rank)
             requests.append(r)
-            self.logger.info('sending to %s' % dest_id)
-        self.logger.info('sent all data from %s' % self.id)
+            if not time_sync:
+                self.logger.info('sending to %s' % dest_id)
+        if not time_sync:
+            self.logger.info('sent all data from %s' % self.id)
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
+        if time_sync:
+            start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             pat = self.routing_table[src_id, self.id]['pattern']
@@ -177,7 +172,7 @@ class BaseModule(mpi.Worker):
 
             # Get destination ports in current module that are connected to the
             # source module:
-            idx_in = pat.dest_idx(int_0, int_1)
+            idx_in = pat.dest_idx(int_0, int_1) # XXX could be precomputed
             data = np.empty(np.shape(idx_in), self.pm.dtype)
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
@@ -185,14 +180,32 @@ class BaseModule(mpi.Worker):
             requests.append(r)
             received.append(data)
             idx_in_list.append(idx_in)
-            self.logger.info('receiving from %s' % src_id)
+            if not time_sync:
+                self.logger.info('receiving from %s' % src_id)
         req.Waitall(requests)
-        self.logger.info('received all data received by %s' % self.id)
+        if not time_sync:
+            self.logger.info('received all data received by %s' % self.id)
+        stop = time.time()
 
         # Copy received elements into the current module's data array:
+        n = 0
         for data, idx_in in zip(received, idx_in_list):
             self.pm[idx_in] = data
-        self.logger.info('saved all data received by %s' % self.id)
+            n += len(data)
+        if time_sync:
+
+            # Send timing data to master node:
+            MPI.COMM_WORLD.isend(msgpack.dumps(['time', 
+                                                (self.rank, self.steps, 
+                                                 start, stop, 
+                                                 n*self.pm.dtype.itemsize)]),
+                                 dest=0, tag=self._ctrl_tag)
+                                 
+            # self.logger.info('start, stop, bytes: %s, %s, %s' % \
+            #                  (start, stop, n*self.pm.dtype.itemsize))
+                             
+        else:
+            self.logger.info('saved all data received by %s' % self.id)
 
     def pre_run(self, *args, **kwargs):
         """
@@ -403,6 +416,11 @@ class Manager(mpi.Manager):
         if pat.is_connected(1, 0):
             self.routing_table[id_1, id_0] = {'pattern': pat, 
                                               'int_0': int_1, 'int_1': int_0}
+
+    def process_worker_msg(self, msg):
+        if msg[0] == 'time':
+            self.logger.info('time data: %s' % str(msg[1]))
+
 if __name__ == '__main__':
     class MyModule(BaseModule):
         """
@@ -488,6 +506,6 @@ if __name__ == '__main__':
     man.start()
 #    man.steps(10)
     man.start()
-    time.sleep(3)
+    time.sleep(2)
     man.stop()
     man.quit()
