@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from functools import wraps
+
 import numpy as np
 import sys, traceback
 
@@ -69,3 +71,20 @@ def catch_exception(func, disp, *args, **kwargs):
         disp(func.__name__ + ': ' + e.__class__.__name__ + ': ' + str(e.message) + \
            ' (' + fname + ':' + str(lineno) + ')')
              
+def memoized_property(fget):
+    """
+    Decorator for creating a property that only calls its getter once.
+
+    Notes
+    -----
+    Copied from https://github.com/estebistec/python-memoized-property
+    under BSD license.
+    """
+
+    attr_name = '_{0}'.format(fget.__name__)
+    @wraps(fget)
+    def fget_memoized(self):
+        if not hasattr(self, attr_name):
+            setattr(self, attr_name, fget(self))
+        return getattr(self, attr_name)
+    return property(fget_memoized)
