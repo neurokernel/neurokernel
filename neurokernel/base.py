@@ -39,9 +39,9 @@ class BaseModule(mpi.Worker):
 
     Parameters
     ----------
-    selector : str, unicode, or sequence
-        Path-like selector describing the module's interface of 
-        exposed ports.
+    ports, ports_in, ports_out : str, unicode, or sequence
+        Path-like selectors respectively describing the module's 
+        interface of exposed ports and all input and output ports.
     data : numpy.ndarray
         Data array to associate with ports. Array length must equal the number
         of ports in a module's interface.    
@@ -84,12 +84,20 @@ class BaseModule(mpi.Worker):
         self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
         self._steps = value
 
-    def __init__(self, selector, data, columns=['interface', 'io', 'type'],
+    def __init__(self, ports, ports_in, ports_out,
+                 data, columns=['interface', 'io', 'type'],
                  data_tag=DATA_TAG, ctrl_tag=CTRL_TAG,
                  id=None, routing_table=None, rank_to_id=None, 
                  debug=False):
         super(BaseModule, self).__init__(data_tag, ctrl_tag)
         self.debug = debug
+
+        # Ensure that the input and output port selectors respectively
+        # select mutually exclusive subsets of the set of all ports exposed by
+        # the module:
+        assert PathLikeSelector.is_in(ports_in, ports)
+        assert PathLikeSelector.is_in(ports_out, ports)
+        assert PathLikeSelector.are_disjoint(ports_in, ports_out)
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -110,15 +118,23 @@ class BaseModule(mpi.Worker):
         self.logger = twiggy.log.name(mpi.format_name('module %s' % self.id))
 
         # Create module interface given the specified ports:
-        self.interface = Interface(selector, columns)
+        self.interface = Interface(ports, columns)
 
         # Set the interface ID to 0; we assume that a module only has one interface:
-        self.interface[selector, 'interface'] = 0
+        self.interface[ports, 'interface'] = 0
+
+        # Set the port attributes:
+        self.interface[ports_in, 'io'] = 'in'
+        self.interface[ports_out, 'io'] = 'out'
+
+        # Find the input and output ports:
+        self.in_ports = self.interface.in_ports().to_tuples()
+        self.out_ports = self.interface.out_ports().to_tuples()
 
         # Set up mapper between port identifiers and their associated data:
         assert len(data) == len(self.interface)
         self.data = data
-        self.pm = PortMapper(self.data, selector)
+        self.pm = PortMapper(self.data, ports)
 
     def _sync(self):
         """
@@ -312,18 +328,14 @@ class Manager(mpi.Manager):
             associated with identifier `id`.
         """
 
-        # if self._is_master():
-        #     self.logger.info('in master! - skipping add')
-        #     return
-
         assert issubclass(target, BaseModule)
         argnames = mpi.getargnames(target.__init__)
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
-        assert 'selector' in argnames
-        assert 'sel_in' in argnames
-        assert 'sel_out' in argnames
+        assert 'ports' in argnames
+        assert 'ports_in' in argnames
+        assert 'ports_out' in argnames
 
         # Need to associate an ID and the routing table with each module class
         # to instantiate:
@@ -349,7 +361,7 @@ class Manager(mpi.Manager):
 
         Notes
         -----
-        Assumes that the constructors of the module types contain a `selector`
+        Assumes that the constructors of the module types contain a `ports`
         parameter.
         """
 
@@ -368,15 +380,15 @@ class Manager(mpi.Manager):
 
         self.logger.info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(id_0, id_1))
-        mod_int_0 = Interface(self._kwargs[rank_0]['selector'])
-        mod_int_0[self._kwargs[rank_0]['selector']] = 0
-        mod_int_1 = Interface(self._kwargs[rank_1]['selector'])
-        mod_int_1[self._kwargs[rank_1]['selector']] = 0
+        mod_int_0 = Interface(self._kwargs[rank_0]['ports'])
+        mod_int_0[self._kwargs[rank_0]['ports']] = 0
+        mod_int_1 = Interface(self._kwargs[rank_1]['ports'])
+        mod_int_1[self._kwargs[rank_1]['ports']] = 0
 
-        mod_int_0[self._kwargs[rank_0]['sel_in'], 'io'] = 'in'
-        mod_int_0[self._kwargs[rank_0]['sel_out'], 'io'] = 'out'
-        mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
-        mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
+        mod_int_0[self._kwargs[rank_0]['ports_in'], 'io'] = 'in'
+        mod_int_0[self._kwargs[rank_0]['ports_out'], 'io'] = 'out'
+        mod_int_1[self._kwargs[rank_1]['ports_in'], 'io'] = 'in'
+        mod_int_1[self._kwargs[rank_1]['ports_out'], 'io'] = 'out'
 
         assert mod_int_0.is_compatible(0, pat.interface, int_0)
         assert mod_int_1.is_compatible(0, pat.interface, int_1)
@@ -396,24 +408,6 @@ if __name__ == '__main__':
         """
         Example of derived module class.
         """
-
-        def __init__(self, selector, sel_in, sel_out, data,
-                     columns=['interface', 'io', 'type'],
-                     data_tag=DATA_TAG, ctrl_tag=CTRL_TAG,
-                     id=None, routing_table=None, rank_to_id=None, debug=False):
-            super(MyModule, self).__init__(selector, data, columns, data_tag, ctrl_tag,
-                                           id, routing_table, rank_to_id, debug)
-
-            assert PathLikeSelector.is_in(sel_in, selector)
-            assert PathLikeSelector.is_in(sel_out, selector)
-            assert PathLikeSelector.are_disjoint(sel_in, sel_out)
-
-            self.interface[sel_in, 'io'] = 'in'            
-            self.interface[sel_out, 'io'] = 'out'
-
-            # Find the input and output ports:
-            self.in_ports = self.interface.in_ports().to_tuples()
-            self.out_ports = self.interface.out_ports().to_tuples()
 
         def run_step(self):
 
