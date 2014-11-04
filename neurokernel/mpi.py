@@ -137,6 +137,9 @@ class Worker(object):
         self._data_tag = data_tag
         self._ctrl_tag = ctrl_tag
 
+        # Execution step counter:
+        self.steps = 0
+
         # Maximum number of execution steps:
         self.max_steps = float('inf')
 
@@ -165,25 +168,28 @@ class Worker(object):
 
         running = False
         req = MPI.Request()
-        steps = 0
+        self.steps = 0
         while True:
 
             # Handle control messages:
             flag, msg = req.testall(r_ctrl)
             if flag:
 
-                # Deserialize:
+                # Deserialize message:
                 msg = msgpack.loads(msg[0])
 
-                # Start listening for data messages:
+                # Start executing work method:
                 if msg[0] == 'start':
-                    self.logger.info('started')
+                    self.logger.info('starting')
                     running = True
 
-                # Stop listening for data messages:
+                # Stop executing work method::
                 elif msg[0] == 'stop':
-                    self.logger.info('stopped')
-                    running = False
+                    if self.max_steps == float('inf'):
+                        self.logger.info('stopping')
+                        running = False
+                    else:
+                        self.logger.info('max steps set - not stopping')
 
                 # Set maximum number of execution steps:
                 elif msg[0] == 'steps':
@@ -191,35 +197,35 @@ class Worker(object):
                         self.max_steps = float('inf')
                     else:
                         self.max_steps = int(msg[1])
-                    self.logger.info('maximum steps set to %s' % self.max_steps)
+                    self.logger.info('setting maximum steps to %s' % self.max_steps)
                     
                 # Quit:
                 elif msg[0] == 'quit':
-                    self.logger.info('acknowledging quit')
+                    if self.max_steps == float('inf'):
+                        self.logger.info('quitting')
+                        break
+                    else:
+                        self.logger.info('max steps set - not quitting')
 
-                    # Block until acknowledgment message received:
-                    MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
-                    self.logger.info('quit')
-                    return
-
+                # Get next message:
                 r_ctrl = []
                 r_ctrl.append(MPI.COMM_WORLD.irecv(source=0, tag=self._ctrl_tag))
 
             # Execute work method:
             if running:
                 self.do_work()
-                steps += 1
-                self.logger.info('execution step: %s' % steps)
+                self.steps += 1
+                self.logger.info('execution step: %s' % self.steps)
 
             # Send acknowledgment back to master if a finite number of steps was
             # specified and then completed:
-            if steps > self.max_steps:
-                self.logger.info('acknowledging steps')
+            if self.steps > self.max_steps:
+                self.logger.info('maximum steps reached')
+                break
 
-                # Block until acknowledgment message received:
-                MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
-                self.logger.info('steps')
-                return
+        # Block until acknowledgment message received:
+        MPI.COMM_WORLD.send(str(rank), dest=0, tag=self._ctrl_tag)
+        self.logger.info('done')
 
 class Manager(object):
     """
@@ -427,6 +433,7 @@ class Manager(object):
         # XXX currently only broadcasts messages to workers; could be extended
         # to permit directed transmission to specific workers:
         size = MPI.COMM_WORLD.Get_size()
+        req = MPI.Request()
         while True:
 
             # Check for messages from launcher:
@@ -441,9 +448,8 @@ class Manager(object):
 
                 # Wait for all workers to acknowledge quit or step message:
                 if msg[0] == 'quit' or msg[0] == 'step':
-                    req = MPI.Request()
                     r_quit = []
-                    self.logger.info('waiting for quit/step acknowledgments')
+                    self.logger.info('waiting for workers to return done ack')
                     for i in xrange(1, size):
                         r_quit.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
                                                            tag=self._ctrl_tag))
@@ -575,8 +581,7 @@ if __name__ == '__main__':
     man.add(target=MyWorker, x=1, y=2, z=3)
     man.add(MyWorker, 3, 4, 5)
     man.add(MyWorker, 6, 7, 8)
-    man.run()
+    man.run()      
     man.start()
-    time.sleep(1)
-    man.stop()
+    time.sleep(1)    
     man.quit()
