@@ -140,9 +140,6 @@ class Worker(object):
         # Execution step counter:
         self.steps = 0
 
-        # Maximum number of execution steps:
-        self.max_steps = float('inf')
-
     @memoized_property
     def rank(self):
         """
@@ -150,6 +147,30 @@ class Worker(object):
         """
 
         return MPI.COMM_WORLD.Get_rank()
+
+    @memoized_property
+    def size(self):
+        """
+        MPI size.
+        """
+        return MPI.COMM_WORLD.Get_size()
+
+    # Define properties to perform validation when the maximum number of
+    # execution steps set:
+    _max_steps = float('inf')
+    @property
+    def max_steps(self):
+        """
+        Maximum number of steps to execute.
+        """
+        return self._max_steps
+    @max_steps.setter
+    def max_steps(self, value):
+        if value < 0:
+            raise ValueError('invalid maximum number of steps')
+        self.logger.info('maximum number of steps changed: %s -> %s' % \
+                         (self._max_steps, value))
+        self._max_steps = value
 
     def do_work(self):
         """
@@ -310,6 +331,13 @@ class Manager(object):
 
         return len(self._targets)
 
+    @memoized_property
+    def size(self):
+        """
+        MPI size.
+        """
+        return MPI.COMM_WORLD.Get_size()
+
     def add(self, target, *args, **kwargs):
         """
         Add a worker to an MPI application.
@@ -453,8 +481,7 @@ class Manager(object):
         r_ctrl = []
         r_ctrl.append(MPI.COMM_WORLD.irecv(source=MPI.ANY_SOURCE,
                                            tag=self._ctrl_tag))
-        size = MPI.COMM_WORLD.Get_size()
-        workers = range(1, size)
+        workers = range(1, self.size)
         req = MPI.Request()
         while True:
 
@@ -464,7 +491,7 @@ class Manager(object):
 
                 # Pass any messages on to all of the workers:
                 self.logger.info('sending message to workers: '+str(msg))
-                for i in xrange(1, size):
+                for i in xrange(1, self.size):
                     MPI.COMM_WORLD.isend(msgpack.dumps(msg),
                                          dest=i, tag=self._ctrl_tag)
 
@@ -602,11 +629,9 @@ if __name__ == '__main__':
     class MyWorker(Worker):
         def __init__(self, x, y, z=None):
             super(MyWorker, self).__init__()
-            comm = MPI.COMM_WORLD
-            size = comm.Get_size()
-            rank = comm.Get_rank()
             name = MPI.Get_processor_name()
-            self.logger.info('I am process %d of %d on %s.' % (rank, size, name))
+            self.logger.info('I am process %d of %d on %s.' % (self.rank, 
+                                                               self.size, name))
             self.logger.info('init args: %s, %s, %s' % (x, y, z))
 
     man = Manager()
