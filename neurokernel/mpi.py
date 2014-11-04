@@ -18,6 +18,7 @@ import twiggy
 import zmq
 
 from tools.logging import format_name, setup_logger, set_excepthook
+from tools.misc import memoized_property
 
 def getargnames(f):
     """
@@ -129,8 +130,7 @@ class Worker(object):
     """
 
     def __init__(self, data_tag=0, ctrl_tag=1):
-        rank = MPI.COMM_WORLD.Get_rank()
-        self.logger = twiggy.log.name(format_name('worker %s' % rank))
+        self.logger = twiggy.log.name(format_name('worker %s' % self.rank))
         set_excepthook(self.logger, True)
 
         # Tags used to distinguish MPI messages:
@@ -142,6 +142,14 @@ class Worker(object):
 
         # Maximum number of execution steps:
         self.max_steps = float('inf')
+
+    @memoized_property
+    def rank(self):
+        """
+        MPI rank.
+        """
+
+        return MPI.COMM_WORLD.Get_rank()
 
     def do_work(self):
         """
@@ -159,8 +167,7 @@ class Worker(object):
         Main body of worker process.
         """
 
-        rank = MPI.COMM_WORLD.Get_rank()
-        self.logger.info('running body of worker %s' % rank)
+        self.logger.info('running body of worker %s' % self.rank)
 
         # Start listening for control messages:
         r_ctrl = []
@@ -210,22 +217,24 @@ class Worker(object):
                 # Get next message:
                 r_ctrl = []
                 r_ctrl.append(MPI.COMM_WORLD.irecv(source=0, tag=self._ctrl_tag))
-            
-            # Execute work method:
+
+            # Execute work method; the work method may send data back to the master
+            # as a serialized control message containing two elements, e.g.,
+            # MPI.COMM_WORLD.isend(msgpack.dumps(['foo', str(self.rank)]),
+            #                      dest=0, tag=self._ctrl_tag)            
             if running:
                 self.do_work()
                 self.steps += 1
                 self.logger.info('execution step: %s' % self.steps)
 
-            # Send acknowledgment back to master if a finite number of steps was
-            # specified and then completed:
+            # Leave loop if maximum number of steps has been reached:
             if self.steps > self.max_steps:
                 self.logger.info('maximum steps reached')
                 break
 
-        # Block until acknowledgment message received:
-        MPI.COMM_WORLD.send(msgpack.dumps(['done', str(rank)]),
-                            dest=0, tag=self._ctrl_tag)
+        # Send acknowledgment message:
+        MPI.COMM_WORLD.isend(msgpack.dumps(['done', str(self.rank)]),
+                             dest=0, tag=self._ctrl_tag)
         self.logger.info('done')
 
 class Manager(object):
@@ -402,6 +411,13 @@ class Manager(object):
                 break
         self.logger.info('launcher synchronized')
 
+    def process_worker_msg(self, msg):
+        """
+        Process the specified deserialized message from a worker.
+        """
+
+        self.logger.info('got ctrl msg: %s' % str(msg))
+
     def _run_master(self):
         """
         Body of master MPI process.
@@ -460,7 +476,10 @@ class Manager(object):
                     self.logger.info('removing %s from worker list' % msg[1])
                     workers.remove(int(msg[1]))
 
-                # Additional control messages from the workers can be processed here.
+                # Additional control messages from the workers are
+                # processed here:
+                else:
+                    self.process_worker_msg(msg)
 
                 # Get new control messages:
                 r_ctrl = []
@@ -596,5 +615,5 @@ if __name__ == '__main__':
     man.add(MyWorker, 6, 7, 8)
     man.run()  
     man.start()
-    time.sleep(1)
+    time.sleep(0.25)
     man.quit()

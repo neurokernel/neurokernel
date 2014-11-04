@@ -78,7 +78,7 @@ def memoized_property(fget):
     Notes
     -----
     Copied from https://github.com/estebistec/python-memoized-property
-    under BSD license.
+    under the BSD license.
     """
 
     attr_name = '_{0}'.format(fget.__name__)
