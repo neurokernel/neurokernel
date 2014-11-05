@@ -192,18 +192,15 @@ class BaseModule(mpi.Worker):
         for data, idx_in in zip(received, idx_in_list):
             self.pm[idx_in] = data
             n += len(data)
-        if time_sync:
 
-            # Send timing data to master node:
+        # Save timing data:
+        if time_sync:
+            self.logger.info('sent timing data to master')
             MPI.COMM_WORLD.isend(msgpack.dumps(['time', 
                                                 (self.rank, self.steps, 
                                                  start, stop, 
                                                  n*self.pm.dtype.itemsize)]),
                                  dest=0, tag=self._ctrl_tag)
-                                 
-            # self.logger.info('start, stop, bytes: %s, %s, %s' % \
-            #                  (start, stop, n*self.pm.dtype.itemsize))
-                             
         else:
             self.logger.info('saved all data received by %s' % self.id)
 
@@ -320,6 +317,8 @@ class Manager(mpi.Manager):
         # Number of emulation steps to run:
         self.steps = np.inf
 
+        self.timing_data = {}
+
         self.logger.info('manager instantiated')
 
     def add(self, target, id, *args, **kwargs):
@@ -418,8 +417,35 @@ class Manager(mpi.Manager):
                                               'int_0': int_1, 'int_1': int_0}
 
     def process_worker_msg(self, msg):
+
+        # Accumulate timing data sent by workers:
+        # XXX computing the throughput by updating the average would be less
+        # memory intensive:
         if msg[0] == 'time':
+            rank, steps, start, stop, bytes = msg[1]
+            if not self.timing_data.has_key(steps):
+                self.timing_data[steps] = {}
+            self.timing_data[steps][rank] = {'start': start,
+                                             'stop': stop,
+                                             'bytes': bytes}            
+                
             self.logger.info('time data: %s' % str(msg[1]))
+
+    def _run_master(self):
+        super(Manager, self)._run_master()
+
+        # Compute throughput using accumulated timing data:
+        total_time = 0.0
+        total_bytes = 0.0
+        for step, data in self.timing_data.iteritems():
+            start = min([d['start'] for d in data.values()])
+            stop = max([d['stop'] for d in data.values()])
+            bytes = sum([d['bytes'] for d in data.values()])
+
+            total_time += stop-start
+            total_bytes += bytes
+        self.logger.info('average received throughput: %s bytes/s' % \
+                         (total_bytes/total_time))
 
 if __name__ == '__main__':
     class MyModule(BaseModule):
@@ -506,6 +532,6 @@ if __name__ == '__main__':
     man.start()
 #    man.steps(10)
     man.start()
-    time.sleep(2)
+    time.sleep(6)
     man.stop()
     man.quit()
