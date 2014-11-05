@@ -11,7 +11,6 @@ import subprocess
 import sys
 
 from mpi4py import MPI
-import msgpack
 import psutil
 import shortuuid
 import twiggy
@@ -200,11 +199,9 @@ class Worker(object):
         while True:
 
             # Handle control messages:
-            flag, msg = req.testall(r_ctrl)
+            flag, msg_list = req.testall(r_ctrl)
             if flag:
-
-                # Deserialize message:
-                msg = msgpack.loads(msg[0])
+                msg = msg_list[0]
 
                 # Start executing work method:
                 if msg[0] == 'start':
@@ -254,7 +251,7 @@ class Worker(object):
                 break
 
         # Send acknowledgment message:
-        MPI.COMM_WORLD.isend(msgpack.dumps(['done', str(self.rank)]),
+        MPI.COMM_WORLD.isend(['done', self.rank],
                              dest=0, tag=self._ctrl_tag)
         self.logger.info('done')
 
@@ -492,16 +489,15 @@ class Manager(object):
                 # Pass any messages on to all of the workers:
                 self.logger.info('sending message to workers: '+str(msg))
                 for i in xrange(1, self.size):
-                    MPI.COMM_WORLD.isend(msgpack.dumps(msg),
-                                         dest=i, tag=self._ctrl_tag)
+                    MPI.COMM_WORLD.isend(msg, dest=i, tag=self._ctrl_tag)
 
             # Check for control messages from workers:
-            flag, msg = req.testall(r_ctrl)
+            flag, msg_list = req.testall(r_ctrl)
             if flag:
-                msg = msgpack.loads(msg[0])
+                msg = msg_list[0]
                 if msg[0] == 'done':
                     self.logger.info('removing %s from worker list' % msg[1])
-                    workers.remove(int(msg[1]))
+                    workers.remove(msg[1])
 
                 # Additional control messages from the workers are
                 # processed here:

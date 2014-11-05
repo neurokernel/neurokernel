@@ -15,7 +15,6 @@ import collections
 
 import bidict
 from mpi4py import MPI
-import msgpack
 import numpy as np
 import twiggy
 
@@ -196,10 +195,9 @@ class BaseModule(mpi.Worker):
         # Save timing data:
         if time_sync:
             self.logger.info('sent timing data to master')
-            MPI.COMM_WORLD.isend(msgpack.dumps(['time', 
-                                                (self.rank, self.steps, 
-                                                 start, stop, 
-                                                 n*self.pm.dtype.itemsize)]),
+            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,                          
+                                           start, stop, 
+                                           n*self.pm.dtype.itemsize)],
                                  dest=0, tag=self._ctrl_tag)
         else:
             self.logger.info('saved all data received by %s' % self.id)
