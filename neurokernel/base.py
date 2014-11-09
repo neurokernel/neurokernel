@@ -57,6 +57,10 @@ class BaseModule(mpi.Worker):
     debug : bool
         Debug flag. When True, exceptions raised during the work method
         are not be suppressed.
+    time_sync : bool
+        Time synchronization flag. When True, debug messages are not emitted
+        during module synchronization and the time taken to receive all incoming
+        data is computed.
 
     Attributes
     ----------
@@ -72,9 +76,10 @@ class BaseModule(mpi.Worker):
                  data, columns=['interface', 'io', 'type'],
                  data_tag=DATA_TAG, ctrl_tag=CTRL_TAG,
                  id=None, routing_table=None, rank_to_id=None, 
-                 debug=False):
+                 debug=False, time_sync=False):
         super(BaseModule, self).__init__(data_tag, ctrl_tag)
         self.debug = debug
+        self.time_sync = time_sync
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
@@ -125,11 +130,6 @@ class BaseModule(mpi.Worker):
         Send output data and receive input data.
         """
 
-        # If True, time and report the data receive portion of the sync; skip
-        # all logging when computing the timing so as to avoid introducing
-        # unnecessary I/O-related delays:
-        time_sync = True
-
         req = MPI.Request()
         requests = []
         received = []
@@ -149,19 +149,19 @@ class BaseModule(mpi.Worker):
             idx_out = pat.src_idx(int_0, int_1)
             data = self.pm[idx_out]
             dest_rank = self.rank_to_id[:dest_id]
-            if not time_sync:
+            if not self.time_sync:
                 self.logger.info('data being sent to %s: %s' % (dest_id, str(data)))
             r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
                                      dest_rank)
             requests.append(r)
-            if not time_sync:
+            if not self.time_sync:
                 self.logger.info('sending to %s' % dest_id)
-        if not time_sync:
+        if not self.time_sync:
             self.logger.info('sent all data from %s' % self.id)
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        if time_sync:
+        if self.time_sync:
             start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
@@ -179,10 +179,10 @@ class BaseModule(mpi.Worker):
             requests.append(r)
             received.append(data)
             idx_in_list.append(idx_in)
-            if not time_sync:
+            if not self.time_sync:
                 self.logger.info('receiving from %s' % src_id)
         req.Waitall(requests)
-        if not time_sync:
+        if not self.time_sync:
             self.logger.info('received all data received by %s' % self.id)
         stop = time.time()
 
@@ -193,9 +193,9 @@ class BaseModule(mpi.Worker):
             n += len(data)
 
         # Save timing data:
-        if time_sync:
+        if self.time_sync:
             self.logger.info('sent timing data to master')
-            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,                          
+            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,     
                                            start, stop, 
                                            n*self.pm.dtype.itemsize)],
                                  dest=0, tag=self._ctrl_tag)
@@ -442,9 +442,12 @@ class Manager(mpi.Manager):
 
             total_time += stop-start
             total_bytes += bytes
-        self.logger.info('average received throughput: %s bytes/s' % \
-                         (total_bytes/total_time))
-
+        if total_time > 0:
+            self.logger.info('average received throughput: %s bytes/s' % \
+                             (total_bytes/total_time))
+        else:
+            self.logger.info('not computing throughput')
+            
 if __name__ == '__main__':
     class MyModule(BaseModule):
         """
@@ -478,12 +481,12 @@ if __name__ == '__main__':
     man.add(MyModule, m1_id, m1_int_sel, m1_int_sel_in, m1_int_sel_out,
             np.zeros(5, dtype=np.float),
             ['interface', 'io', 'type'],
-            DATA_TAG, CTRL_TAG)
+            DATA_TAG, CTRL_TAG, time_sync=True)
     m2_id = 'm2   '
     man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
             np.zeros(5, dtype=np.float),
             ['interface', 'io', 'type'],
-            DATA_TAG, CTRL_TAG)
+            DATA_TAG, CTRL_TAG, time_sync=True)
     # m3_id = 'm3   '
     # man.add(MyModule, m3_id, m3_int_sel, m3_int_sel_in, m3_int_sel_out,
     #         np.zeros(4, dtype=np.float),
