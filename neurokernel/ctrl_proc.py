@@ -132,21 +132,74 @@ class ControlledProcess(mp.Process):
         self.logger.info('done')
 
 if __name__ == '__main__':
+    from neurokernel.tools.comm import synchronize
+
     output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
                                          stream=sys.stdout)
     twiggy.emitters['*'] = twiggy.filters.Emitter(twiggy.levels.DEBUG,
                                                   True, output)
 
+    # Example: create one custom controlled process that emits data on a port,
+    # and another that 
+    class MyControlledProcess(ControlledProcess):
+        def run(self):
+            """
+            Body of process.
+            """
+
+            self._init_net()
+            sock_out = self.zmq_ctx.socket(zmq.PUB)
+            sock_out.bind('ipc://out')
+            synchronize(sock_out, True)
+
+            self.running = True
+            counter = 0
+            while True:
+                sock_out.send(str(counter))
+                counter += 1
+                self.logger.info('sent %s' % counter)
+                if not self.running:
+                    self.logger.info('stopping run loop')
+                    break
+            self.logger.info('done')
+
+    class MyListenerProcess(ControlledProcess):
+        def run(self):
+            """
+            Body of process.
+            """
+
+            self._init_net()
+            sock_out = self.zmq_ctx.socket(zmq.SUB)
+            sock_out.setsockopt(zmq.SUBSCRIBE, '')
+            sock_out.connect('ipc://out')
+            synchronize(sock_out, False)
+
+            self.running = True
+            while True:
+                if sock_out.poll(10):
+                    data = sock_out.recv()
+                    self.logger.info('received %s' % data)
+                if not self.running:
+                    self.logger.info('stopping run loop')
+                    break
+            self.logger.info('done')
+
+    # Sockets for controlling started processes:
     zmq_ctx = zmq.Context()
-    sock = zmq_ctx.socket(zmq.ROUTER)
-    port_ctrl = sock.bind_to_random_port('tcp://*')
+    sock_myproc = zmq_ctx.socket(zmq.ROUTER)
+    sock_mylist = zmq_ctx.socket(zmq.ROUTER)
+    port_myproc = sock_myproc.bind_to_random_port('tcp://*')
+    port_mylist = sock_mylist.bind_to_random_port('tcp://*')
 
     # Protect both the child and parent processes from being clobbered by
     # Ctrl-C:
     from ctx_managers import TryExceptionOnSignal, IgnoreKeyboardInterrupt
     with IgnoreKeyboardInterrupt():
-        p = ControlledProcess(port_ctrl, 'mymod')
-        p.start()
-
-        time.sleep(3)
-        sock.send_multipart([p.id, 'quit'])
+        myproc = MyControlledProcess(port_myproc, 'myproc')
+        myproc.start()
+        mylist = MyListenerProcess(port_mylist, 'mylist')
+        mylist.start()
+        time.sleep(2)
+        sock_myproc.send_multipart([myproc.id, 'quit'])
+        sock_mylist.send_multipart([mylist.id, 'quit'])
