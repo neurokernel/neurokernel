@@ -583,6 +583,7 @@ class visualizer(object):
 
     def _close(self):
         self.writer.finish()
+        plt.close(self.f)
 
     @property
     def xlim(self):
