@@ -1488,6 +1488,8 @@ class PortMapper(object):
     ----------
     data : numpy.ndarray
         Data that has been mapped to ports.
+    dtype : numpy.dtype
+        Type of mapped data.
     index : pandas.MultiIndex
         Index of port identifiers.
     portmap : pandas.Series
@@ -1524,6 +1526,17 @@ class PortMapper(object):
     @index.setter
     def index(self, i):
         self.portmap.index = i
+
+    @property
+    def dtype(self):
+        """
+        PortMapper data type.
+        """
+        
+        return self.data.dtype
+    @dtype.setter
+    def dtype(self, d):
+        self.data.dtype = d
 
     def get(self, selector):
         """
