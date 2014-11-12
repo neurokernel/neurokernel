@@ -6,6 +6,7 @@ Lamina specification
 
 import csv
 import os
+import collections
 
 import numpy as np
 import gzip
@@ -45,8 +46,6 @@ class hex_array(object):
         self.row = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1)),
                            (1, self.ncols))
 
-        #self.Y = self.Y + np.tile(np.asarray([0, 1]),
-        #                          (self.nrows, self.ncols/2))
 
         self.col = self.col.reshape(-1)
         self.row = self.row.reshape(-1)
@@ -105,7 +104,8 @@ class hex_array(object):
 
 class vision_LPU(object):
     def __init__(self, nrows, ncols, neuron_csv,
-                 columnar_synapse_csv, other_synapse_csv):
+                 columnar_synapse_csv, other_synapse_csv,
+                 LPU_name):
         self.nrows = nrows
         self.ncols = ncols
         self.num_cartridges = nrows * ncols
@@ -114,9 +114,10 @@ class vision_LPU(object):
         self.other_synapse_csv = other_synapse_csv
         self.hexarray = hex_array(nrows, ncols)
         self._connected = False
-        self.inter_cartridge_synapses = []
+        self.LPU_name = LPU_name
+        
+        self.composition_rules = []
 
-#    def read_neurons(self):
         # read in csv file and turn it into a numpy structured array
         neuron_list = []
         dtypes = [np.dtype('S10'), np.dtype('S32'),
@@ -141,7 +142,6 @@ class vision_LPU(object):
             neuron_list,
             dtype = [(a, b) for a, b in zip(self.neuron_field_name, dtypes)])
         
-#    def read_synapses(self):
         # read in csv file and turn it into a numpy structured array
         if self.columnar_synapse_csv is not None:
             synapse_list = []
@@ -223,23 +223,16 @@ class vision_LPU(object):
         self._connected = True
 
     def create_non_columnar_neurons(self):
-        self.non_columnar_neurons = []
-        self.non_columnar_synapses = []
+        self.non_columnar_neurons = collections.OrderedDict()
         self.non_columnar_neuron_list = self.neuron_dict[self.neuron_dict['columnar'] != 1]
         
         dtnames = self.non_columnar_neuron_list.dtype.names
-        self.non_columnar_neuron_number = {
-            neuron_dict['name']: neuron_dict['columnar']
-            for neuron_dict in self.non_columnar_neuron_list}
         for neuron_dict in self.non_columnar_neuron_list:
+            name = neuron_dict['name']
+            self.non_columnar_neurons.update({name: []})
             for _ in range(neuron_dict['columnar']):
-                self.non_columnar_neurons.append(
+                self.non_columnar_neurons[name].append(
                     Neuron(dict(zip(dtnames, [np.asscalar(p) for p in neuron_dict]))))
-
-
-    def create_other_synapses(self):
-        self.other_synapses = []
-        
 
     def remove_cartridge(self, num):
         pass
@@ -267,33 +260,26 @@ class vision_LPU(object):
                         neuron.process_before_export()
                         g.add_node(num, neuron.params)
                         num += 1
-        
-        for neuron in self.non_columnar_neurons:
-            neuron.add_num(num)
-            neuron.process_before_export()
-            g.add_node(num, neuron.params)
-            num += 1
+
+        for name in self.non_columnar_neurons.iterkeys():
+            for neuron in self.non_columnar_neurons[name]:
+                neuron.add_num(num)
+                neuron.process_before_export()
+                g.add_node(num, neuron.params)
+                num += 1
         
         for cartridge in self.cartridges:
-            for neuron in cartridge.neurons.values():
-                for synapse in neuron.outgoing_synapses:
-                    synapse.process_before_export()
-                    g.add_edge(synapse.pre_neuron.num, synapse.post_neuron.num,
-                               attr_dict = synapse.params)
+            for synapse in cartridge.synapses:
+                synapse.process_before_export()
+                g.add_edge(synapse.pre_neuron.num, synapse.post_neuron.num,
+                           attr_dict = synapse.params)
     
-        if hasattr(self, 'non_columnar_neurons'):
-            for neuron in self.non_columnar_neurons:
-                for synapse in neuron.outgoing_synapses:
-                    synapse.process_before_export()
-                    g.add_edge(synapse.pre_neuron.num, synapse.post_neuron.num,
-                               attr_dict = synapse.params)
-        
-        #for cartridge in self.cartridges:
-        #    for synapse in cartridge.synapses:
-        #        synapse.process_before_export()
-        #        g.add_edge(synapse.pre_neuron.num, synapse.post_neuron.num,
-        #                   synapse.params)
-        
+        for cr in self.composition_rules:
+            for synapse in cr['synapses']:
+                synapse.process_before_export()
+                g.add_edge(synapse.pre_neuron.num, synapse.post_neuron.num,
+                           attr_dict = synapse.params)
+
         if isinstance(filename, str):
             name, ext = os.path.splitext(filename)
             if name == '':
@@ -311,12 +297,40 @@ class vision_LPU(object):
         else:
             raise ValueError("Specify the filename in string")
 
+    def add_selectors(self):
+        for neuron_type in self.neuron_dict:
+            if not neuron_type['dummy']:
+                if neuron_type['columnar'] == 1:
+                    if neuron_type['public'] == 1:
+                        name = neuron_type['name']
+                        for cartridge in self.cartridges:
+                            neuron = cartridge.neurons[name]
+                            neuron.add_selector(
+                                '/'+self.LPU_name+'/cart{0}'.format(cartridge.num)
+                                +'/'+name)
+        for name in self.non_columnar_neurons.iterkeys():
+            count = 0
+            for neuron in self.non_columnar_neurons[name]:
+                if neuron.is_public():
+                    neuron.add_selector(
+                        '/'+self.LPU_name+'/'+name+'[{0}]'.format(count))
+                    count += 1
+
+
 class Lamina(vision_LPU):
+    def __init__(self, nrows, ncols, neuron_csv,
+                 columnar_synapse_csv, other_synapse_csv):
+        super(Lamina, self).__init__(nrows, ncols, neuron_csv,
+                                     columnar_synapse_csv, other_synapse_csv,
+                                     'lamina')
+    
     def connect_composition_II(self):
         # create synapses defined in composition rule II.
         if not self._connected:
             raise AttributeError("Need to connect cartridges before setting interconnects")
         self.rule2synapses = self.synapse_dict[self.synapse_dict['cart'] != 0]
+        
+        synapse_list = []
         
         dtnames = self.rule2synapses.dtype.names
         for cartridge in self.cartridges:
@@ -328,27 +342,22 @@ class Lamina(vision_LPU):
                     synapse.link(
                         cartridge.neurons[synapse_array['prename']],
                         cartridge.neighbors[neighbor_num].neurons[synapse_array['postname']])
-                    self.inter_cartridge_synapses.append(synapse)
-
+                    synapse_list.append(synapse)
+        self.composition_rules.append({'synapses': synapse_list})
 
     def connect_composition_I(self):
-        self.create_non_columnar_neurons()
-        self.am_list = []
-        n_amacrine = self.non_columnar_neuron_number['Am']
+        am_list = self.non_columnar_neurons['Am']
+        synapse_list = []
+        
+        n_amacrine = len(am_list) # self.non_columnar_neuron_number['Am']
         am_xpos = np.random.random(n_amacrine)*self.hexarray.X[-1,-1]
         am_ypos = np.random.random(n_amacrine)*self.hexarray.Y[-1,-1]
         count = 0
-        for neuron in self.non_columnar_neurons:
-            if neuron.params['name'] == 'Am':
-                neuron.assign_pos(np.asscalar(am_xpos[count]),
-                                  np.asscalar(am_ypos[count]))
-                self.am_list.append(neuron)
-                count += 1
+        for neuron in am_list:
+            neuron.assign_pos(np.asscalar(am_xpos[count]),
+                              np.asscalar(am_ypos[count]))
+            count += 1
 
-
-        # TODO: where to put synapse from Am to Am?
-        # right now all synapse are listed inside a cartridge
-        # even if the replaced dummy neuron results in Am to Am synapse
         bound = 4.0
         alpha_profiles = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
         fill = np.zeros((n_amacrine, self.num_cartridges), np.int32);
@@ -371,7 +380,9 @@ class Lamina(vision_LPU):
                 for am_num in np.random.permutation(suitable_am):
                     if fill[am_num, count] < 3:
                         fill[am_num, count] += 1
-                        cartridge.replace_dummy(name, self.am_list[am_num])
+                        #a1-a6 do not have synapses outside a cartridge
+                        synapses = cartridge.replace_dummy(name, am_list[am_num])
+                        synapse_list.extend(synapses)
                         assigned = True
                         break
                 if not assigned:
@@ -379,20 +390,13 @@ class Lamina(vision_LPU):
             count += 1
 
         self.fill = fill
-
+        self.composition_rules.append( {'synapses': synapse_list} )
+        
     def __repr__(self):
         if hasattr(self, 'cartridges'):
             return 'Lamina LPU with '+str(len(self.cartridges))+' cartridges'
         else:
             return 'Lamina LPU unconfigured'
-            
-
-class Medulla(vision_LPU):
-    def __repr__(self):
-        if hasattr(self, 'cartridges'):
-            return 'Medulla LPU with '+str(len(self.cartridges))+' cartridges'
-        else:
-            return 'Medulla LPU unconfigured'
 
 
 class Cartridge(object):
@@ -400,7 +404,7 @@ class Cartridge(object):
         self.connected = False
         self.neuron_list = neuron.copy()
         self.synapse_list = connection.copy()
-        self.neurons = {}
+        self.neurons = collections.OrderedDict()
         
         dtnames = self.neuron_list.dtype.names
     
@@ -414,8 +418,8 @@ class Cartridge(object):
         for synapse_dict in self.synapse_list:
             synapse = Synapse(
                 dict(zip(dtnames, [np.asscalar(p) for p in synapse_dict])))
-            synapse.link(self.neurons[synapse.params['prename']],
-                         self.neurons[synapse.params['postname']])
+            synapse.link(self.neurons[synapse.prename],
+                         self.neurons[synapse.postname])
             self.synapses.append(synapse)
         
     def set_neighbors(self, neighbor_cartridges):
@@ -452,23 +456,38 @@ class Cartridge(object):
         return self.ypos
 
     def replace_dummy(self, name, neuron):
+        removed_synapse_list = []
         neuron_to_be_replaced = self.neurons[name]
+        
         if neuron_to_be_replaced.params['dummy'] != 1:
             raise ValueError("Neuron to be replaced is not dummy element")
         
         for synapse in neuron_to_be_replaced.outgoing_synapses:
+            flag = self.remove_synapse(synapse)
             synapse.replace_pre(neuron)
-            
+            if flag:
+                removed_synapse_list.append(synapse)
+        
         for synapse in neuron_to_be_replaced.incoming_synapses:
+            flag = self.remove_synapse(synapse)
             synapse.replace_post(neuron)
-            
-        self.delete(name)
+            if flag:
+                removed_synapse_list.append(synapse)
+        
+        self.neurons[name].set_parent(neuron)
+        return removed_synapse_list
         
     def remove_neuron(self, name):
-        pass
+        self.neurons.pop(name)
 
-    def delete(self, name):
-        del self.neurons[name]
+    def remove_synapse(self, synapse):
+        # the try/except here is to deal with Am to Am connection that
+        # may have been removed previously by another Am in the same cartridge
+        try:
+            self.synapses.remove(synapse)
+            return True
+        except:
+            return False
 
 class Neuron(object):
     def __init__(self, param_dict):
@@ -480,12 +499,22 @@ class Neuron(object):
         self.params.update({'spiking': spiking})
         self.outgoing_synapses = []
         self.incoming_synapses = []
+    
+    @property
+    def name(self):
+        return self.params['name']
         
     def add_outgoing_synapse(self, synapse):
         self.outgoing_synapses.append(synapse)
 
     def add_incoming_synapse(self, synapse):
         self.incoming_synapses.append(synapse)
+    
+    def remove_outgoing_synapse(self, synapse):
+        self.outgoing_synapses.remove(synapse)
+    
+    def remove_incoming_synapse(self, synapse):
+        self.incoming_synapses.remove(synapse)
 
     def __repr__(self):
         return 'neuron '+self.params['name']+': '+str(self.params)
@@ -506,10 +535,6 @@ class Neuron(object):
         self.params.update({'n_dendrites': len(self.incoming_synapses),
                             'n_outputs': len(self.outgoing_synapses)})
         if 'dummy' in self.params.keys():
-            if self.params['dummy'] == 0:
-                # num is different for every neuron
-                selector = '/lam/{0}'.format(self.num)
-                self.params['selector'] = selector
             del self.params['dummy']
         if 'columnar' in self.params.keys():
             del self.params['columnar']
@@ -518,6 +543,21 @@ class Neuron(object):
         self.params['public'] = bool(self.params['public'])
         self.params['extern'] = bool(self.params['extern'])
         self.params['model'] = str(self.params['model'])
+
+    def is_dummy(self):
+        if self.params.has_key('dummy'):
+            return self.params['dummy']
+        else:
+            return False
+
+    def is_public(self):
+        return self.params['public']
+
+    def add_selector(self, selector):
+        self.params['selector'] = selector
+
+    def set_parent(self, neuron):
+        self.parent = neuron
 
 class Synapse(object):
     def __init__(self, param_dict):
@@ -529,27 +569,17 @@ class Synapse(object):
         self.post_neuron = post_neuron
         self.pre_neuron.add_outgoing_synapse(self)
         self.post_neuron.add_incoming_synapse(self)
-        pre_spiking = self.pre_neuron.params['spiking']
-        post_spiking = self.post_neuron.params['spiking']
-        if not pre_spiking and not post_spiking:
-            synapse_class = 3
-        elif pre_spiking and not post_spiking:
-            synapse_class = 1
-        elif not pre_spiking and post_spiking:
-            synapse_class = 2
-        else:
-            synapse_class = 0
-        self.params.update({'class': synapse_class})
+        self.update_class(self.get_class(self.pre_neuron, self.post_neuron))
 
     def replace_pre(self, pre_neuron):
-        # TODO: does not remove this synapse from the old pre_neuron
         self.pre_neuron = pre_neuron
         self.pre_neuron.add_outgoing_synapse(self)
-        
+        self.params['prename'] = pre_neuron.name
+
     def replace_post(self, post_neuron):
         self.post_neuron = post_neuron
         self.post_neuron.add_incoming_synapse(self)
-        
+        self.params['postname'] = post_neuron.name
 
     def __repr__(self):
         return ('synapse from '+self.params['prename']+' to ' + self.params['postname']
@@ -566,6 +596,35 @@ class Synapse(object):
             self.params['saturation'] *= self.params['scale']
             del self.params['scale']
         self.params['model'] = str(self.params['model'])
+
+    @staticmethod
+    def get_class(preneuron, postneuron):
+        """ preneuron: Neuron instance 
+            postneuron: Neuron instance 
+        """
+        is_pre_spk = preneuron.params['spiking']
+        is_post_spk = postneuron.params['spiking']
+        
+        if is_pre_spk and is_post_spk:
+            return 0
+        elif is_pre_spk and not is_post_spk:
+            return 1
+        elif not is_pre_spk and is_post_spk:
+            return 2
+        elif not is_pre_spk and not is_post_spk:
+            return 3
+
+    def update_class(self, cls):
+        self.params.update({'class': cls})
+
+    @property
+    def prename(self):
+        return self.params['prename']
+
+    @property
+    def postname(self):
+        return self.params['postname']
+
 
 def append_field(rec, name, arr, dtype=None):
     arr = np.asarray(arr)
