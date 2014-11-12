@@ -4,9 +4,14 @@
 Visualize vision model output.
 """
 
+import sys
+
 import numpy as np
 import matplotlib as mpl
-mpl.use('Agg')
+
+# suppress a warning when running ipython notebook
+if 'matplotlib.pyplot' not in sys.modules:
+    mpl.use('Agg')
 
 import neurokernel.LPU.utils.visualizer as vis
 import networkx as nx
