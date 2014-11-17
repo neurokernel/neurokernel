@@ -198,7 +198,8 @@ class Worker(object):
         self.steps = 0
         while True:
 
-            # Handle control messages:
+            # Handle control messages (this assumes that only one control
+            # message will arrive at a time):
             flag, msg_list = req.testall(r_ctrl)
             if flag:
                 msg = msg_list[0]
@@ -223,7 +224,7 @@ class Worker(object):
                     else:
                         self.max_steps = int(msg[1])
                     self.logger.info('setting maximum steps to %s' % self.max_steps)
-                    
+
                 # Quit:
                 elif msg[0] == 'quit':
                     if self.max_steps == float('inf'):
