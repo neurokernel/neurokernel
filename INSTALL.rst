@@ -37,6 +37,7 @@ packages:
 * `networkx <https://networkx.github.io>`_ 1.8 or later.
 * `numexpr <https://github.com/pydata/numexpr>`_ 2.3 or later.
 * `numpy <http://numpy.scipy.org>`_ 1.2.0 or later.
+* `pandas <http://pandas.pydata.org>`_ 0.14.1 or later.
 * `ply <http://www.dabeaz.com/ply/>`_ 3.4 or later.
 * `pycuda <http://mathema.tician.de/software/pycuda>`_ 2012.1 or later.
 * `pyzmq <http://zeromq.github.io/pyzmq/>`_ 13.0 or later.
