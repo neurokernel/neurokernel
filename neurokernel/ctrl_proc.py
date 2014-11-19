@@ -132,7 +132,7 @@ class ControlledProcess(mp.Process):
         self.logger.info('done')
 
 if __name__ == '__main__':
-    from neurokernel.tools.comm import synchronize
+    from neurokernel.tools.comm import sync_pub, sync_sub
 
     output = twiggy.outputs.StreamOutput(twiggy.formats.line_format,
                                          stream=sys.stdout)
@@ -150,7 +150,7 @@ if __name__ == '__main__':
             self._init_net()
             sock_out = self.zmq_ctx.socket(zmq.PUB)
             sock_out.bind('ipc://out')
-            synchronize(sock_out, True)
+            sync_pub(sock_out, ['listen'])
 
             self.running = True
             counter = 0
@@ -173,7 +173,7 @@ if __name__ == '__main__':
             sock_out = self.zmq_ctx.socket(zmq.SUB)
             sock_out.setsockopt(zmq.SUBSCRIBE, '')
             sock_out.connect('ipc://out')
-            synchronize(sock_out, False)
+            sync_sub(sock_out, 'listen')
 
             self.running = True
             while True:
@@ -200,6 +200,6 @@ if __name__ == '__main__':
         myproc.start()
         mylist = MyListenerProcess(port_mylist, 'mylist')
         mylist.start()
-        time.sleep(2)
+        time.sleep(1)
         sock_myproc.send_multipart([myproc.id, 'quit'])
         sock_mylist.send_multipart([mylist.id, 'quit'])
