@@ -8,15 +8,11 @@ from collections import OrderedDict
 import itertools
 import re
 
-from chash import lfu_cache_method
 import networkx as nx
 import numpy as np
 import pandas as pd
 
 from plsel import PathLikeSelector
-
-from chash import chash
-_hash_func = chash
 
 class Interface(object):
     """
