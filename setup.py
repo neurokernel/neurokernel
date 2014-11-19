@@ -84,6 +84,5 @@ if __name__ == "__main__":
             'shortuuid',
             'tables',
             'twiggy',
-            'xxh'
         ],
         )
