@@ -102,7 +102,7 @@ class BaseModule(mpi.Worker):
             if routing_table is not None and not routing_table.has_node(id):
                 raise ValueError('routing table must contain specified module ID')
             self.id = id
-                    
+
         # Logging:
         self.logger = twiggy.log.name(mpi.format_name('module %s' % self.id))
 
@@ -139,7 +139,7 @@ class BaseModule(mpi.Worker):
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
         dest_ids = self.routing_table.dest_ids(self.id)
-        for dest_id in dest_ids:            
+        for dest_id in dest_ids:
             pat = self.routing_table[self.id, dest_id]['pattern']
             int_0 = self.routing_table[self.id, dest_id]['int_0']
             int_1 = self.routing_table[self.id, dest_id]['int_1']
@@ -184,7 +184,8 @@ class BaseModule(mpi.Worker):
         req.Waitall(requests)
         if not self.time_sync:
             self.logger.info('received all data received by %s' % self.id)
-        stop = time.time()
+        else:
+            stop = time.time()
 
         # Copy received elements into the current module's data array:
         n = 0
@@ -195,8 +196,8 @@ class BaseModule(mpi.Worker):
         # Save timing data:
         if self.time_sync:
             self.logger.info('sent timing data to master')
-            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,     
-                                           start, stop, 
+            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,
+                                           start, stop,
                                            n*self.pm.dtype.itemsize)],
                                  dest=0, tag=self._ctrl_tag)
         else:
@@ -226,10 +227,10 @@ class BaseModule(mpi.Worker):
     def run_step(self):
         """
         Module work method.
-    
-        This method should be implemented to do something interesting with new 
+
+        This method should be implemented to do something interesting with new
         input port data in the module's `pm` attribute and update the attribute's
-        output port data if necessary. It should not interact with any other 
+        output port data if necessary. It should not interact with any other
         class attributes.
         """
 
@@ -277,7 +278,7 @@ class BaseModule(mpi.Worker):
 
             # Synchronize:
             catch_exception(self._sync, self.logger.info)
-        
+
 class Manager(mpi.Manager):
     """
     Module manager.
@@ -308,7 +309,7 @@ class Manager(mpi.Manager):
 
         # Unique object ID:
         self.id = uid()
-        
+
         # Set up a dynamic table to contain the routing table:
         self.routing_table = RoutingTable()
 
@@ -408,10 +409,10 @@ class Manager(mpi.Manager):
         # Store the pattern information in the routing table:
         self.logger.info('updating routing table with pattern')
         if pat.is_connected(0, 1):
-            self.routing_table[id_0, id_1] = {'pattern': pat, 
+            self.routing_table[id_0, id_1] = {'pattern': pat,
                                               'int_0': int_0, 'int_1': int_1}
         if pat.is_connected(1, 0):
-            self.routing_table[id_1, id_0] = {'pattern': pat, 
+            self.routing_table[id_1, id_0] = {'pattern': pat,
                                               'int_0': int_1, 'int_1': int_0}
 
     def process_worker_msg(self, msg):
@@ -420,34 +421,35 @@ class Manager(mpi.Manager):
         # XXX computing the throughput by updating the average would be less
         # memory intensive:
         if msg[0] == 'time':
-            rank, steps, start, stop, bytes = msg[1]
+            rank, steps, start, stop, nbytes = msg[1]
             if not self.timing_data.has_key(steps):
                 self.timing_data[steps] = {}
             self.timing_data[steps][rank] = {'start': start,
                                              'stop': stop,
-                                             'bytes': bytes}            
-                
+                                             'bytes': nbytes}
+
             self.logger.info('time data: %s' % str(msg[1]))
 
     def _run_master(self):
         super(Manager, self)._run_master()
 
         # Compute throughput using accumulated timing data:
-        total_time = 0.0
-        total_bytes = 0.0
-        for step, data in self.timing_data.iteritems():
-            start = min([d['start'] for d in data.values()])
-            stop = max([d['stop'] for d in data.values()])
-            bytes = sum([d['bytes'] for d in data.values()])
+        if self._is_master():
+            total_time = 0.0
+            total_bytes = 0.0
+            for step, data in self.timing_data.iteritems():
+                start = min([d['start'] for d in data.values()])
+                stop = max([d['stop'] for d in data.values()])
+                nbytes = sum([d['bytes'] for d in data.values()])
 
-            total_time += stop-start
-            total_bytes += bytes
-        if total_time > 0:
-            self.logger.info('average received throughput: %s bytes/s' % \
-                             (total_bytes/total_time))
-        else:
-            self.logger.info('not computing throughput')
-            
+                total_time += stop-start
+                total_bytes += nbytes
+            if total_time > 0:
+                self.logger.info('average received throughput: %s bytes/s' % \
+                                 (total_bytes/total_time))
+            else:
+                self.logger.info('not computing throughput')
+
 if __name__ == '__main__':
     class MyModule(BaseModule):
         """
