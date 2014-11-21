@@ -46,8 +46,8 @@ as follows::
   LDFLAGS=-L${CUDA_ROOT}/lib64 pip install pycuda
 
 Replace `${CUDA_ROOT}/lib` with `${CUDA_ROOT}/lib64` if your system is running 64-bit
-Linux. If you continue to encounter installation problems, see 
-the `PyCUDA Wiki <http://wiki.tiker.net/PyCuda/Installation`_ for more information.
+Linux. If you continue to encounter installation problems, see the `PyCUDA Wiki 
+<http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
 
 You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
 <http://libav.org>`_ installed to generate some of the demo visualizations.
