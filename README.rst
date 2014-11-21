@@ -28,15 +28,16 @@ following dependencies as follows::
   pip install tables
   pip install pycuda
 
-If installation of `pycuda` fails because some of the CUDA development files or 
-libraries are not found, you may need to specify where they are explicitly. For 
-example, if CUDA is installed in `/usr/local/cuda/`, try installing `pycuda` as 
+If installation of PyCUDA fails because some of the CUDA development files or 
+libraries are not found, you may need to specify where they are explicitly.  For 
+example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA  as 
 follows::
 
   CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
   LDFLAGS=-L${CUDA_ROOT}/lib64 pip install pycuda
 
-Replace `${CUDA_ROOT}/lib` with `${CUDA_ROOT}/lib64` if your system is running 64-bit
+Replace ``${CUDA_ROOT}/lib`` with ``${CUDA_ROOT}/lib64`` if your system is 
+running 64-bit
 Linux. If you continue to encounter installation problems, see the `PyCUDA Wiki 
 <http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
 
