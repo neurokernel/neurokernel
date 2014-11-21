@@ -8,7 +8,7 @@ Neurokernel requires Python 2.7, at least one NVIDIA GPU, NVIDIA's `GPU drivers
 <http://www.nvidia.com/content/drivers/>`_, and `CUDA 
 <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.  To check what 
 GPUs are in your system, you can use the `inxi 
-<https://code.google.com/p/inxi/`_ command available on most Linux 
+<https://code.google.com/p/inxi/>`_ command available on most Linux 
 distributions::
 
   inxi -G
@@ -36,15 +36,16 @@ following dependencies as follows::
   pip install tables
   pip install pycuda
 
-If installation of `pycuda` fails because some of the CUDA development files or 
+If installation of PyCUDA fails because some of the CUDA development files or 
 libraries are not found, you may need to specify where they are explicitly. For 
-example, if CUDA is installed in `/usr/local/cuda/`, try installing `pycuda` 
+example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA
 as follows::
 
   CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
   LDFLAGS=-L${CUDA_ROOT}/lib64 pip install pycuda
 
-Replace `${CUDA_ROOT}/lib` with `${CUDA_ROOT}/lib64` if your system is running 64-bit
+Replace ``${CUDA_ROOT}/lib`` with ``${CUDA_ROOT}/lib64`` if your system is 
+running 64-bit
 Linux. If you continue to encounter installation problems, see the `PyCUDA Wiki 
 <http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
 
