@@ -2,8 +2,27 @@
 
 Installation
 ============
-Neurokernel requires at least one NVIDIA GPU and `CUDA 
-<http://www.nvidia.com/object/cuda_home_new.html>`_.
+Prerequisites
+-------------
+Neurokernel requires Python 2.7, at least one NVIDIA GPU, NVIDIA's `GPU drivers 
+<http://www.nvidia.com/content/drivers/>`_, and `CUDA 
+<http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.  To check what 
+GPUs are in your system, you can use the `inxi 
+<https://code.google.com/p/inxi/`_ command available on most Linux 
+distributions::
+
+  inxi -G
+
+You can verify that the drivers are loaded as follows::
+
+  lsmod | grep nvidia
+
+If no drivers are present, you may have to manually load them by running 
+something like::
+
+  modprobe nvidia
+
+as root.
 
 Quick Start
 -----------
@@ -15,6 +34,22 @@ following dependencies as follows::
   pip install cython
   pip install numexpr
   pip install tables
+  pip install pycuda
+
+If installation of `pycuda` fails because some of the CUDA development files or 
+libraries are not found, you may need to specify where they are explicitly. For 
+example, if CUDA is installed in `/usr/local/cuda/`, try installing `pycuda` 
+as follows::
+
+  CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
+  LDFLAGS=-L${CUDA_ROOT}/lib64 pip install pycuda
+
+Replace `${CUDA_ROOT}/lib` with `${CUDA_ROOT}/lib64` if your system is running 64-bit
+Linux. If you continue to encounter installation problems, see the `PyCUDA Wiki 
+<http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
+
+You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
+<http://libav.org>`_ installed to generate some of the demo visualizations.
   
 Run the following to install the remaining dependencies and the 
 latest Neurokernel code::
@@ -24,9 +59,7 @@ latest Neurokernel code::
 
 Installation Dependencies
 -------------------------
-In addition to Python 2.7, nd NVIDIA CUDA, Neurokernel currently requires the 
-following
-packages:
+Neurokernel currently requires the following Python packages:
 
 * `bidict <http://pypi.python.org/pypi/bidict/>`_ 0.1.0 or later.
 * `bottleneck <http://pypi.python.org/pypi/bottleneck/>`_ 0.7.0 or later.
@@ -39,14 +72,11 @@ packages:
 * `numpy <http://numpy.scipy.org>`_ 1.2.0 or later.
 * `pandas <http://pandas.pydata.org>`_ 0.14.1 or later.
 * `ply <http://www.dabeaz.com/ply/>`_ 3.4 or later.
-* `pycuda <http://mathema.tician.de/software/pycuda>`_ 2012.1 or later.
+* `pycuda <http://mathema.tician.de/software/pycuda>`_ 2014.1 or later.
 * `pyzmq <http://zeromq.github.io/pyzmq/>`_ 13.0 or later.
 * `scipy <http://www.scipy.org>`_ 0.11.0 or later.
 * `tables <http://www.pytables.org>`_ 2.4.0 or later.
 * `twiggy <http://twiggy.readthedocs.org/>`_ 0.4.0 or later.
-
-You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
-<http://libav.org>`_ installed to generate some of the demo visualizations.
 
 If you have all of the above requirements installed, you can install 
 the downloaded code using::
