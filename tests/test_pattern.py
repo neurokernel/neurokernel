@@ -369,6 +369,16 @@ class test_pattern(TestCase):
         self.assertRaises(Exception,  Pattern,
                           '/[foo,bar][0]', '/bar[0:2]')
 
+    def test_create_fan_in(self):
+        pat = Pattern('/x[0:3]', '/y[0:3]')
+        pat['/x[0]', '/y[0:2]'] = 1 # fan-out is allowed
+        try:
+            pat['/x[1:3]', '/y[2]'] = 1 # fan-in is not allowed
+        except:
+            pass
+        else:
+            raise Exception
+
     def test_src_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
