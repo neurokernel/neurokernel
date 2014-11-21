@@ -1,12 +1,12 @@
 .. -*- rst -*- 
 
 Authors & Acknowledgements
-========================== 
-The Neurokernel Project was begun in 2012 by Aurel A. Lazar [1]_ at Columbia
-University's Department of Electrical Engineering after extensive discussions
-held during a research seminar on Massively Parallel Neural Computation
-[2]_. The Neurokernel Development Team currently comprises the following
-researchers at the Bionet Group [3]_:
+==========================
+The Neurokernel Project was begun in July 2011 by Aurel A.  Lazar [1]_ at 
+Columbia University's Department of Electrical Engineering after extensive 
+discussions held during a research seminar on Massively Parallel Neural 
+Computation [2]_. The Neurokernel Development Team currently comprises the 
+following researchers at the Bionet Group [3]_:
 
 * Lev Givon [4]_
 * Konstantinos Psychas [5]_
