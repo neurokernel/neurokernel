@@ -1,0 +1,2 @@
+prename,postname,model,reverse,delay,threshold,slope,power,saturation,scale,modeL2,Dm3,power_gpot_gpot,0,0.2,-0.0505,10,1,0.15,1,0L2,Dm3,power_gpot_gpot,0,0.2,-0.0505,10,1,0.15,1,0
+L2,Mt3v,power_gpot_gpot,0,0.1,-0.052,5,1,0.15,0.1,0L2,Mt3h,power_gpot_gpot,0,0.1,-0.052,5,1,0.15,0.1,0
