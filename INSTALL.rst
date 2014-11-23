@@ -75,12 +75,11 @@ Neurokernel currently requires the following Python packages:
 * `h5py <http://www.h5py.org/>`_ 2.2.1 or later.
 * `matplotlib <http://matplotlib.org/>`_ 1.3.0 or later.
 * `msgpack-numpy <http://pypi.python.org/pypi/msgpack-numpy>`_ 0.3.1.1 or later.
-* `networkx <https://networkx.github.io>`_ 1.8 or later
+* `networkx <https://networkx.github.io>`_ 1.9 or later
 * `numexpr <https://github.com/pydata/numexpr>`_ 2.3 or later.
 * `numpy <http://numpy.scipy.org>`_ 1.2.0 or later.
 * `pandas <http://pandas.pydata.org>`_ 0.14.1 or later.
-* `pycuda <http://mathema.tician.de/software/pycuda>`_ 2014.1 or
-  later.
+* `pycuda <http://mathema.tician.de/software/pycuda>`_ 2014.1 or later.
 * `pyzmq <http://zeromq.github.io/pyzmq/>`_ 13.0 or later.
 * `scipy <http://www.scipy.org>`_ 0.11.0 or later.
 * `tables <http://www.pytables.org>`_ 2.4.0 or later.

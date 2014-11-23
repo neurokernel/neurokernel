@@ -11,11 +11,13 @@ import re
 
 import networkx as nx
 
-# Work around bug that causes networkx to choke on GEXF files with boolean
-# attributes that contain the strings 'True' or 'False'
+# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF 
+# files with boolean attributes that contain the strings 'True' or 'False'
 # (bug already observed in https://github.com/networkx/networkx/pull/971)
-nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
-                                        'true':True, 'True':True}
+nx.readwrite.gexf.GEXF.convert_bool['false'] = False
+nx.readwrite.gexf.GEXF.convert_bool['False'] = False
+nx.readwrite.gexf.GEXF.convert_bool['true'] = True
+nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
 import pandas
 
