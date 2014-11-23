@@ -72,7 +72,7 @@ if __name__ == "__main__":
             'h5py >= 2.2.1',
             'matplotlib >= 1.3.0',
             'msgpack-numpy >= 0.3.1.1',
-            'networkx >= 1.8',
+            'networkx >= 1.9',
             'numexpr >= 2.3',
             'numpy >= 1.2.0',
             'pandas >= 0.14.1',
