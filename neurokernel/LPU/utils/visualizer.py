@@ -369,6 +369,10 @@ class visualizer(object):
                 for key in config.iterkeys():
                     if key not in keywds:
                         try:
+                            self._set_wrapper(self.axarr[ind],key, config[key])
+                        except:
+                            pass
+                        try:
                             self._set_wrapper(config['handle'],key, config[key])
                         except:
                             pass
@@ -472,13 +476,18 @@ class visualizer(object):
                                                   self._dome_pos[2], rstride=1, cstride=1,
                                                   facecolors=colors, antialiased=False,
                                                   shade=False)
-                    keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
-                    for key in config.iterkeys():
-                        if key not in keywds:
-                            try:
-                                self._set_wrapper(config['handle'],key, config[key])
-                            except:
-                                pass
+                keywds = ['handle', 'ydata', 'fmt', 'type', 'ids', 'shape', 'norm']
+                for key in config.iterkeys():
+                    if key not in keywds:
+                        try:
+                            self._set_wrapper(self.axarr[ind],key, config[key])
+                        except:
+                            pass
+                        
+                        try:
+                            self._set_wrapper(config['handle'],key, config[key])
+                        except:
+                            pass
         self.f.canvas.draw()
         if self.out_filename:
             self.writer.grab_frame()
