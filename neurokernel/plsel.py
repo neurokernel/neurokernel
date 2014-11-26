@@ -573,18 +573,13 @@ class PathLikeSelector(object):
         else:
             raise ValueError('invalid selector type')
         
-        max_levels = 1
         for i in xrange(len(p)):
             
             # p[i] needs to be mutable in order to perform
             # the manipulations below:
             p[i] = list(p[i])
 
-            # Check the number of levels in p[i] to see if the expanded selector
-            # will contain more than one level:
-            levels = len(p[i])
-            max_levels = max(levels, max_levels)
-            for j in xrange(levels):
+            for j in xrange(len(p[i])):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
@@ -594,10 +589,7 @@ class PathLikeSelector(object):
                 # Expand tuples into ranges:
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
-        if max(max_levels, pad_len) == 1:
-            return [x[0] for y in p for x in itertools.product(*y)]
-        else:
-            return [tuple(x)+('',)*(pad_len-len(x)) for y in p for x in itertools.product(*y)]
+        return [tuple(x)+('',)*(pad_len-len(x)) for y in p for x in itertools.product(*y)]
     
     @classmethod
     def is_expandable(cls, selector):
