@@ -531,7 +531,7 @@ class PathLikeSelector(object):
             return False
 
     @classmethod
-    def expand(cls, selector):
+    def expand(cls, selector, pad_len=0):
         """
         Expand an unambiguous selector into a list of identifiers.
 
@@ -540,11 +540,25 @@ class PathLikeSelector(object):
         selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
+        pad_len : int
+            Length to which expanded token sequences should be padded with blanks.
 
         Returns
         -------
         result : list
-            List of identifiers; each identifier is a tuple of unambiguous tokens.
+            List of identifiers. If the number of levels in the selector is 1,
+            each is a string or integer token; otherwise, each identifier is a tuple
+            of identifier is a tuple of tokens.
+        
+        Examples
+        --------
+        >>> from neurokernel.plsel import PathLikeSelector
+        >>> PathLikeSelector.expand('/foo[0:2]')
+        [('foo', 0), ('foo', 1)]
+        >>> PathLikeSelector.expand('/foo[0:2]', 3)
+        [('foo', 0, ''), ('foo', 1, '')]
+        >>> PathLikeSelector.expand('/bar,/foo[0:2]', 3)
+        [('bar', '', ''), ('foo', 0, ''), ('foo', 1, '')]
         """
         
         assert cls.is_selector(selector)
@@ -558,17 +572,32 @@ class PathLikeSelector(object):
             p = copy.copy(selector) 
         else:
             raise ValueError('invalid selector type')
+        
+        max_levels = 1
         for i in xrange(len(p)):
-
-            # p[i] needs to be mutable:
+            
+            # p[i] needs to be mutable in order to perform
+            # the manipulations below:
             p[i] = list(p[i])
 
-            for j in xrange(len(p[i])):
+            # Check the number of levels in p[i] to see if the expanded selector
+            # will contain more than one level:
+            levels = len(p[i])
+            max_levels = max(levels, max_levels)
+            for j in xrange(levels):
+
+                # Wrap integers and strings in a list so that
+                # itertools.product() can iterate over them:
                 if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
+
+                # Expand tuples into ranges:
                 elif type(p[i][j]) == tuple:
                     p[i][j] = range(p[i][j][0], p[i][j][1])
-        return [tuple(x) for y in p for x in itertools.product(*y)]
+        if max(max_levels, pad_len) == 1:
+            return [x[0] for y in p for x in itertools.product(*y)]
+        else:
+            return [tuple(x)+('',)*(pad_len-len(x)) for y in p for x in itertools.product(*y)]
     
     @classmethod
     def is_expandable(cls, selector):
