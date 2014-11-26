@@ -392,13 +392,13 @@ class test_pattern(TestCase):
                                ('aaa', 1),
                                ('aaa', 2)])
 
-        # q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
-        # q['/aaa','/www'] = 1
-        # q['/aaa','/xxx'] = 1
-        # q['/bbb','/yyy'] = 1
-        # self.assertItemsEqual(q.src_idx(0, 1),
-        #                       [('aaa',),
-        #                        ('bbb',)])
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.src_idx(0, 1),
+                              [('aaa',),
+                               ('bbb',)])
 
     def test_src_idx_dest_ports(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -411,12 +411,12 @@ class test_pattern(TestCase):
         self.assertItemsEqual(p.src_idx(0, 1, dest_ports='/yyy[0]'),
                               [('aaa', 0)])
 
-        # q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
-        # q['/aaa','/www'] = 1
-        # q['/aaa','/xxx'] = 1
-        # q['/bbb','/yyy'] = 1
-        # self.assertItemsEqual(q.src_idx(0, 1, dest_ports='/[www,xxx]'),
-        #                       [('aaa',)])
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.src_idx(0, 1, dest_ports='/[www,xxx]'),
+                              [('aaa',)])
 
     def test_src_idx_src_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -432,6 +432,17 @@ class test_pattern(TestCase):
                               [('aaa', 0)])
         self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
 
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.src_idx(0, 1, src_type='spike'), 
+                              [('aaa',)])
+        self.assertItemsEqual(q.src_idx(0, 1, src_type='gpot'), [])
+
     def test_src_idx_dest_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -446,6 +457,17 @@ class test_pattern(TestCase):
                               [('aaa', 0)])
         self.assertItemsEqual(p.src_idx(0, 1, dest_type='gpot'), [])
 
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.src_idx(0, 1, dest_type='spike'), 
+                              [('aaa',)])
+        self.assertItemsEqual(q.src_idx(0, 1, dest_type='gpot'), [])
+
     def test_dest_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -459,14 +481,14 @@ class test_pattern(TestCase):
                                ('yyy', 1),
                                ('yyy', 2)])
 
-        # q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
-        # q['/aaa','/www'] = 1
-        # q['/aaa','/xxx'] = 1
-        # q['/bbb','/yyy'] = 1
-        # self.assertItemsEqual(q.dest_idx(0, 1),
-        #                       [('www',),
-        #                        ('xxx',),
-        #                        ('yyy',)])
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.dest_idx(0, 1),
+                              [('www',),
+                               ('xxx',),
+                               ('yyy',)])
 
     def test_dest_idx_src_ports(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -481,12 +503,13 @@ class test_pattern(TestCase):
                                ('yyy', 1),
                                ('yyy', 2)])
 
-        # q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
-        # q['/aaa','/www'] = 1
-        # q['/aaa','/xxx'] = 1
-        # q['/bbb','/yyy'] = 1
-        # self.assertItemsEqual(q.dest_idx(0, 1, src_ports='/aaa'),
-        #                       [('www',), ('xxx',)])
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.dest_idx(0, 1, src_ports='/aaa'),
+                              [('www',),
+                               ('xxx',)])
 
     def test_dest_idx_src_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -504,17 +527,17 @@ class test_pattern(TestCase):
                                ('yyy', 2)])
         self.assertItemsEqual(p.dest_idx(0, 1, src_type='gpot'), [])
 
-        # q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
-        # q['/aaa','/www'] = 1
-        # q['/aaa','/xxx'] = 1
-        # q['/yyy','/bbb'] = 1
-        # q['/zzz','/ccc'] = 1
-        # q.interface['/aaa'] = [0, 'in', 'spike']
-        # q.interface['/[www,xxx]'] = [1, 'out', 'spike']
-        # self.assertItemsEqual(q.dest_idx(0, 1, src_type='spike'), 
-        #                       [('www',),
-        #                        ('xxx',)])
-        # self.assertItemsEqual(q.src_idx(0, 1, src_type='gpot'), [])
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.dest_idx(0, 1, src_type='spike'), 
+                              [('www',),
+                               ('xxx',)])
+        self.assertItemsEqual(q.dest_idx(0, 1, src_type='gpot'), [])
 
     def test_dest_idx_dest_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -531,6 +554,18 @@ class test_pattern(TestCase):
                                ('yyy', 1),
                                ('yyy', 2)])
         self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
+
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.dest_idx(0, 1, dest_type='spike'), 
+                              [('www',),
+                               ('xxx',)])
+        self.assertItemsEqual(q.dest_idx(0, 1, dest_type='gpot'), [])
 
     def test_is_in_interfaces(self):
         p = Pattern('/aaa/bbb', '/ccc/ddd')
