@@ -186,6 +186,17 @@ class Interface(object):
         data_inv['io'] = data_inv['io'].apply(f)
         return self.from_df(data_inv)
 
+    @property
+    def idx_levels(self):
+        """
+        Number of levels in Interface index.
+        """
+
+        if isinstance(self.data.index, pd.MultiIndex):
+            return len(self.index.levels)
+        else:
+            return 1
+
     def clear(self):
         """
         Clear all ports in class instance.
@@ -548,11 +559,14 @@ class Interface(object):
         """
 
         try:
-            idx_temp = self.sel.expand(s)
-
-            #Fix for one level selectors
-            idx = [x if len(x)>1 else x[0] for x in idx_temp]
+            # Pad the expanded selector with blanks to prevent pandas from
+            # spurious matches such as mistakenly validating '/foo' as being in 
+            # an Interface that only contains the ports '/foo[0:2]':
+            idx = self.sel.expand(s, self.idx_levels)
+            if not isinstance(self.data.index, pd.MultiIndex):
+                idx = [x[0] for x in idx]
             d = self.data['interface'].ix[idx]
+
             if isinstance(d, int):
                 return True
             if np.any(d.isnull().tolist()):
@@ -721,8 +735,10 @@ class Interface(object):
         """
 
         try:
-            t = self.sel.expand(s)
-            d = self.data['interface'][t]
+            idx = self.sel.expand(s, self.idx_levels)
+            if not isinstance(self.data.index, pd.MultiIndex):
+                idx = [x[0] for x in idx]
+            d = self.data['interface'].ix[idx]
             s = set(d)
             s.discard(np.nan)
             return s
