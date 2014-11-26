@@ -1283,7 +1283,7 @@ class Pattern(object):
         assert src_int != dest_int
         assert src_int in self.interface.interface_ids and \
             dest_int in self.interface.interface_ids
-
+        
         # Filter destination ports by specified type:
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
@@ -1308,8 +1308,17 @@ class Pattern(object):
 
         # Construct index from those rows in the pattern whose ports have been
         # selected by the above code:
-        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
-                               and x[self.to_slice] in to_idx).index
+        if isinstance(from_idx, pd.MultiIndex):
+            if isinstance(to_idx, pd.MultiIndex):
+                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice] in to_idx
+            else:
+                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice][0] in to_idx
+        else:
+            if isinstance(to_idx, pd.MultiIndex):
+                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice] in to_idx
+            else:
+                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice][0] in to_idx
+        idx = self.data.select(f).index
                 
         # Remove duplicate tuples from output without perturbing the order
         # of the remaining tuples:
@@ -1376,8 +1385,17 @@ class Pattern(object):
 
         # Construct index from those rows in the pattern whose ports have been
         # selected by the above code:
-        idx = self.data.select(lambda x: x[self.from_slice] in from_idx \
-                               and x[self.to_slice] in to_idx).index
+        if isinstance(from_idx, pd.MultiIndex):
+            if isinstance(to_idx, pd.MultiIndex):
+                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice] in to_idx
+            else:
+                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice][0] in to_idx
+        else:
+            if isinstance(to_idx, pd.MultiIndex):
+                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice] in to_idx
+            else:
+                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice][0] in to_idx
+        idx = self.data.select(f).index
 
         # Remove duplicate tuples from output without perturbing the order
         # of the remaining tuples:
