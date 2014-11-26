@@ -1024,23 +1024,10 @@ class PathLikeSelector(object):
         """
 
         assert cls.is_selector(selector)
-
+        max_levels = cls.max_levels(selector)
         if type(selector) in [str, unicode]:
             try:
-                tks = cls.expand(selector)
-                # Check if interface is set for all values
-                if not df.ix[:]['interface'].isnull().any():
-                    tks = cls.expand(selector)
-                    return df.ix[tks]['interface'].dropna().index.tolist()
-                else:
-                    t = []
-                    for s in tks:
-                        try:
-                            df.ix[s]
-                            t.append(s)
-                        except:
-                            pass
-                    return t
+                parse_list = cls.expand(selector, max_levels)
             except:
                 parse_list = cls.parse(selector)
         elif type(selector) in [list, tuple]:
@@ -1050,7 +1037,6 @@ class PathLikeSelector(object):
 
         # The maximum number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:
-        max_levels = max(map(len, parse_list))
         if max_levels > len(df.index.names[start:stop]):
             raise ValueError('Maximum number of levels in selector exceeds that of '
                              'DataFrame index')
