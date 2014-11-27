@@ -165,6 +165,14 @@ class test_interface(TestCase):
         assert i.is_in_interfaces('/foo') == True
         assert i.is_in_interfaces('/qux') == False
 
+        # Selectors comprising identifiers with different numbers of levels
+        i = Interface('/foo,/bar[0:3]')
+        i['/foo', 'interface', 'io'] = [0, 'in']
+        i['/bar[0:3]', 'interface', 'io'] = [1, 'out']
+        assert i.is_in_interfaces('/foo') == True
+        assert i.is_in_interfaces('/bar[0]') == True
+        assert i.is_in_interfaces('/bar') == False
+        
     def test_in_ports(self):
         # Selector with multiple levels:
         i = Interface('/foo[0:2]')
@@ -648,9 +656,22 @@ class test_pattern(TestCase):
         self.assertItemsEqual(q.dest_idx(0, 1, dest_type='gpot'), [])
 
     def test_is_in_interfaces(self):
+        # Selectors with multiple levels:
         p = Pattern('/aaa/bbb', '/ccc/ddd')
         assert p.is_in_interfaces('/aaa/bbb') == True
         assert p.is_in_interfaces('/aaa') == False
+
+        # Selectors with a single level:
+        p = Pattern('/aaa', '/bbb')
+        assert p.is_in_interfaces('/aaa') == True
+        assert p.is_in_interfaces('/ccc') == False
+
+        # Selectors comprising identifiers with different numbers of levels::
+        p = Pattern('/aaa,/bbb[0]', '/ccc,/ddd[0]')
+        assert p.is_in_interfaces('/aaa') == True
+        assert p.is_in_interfaces('/ccc') == True
+        assert p.is_in_interfaces('/ddd') == False
+        assert p.is_in_interfaces('/ddd[0]') == True
 
     def test_is_connected_single_level(self):
         p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
