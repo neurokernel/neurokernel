@@ -77,10 +77,22 @@ class test_interface(TestCase):
                                  [(0,), (1,), (2,), (3,)])
 
     def test_data_select(self):
-        i = self.interface.data_select(lambda x: x['io'] >= 'out')
-        assert_index_equal(i.data.index,
+        # Selector with multiple levels:
+        i = Interface('/foo[0:3]')
+        i['/foo[0]', 'interface', 'io'] = [0, 'in']
+        i['/foo[1:3]', 'interface', 'io'] = [0, 'out']
+        j = i.data_select(lambda x: x['io'] != 'in')
+        assert_index_equal(j.data.index,
                            pd.MultiIndex.from_tuples([('foo', 1),
                                                       ('foo', 2)]))
+
+        # Selector with single level:
+        i = Interface('/[foo,bar,baz]')
+        i['/[foo,bar]', 'interface', 'io'] = [0, 'in']
+        i['/baz', 'interface', 'io'] = [0, 'out']
+        j = i.data_select(lambda x: x['io'] != 'in')
+        assert_index_equal(j.data.index,
+                           pd.Index(['baz']))
 
     def test_from_df_index(self):
         idx = pd.Index(['foo', 'bar', 'baz'])
@@ -177,11 +189,20 @@ class test_interface(TestCase):
         assert_frame_equal(i.in_ports(0).data, df)
 
     def test_interface_ports(self):
+        # Selector with multiple levels:
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
         j = Interface('/foo[2:4]')
         j['/foo[2:4]', 'interface'] = 1
+        assert_frame_equal(i.interface_ports(1).data, j.data)
+
+        # Selector with single level:
+        i = Interface('/[foo,bar,baz]')
+        i['/[foo,bar]', 'interface'] = 0
+        i['/baz', 'interface'] = 1
+        j = Interface('/baz')
+        j['/baz', 'interface'] = 1
         assert_frame_equal(i.interface_ports(1).data, j.data)
 
     def test_out_ports(self):
@@ -262,12 +283,22 @@ class test_interface(TestCase):
         different ways should still be deemed compatible.
         """
 
+        # Selectors with multiple levels:
         i = Interface('/foo[0:2],/bar[0:2]')
         i['/foo[0:2]', 'interface', 'io'] = [0, 'in']
         i['/bar[0:2]', 'interface', 'io'] = [0, 'out']
         j = Interface('/bar[0:2],/foo[0:2]')
         j['/bar[0:2]', 'interface', 'io'] = [1, 'in']
         j['/foo[0:2]', 'interface', 'io'] = [1, 'out']
+        assert i.is_compatible(0, j, 1)
+
+        # Selectors with single level:
+        i = Interface('/foo,/bar,/baz,/qux')
+        i['/[foo,bar]', 'interface', 'io'] = [0, 'in']
+        i['/[baz,qux]', 'interface', 'io'] = [0, 'out']
+        j = Interface('/bar,/foo,/qux,/baz')
+        j['/[baz,qux]', 'interface', 'io'] = [1, 'in']
+        j['/[foo,bar]', 'interface', 'io'] = [1, 'out']
         assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_both_dirs(self):
