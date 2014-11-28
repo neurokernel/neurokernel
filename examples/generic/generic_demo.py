@@ -27,7 +27,7 @@ dur = 1.0
 steps = int(dur/dt)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--debug', default=True,
+parser.add_argument('--debug', default=False,
                     dest='debug', action='store_true',
                     help='Write connectivity structures and inter-LPU routed data in debug folder')
 parser.add_argument('-l', '--log', default='none', type=str,
@@ -61,8 +61,7 @@ man = core.Manager(port_data, port_ctrl)
 man.add_brok()
 
 (n_dict, s_dict) = LPU.lpu_parser('./data/generic_lpu.gexf.gz')
-import sys
-sys.exit()
+
 ge = LPU(dt, n_dict, s_dict,
          input_file='./data/generic_input.h5',
          output_file='generic_output.h5', port_ctrl=port_ctrl,
