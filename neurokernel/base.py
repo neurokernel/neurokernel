@@ -11,7 +11,7 @@ import os
 import re
 import string
 import sys
-import threading
+import threading as th
 import time
 import collections
 
@@ -28,7 +28,7 @@ import msgpack_numpy as msgpack
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from tools.comm import is_poll_in, get_random_port
+from tools.comm import is_poll_in, get_random_port, sync_router, sync_dealer
 from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
@@ -37,6 +37,7 @@ from plsel import PathLikeSelector, PortMapper
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
+PORT_TIME = 5002
 
 class BaseModule(ControlledProcess):
     """
@@ -65,6 +66,10 @@ class BaseModule(ControlledProcess):
     debug : bool
         Debug flag. When True, exceptions raised during the work method
         are not be suppressed.
+    time_sync : bool
+        Time synchronization flag. When True, debug messages are not emitted during
+        module synchronization and the time taken to receive all incoming data is 
+        computed.
 
     Attributes
     ----------
@@ -106,24 +111,26 @@ class BaseModule(ControlledProcess):
 
     # Define properties to perform validation when the maximum number of
     # execution steps set:
-    _steps = np.inf
+    _max_steps = float('inf')
     @property
-    def steps(self):
+    def max_steps(self):
         """
         Maximum number of steps to execute.
         """
-        return self._steps
-    @steps.setter
-    def steps(self, value):
+        return self._max_steps
+    @max_steps.setter
+    def max_steps(self, value):
         if value <= 0:
             raise ValueError('invalid maximum number of steps')
-        self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
-        self._steps = value
+        self.logger.info('maximum number of steps changed: %s -> %s' % \
+                         (self._max_steps, value))
+        self._max_steps = value
 
     def __init__(self, selector, data, columns=['interface', 'io', 'type'],
-                 port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
-                 id=None, debug=False):
+                 port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
+                 id=None, debug=False, time_sync=False):
         self.debug = debug
+        self.time_sync = time_sync
 
         # Generate a unique ID if none is specified:
         if id is None:
@@ -138,6 +145,9 @@ class BaseModule(ControlledProcess):
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
+        if port_time == port_ctrl or port_time == port_data:
+            raise ValueError('time port must differ from data and control ports')
+        self.port_time = port_time
 
         # Initial network connectivity:
         self.net = 'none'
@@ -330,17 +340,18 @@ class BaseModule(ControlledProcess):
         """
 
         # Initialize control port handler:
-        self.logger.info('initializing ctrl network connection')
+        self.logger.info('initializing ctrl port')
         super(BaseModule, self)._init_net()
 
+        # Initialize data port handler:
         if self.net == 'none':
-            self.logger.info('not initializing data network connection')
+            self.logger.info('not initializing data port')
         else:
 
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
             with IgnoreKeyboardInterrupt():
-                self.logger.info('initializing data network connection')
+                self.logger.info('initializing data port')
 
                 # Use a nonblocking port for the data interface; set
                 # the linger period to prevent hanging on unsent
@@ -349,11 +360,20 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-                self.logger.info('network connection initialized')
+                self.logger.info('data port initialized')
 
                 # Set up a poller for detecting incoming data:
                 self.data_poller = zmq.Poller()
                 self.data_poller.register(self.sock_data, zmq.POLLIN)
+
+                # Initialize timing port:
+                self.logger.info('initializing time port')
+                self.sock_time = self.zmq_ctx.socket(zmq.DEALER)
+                self.sock_time.setsockopt(zmq.IDENTITY, self.id)
+                self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
+                self.sock_time.connect("tcp://localhost:%i" % self.port_time)
+                sync_dealer(self.sock_time, self.id)
+                self.logger.info('time port initialized')
 
     def _get_in_data(self):
         """
@@ -447,22 +467,37 @@ class BaseModule(ControlledProcess):
             if self.net in ['in', 'full']:
 
                 # Wait until inbound data is received from all source modules:  
+                nbytes = 0
+                start = time.time()
                 while not all((q for q in self._in_data.itervalues())):
                     # Use poller to avoid blocking:
                     if is_poll_in(self.sock_data, self.data_poller):
-                        in_id, data = msgpack.unpackb(self.sock_data.recv())
-                        self.logger.info('recv from %s: %s ' % (in_id, str(data)))
+                        data_packed = self.sock_data.recv()
+                        in_id, data = msgpack.unpackb(data_packed)
+                        if not self.time_sync:
+                            self.logger.info('recv from %s: %s %s ' % (in_id, str(data)))
 
                         # Ignore incoming data containing None:
                         if data is not None:
                             self._in_data[in_id].append(data)
 
+                            # Record number of bytes of transmitted serialized data:
+                            nbytes += len(data_packed)
+
                     # Stop the synchronization if a quit message has been received:
                     if not self.running:
-                        self.logger.info('run loop stopped - stopping sync')
+                        if not self.time_sync:
+                            self.logger.info('run loop stopped - stopping sync')
                         break
+                stop = time.time()
                 self.logger.info('recv data from all input IDs')
-                
+
+                # Transmit time taken to receive data:
+                if self.time_sync:
+                    self.logger.info('sent timing data to master')
+                    self.sock_time.send(msgpack.packb((self.id, self.steps,
+                                                       start, stop, nbytes)))
+
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
@@ -542,6 +577,7 @@ class BaseModule(ControlledProcess):
 
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
+        self.steps = 0
         with IgnoreKeyboardInterrupt():
 
             # Initialize environment:
@@ -559,9 +595,9 @@ class BaseModule(ControlledProcess):
             self.pre_run()
 
             self.running = True
-            curr_steps = 0
-            while curr_steps < self._steps:
-                self.logger.info('execution step: %s' % curr_steps)
+            self.steps = 0
+            while self.steps < self.max_steps:
+                self.logger.info('execution step: %s/%s' % (self.steps, self.max_steps))
 
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
@@ -596,8 +632,8 @@ class BaseModule(ControlledProcess):
                     self.logger.info('run loop stopped')
                     break
 
-                curr_steps += 1
-
+                self.steps += 1
+            self.logger.info('maximum number of steps reached')
             # Perform any post-emulation operations:
             self.post_run()
 
@@ -769,7 +805,72 @@ class Broker(ControlledProcess):
                 np.zeros(len(conn), dtype=np.int32))) 
             self._init_net()
         self.logger.info('exiting')
-        
+
+class TimeListener(ControlledProcess):
+    """
+    Class for collecting/processing emitted module timing data.
+
+    Parameters
+    ----------
+    port_ctrl : int
+        Network port for controlling the module instance.
+    port_time : int
+        Network port for receiving transmitted timing data.
+    ids : set of str
+        Set of module IDs from which to receive timing data.
+
+    Notes
+    -----
+    The IDs of all modules from which timing data will be collected
+    must be stored in the class instance's `ids` attribute before
+    the process is started.
+
+    This class should only be instantiated by the Manager class.
+    """
+
+    def __init__(self, port_ctrl, port_time, ids=set()):
+        super(TimeListener, self).__init__(port_ctrl, uid())
+
+        # Logging:
+        self.logger = twiggy.log.name('listen %s' % self.id)
+
+        # Time port:
+        if port_time == port_ctrl:
+            raise ValueError('time and control ports must differ')
+        self.port_time = port_time
+
+        # IDs of modules from which to collect timing data:
+        assert isinstance(ids, set)
+        self.ids = ids
+
+        self.timing_data = {}
+
+    def add(self, id):
+        """
+        Add a module ID from which to collect timing data.
+        """
+
+        self.ids.add(id)
+
+    def run(self):
+        self._init_net()
+        sock_time = self.zmq_ctx.socket(zmq.ROUTER)
+        sock_time.bind('tcp://*:%s' % self.port_time)
+        sync_router(sock_time, self.ids)
+        self.logger.info('time port initialized')
+        self.running = True
+        counter = 0
+        while True:
+            if sock_time.poll(10):
+                id, data = sock_time.recv_multipart()
+                id, steps, start, stop, nbytes = msgpack.unpackb(data)
+                self.logger.info('received %s:%s' % (id, 
+                                 str(msgpack.unpackb(data))))
+            if not self.running:
+                self.logger.info('stopping run loop')
+                break
+        self.logger.info('done')
+
 class Manager(object):
     """
     Module manager.
@@ -783,6 +884,8 @@ class Manager(object):
         Port to use for communication with modules.
     port_ctrl : int
         Port used to control modules.
+    port_time : int
+        Port used to obtain timing information from modules.
 
     Attributes
     ----------
@@ -792,9 +895,20 @@ class Manager(object):
         Module instances. Keyed by module object ID.
     routing_table : routing_table.RoutingTable
         Table of data transmission connections between modules.
+    time_listener : TimeListener
+        Process for collecting timing data from all modules.
+
+    Notes
+    -----
+    The message flow between objects in a Neurokernel emulation is as follows:
+    
+    Manager -[ctrl]-> BaseModule, Broker, TimeListener
+    BaseModule -[time]-> TimeListener
+    BaseModule -[data]-> Broker -[data]-> BaseModule
     """ 
 
-    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL):
+    def __init__(self, port_data=PORT_DATA, port_ctrl=PORT_CTRL,
+                 port_time=PORT_TIME):
 
         # Unique object ID:
         self.id = uid()
@@ -802,6 +916,7 @@ class Manager(object):
         self.logger = twiggy.log.name('manage %s' % self.id)
         self.port_data = port_data
         self.port_ctrl = port_ctrl
+        self.port_time = port_time
 
         # Set up a router socket to communicate with other topology
         # components; linger period is set to 0 to prevent hanging on
@@ -825,7 +940,10 @@ class Manager(object):
         self.routing_table = RoutingTable()
 
         # Number of emulation steps to run:
-        self.steps = np.inf
+        self.max_steps = np.inf
+
+        # Set up process to handle time data:
+        self.time_listener = TimeListener(self.port_ctrl, self.port_time)
 
     def connect(self, m_0, m_1, pat, int_0=0, int_1=1):
         """
@@ -864,6 +982,10 @@ class Manager(object):
         if m_1.id not in self.modules:
             self.add_mod(m_1)
 
+        # Make the timing listener aware of the module IDs:
+        self.time_listener.add(m_0.id)
+        self.time_listener.add(m_1.id)
+
         # Pass the pattern to the modules being connected:
         self.logger.info('passing connection pattern to modules {0} and {1}'
             .format(m_0.id, m_1.id))
@@ -878,7 +1000,6 @@ class Manager(object):
             self.routing_table[m_1.id, m_0.id] = 1
 
         self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
-
 
     @property
     def N_brok(self):
@@ -923,7 +1044,8 @@ class Manager(object):
         """
 
         if not isinstance(m, BaseModule):
-            m = BaseModule(port_data=self.port_data, port_ctrl=self.port_ctrl)
+            m = BaseModule(port_data=self.port_data,
+                           port_ctrl=self.port_ctrl, port_time=self.port_time)
         self.modules[m.id] = m
         self.logger.info('added module %s' % m.id)
         return m
@@ -938,8 +1060,11 @@ class Manager(object):
             Maximum number of steps to execute.
         """
 
-        self.steps = steps
+        self.max_steps = steps
         with IgnoreKeyboardInterrupt():
+            self.logger.info('time listener about to start')
+            self.time_listener.start()
+            self.logger.info('time listener started')
             bi = 1
             mi = 1
             for b in self.brokers.values():
@@ -948,7 +1073,7 @@ class Manager(object):
                 self.logger.info('broker ' + str(bi) + ' started')
                 bi+=1
             for m in self.modules.values():
-                m.steps = steps
+                m.max_steps = steps
                 self.logger.info('module ' + str(mi) + ' about to start')
                 m.start()
                 self.logger.info('module ' + str(mi) + ' started')
@@ -979,6 +1104,17 @@ class Manager(object):
             self.brokers[i].join(1)
         self.logger.info('all brokers stopped')
         
+    def stop_listener(self):
+        """
+        Stop execution of the time listener.
+        """
+
+        self.logger.info('stopping time listener')
+        self.logger.info('sent to   %s: quit' % self.time_listener.id)
+        self.sock_ctrl.send_multipart([self.time_listener.id, 'quit'])
+        self.time_listener.join(1)
+        self.logger.info('time listener stopped')
+
     def join_modules(self, send_quit=False):
         """
         Wait until all modules have stopped.
@@ -1024,13 +1160,14 @@ class Manager(object):
         Stop execution of an emulation.
         """
 
-        if np.isinf(self.steps):
-            self.logger.info('stopping all modules')
+        if np.isinf(self.max_steps):
+            self.logger.info('stopping all processes')
             send_quit = True
         else:
             send_quit = False
         self.join_modules(send_quit)
         self.stop_brokers()
+        self.stop_listener()
         
 def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     """
@@ -1085,9 +1222,11 @@ if __name__ == '__main__':
 
         def __init__(self, sel, sel_in, sel_out, data,
                      columns=['interface', 'io', 'type'],
-                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, id=None):
+                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
+                     port_time=PORT_TIME,
+                     id=None):
             super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
-                                           id, True)
+                                           port_time, id, True, True)
 
             assert PathLikeSelector.is_in(sel_in, sel)
             assert PathLikeSelector.is_in(sel_out, sel)
@@ -1112,7 +1251,7 @@ if __name__ == '__main__':
     logger = setup_logger()
 
     # Set up emulation:
-    man = Manager(get_random_port(), get_random_port())
+    man = Manager(get_random_port(), get_random_port(), get_random_port())
     man.add_brok()
 
     m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0:2]'; m1_int_sel_out = '/a[2:5]'
@@ -1122,17 +1261,17 @@ if __name__ == '__main__':
     m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
                   np.zeros(5, dtype=np.float),
                   ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm1   ')
+                  man.port_data, man.port_ctrl, man.port_time, 'm1   ')
     man.add_mod(m1)
     m2 = MyModule(m2_int_sel, m2_int_sel_in, m2_int_sel_out,
                   np.zeros(5, dtype=np.float),
                   ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, 'm2   ')
+                  man.port_data, man.port_ctrl, man.port_time, 'm2   ')
     man.add_mod(m2)
     m3 = MyModule(m3_int_sel, m3_int_sel_in, m3_int_sel_out,
                   np.zeros(4, dtype=np.float),
                   ['interface', 'io', 'type'], 
-                  man.port_data, man.port_ctrl, 'm3   ')
+                  man.port_data, man.port_ctrl, man.port_time, 'm3   ')
     man.add_mod(m3)
 
     # Make sure that all ports in the patterns' interfaces are set so 
@@ -1168,9 +1307,9 @@ if __name__ == '__main__':
     # Start emulation and allow it to run for a little while before shutting
     # down.  To set the emulation to exit after executing a fixed number of
     # steps, start it as follows and remove the sleep statement:
-    # man.start(steps=500)
+    #man.start(steps=500)
 
     man.start()
-    time.sleep(2)
+    time.sleep(3)
     man.stop()
     logger.info('all done')

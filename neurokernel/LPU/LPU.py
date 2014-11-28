@@ -24,6 +24,7 @@ nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
 from neurokernel.core import Module
 import neurokernel.base as base
+from neurokernel.tools.comm import get_random_port
 
 from types import *
 from collections import Counter
@@ -441,7 +442,8 @@ class LPU(Module, object):
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
         super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl, self.LPU_id,
+                                  columns, port_data, port_ctrl,
+                                  get_random_port(), self.LPU_id,
                                   device, debug)
 
         self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']

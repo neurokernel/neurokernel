@@ -14,7 +14,7 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
-from base import BaseModule, Manager, Broker, PORT_DATA, PORT_CTRL, setup_logger
+from base import BaseModule, Manager, Broker, PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
 
 from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
                           ExceptionOnSignal, TryExceptionOnSignal)
@@ -63,6 +63,10 @@ class Module(BaseModule):
         GPU device to use.
     debug : bool
         Debug flag.
+    time_sync : bool
+        Time synchronization flag. When True, debug messages are not emitted during
+        module synchronization and the time taken to receive all incoming data is 
+        computed.
         
     Notes
     -----
@@ -74,10 +78,11 @@ class Module(BaseModule):
 
     def __init__(self, selector, sel_gpot, sel_spike, data_gpot, data_spike,
                  columns=['interface', 'io', 'type'],
-                 port_data=PORT_DATA, port_ctrl=PORT_CTRL,
-                 id=None, device=None, debug=False):
+                 port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
+                 id=None, device=None, debug=False, time_sync=False):
 
         self.debug = debug
+        self.time_sync = time_sync
         self.device = device
         
         # Require several necessary attribute columns:
@@ -98,6 +103,9 @@ class Module(BaseModule):
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
+        if port_time == port_ctrl or port_time == port_data:
+            raise ValueError('time port must differ from data and control ports')
+        self.port_time = port_time
 
         # Initial network connectivity:
         self.net = 'none'
@@ -390,6 +398,7 @@ class Module(BaseModule):
 
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
+        self.steps = 0
         with IgnoreKeyboardInterrupt():
             # Initialize environment:
             self._init_net()
@@ -408,7 +417,7 @@ class Module(BaseModule):
 
             self.running = True
             curr_steps = 0
-            while curr_steps < self._steps:
+            while curr_steps < self.max_steps:
                 self.logger.info('execution step: %s' % curr_steps)
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
@@ -475,15 +484,15 @@ if __name__ == '__main__':
                      sel_out_gpot, sel_out_spike,
                      data_gpot, data_spike,
                      columns=['interface', 'io', 'type'],
-                     port_data=PORT_DATA, port_ctrl=PORT_CTRL,
+                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                      id=None, device=None):                     
             super(MyModule, self).__init__(sel, ','.join([sel_in_gpot, 
                                                           sel_out_gpot]),
                                            ','.join([sel_in_spike,
                                                      sel_out_spike]),
                                            data_gpot, data_spike,
-                                           columns, port_data, port_ctrl,
-                                           id, None, True)
+                                           columns, port_data, port_ctrl, port_time,
+                                           id, None, True, True)
 
             
             assert PathLikeSelector.is_in(sel_in_gpot, sel)
@@ -520,16 +529,13 @@ if __name__ == '__main__':
                     np.random.randint(0, 2, len(out_spike_ports))
 
         def run(self):
-
-            # Make every class instance generate a different pseudorandom sequence:
-            np.random.seed(id(self))
             super(MyModule, self).run()
 
     def emulate(n, steps):
         assert(n>1)
         n = str(n)
         # Set up emulation:
-        man = Manager(get_random_port(), get_random_port())
+        man = Manager(get_random_port(), get_random_port(), get_random_port())
         man.add_brok()
 
         m1_int_sel_in_gpot = '/a/in/gpot0,/a/in/gpot1'
@@ -547,7 +553,7 @@ if __name__ == '__main__':
                       m1_int_sel_out_gpot, m1_int_sel_out_spike,
                       np.zeros(N1_gpot, np.float64),
                       np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, 'm1')
+                      man.port_data, man.port_ctrl, man.port_time, 'm1')
         man.add_mod(m1)
 
         m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
@@ -565,7 +571,7 @@ if __name__ == '__main__':
                       m2_int_sel_out_gpot, m2_int_sel_out_spike,
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, 'm2')
+                      man.port_data, man.port_ctrl, man.port_time, 'm2')
 
         # Make sure that all ports in the patterns' interfaces are set so 
         # that they match those of the modules:
@@ -597,7 +603,7 @@ if __name__ == '__main__':
         return m1
 
     # Set up logging:
-    logger = setup_logger(screen=False)
+    logger = setup_logger()
     steps = 100
 
     # Emulation 1
@@ -607,9 +613,9 @@ if __name__ == '__main__':
     print('Simulation of size {} complete: Duration {} seconds'.format(
         size, time.time() - start_time))
     # Emulation 2
-    start_time = time.time()
-    size = 100
-    emulate(size, steps)
-    print('Simulation of size {} complete: Duration {} seconds'.format(
-        size, time.time() - start_time))
-    logger.info('all done')
+    # start_time = time.time()
+    # size = 100
+    # emulate(size, steps)
+    # print('Simulation of size {} complete: Duration {} seconds'.format(
+    #     size, time.time() - start_time))
+    # logger.info('all done')
