@@ -46,7 +46,7 @@ parser.add_argument('-d', '--port_data', default=None, type=int,
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
 parser.add_argument('-g', '--gpu_dev', default=[0, 1], type=int, nargs='+',
-                    help='GPU device numbers [default: [0, 1]]')
+                    help='GPU device numbers [default: 0 1]')
 args = parser.parse_args()
 
 file_name = None
