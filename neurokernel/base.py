@@ -864,13 +864,36 @@ class TimeListener(ControlledProcess):
             if sock_time.poll(10):
                 id, data = sock_time.recv_multipart()
                 id, steps, start, stop, nbytes = msgpack.unpackb(data)
-                self.logger.info('received %s:%s' % (id, 
-                                 str(msgpack.unpackb(data))))
+                if not self.timing_data.has_key(steps):
+                    self.timing_data[steps] = {}
+                self.timing_data[steps][id] = {'start': start,
+                                               'stop': stop,
+                                               'bytes': nbytes}
+
+                self.logger.info('time data: %s' % \
+                                 str(msgpack.unpackb(data)))
+
             if not self.running:
                 self.logger.info('stopping run loop')
                 break
         self.logger.info('done')
 
+        # Compute throughput using accumulated timing data:
+        total_time = 0.0
+        total_bytes = 0.0
+        for step, data in self.timing_data.iteritems():
+            start = min([d['start'] for d in data.values()])
+            stop = max([d['stop'] for d in data.values()])
+            nbytes = sum([d['bytes'] for d in data.values()])
+
+            total_time += stop-start
+            total_bytes += nbytes
+        if total_time > 0:
+            self.logger.info('average received throughput: %s bytes/s' % \
+                             (total_bytes/total_time))
+        else:
+            self.logger.info('not computing throughput')
+        
 class Manager(object):
     """
     Module manager.
