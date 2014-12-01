@@ -82,4 +82,7 @@ if __name__ == "__main__":
             'tables >= 2.4.0',
             'twiggy >= 0.4.0',
         ],
+        extras_require = {
+            'sphinx_rtd_theme': ['sphinx_rtd_theme >= 0.1.6'],
+            }
         )
