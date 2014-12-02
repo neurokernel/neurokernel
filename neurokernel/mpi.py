@@ -539,7 +539,7 @@ class Manager(object):
             t.run()
             self.logger.info('finished running %s' % rank)
 
-    def start(self):
+    def start(self, steps=float('inf')):
         """
         Tell the workers to start processing data.
         """
@@ -547,6 +547,8 @@ class Manager(object):
         if not self._is_launcher():
             self.logger.info('not in launcher - skipping start')
             return
+        self.logger.info('sending steps message (%s)' % steps)
+        self._sock.send_multipart(['master', 'steps', str(steps)])
         self.logger.info('sending start message')
         self._sock.send_multipart(['master', 'start'])
 
@@ -560,17 +562,6 @@ class Manager(object):
             return
         self.logger.info('sending stop message')
         self._sock.send_multipart(['master', 'stop'])
-
-    def steps(self, n=float('inf')):
-        """
-        Tell the workers to run no more than the specified number of steps.
-        """
-
-        if not self._is_launcher():
-            self.logger.info('not in launcher - skipping steps')
-            return
-        self.logger.info('sending steps message (%s)' % n)
-        self._sock.send_multipart(['master', 'steps', str(n)])
 
     def quit(self):
         """
@@ -639,11 +630,11 @@ if __name__ == '__main__':
 
     # To run for a specific number of steps, 
     # run 
-    # man.steps(number_of_steps)
-    # man.start()
+    # man.start(number_of_steps)
+    man.start(100)
     # The emulation will automatically stop after the specified number of steps
     # without requiring any invocation of man.quit()
-    man.start()
-    time.sleep(1)
-    man.quit()
+    #man.start()
+    #time.sleep(1)
+    #man.quit()
 
