@@ -636,6 +636,14 @@ if __name__ == '__main__':
     man.add(MyWorker, 3, 4, 5)
     man.add(MyWorker, 6, 7, 8)
     man.run()  
+
+    # To run for a specific number of steps, 
+    # run 
+    # man.steps(number_of_steps)
+    # man.start()
+    # The emulation will automatically stop after the specified number of steps
+    # without requiring any invocation of man.quit()
     man.start()
-    time.sleep(0.25)
+    time.sleep(1)
     man.quit()
+
