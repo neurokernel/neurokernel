@@ -17,8 +17,6 @@ import collections
 
 import bidict
 import numpy as np
-import scipy.sparse
-import scipy as sp
 import twiggy
 import zmq
 from zmq.eventloop.ioloop import IOLoop
@@ -468,14 +466,16 @@ class BaseModule(ControlledProcess):
 
                 # Wait until inbound data is received from all source modules:  
                 nbytes = 0
+                recv_ids = set(self._in_ids)
                 start = time.time()
-                while not all((q for q in self._in_data.itervalues())):
+                while recv_ids:
+
                     # Use poller to avoid blocking:
                     if is_poll_in(self.sock_data, self.data_poller):
                         data_packed = self.sock_data.recv()
                         in_id, data = msgpack.unpackb(data_packed)
                         if not self.time_sync:
-                            self.logger.info('recv from %s: %s %s ' % (in_id, str(data)))
+                            self.logger.info('recv from %s: %s' % (in_id, str(data)))
 
                         # Ignore incoming data containing None:
                         if data is not None:
@@ -483,6 +483,10 @@ class BaseModule(ControlledProcess):
 
                             # Record number of bytes of transmitted serialized data:
                             nbytes += len(data_packed)
+
+                        # Remove source module ID from set of IDs from which to
+                        # expect data:
+                        recv_ids.discard(in_id)
 
                     # Stop the synchronization if a quit message has been received:
                     if not self.running:
