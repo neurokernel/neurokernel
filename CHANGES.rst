@@ -3,6 +3,6 @@
 Change Log
 ==========
 
-Release 0.01 - (under development)
+Release 0.1 - (under development)
 ----------------------------------
 * Initial release.

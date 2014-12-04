@@ -7,10 +7,13 @@ Lamina specification
 import csv
 import os
 import collections
+import pickle
 
 import numpy as np
 import gzip
 import networkx as nx
+
+from neurokernel.pattern import Pattern
 
 class hex_array(object):
     """
@@ -46,6 +49,8 @@ class hex_array(object):
         self.row = np.tile(np.arange(self.nrows, dtype = np.int32).reshape((self.nrows, 1)),
                            (1, self.ncols))
 
+        #self.Y = self.Y + np.tile(np.asarray([0, 1]),
+        #                          (self.nrows, self.ncols/2))
 
         self.col = self.col.reshape(-1)
         self.row = self.row.reshape(-1)
@@ -118,6 +123,7 @@ class vision_LPU(object):
         
         self.composition_rules = []
 
+#    def read_neurons(self):
         # read in csv file and turn it into a numpy structured array
         neuron_list = []
         dtypes = [np.dtype('S10'), np.dtype('S32'),
@@ -142,6 +148,7 @@ class vision_LPU(object):
             neuron_list,
             dtype = [(a, b) for a, b in zip(self.neuron_field_name, dtypes)])
         
+#    def read_synapses(self):
         # read in csv file and turn it into a numpy structured array
         if self.columnar_synapse_csv is not None:
             synapse_list = []
@@ -154,8 +161,8 @@ class vision_LPU(object):
                       np.dtype(np.int32)]
             with open(self.columnar_synapse_csv, 'rU') as csvfile:
                 reader = csv.reader(csvfile)
-                self.synapse_field_name = reader.next()
-                n_entry = len(self.synapse_field_name)
+                synapse_field_name = reader.next()
+                n_entry = len(synapse_field_name)
                 for row in reader:
                     tmp = [dtypes[i].type(row[i]) for i in range(n_entry)]
                     synapse_list.append(tuple(tmp))
@@ -163,32 +170,33 @@ class vision_LPU(object):
             self.num_synapse_types = len(synapse_list)
             self.synapse_dict = np.array(
                 synapse_list,
-                dtype = [(a, b) for a, b in zip(self.synapse_field_name, dtypes)])
+                dtype = [(a, b) for a, b in zip(synapse_field_name, dtypes)])
         else:
+            # TODO: will fail later if synapse_dict is empty
             self.num_synapse_types = 0
             self.synapse_dict = []
         
         if self.other_synapse_csv is not None:
             synapse_list = []
             dtypes = [np.dtype('S10'), np.dtype('S10'),
-                      np.dtype(np.int32),
-                      np.dtype(np.int32), np.dtype(np.double),
+                      np.dtype('S32'),
+                      np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
                       np.dtype(np.double), np.dtype(np.double),
                       np.dtype(np.int32)]
-            with open(self.columnar_synapse_csv, 'rU') as csvfile:
+            with open(self.other_synapse_csv, 'rU') as csvfile:
                 reader = csv.reader(csvfile)
-                self.synapse_field_name = reader.next()
-                n_entry = len(self.synapse_field_name)
+                synapse_field_name = reader.next()
+                n_entry = len(synapse_field_name)
                 for row in reader:
                     tmp = [dtypes[i].type(row[i]) for i in range(n_entry)]
                     synapse_list.append(tuple(tmp))
             
-            self.num_synapse_types = len(synapse_list)
-            self.synapse_dict = np.array(
+            self.num_other_synapse_types = len(synapse_list)
+            self.other_synapse_dict = np.array(
                 synapse_list,
-                dtype = [(a, b) for a, b in zip(self.synapse_field_name, dtypes)])
+                dtype = [(a, b) for a, b in zip(synapse_field_name, dtypes)])
         else:
             self.num_other_synapse_types = 0
             self.other_synapse_dict = []
@@ -279,7 +287,7 @@ class vision_LPU(object):
                 synapse.process_before_export()
                 g.add_edge(synapse.pre_neuron.num, synapse.post_neuron.num,
                            attr_dict = synapse.params)
-
+    
         if isinstance(filename, str):
             name, ext = os.path.splitext(filename)
             if name == '':
@@ -391,12 +399,148 @@ class Lamina(vision_LPU):
 
         self.fill = fill
         self.composition_rules.append( {'synapses': synapse_list} )
-        
+    
     def __repr__(self):
         if hasattr(self, 'cartridges'):
             return 'Lamina LPU with '+str(len(self.cartridges))+' cartridges'
         else:
             return 'Lamina LPU unconfigured'
+            
+
+class Medulla(vision_LPU):
+    def __init__(self, nrows, ncols, neuron_csv,
+                 columnar_synapse_csv, other_synapse_csv):
+        super(Medulla, self).__init__(nrows, ncols, neuron_csv,
+                                     columnar_synapse_csv, other_synapse_csv,
+                                     'medulla')
+    
+    def connect_composition_I(self):
+        if not self._connected:
+            raise AttributeError("Need to connect cartridges before setting interconnects")
+        self.rule1synapses = self.synapse_dict[self.synapse_dict['cart'] != 0]
+        
+        synapse_list = []
+        
+        dtnames = self.rule1synapses.dtype.names
+        for cartridge in self.cartridges:
+            for synapse_array in self.rule1synapses:
+                neighbor_num = synapse_array['cart']
+                if cartridge.neighbors[neighbor_num] is not None:
+                    synapse = Synapse(
+                        dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                    synapse.link(
+                        cartridge.neurons[synapse_array['prename']],
+                        cartridge.neighbors[neighbor_num].neurons[synapse_array['postname']])
+                    synapse_list.append(synapse)
+        self.composition_rules.append({'synapses': synapse_list})
+    
+    def connect_composition_II(self):
+        synapse_list = []
+        
+        rule2synapses = self.other_synapse_dict[self.other_synapse_dict['postname'] == 'Dm3']
+        dtnames = rule2synapses.dtype.names
+        synapse_array = rule2synapses[0]
+        for cartridge in self.cartridges:
+            if cartridge.neighbors[2] is not None:
+                synapse = Synapse(
+                    dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                synapse.link(
+                    cartridge.neurons['L2'],
+                    cartridge.neighbors[2].neurons['Dm3'])
+                synapse_list.append(synapse)
+            
+            if cartridge.neighbors[3] is not None:
+                synapse = Synapse(
+                    dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                synapse.link(
+                    cartridge.neurons['L2'],
+                    cartridge.neighbors[3].neurons['Dm3'])
+                synapse_list.append(synapse)
+            
+            if cartridge.neighbors[5] is not None:
+                synapse = Synapse(
+                    dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                synapse.link(
+                    cartridge.neurons['L2'],
+                    cartridge.neighbors[5].neurons['Dm3'])
+                synapse_list.append(synapse)
+            
+            if cartridge.neighbors[6] is not None:
+                synapse = Synapse(
+                    dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                synapse.link(
+                    cartridge.neurons['L2'],
+                    cartridge.neighbors[6].neurons['Dm3'])
+                synapse_list.append(synapse)
+                
+            if cartridge.neighbors[2] is not None:
+                if cartridge.neighbors[2].neighbors[3] is not None:
+                    synapse = Synapse(
+                        dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                    synapse.link(
+                        cartridge.neurons['L2'],
+                        cartridge.neighbors[2].neighbors[3].neurons['Dm3'])
+                    synapse_list.append(synapse)
+            elif cartridge.neighbors[3] is not None:
+                if cartridge.neighbors[3].neighbors[2] is not None:
+                    synapse = Synapse(
+                        dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                    synapse.link(
+                        cartridge.neurons['L2'],
+                        cartridge.neighbors[3].neighbors[2].neurons['Dm3'])
+                    synapse_list.append(synapse)
+    
+            if cartridge.neighbors[5] is not None:
+                if cartridge.neighbors[5].neighbors[6] is not None:
+                    synapse = Synapse(
+                        dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                    synapse.link(
+                        cartridge.neurons['L2'],
+                        cartridge.neighbors[5].neighbors[6].neurons['Dm3'])
+                    synapse_list.append(synapse)
+            elif cartridge.neighbors[6] is not None:
+                if cartridge.neighbors[6].neighbors[5] is not None:
+                    synapse = Synapse(
+                        dict(zip(dtnames, [np.asscalar(p) for p in synapse_array])))
+                    synapse.link(
+                        cartridge.neurons['L2'],
+                        cartridge.neighbors[6].neighbors[5].neurons['Dm3'])
+                    synapse_list.append(synapse)
+            
+        self.composition_rules.append({'synapses': synapse_list})
+    
+    def connect_composition_III(self):
+        synapse_list = []
+        Mt3v_list = self.non_columnar_neurons['Mt3v']
+        Mt3h_list = self.non_columnar_neurons['Mt3h']
+        
+        for neuron in Mt3v_list:
+            neuron.assign_pos(0., 0.)
+        for neuron in Mt3h_list:
+            neuron.assign_pos(0., 0.)
+        
+        rule3synapsesv = self.other_synapse_dict[self.other_synapse_dict['postname'] == 'Mt3v']
+        rule3synapsesh = self.other_synapse_dict[self.other_synapse_dict['postname'] == 'Mt3h']
+        
+        dtnames = rule3synapsesv.dtype.names
+        for cartridge in self.cartridges:
+            synapse = Synapse(dict(zip(dtnames, [np.asscalar(p) for p in rule3synapsesv[0]])))
+            mtn = int(np.floor(cartridge.neurons['L2'].ypos / ((self.hexarray.Y[-1][-1]+1)/4)))
+            synapse.link(cartridge.neurons['L2'], Mt3v_list[mtn])
+            synapse_list.append(synapse)
+            synapse = Synapse(dict(zip(dtnames, [np.asscalar(p) for p in rule3synapsesh[0]])))
+            mtn = int(np.floor(cartridge.neurons['L2'].xpos / ((self.hexarray.X[-1][-1]+1)/4)))
+            synapse.link(cartridge.neurons['L2'], Mt3h_list[mtn])
+            synapse_list.append(synapse)
+
+        self.composition_rules.append({'synapses': synapse_list})
+        
+    
+    def __repr__(self):
+        if hasattr(self, 'cartridges'):
+            return 'Medulla LPU with '+str(len(self.cartridges))+' cartridges'
+        else:
+            return 'Medulla LPU unconfigured'
 
 
 class Cartridge(object):
@@ -459,7 +603,7 @@ class Cartridge(object):
         removed_synapse_list = []
         neuron_to_be_replaced = self.neurons[name]
         
-        if neuron_to_be_replaced.params['dummy'] != 1:
+        if not neuron_to_be_replaced.dummy:
             raise ValueError("Neuron to be replaced is not dummy element")
         
         for synapse in neuron_to_be_replaced.outgoing_synapses:
@@ -475,6 +619,7 @@ class Cartridge(object):
                 removed_synapse_list.append(synapse)
         
         self.neurons[name].set_parent(neuron)
+        #self.remove_neuron(name)
         return removed_synapse_list
         
     def remove_neuron(self, name):
@@ -492,11 +637,13 @@ class Cartridge(object):
 class Neuron(object):
     def __init__(self, param_dict):
         self.params = param_dict.copy()
-        if self.params['model'] == 'MorrisLecar':
-            spiking = False
-        else:
-            spiking = True
+        spiking = False
         self.params.update({'spiking': spiking})
+        if 'dummy' in self.params.keys():
+            self.dummy = self.params.pop('dummy')
+        else:
+            self.dummy = False
+        
         self.outgoing_synapses = []
         self.incoming_synapses = []
     
@@ -526,16 +673,22 @@ class Neuron(object):
         self.params.update({'xpos': xpos, 'ypos': ypos})
         
     def position(self):
-            return (self.params['xpos'], self.params['ypos'])
-        
+        return (self.params['xpos'], self.params['ypos'])
+    
+    @property
+    def xpos(self):
+        return self.params['xpos']
+    
+    @property
+    def ypos(self):
+        return self.params['ypos']
+    
     def add_num(self, num):
         self.num = num
         
     def process_before_export(self):
         self.params.update({'n_dendrites': len(self.incoming_synapses),
                             'n_outputs': len(self.outgoing_synapses)})
-        if 'dummy' in self.params.keys():
-            del self.params['dummy']
         if 'columnar' in self.params.keys():
             del self.params['columnar']
         self.params['input'] = bool(self.params['input'])
@@ -544,17 +697,15 @@ class Neuron(object):
         self.params['extern'] = bool(self.params['extern'])
         self.params['model'] = str(self.params['model'])
 
-    def is_dummy(self):
-        if self.params.has_key('dummy'):
-            return self.params['dummy']
-        else:
-            return False
-
     def is_public(self):
         return self.params['public']
 
     def add_selector(self, selector):
         self.params['selector'] = selector
+    
+    @property
+    def selector(self):
+        return self.params['selector']
 
     def set_parent(self, neuron):
         self.parent = neuron
@@ -625,6 +776,42 @@ class Synapse(object):
     def postname(self):
         return self.params['postname']
 
+
+def create_pattern(lpu1, lpu2):
+    lpu1_sel = ','.join(['/'+'/'.join([str(i) for i in sel]) for sel in lpu1.interface.index.tolist()])
+    lpu2_sel = ','.join(['/'+'/'.join([str(i) for i in sel]) for sel in lpu2.interface.index.tolist()])
+    pat = Pattern(lpu1_sel, lpu2_sel)
+
+    lpu1_sel_in_gpot = str(','.join( lpu1.interface.in_ports().gpot_ports().to_selectors() ))
+    lpu1_sel_out_gpot = str(','.join( lpu1.interface.out_ports().gpot_ports().to_selectors() ))
+    lpu2_sel_in_gpot = str(','.join( lpu2.interface.in_ports().gpot_ports().to_selectors() ))
+    lpu2_sel_out_gpot = str(','.join( lpu2.interface.out_ports().gpot_ports().to_selectors() ))
+    
+    lpu1_sel_in_spike = str(','.join( lpu1.interface.in_ports().spike_ports().to_selectors() ))
+    lpu1_sel_out_spike = str(','.join( lpu1.interface.out_ports().spike_ports().to_selectors() ))
+    lpu2_sel_in_spike = str(','.join( lpu2.interface.in_ports().spike_ports().to_selectors() ))
+    lpu2_sel_out_spike = str(','.join( lpu2.interface.out_ports().spike_ports().to_selectors() ))
+
+    pat.interface[lpu1_sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
+    pat.interface[lpu1_sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
+    pat.interface[lpu2_sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
+    pat.interface[lpu2_sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
+    pat.interface[lpu1_sel_in_spike, 'io', 'type'] = ['in', 'spike']
+    pat.interface[lpu1_sel_out_spike, 'io', 'type'] = ['out', 'spike']
+    pat.interface[lpu2_sel_in_spike, 'io', 'type'] = ['in', 'spike']
+    pat.interface[lpu2_sel_out_spike, 'io', 'type'] = ['out', 'spike']
+
+    Neuron_list_12 = ['L1', 'L2', 'L3', 'L4', 'L5', 'T1']
+    Neuron_list_21 = ['C2', 'C3']
+    
+    for i in range(768):
+        for neuron in Neuron_list_12:
+            pat['/lamina/cart'+str(i)+'/'+neuron, '/medulla/cart'+str(i)+'/'+neuron] = 1
+        for neuron in Neuron_list_21:
+            pat['/medulla/cart'+str(i)+'/'+neuron, '/lamina/cart'+str(i)+'/'+neuron] = 1
+    with open('lam_med_pattern', 'wb') as pat_file:
+        pickle.dump(pat, pat_file)
+    return pat
 
 def append_field(rec, name, arr, dtype=None):
     arr = np.asarray(arr)

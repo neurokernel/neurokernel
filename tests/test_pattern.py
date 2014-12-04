@@ -28,6 +28,7 @@ class test_interface(TestCase):
         self.assertRaises(Exception, Interface, '/foo[0],/foo[0]')
 
     def test_to_selectors(self):
+        # Selector with multiple levels:
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
@@ -39,6 +40,19 @@ class test_interface(TestCase):
                                   '/foo[1]',
                                   '/foo[2]',
                                   '/foo[3]'])
+
+        # Selector with single level:
+        i = Interface('/[foo,bar,baz]')
+        i['/foo', 'interface'] = 0
+        i['/bar', 'interface'] = 0
+        i['/baz', 'interface'] = 1
+        self.assertSequenceEqual(i.to_selectors(0),
+                                 ['/foo', 
+                                  '/bar'])
+        self.assertSequenceEqual(i.to_selectors(), 
+                                 ['/foo', 
+                                  '/bar',
+                                  '/baz'])
 
     def test_to_tuples_multi_levels(self):
         i = Interface('/foo[0:4]')
@@ -63,10 +77,22 @@ class test_interface(TestCase):
                                  [(0,), (1,), (2,), (3,)])
 
     def test_data_select(self):
-        i = self.interface.data_select(lambda x: x['io'] >= 'out')
-        assert_index_equal(i.data.index,
+        # Selector with multiple levels:
+        i = Interface('/foo[0:3]')
+        i['/foo[0]', 'interface', 'io'] = [0, 'in']
+        i['/foo[1:3]', 'interface', 'io'] = [0, 'out']
+        j = i.data_select(lambda x: x['io'] != 'in')
+        assert_index_equal(j.data.index,
                            pd.MultiIndex.from_tuples([('foo', 1),
                                                       ('foo', 2)]))
+
+        # Selector with single level:
+        i = Interface('/[foo,bar,baz]')
+        i['/[foo,bar]', 'interface', 'io'] = [0, 'in']
+        i['/baz', 'interface', 'io'] = [0, 'out']
+        j = i.data_select(lambda x: x['io'] != 'in')
+        assert_index_equal(j.data.index,
+                           pd.Index(['baz']))
 
     def test_from_df_index(self):
         idx = pd.Index(['foo', 'bar', 'baz'])
@@ -122,39 +148,93 @@ class test_interface(TestCase):
         ig = Interface.from_graph(g)
         assert_index_equal(i.data.index, ig.data.index)
         assert_frame_equal(i.data, ig.data)
+    
+    def test_is_in_interfaces(self):
+        # Selector with multiple levels:
+        i = Interface('/foo[0:3]')
+        i['/foo[0]', 'interface', 'io'] = [0, 'in']
+        i['/foo[1:3]', 'interface', 'io'] = [0, 'out']
+        assert i.is_in_interfaces('/foo[0:3]') == True
+        assert i.is_in_interfaces('/foo[0:4]') == False
+        assert i.is_in_interfaces('/foo') == False
 
-    def test_is_in_interfaces_single(self):
+        # Selector with single level:
         i = Interface('/[foo,bar]')
-        i['/foo'] = [0, 'in', 'gpot']
-        i['/bar'] = [1, 'out', 'gpot']
+        i['/foo', 'interface', 'io'] = [0, 'in']
+        i['/bar', 'interface', 'io'] = [1, 'out']
         assert i.is_in_interfaces('/foo') == True
         assert i.is_in_interfaces('/qux') == False
 
-    def test_is_in_interfaces_multi(self):
-        assert self.interface.is_in_interfaces('/foo[0:3]') == True
-        assert self.interface.is_in_interfaces('/foo[0:4]') == False
-        assert self.interface.is_in_interfaces('/foo') == False
-
+        # Selectors comprising identifiers with different numbers of levels
+        i = Interface('/foo,/bar[0:3]')
+        i['/foo', 'interface', 'io'] = [0, 'in']
+        i['/bar[0:3]', 'interface', 'io'] = [1, 'out']
+        assert i.is_in_interfaces('/foo') == True
+        assert i.is_in_interfaces('/bar[0]') == True
+        assert i.is_in_interfaces('/bar') == False
+        
     def test_in_ports(self):
-        i = Interface('/foo[0]')
-        i['/foo[0]', 'interface', 'io'] = [0, 'in']
-        assert_frame_equal(self.interface.in_ports(0).data, i.data)
-        assert_index_equal(self.interface.in_ports(0).index, i.index)
+        # Selector with multiple levels:
+        i = Interface('/foo[0:2]')
+        i['/foo[0]'] = [0, 'in', 'spike']
+        i['/foo[1]'] = [1, 'out', 'spike']
+        df = pd.DataFrame([(0, 'in', 'spike')],
+                          pd.MultiIndex.from_tuples([('foo', 0)],
+                                                    names=['0', '1']),
+                          ['interface', 'io', 'type'],
+                          dtype=object)
+        assert_frame_equal(i.in_ports(0).data, df)
+
+        # Selector with single level:
+        i = Interface('/[foo,bar]')
+        i['/foo'] = [0, 'in', 'spike']
+        i['/bar'] = [1, 'out', 'spike']
+        df = pd.DataFrame([(0, 'in', 'spike')],
+                          pd.MultiIndex.from_tuples([('foo',)],
+                                                    names=['0']),
+                          ['interface', 'io', 'type'],
+                          dtype=object)
+        assert_frame_equal(i.in_ports(0).data, df)
 
     def test_interface_ports(self):
+        # Selector with multiple levels:
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
         j = Interface('/foo[2:4]')
         j['/foo[2:4]', 'interface'] = 1
         assert_frame_equal(i.interface_ports(1).data, j.data)
-        assert_index_equal(i.interface_ports(1).index, j.index)
+
+        # Selector with single level:
+        i = Interface('/[foo,bar,baz]')
+        i['/[foo,bar]', 'interface'] = 0
+        i['/baz', 'interface'] = 1
+        j = Interface('/baz')
+        j['/baz', 'interface'] = 1
+        assert_frame_equal(i.interface_ports(1).data, j.data)
 
     def test_out_ports(self):
-        i = Interface('/foo[1:3]')
-        i['/foo[1:3]', 'interface', 'io'] = [0, 'out']
-        assert_frame_equal(self.interface.out_ports(0).data, i.data)
-        assert_index_equal(self.interface.out_ports(0).index, i.index)
+        # Selector with multiple levels:
+        i = Interface('/foo[0:2]')
+        i['/foo[0]'] = [0, 'in', 'spike']
+        i['/foo[1]'] = [1, 'out', 'spike']
+        df = pd.DataFrame([(1, 'out', 'spike')],
+                          pd.MultiIndex.from_tuples([('foo', 1)],
+                                                    names=['0', '1']),
+                          ['interface', 'io', 'type'],
+                          dtype=object)
+        assert_frame_equal(i.out_ports(1).data, df)
+
+        # Selector with single level:
+        i = Interface('/[foo,bar]')
+        i['/foo'] = [0, 'in', 'spike']
+        i['/bar'] = [1, 'out', 'spike']
+        df = pd.DataFrame([(1, 'out', 'spike')],
+                          pd.MultiIndex.from_tuples([('bar',)],
+                                                    names=['0']),
+                          ['interface', 'io', 'type'],
+                          dtype=object)
+        assert_frame_equal(i.out_ports(1).data, df)
 
     def test_gpot_ports(self):
         i = Interface('/foo[0:6]')
@@ -166,7 +246,6 @@ class test_interface(TestCase):
         j['/foo[3]'] = [0, 'in', 'gpot']
         j['/foo[4:6]'] = [0, 'out', 'gpot']
         assert_frame_equal(i.gpot_ports(0).data, j.data)
-        assert_index_equal(i.gpot_ports(0).index, j.index)
 
     def test_spike_ports(self):
         i = Interface('/foo[0:6]')
@@ -178,7 +257,6 @@ class test_interface(TestCase):
         j['/foo[0]'] = [0, 'in', 'spike']
         j['/foo[1:3]'] = [0, 'out', 'spike']
         assert_frame_equal(i.spike_ports(0).data, j.data)
-        assert_index_equal(i.spike_ports(0).index, j.index)
 
     def test_port_select(self):
         i = self.interface.port_select(lambda x: x[1] >= 1)
@@ -213,12 +291,22 @@ class test_interface(TestCase):
         different ways should still be deemed compatible.
         """
 
+        # Selectors with multiple levels:
         i = Interface('/foo[0:2],/bar[0:2]')
         i['/foo[0:2]', 'interface', 'io'] = [0, 'in']
         i['/bar[0:2]', 'interface', 'io'] = [0, 'out']
         j = Interface('/bar[0:2],/foo[0:2]')
         j['/bar[0:2]', 'interface', 'io'] = [1, 'in']
         j['/foo[0:2]', 'interface', 'io'] = [1, 'out']
+        assert i.is_compatible(0, j, 1)
+
+        # Selectors with single level:
+        i = Interface('/foo,/bar,/baz,/qux')
+        i['/[foo,bar]', 'interface', 'io'] = [0, 'in']
+        i['/[baz,qux]', 'interface', 'io'] = [0, 'out']
+        j = Interface('/bar,/foo,/qux,/baz')
+        j['/[baz,qux]', 'interface', 'io'] = [1, 'in']
+        j['/[foo,bar]', 'interface', 'io'] = [1, 'out']
         assert i.is_compatible(0, j, 1)
 
     def test_is_compatible_both_dirs(self):
@@ -369,6 +457,16 @@ class test_pattern(TestCase):
         self.assertRaises(Exception,  Pattern,
                           '/[foo,bar][0]', '/bar[0:2]')
 
+    def test_create_fan_in(self):
+        pat = Pattern('/x[0:3]', '/y[0:3]')
+        pat['/x[0]', '/y[0:2]'] = 1 # fan-out is allowed
+        try:
+            pat['/x[1:3]', '/y[2]'] = 1 # fan-in is not allowed
+        except:
+            pass
+        else:
+            raise Exception
+
     def test_src_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -382,6 +480,14 @@ class test_pattern(TestCase):
                                ('aaa', 1),
                                ('aaa', 2)])
 
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.src_idx(0, 1),
+                              [('aaa',),
+                               ('bbb',)])
+
     def test_src_idx_dest_ports(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -392,6 +498,13 @@ class test_pattern(TestCase):
         p['/xxx[2]', '/bbb[2]'] = 1
         self.assertItemsEqual(p.src_idx(0, 1, dest_ports='/yyy[0]'),
                               [('aaa', 0)])
+
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.src_idx(0, 1, dest_ports='/[www,xxx]'),
+                              [('aaa',)])
 
     def test_src_idx_src_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -407,6 +520,17 @@ class test_pattern(TestCase):
                               [('aaa', 0)])
         self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
 
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.src_idx(0, 1, src_type='spike'), 
+                              [('aaa',)])
+        self.assertItemsEqual(q.src_idx(0, 1, src_type='gpot'), [])
+
     def test_src_idx_dest_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -421,6 +545,17 @@ class test_pattern(TestCase):
                               [('aaa', 0)])
         self.assertItemsEqual(p.src_idx(0, 1, dest_type='gpot'), [])
 
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.src_idx(0, 1, dest_type='spike'), 
+                              [('aaa',)])
+        self.assertItemsEqual(q.src_idx(0, 1, dest_type='gpot'), [])
+
     def test_dest_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -434,6 +569,15 @@ class test_pattern(TestCase):
                                ('yyy', 1),
                                ('yyy', 2)])
 
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.dest_idx(0, 1),
+                              [('www',),
+                               ('xxx',),
+                               ('yyy',)])
+
     def test_dest_idx_src_ports(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -446,6 +590,14 @@ class test_pattern(TestCase):
                               [('yyy', 0),
                                ('yyy', 1),
                                ('yyy', 2)])
+
+        q = Pattern('/[aaa,bbb]', '/[www,xxx,yyy]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/bbb','/yyy'] = 1
+        self.assertItemsEqual(q.dest_idx(0, 1, src_ports='/aaa'),
+                              [('www',),
+                               ('xxx',)])
 
     def test_dest_idx_src_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -461,7 +613,19 @@ class test_pattern(TestCase):
                               [('yyy', 0),
                                ('yyy', 1),
                                ('yyy', 2)])
-        self.assertItemsEqual(p.src_idx(0, 1, src_type='gpot'), [])
+        self.assertItemsEqual(p.dest_idx(0, 1, src_type='gpot'), [])
+
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.dest_idx(0, 1, src_type='spike'), 
+                              [('www',),
+                               ('xxx',)])
+        self.assertItemsEqual(q.dest_idx(0, 1, src_type='gpot'), [])
 
     def test_dest_idx_dest_type(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
@@ -479,10 +643,35 @@ class test_pattern(TestCase):
                                ('yyy', 2)])
         self.assertItemsEqual(p.dest_idx(0, 1, dest_type='gpot'), [])
 
+        q = Pattern('/[aaa,bbb,ccc]', '/[www,xxx,yyy,zzz]')
+        q['/aaa','/www'] = 1
+        q['/aaa','/xxx'] = 1
+        q['/yyy','/bbb'] = 1
+        q['/zzz','/ccc'] = 1
+        q.interface['/aaa'] = [0, 'in', 'spike']
+        q.interface['/[www,xxx]'] = [1, 'out', 'spike']
+        self.assertItemsEqual(q.dest_idx(0, 1, dest_type='spike'), 
+                              [('www',),
+                               ('xxx',)])
+        self.assertItemsEqual(q.dest_idx(0, 1, dest_type='gpot'), [])
+
     def test_is_in_interfaces(self):
+        # Selectors with multiple levels:
         p = Pattern('/aaa/bbb', '/ccc/ddd')
         assert p.is_in_interfaces('/aaa/bbb') == True
         assert p.is_in_interfaces('/aaa') == False
+
+        # Selectors with a single level:
+        p = Pattern('/aaa', '/bbb')
+        assert p.is_in_interfaces('/aaa') == True
+        assert p.is_in_interfaces('/ccc') == False
+
+        # Selectors comprising identifiers with different numbers of levels::
+        p = Pattern('/aaa,/bbb[0]', '/ccc,/ddd[0]')
+        assert p.is_in_interfaces('/aaa') == True
+        assert p.is_in_interfaces('/ccc') == True
+        assert p.is_in_interfaces('/ddd') == False
+        assert p.is_in_interfaces('/ddd[0]') == True
 
     def test_is_connected_single_level(self):
         p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')

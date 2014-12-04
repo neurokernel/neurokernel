@@ -152,7 +152,8 @@ class LeakyIAF:
     """
 
     def __init__(self,id=None,name=None,V0=0.,Vr=-0.05,Vt=-0.02,R=1.,C=1.,\
-                 syn_list=None,public=True,extern=True,rand=0.):
+                 syn_list=None,public=True,extern=True,rand=0.,\
+                 selector=None,model=None):
         self.id = id
         self.name = name
         self.Vr = Vr*uniform(1.-rand,1.+rand)
@@ -164,6 +165,10 @@ class LeakyIAF:
         # For GEXF
         self.public = public
         self.extern = extern
+
+        # For port API
+        self.selector = selector or ''
+        self.model = model
 
         self.isSpiking = False
         if syn_list is not None:
@@ -228,12 +233,15 @@ class LeakyIAF:
         node = etree.SubElement( etree_element, "node", id=str(self.id) )
         attr = etree.SubElement( node, "attvalues" )
         etree.SubElement(attr,"attvalue",attrib={"for":"0","value":"LeakyIAF"})
-        for i,att in enumerate( ("name","V","Vr","Vt","R","C") ):
+        for i,att in enumerate( ("name","V","Vr","Vt","R","C",) ):
             etree.SubElement( attr, "attvalue",\
                 attrib={"for":str(i+1), "value":str(getattr(self,att)) })
         etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
         etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
         etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.extern else "false" })
+        if self.model is not None:
+            etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.model })
+        etree.SubElement( attr, "attvalue", attrib={"for":"11", "value":self.selector })
 
     @staticmethod
     def getGEXFattr(etree_element):
@@ -252,26 +260,33 @@ class LeakyIAF:
         for (i,attr) in enumerate( ("spiking","public","extern") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+7), type="boolean", title=attr )
+        for (i,attr) in enumerate( ("model","selector") ):
+            etree.SubElement( etree_element, "attribute",\
+                id=str(i+10), type="string", title=attr )
 
 class Glomerulus:
     """
     Glomerulus in the Antenna lobe of Drosophila olfactory system
     """
-    def __init__(self,idx=None,name=None,database=None,osn_type=None,\
-                 osn_num=25,pn_num=3,rand=0.):
+    def __init__(self,al,idx=None,name=None,database=None,osn_type=None,\
+                 osn_num=25,pn_num=3,rand=0.,al_ref=None):
         self.idx = idx
         self.name = name
         self.osn_type = osn_type
         self.osn_num = osn_num
         self.pn_num = pn_num
         self.rand = rand
+        self.al_ref = al
         if database:
             self.setNeuron(database)
 
     def setNeuron(self, database, osn_type=None):
         assert( database is not None )
+
+        al_name = 'al' if self.al_ref is None else self.al_ref.name
         # overide osn_type if a new one is given
-        if osn_type: self.osn_type = osn_type
+        if osn_type:
+            self.osn_type = osn_type
         # check osn_type is supported by the odor database; If not,
         osn = [o for o in self.osn_type if o in database['osn']]
         if len(osn) > 0:
@@ -293,7 +308,8 @@ class Glomerulus:
                 C=database['pn_para']['C'],
                 public=True,
                 extern=False,
-                rand=self.rand))
+                rand=self.rand,
+                selector=str('/%s/%d/pn_%d' % (al_name, self.idx, i))))
 
         self.osn_list = [] # initialize the osn list
         self.syn_list = []
@@ -307,7 +323,9 @@ class Glomerulus:
                 C=C,
                 public=True,
                 extern=True,
-                rand=self.rand))
+                rand=self.rand,
+                model='port_in_spk',
+                selector=str('/%s/%d/osn_%d' % (al_name, self.idx, i))))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
@@ -340,7 +358,8 @@ class Glomerulus:
             syn.update(dt)
 
 class AntennalLobe():
-    def __init__(self, anatomy_db=None, odor_db=None, gl_name=None):
+    def __init__(self, name=None, anatomy_db=None, odor_db=None, gl_name=None):
+        self.name = name or 'al'
         self.anatomy_db = anatomy_db
         self.odor_db = odor_db
         self.gl_name = gl_name
@@ -352,10 +371,12 @@ class AntennalLobe():
         if odor_db is not None: self.odor_db = odor_db
         if gl_name is not None: self.gl_name = gl_name
         self.gl_list = []
-        for gl in self.gl_name:
+        for i,gl in enumerate(self.gl_name):
             #assert( gl is in self.database['gl'] )
             self.gl_list.append( Glomerulus(
+                al=self,
                 name=gl,
+                idx=i,
                 database=self.odor_db,
                 osn_type=self.anatomy_db['gl'][gl],
                 rand=rand))
