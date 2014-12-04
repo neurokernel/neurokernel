@@ -8,6 +8,17 @@ from pandas.util.testing import assert_frame_equal, assert_index_equal
 
 from neurokernel.plsel import PathLikeSelector, PortMapper
 
+df = pd.DataFrame(data={'data': np.random.rand(10),
+                  0: ['foo', 'foo', 'foo', 'foo', 'foo',
+                      'bar', 'bar', 'bar', 'baz', 'baz'],
+                  1: ['qux', 'qux', 'mof', 'mof', 'mof',
+                      'qux', 'qux', 'qux', 'qux', 'mof'],
+                  2: [0, 1, 0, 1, 2, 
+                      0, 1, 2, 0, 0]})
+df.set_index(0, append=False, inplace=True)
+df.set_index(1, append=True, inplace=True)
+df.set_index(2, append=True, inplace=True)
+
 df1 = pd.DataFrame(data={'data': np.random.rand(12),
                    'level_0': ['foo', 'foo', 'foo', 'foo', 'foo', 'foo',
                                'bar', 'bar', 'bar', 'bar', 'baz', 'baz'],
@@ -22,17 +33,6 @@ df1.set_index('level_1', append=True, inplace=True)
 df1.set_index('level_2', append=True, inplace=True)
 df1.set_index('level_3', append=True, inplace=True)
 
-df = pd.DataFrame(data={'data': np.random.rand(10),
-                  0: ['foo', 'foo', 'foo', 'foo', 'foo',
-                      'bar', 'bar', 'bar', 'baz', 'baz'],
-                  1: ['qux', 'qux', 'mof', 'mof', 'mof',
-                      'qux', 'qux', 'qux', 'qux', 'mof'],
-                  2: [0, 1, 0, 1, 2, 
-                      0, 1, 2, 0, 0]})
-df.set_index(0, append=False, inplace=True)
-df.set_index(1, append=True, inplace=True)
-df.set_index(2, append=True, inplace=True)
-
 df2 = pd.DataFrame(data={'data': np.random.rand(10),
                   0: ['foo', 'foo', 'foo', 'foo', 'foo',
                       'bar', 'bar', 'bar', 'baz', 'baz'],
@@ -45,7 +45,7 @@ df2.set_index(1, append=True, inplace=True)
 df2.set_index(2, append=True, inplace=True)
 
 df_single = pd.DataFrame(data={'data': np.random.rand(5),
-                               0: ['foo', 'foo', 'bar', 'bar', 'baz']})
+    0: ['foo', 'foo', 'bar', 'bar', 'baz']})
 df_single.set_index(0, append=False, inplace=True)
 
 class test_path_like_selector(TestCase):

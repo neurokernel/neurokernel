@@ -59,9 +59,7 @@ Communication Tools
       :toctree: generated/
       :nosignatures:
 
-      graph_to_conn
       graph_to_df
-      load_conn_all
 
 Visualization Tools
 -------------------

@@ -6,6 +6,7 @@ Vision system demo.
 Notes
 -----
 Generate input file by running ./data/gen_vis_input.py
+and generate configurations of LPUs by running ./data/generate_vision_gexf.py
 """
 
 import argparse
@@ -22,6 +23,7 @@ import neurokernel.tools.graph as graph_tools
 from neurokernel.tools.comm import get_random_port
 
 from neurokernel.LPU.LPU import LPU
+import data.vision_configuration as vc
 
 dt = 1e-4
 dur = 1.0
@@ -77,9 +79,9 @@ lpu_med = LPU(dt, n_dict_med, s_dict_med,
               port_data=port_data, device=args.med_dev, id='medulla')
 man.add_mod(lpu_med)
 
-g = nx.read_gexf('./data/lamina_medulla.gexf.gz', relabel=True)
-conn_lam_med = graph_tools.graph_to_conn(g)
-man.connect(lpu_lam, lpu_med, conn_lam_med)
+pat = vc.create_pattern(lpu_lam, lpu_med)
+
+man.connect(lpu_lam, lpu_med, pat, 0, 1)
 
 man.start(steps=args.steps)
 man.stop()
