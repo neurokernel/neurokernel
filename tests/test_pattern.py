@@ -718,6 +718,28 @@ class test_pattern(TestCase):
                                          labels=[[0, 0, 1, 1], [0, 1, 0, 1],
                                                  [0, 1, 1, 2]]))
 
+    def test_from_concat(self):
+        p = Pattern.from_concat('/[foo,bar]', '/[baz,qux]',
+                                from_sel='/[foo,bar]', to_sel='/[baz,qux]',
+                                data=1)
+        df = pd.DataFrame(data=[1, 1],
+                    index=pd.MultiIndex(levels=[['bar', 'foo'], ['baz', 'qux']],
+                                        labels=[[1, 0], [0, 1]],
+                                        names=['from_0', 'to_0'], dtype=object),
+                    columns=['conn'])
+        assert_frame_equal(p.data, df)
+
+        p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
+                                from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                                data=1)
+        df = pd.DataFrame(data=[1, 1],
+                index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
+                                    labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
+                                    names=['from_0', 'from_1', 'to_0', 'to_1'], 
+                                    dtype=object),
+                    columns=['conn'])
+        assert_frame_equal(p.data, df)
+
     def test_from_df(self):
         p = Pattern('/[aaa,bbb]/0', '/[ccc,ddd]/0')
         p['/aaa/0', '/ccc/0'] = 1
