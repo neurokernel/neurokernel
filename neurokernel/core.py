@@ -123,8 +123,8 @@ class Module(BaseModule):
         self.data['gpot'] = data_gpot
         self.data['spike'] = data_spike
         self.pm = {}
-        self.pm['gpot'] = PortMapper(self.data['gpot'], sel_gpot)
-        self.pm['spike'] = PortMapper(self.data['spike'], sel_spike)
+        self.pm['gpot'] = PortMapper(sel_gpot, self.data['gpot'])
+        self.pm['spike'] = PortMapper(sel_spike, self.data['spike'])
 
         # Patterns connecting this module instance with other modules instances.
         # Keyed on the IDs of those modules:
@@ -518,12 +518,6 @@ if __name__ == '__main__':
             out_spike_ports = self.interface.out_ports().spike_ports().to_tuples()
             self.pm['spike'][out_spike_ports] = \
                     np.random.randint(0, 2, len(out_spike_ports))
-
-        def run(self):
-
-            # Make every class instance generate a different pseudorandom sequence:
-            np.random.seed(id(self))
-            super(MyModule, self).run()
 
     def emulate(n, steps):
         assert(n>1)

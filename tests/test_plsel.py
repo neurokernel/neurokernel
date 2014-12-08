@@ -422,24 +422,26 @@ class test_port_mapper(TestCase):
         self.data = np.random.rand(20)
 
     def test_get(self):
-        pm = PortMapper(self.data,
-                        '/foo/bar[0:10],/foo/baz[0:10]')
+        # Mapper with data:
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
         np.allclose(self.data[0:10], pm['/foo/bar[0:10]'])
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]')
+
+        # Mapper without data:
+        self.assertRaises(Exception, pm.__getitem__, '/foo/bar[0]')
 
     def test_get_discontinuous(self):
-        pm = PortMapper(self.data,
-                        '/foo/bar[0:10],/foo/baz[0:10]')
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
         np.allclose(self.data[[0, 2, 4, 6]],
                     pm['/foo/bar[0,2,4,6]'])
 
     def test_get_sub(self):
-        pm = PortMapper(self.data,
-                        '/foo/bar[0:5],/foo/baz[0:5]',
+        pm = PortMapper('/foo/bar[0:5],/foo/baz[0:5]', self.data,                      
                         np.arange(5, 15))
         np.allclose(self.data[5:10], pm['/foo/bar[0:5]'])
 
     def test_get_ports(self):
-        pm = PortMapper(np.arange(10), '/foo/bar[0:10]')
+        pm = PortMapper('/foo/bar[0:10]', np.arange(10))
         self.assertSequenceEqual(pm.get_ports(lambda x: x < 5),
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
@@ -455,34 +457,37 @@ class test_port_mapper(TestCase):
                                   ('foo', 'bar', 4)])
 
     def test_get_ports_as_inds(self):
-        pm = PortMapper(np.array([0, 1, 0, 1, 0]), '/foo[0:5]')
+        pm = PortMapper('/foo[0:5]', np.array([0, 1, 0, 1, 0]))
         np.allclose(pm.get_ports_as_inds(lambda x: np.asarray(x, dtype=np.bool)), 
                     [1, 3])
 
     def test_get_ports_nonzero(self):
-        pm = PortMapper(np.array([0, 1, 0, 1, 0]), '/foo[0:5]')
+        pm = PortMapper('/foo[0:5]', np.array([0, 1, 0, 1, 0]))
         self.assertSequenceEqual(pm.get_ports_nonzero(),
                                  [('foo', 1),
                                   ('foo', 3)])
 
     def test_inds_to_ports(self):
-        pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
+        pm = PortMapper('/foo[0:5],/bar[0:5]', np.random.rand(10))
         self.assertSequenceEqual(pm.inds_to_ports([4, 5]),
                                  [('foo', 4), ('bar', 0)])
 
     def test_ports_to_inds(self):
-        pm = PortMapper(np.random.rand(10), '/foo[0:5],/bar[0:5]')
+        pm = PortMapper('/foo[0:5],/bar[0:5]', np.random.rand(10))
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [4, 5])
 
     def test_set(self):
-        pm = PortMapper(self.data,
-                        '/foo/bar[0:10],/foo/baz[0:10]')
+        # Mapper with data:
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
         pm['/foo/baz[0:5]'] = 1.0
         np.allclose(np.ones(5), pm['/foo/baz[0:5]'])
+        
+        # Mapper without data:
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]')
+        self.assertRaises(Exception, pm.__setitem__, '/foo/bar[0]', 0)
 
     def test_set_discontinuous(self):
-        pm = PortMapper(self.data,
-                        '/foo/bar[0:10],/foo/baz[0:10]')
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)                        
         pm['/foo/*[0:2]'] = 1.0
         np.allclose(np.ones(4), pm['/foo/*[0:2]'])
 

@@ -1473,19 +1473,24 @@ class PortMapper(object):
     Examples
     --------
     >>> data = np.array([1, 0, 3, 2, 5, 2])
-    >>> pm = PortMapper(data, '/d[0:5]')
+    >>> pm = PortMapper('/d[0:5]', data)
     >>> print pm['/d[1]']
     array([0])
     >>> print pm['/d[2:4]']
     array([3, 2])
+    >>> pm = PortMapper('/e[0:3]')
+    >>> print pm['/e[0]']
+    array([], dtype=float64)
 
     Parameters
     ----------
-    data : numpy.ndarray
-        Data to map to ports.
     selector : str, unicode, or sequence
         Selector string (e.g., '/foo[0:2]') or sequence of token sequences
         (e.g., [['foo', (0, 2)]]) to map to `data`.
+    data : numpy.ndarray
+        1D data array to map to ports. If no data array is specified, port
+        identifiers will still be mapped to their sequential indices but 
+        __getitem__() and __setitem__() will raise exceptions if invoked.
     idx : sequence
         Indices of elements in the specified array to map to ports. If no
         indices are specified, the entire array is mapped to the ports 
@@ -1507,19 +1512,27 @@ class PortMapper(object):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, data, selector, idx=None):
+    def __init__(self, selector, data=None, idx=None):
+
+        # Get number of ports in selector (and implicitly reject ambiguous selectors):
+        self.sel = PathLikeSelector()
+        N = self.sel.count_ports(selector)
 
         # Can currently only handle unidimensional data structures:
-        assert np.ndim(data) == 1
-        assert type(data) == np.ndarray
-
-        # Save a reference to the specified array:
-        self.data = data
-
-        self.sel = PathLikeSelector()
-        if idx is None:
-            self.portmap = pd.Series(data=np.arange(len(data)))
+        if data is None:
+            self.data = np.array([])
         else:
+            assert np.ndim(data) == 1
+            assert type(data) == np.ndarray
+
+            # The port mapper may map identifiers to some portion of the data array:
+            assert N <= len(data)
+            self.data = data
+
+        if idx is None:
+            self.portmap = pd.Series(data=np.arange(N))
+        else:
+            assert len(idx) == N
             self.portmap = pd.Series(data=np.asarray(idx))        
         self.portmap.index = self.sel.make_index(selector)
 
@@ -1560,6 +1573,7 @@ class PortMapper(object):
         result : numpy.ndarray
             Selected data.
         """
+
         return self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)]
 
     def get_ports(self, f):
@@ -1690,6 +1704,7 @@ class PortMapper(object):
         data : numpy.ndarray
             Array of data to save.
         """
+
         # sel.select will return a Series with nan for selector [()], hence dropna
         # is necessary here
         self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
