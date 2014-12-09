@@ -442,6 +442,15 @@ class test_base_port_mapper(TestCase):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]', range(10, 20))
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [14, 15])
 
+    def test_get_map(self):
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]')
+        self.assertSequenceEqual(pm.get_map('/bar[0:5]').tolist(), range(5, 10))
+
+    def test_set_map(self):
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]')
+        pm.set_map('/bar[0:5]', range(5))
+        self.assertSequenceEqual(pm.portmap.ix[5:10].tolist(), range(5))
+
 class test_port_mapper(TestCase):
     def setUp(self):
         self.data = np.random.rand(20)

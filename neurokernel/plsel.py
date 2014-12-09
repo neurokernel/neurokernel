@@ -1493,7 +1493,7 @@ class BasePortMapper(object):
     index : pandas.MultiIndex
         Index of port identifiers.
     portmap : pandas.Series
-        Map of port identifiers to integer indices into `data`.
+        Map of port identifiers to integer indices.
 
     Notes
     -----
@@ -1566,6 +1566,39 @@ class BasePortMapper(object):
         """
 
         return self.sel.select(self.portmap, selector).dropna().values
+
+    def get_map(self, selector):
+        """
+        Retrieve integer indices associated with selector.
+
+        Parameters
+        ----------
+        selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
+
+        Returns
+        -------
+        result : numpy.ndarray
+            Selected data.
+        """
+
+        return np.asarray(self.portmap[self.sel.get_index(self.portmap, selector)])
+
+    def set_map(self, selector, portmap):
+        """
+        Set mapped integer index associated with selector.
+
+        Parameters
+        ----------
+        selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).            
+        portmap : sequence of int
+            Integer indices to map to port identifiers.
+        """
+        
+        self.portmap[self.sel.get_index(self.portmap, selector)] = portmap
 
     def __len__(self):
         return self.portmap.size
