@@ -1466,7 +1466,114 @@ PathLikeSelector.lexer = lex.lex(module=PathLikeSelector)
 PathLikeSelector.parser = yacc.yacc(module=PathLikeSelector, 
                                     debug=0, write_tables=0)
 
-class PortMapper(object):
+class BasePortMapper(object):
+    """
+    Maps integer sequence to/from path-like port identifiers.
+
+    Examples
+    --------
+    >>> pm = BasePortMapper('/[a,b][0:2]')
+    >>> print pm.ports_to_inds('/b[0:2]')
+    array([2, 3])
+    >>> print pm.inds_to_ports([0, 1])
+    [('a', 0), ('a', 1)]
+
+    Parameters
+    ----------
+    selector : str, unicode, or sequence
+        Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+        (e.g., [['foo', (0, 2)]]) to map to `data`.
+    portmap : sequence of int
+        Integer indices to map to port identifiers. If no map is specified,
+        it is assumed to be an array of consecutive integers from 0
+        through one less than the number of ports.
+
+    Attributes
+    ----------
+    index : pandas.MultiIndex
+        Index of port identifiers.
+    portmap : pandas.Series
+        Map of port identifiers to integer indices into `data`.
+
+    Notes
+    -----
+    The selectors may not contain any '*' or '[:]' characters.
+    """
+
+    def __init__(self, selector, portmap=None):
+        self.sel = PathLikeSelector()
+        N = self.sel.count_ports(selector)
+        if portmap is None:
+            self.portmap = pd.Series(data=np.arange(N))
+        else:
+            assert len(portmap) == N
+            self.portmap = pd.Series(data=np.asarray(portmap))
+        self.portmap.index = self.sel.make_index(selector)
+
+    @property
+    def index(self):
+        """
+        Port mapper index.
+        """
+        
+        return self.portmap.index
+    @index.setter
+    def index(self, i):
+        self.portmap.index = i
+
+    def inds_to_ports(self, inds):
+        """
+        Convert list of integer indices to port identifiers.
+
+        Examples
+        --------
+        >>> pm = BasePortMapper('/[a,b][0:2]')
+        >>> print pm.inds_to_ports([0, 1])
+        [('a', 0), ('a', 1)]
+
+        Parameters
+        ----------
+        inds : array_like of int
+            Integer indices of ports.
+
+        Returns
+        -------
+        t : list of tuple
+            Expanded port identifiers.
+        """
+
+        return self.portmap[self.portmap.isin(inds)].index.tolist()
+
+    def ports_to_inds(self, selector):
+        """
+        Convert port selector to list of integer indices.
+
+        Examples
+        --------
+        >>> pm = BasePortMapper('/[a,b][0:2]')
+        >>> print pm.ports_to_inds('/b[0:2]')
+
+        Parameters
+        ----------
+        selector : str, unicode, or sequence
+            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
+            (e.g., [['foo', (0, 2)]]).
+
+        Returns
+        -------
+        inds : numpy.ndarray of int
+            Integer indices of ports comprised by selector. 
+        """
+
+        return self.sel.select(self.portmap, selector).dropna().values
+
+    def __len__(self):
+        return self.portmap.size
+
+    def __repr__(self):
+        return 'map:\n'+self.portmap.__repr__()
+
+class PortMapper(BasePortMapper):
     """
     Maps a numpy array to/from path-like port identifiers.
 
@@ -1478,9 +1585,6 @@ class PortMapper(object):
     array([0])
     >>> print pm['/d[2:4]']
     array([3, 2])
-    >>> pm = PortMapper('/e[0:3]')
-    >>> print pm['/e[0]']
-    array([], dtype=float64)
 
     Parameters
     ----------
@@ -1491,10 +1595,10 @@ class PortMapper(object):
         1D data array to map to ports. If no data array is specified, port
         identifiers will still be mapped to their sequential indices but 
         __getitem__() and __setitem__() will raise exceptions if invoked.
-    idx : sequence
-        Indices of elements in the specified array to map to ports. If no
-        indices are specified, the entire array is mapped to the ports 
-        specified by the given selector.
+    portmap : sequence of int
+        Integer indices to map to port identifiers. If no map is specified,
+        it is assumed to be an array of consecutive integers from 0
+        through one less than the number of ports.
 
     Attributes
     ----------
@@ -1512,11 +1616,9 @@ class PortMapper(object):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, selector, data=None, idx=None):
-
-        # Get number of ports in selector (and implicitly reject ambiguous selectors):
-        self.sel = PathLikeSelector()
-        N = self.sel.count_ports(selector)
+    def __init__(self, selector, data=None, portmap=None):
+        super(PortMapper, self).__init__(selector, portmap)
+        N = len(self)
 
         # Can currently only handle unidimensional data structures:
         if data is None:
@@ -1525,32 +1627,18 @@ class PortMapper(object):
             assert np.ndim(data) == 1
             assert type(data) == np.ndarray
 
+            # The integers in the port map must be valid indices into the
+            # data array:
+            assert max(self.portmap) < len(data)
+
             # The port mapper may map identifiers to some portion of the data array:
             assert N <= len(data)
             self.data = data
 
-        if idx is None:
-            self.portmap = pd.Series(data=np.arange(N))
-        else:
-            assert len(idx) == N
-            self.portmap = pd.Series(data=np.asarray(idx))        
-        self.portmap.index = self.sel.make_index(selector)
-
-    @property
-    def index(self):
-        """
-        PortMapper index.
-        """
-        
-        return self.portmap.index
-    @index.setter
-    def index(self, i):
-        self.portmap.index = i
-
     @property
     def dtype(self):
         """
-        PortMapper data type.
+        Port mapper data type.
         """
         
         return self.data.dtype
@@ -1642,55 +1730,6 @@ class PortMapper(object):
         else:
             v = self.portmap[f].values
         return v
-
-    def inds_to_ports(self, inds):
-        """
-        Convert list of integer indices to port identifiers.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> pm = PortMapper(np.random.rand(10), '/a[0:5],/b[0:5]')
-        >>> pm.inds_to_ports([4, 5])
-        [('a', 4), ('b', 0)]
-
-        Parameters
-        ----------
-        inds : array_like of int
-            Integer indices of ports.
-
-        Returns
-        -------
-        t : list of tuple
-            Expanded port identifiers.
-        """
-
-        return self.portmap[self.portmap.isin(inds)].index.tolist()
-
-    def ports_to_inds(self, selector):
-        """
-        Convert port selector to list of integer indices.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> pm = PortMapper(np.random.rand(10), '/a[0:5],/b[0:5]')
-        >>> pm.ports_to_inds('/a[4],/b[0]')
-        array([4, 5])
-
-        Parameters
-        ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
-
-        Returns
-        -------
-        inds : numpy.ndarray of int
-            Integer indices of ports comprised by selector. 
-        """
-
-        return self.sel.select(self.portmap, selector).dropna().values
 
     def set(self, selector, data):
         """

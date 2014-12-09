@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas.util.testing import assert_frame_equal, assert_index_equal
 
-from neurokernel.plsel import PathLikeSelector, PortMapper
+from neurokernel.plsel import PathLikeSelector, BasePortMapper, PortMapper
 
 df = pd.DataFrame(data={'data': np.random.rand(10),
                   0: ['foo', 'foo', 'foo', 'foo', 'foo',
@@ -417,9 +417,38 @@ class test_path_like_selector(TestCase):
         assert self.sel.max_levels([['foo', 'bar', (0, 10)],
                                     ['baz', 'qux']]) == 3
 
+class test_base_port_mapper(TestCase):
+    def test_len(self):
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]')
+        assert len(pm) == 10
+
+    def test_inds_to_ports(self):
+        # Without a specified port map:
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]')
+        self.assertSequenceEqual(pm.inds_to_ports([4, 5]),
+                                 [('foo', 4), ('bar', 0)])
+
+        # With a specified port map:
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]', range(10, 20))
+        self.assertSequenceEqual(pm.inds_to_ports([14, 15]),
+                                 [('foo', 4), ('bar', 0)])
+
+    def test_ports_to_inds(self):
+        # Without a specified port map:
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]')
+        np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [4, 5])
+
+        # With a specified port map:
+        pm = BasePortMapper('/foo[0:5],/bar[0:5]', range(10, 20))
+        np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [14, 15])
+
 class test_port_mapper(TestCase):
     def setUp(self):
         self.data = np.random.rand(20)
+
+    def test_dtype(self):
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
+        assert pm.dtype == np.float64
 
     def test_get(self):
         # Mapper with data:
@@ -466,15 +495,6 @@ class test_port_mapper(TestCase):
         self.assertSequenceEqual(pm.get_ports_nonzero(),
                                  [('foo', 1),
                                   ('foo', 3)])
-
-    def test_inds_to_ports(self):
-        pm = PortMapper('/foo[0:5],/bar[0:5]', np.random.rand(10))
-        self.assertSequenceEqual(pm.inds_to_ports([4, 5]),
-                                 [('foo', 4), ('bar', 0)])
-
-    def test_ports_to_inds(self):
-        pm = PortMapper('/foo[0:5],/bar[0:5]', np.random.rand(10))
-        np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [4, 5])
 
     def test_set(self):
         # Mapper with data:
