@@ -4,7 +4,8 @@ from unittest import main, TestCase
 
 import numpy as np
 import pandas as pd
-from pandas.util.testing import assert_frame_equal, assert_index_equal
+from pandas.util.testing import assert_frame_equal, assert_index_equal, \
+    assert_series_equal
 
 from neurokernel.plsel import PathLikeSelector, BasePortMapper, PortMapper
 
@@ -423,6 +424,17 @@ class test_base_port_mapper(TestCase):
     def test_len(self):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert len(pm) == 10
+
+    def test_from_index(self):
+        # Without a specified port map:
+        pm0 = BasePortMapper('/foo[0:5],/bar[0:5]')
+        pm1 = BasePortMapper.from_index(pm0.index)
+        assert_series_equal(pm0.portmap, pm1.portmap)
+
+        # With a specified port map:
+        pm0 = BasePortMapper('/foo[0:5],/bar[0:5]', range(5)*2)
+        pm1 = BasePortMapper.from_index(pm0.index, range(5)*2)
+        assert_series_equal(pm0.portmap, pm1.portmap)
 
     def test_inds_to_ports(self):
         # Without a specified port map:

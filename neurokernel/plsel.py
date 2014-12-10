@@ -1514,6 +1514,28 @@ class BasePortMapper(object):
             self.portmap = pd.Series(data=np.asarray(portmap))
         self.portmap.index = self.sel.make_index(selector)
 
+    @classmethod
+    def from_index(cls, idx, portmap=None):
+        """
+        Parameters
+        ----------
+        index : pandas.MultiIndex
+            Index containing selector data.
+        portmap : sequence of int
+            Integer indices to map to port identifiers. If no map is specified,
+            it is assumed to be an array of consecutive integers from 0
+            through one less than the number of ports.
+        """
+
+        pm = cls('')
+        N = len(idx)
+        if portmap is None:
+            pm.portmap = pd.Series.from_array(np.arange(N), idx)
+        else:
+            assert len(portmap) == N
+            pm.portmap = pd.Series.from_array(np.asarray(portmap), idx)
+        return pm
+
     @property
     def index(self):
         """
