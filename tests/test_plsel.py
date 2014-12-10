@@ -197,6 +197,8 @@ class test_path_like_selector(TestCase):
     def test_count_ports(self):
         result = self.sel.count_ports('/foo/bar[0:2],/moo/[qux,baz]')
         assert result == 4
+        result = self.sel.count_ports('')
+        assert result == 0
 
     def test_expand_str(self):
         result = self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]')

@@ -814,7 +814,11 @@ class PathLikeSelector(object):
             Number of identifiers comprised by selector.
         """
         
-        return len(cls.expand(selector))
+        e = cls.expand(selector)
+        if e == [()]:
+            return 0
+        else:
+            return len(e)
 
     # Need to create cache here because one can't assign create a cache that is
     # an attribute of the classmethod itself:
