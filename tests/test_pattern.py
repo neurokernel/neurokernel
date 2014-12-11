@@ -5,7 +5,8 @@ from unittest import main, TestCase
 import numpy as np
 import pandas as pd
 import networkx as nx
-from pandas.util.testing import assert_frame_equal, assert_index_equal
+from pandas.util.testing import assert_frame_equal, assert_index_equal, \
+    assert_series_equal
 
 from neurokernel.pattern import Interface, Pattern
 
@@ -26,6 +27,40 @@ class test_interface(TestCase):
 
     def test_create_dup_identifiers(self):
         self.assertRaises(Exception, Interface, '/foo[0],/foo[0]')
+
+    def test_equals(self):
+        i = Interface('/foo[0:2],/bar[0:2]')
+        i['/foo[0]'] = [0, 'in', 'gpot']
+        i['/bar[0]'] = [0, 'out', 'gpot']
+        i['/foo[1]'] = [1, 'in', 'spike']
+        i['/bar[1]'] = [1, 'out', 'spike']
+        j = Interface('/foo[0:2],/bar[0:2]')
+        j['/foo[0]'] = [0, 'in', 'gpot']
+        j['/bar[0]'] = [0, 'out', 'gpot']
+        j['/foo[1]'] = [1, 'in', 'spike']
+        j['/bar[1]'] = [1, 'out', 'spike']
+        assert i.equals(j)
+        assert j.equals(i)
+        j['/foo[0]'] = [0, 'in', 'spike']
+        assert not i.equals(j)
+        assert not j.equals(i)
+
+    def test_get_pm(self):
+        i = Interface('/foo[0:2],/bar[0:2]')
+        i['/foo[0]'] = [0, 'in', 'gpot']
+        i['/bar[0]'] = [0, 'out', 'gpot']
+        i['/foo[1]'] = [1, 'in', 'spike']
+        i['/bar[1]'] = [1, 'out', 'spike']
+        assert_series_equal(i.gpot_pm().portmap,
+                            pd.Series([0, 1],
+                                      index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
+                                                          labels=[[1, 0], [0, 0]],
+                                                          names=['0', '1'])))
+        assert_series_equal(i.spike_pm().portmap,
+                            pd.Series([0, 1],
+                                      index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
+                                                          labels=[[1, 0], [1, 1]],
+                                                          names=['0', '1'])))
 
     def test_to_selectors(self):
         # Selector with multiple levels:
