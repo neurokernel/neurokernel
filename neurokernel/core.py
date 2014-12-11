@@ -14,7 +14,7 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
-from base import BaseModule, Manager, Broker, PORT_DATA, PORT_CTRL, setup_logger
+from base import BaseModule, BaseManager, Broker, PORT_DATA, PORT_CTRL, setup_logger
 
 from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
                           ExceptionOnSignal, TryExceptionOnSignal)
@@ -237,6 +237,7 @@ class Module(BaseModule):
                 # Assign transmitted graded potential values directly to port
                 # data array:
                 self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
+
                 # Clear all input spike port data..
                 self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = 0
                     
@@ -287,7 +288,6 @@ class Module(BaseModule):
                                                out_spike_ports)
 
             try:
-
 
                 # Stage the emitted port data for transmission:
                 self._out_data.append((out_id, (gpot_data, spike_data)))
@@ -397,7 +397,6 @@ class Module(BaseModule):
             # Initialize _out_port_dict and _in_port_dict attributes:
             self._init_port_dicts()
 
-            
             # Initialize Buffer for incoming data.  Dict used to store the
             # incoming data keyed by the source module id.  Each value is a
             # queue buferring the received data:
@@ -462,6 +461,87 @@ class Module(BaseModule):
         self.logger.info('exiting')
         
 
+class Manager(BaseManager):
+    """
+    Module manager.
+
+    Instantiates, connects, starts, and stops modules comprised by an 
+    emulation.
+
+    Parameters
+    ----------
+    port_data : int
+        Port to use for communication with modules.
+    port_ctrl : int
+        Port used to control modules.
+
+    Attributes
+    ----------
+    brokers : dict
+        Communication brokers. Keyed by broker object ID.
+    modules : dict
+        Module instances. Keyed by module object ID.
+    routing_table : routing_table.RoutingTable
+        Table of data transmission connections between modules.
+    """ 
+
+    def connect(self, m_0, m_1, pat, int_0=0, int_1=1):
+        """
+        Connect two module instances with a Pattern instance.
+
+        Parameters
+        ----------
+        m_0, m_1 : BaseModule
+            Module instances to connect.
+        pat : Pattern
+            Pattern instance.
+        int_0, int_1 : int
+            Which of the pattern's interfaces to connect to `m_0` and `m_1`,
+            respectively.
+        """
+
+        assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
+        assert isinstance(pat, Pattern)
+        assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
+
+        self.logger.info('connecting modules {0} and {1}'
+                         .format(m_0.id, m_1.id))
+
+        # Check whether the interfaces exposed by the modules and the
+        # pattern share compatible subsets of ports:
+        self.logger.info('checking compatibility of modules {0} and {1} and'
+                         ' assigned pattern'.format(m_0.id, m_1.id))
+        assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
+        assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
+
+        # Check that the data port mappers map the same integer indices to ports
+        # as do those in the corresponding interfaces of the connecting pattern:
+        assert pat.interface.gpot_pm(int_0).equals(m_0.pm['gpot'])
+        assert pat.interface.spike_pm(int_0).equals(m_0.pm['spike'])
+        assert pat.interface.gpot_pm(int_1).equals(m_1.pm['gpot'])
+        assert pat.interface.spike_pm(int_1).equals(m_1.pm['spike'])
+
+        # Add the module and pattern instances to the internal dictionaries of
+        # the manager instance if they are not already there:
+        if m_0.id not in self.modules:
+            self.add_mod(m_0)
+        if m_1.id not in self.modules:
+            self.add_mod(m_1)
+
+        # Pass the pattern to the modules being connected:
+        self.logger.info('passing connection pattern to modules {0} and {1}'.format(m_0.id, m_1.id))
+        m_0.connect(m_1, pat, int_0, int_1)
+        m_1.connect(m_0, pat, int_1, int_0)
+
+        # Update the routing table:
+        self.logger.info('updating routing table')
+        if pat.is_connected(0, 1):
+            self.routing_table[m_0.id, m_1.id] = 1
+        if pat.is_connected(1, 0):
+            self.routing_table[m_1.id, m_0.id] = 1
+
+        self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
+
 if __name__ == '__main__':
     import time
 
@@ -522,6 +602,7 @@ if __name__ == '__main__':
     def emulate(n, steps):
         assert(n>1)
         n = str(n)
+
         # Set up emulation:
         man = Manager(get_random_port(), get_random_port())
         man.add_brok()
@@ -591,7 +672,7 @@ if __name__ == '__main__':
         return m1
 
     # Set up logging:
-    logger = setup_logger(screen=False)
+    logger = setup_logger(screen=True)
     steps = 100
 
     # Emulation 1
