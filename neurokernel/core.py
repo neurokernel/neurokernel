@@ -242,9 +242,8 @@ class Module(BaseModule):
                 self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = 0
                     
                 # ..and then set the port data using the transmitted
-                # information about source module spikes:
-                #self.pm['spike'][self.pm['spike'].inds_to_ports(data[1])] = 1
-                self.pm['spike'][data[1]] = 1
+                # integer indices corresponding to spike ports:
+                self.pm['spike'].data[data[1]] = 1
 
     def _put_out_data(self):
         """
@@ -252,6 +251,10 @@ class Module(BaseModule):
 
         Stage data from the data arrays associated with a module's ports for
         output to other modules.
+
+        Notes
+        -----
+        The output spike port selection algorithm could probably be made faster.
         """
 
         self.logger.info('populating output buffer')
@@ -283,14 +286,19 @@ class Module(BaseModule):
             # which the spikes emitted by the current module's spiking ports
             # must be sent:
             from_int, to_int = self.pat_ints[out_id]
+            pat = self.patterns[out_id]
             spike_data = \
-                self.patterns[out_id].dest_idx(from_int, to_int, 'spike', 'spike',
-                                               out_spike_ports)
+                pat.dest_idx(from_int, to_int, 'spike', 'spike', out_spike_ports)
+
+            # Find the integer indices corresponding to the destination module
+            # port identifiers so that the
+            spike_data_ind = \
+                pat.interface.spike_pm(to_int).ports_to_inds(spike_data)
 
             try:
 
                 # Stage the emitted port data for transmission:
-                self._out_data.append((out_id, (gpot_data, spike_data)))
+                self._out_data.append((out_id, (gpot_data, spike_data_ind)))
             except:
                 self.logger.info('no output data to [%s] sent' % out_id)
             else:
