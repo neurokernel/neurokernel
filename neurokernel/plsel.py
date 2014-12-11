@@ -1626,6 +1626,28 @@ class BasePortMapper(object):
         
         self.portmap[self.sel.get_index(self.portmap, selector)] = portmap
 
+    def equals(self, other):
+        """
+        Check whether this mapper is equivalent to another mapper.
+
+        Parameters
+        ----------
+        other : neurokernel.plsel.BasePortMapper
+            Mapper to compare to this mapper.
+
+        Returns
+        -------
+        result : bool
+            True if the mappers are identical.
+
+        Notes
+        -----
+        Mappers containing the same rows in different orders are not 
+        regarded as equivalent.
+        """
+
+        return self.portmap.equals(other.portmap)
+
     def __len__(self):
         return self.portmap.size
 
@@ -1809,6 +1831,30 @@ class PortMapper(BasePortMapper):
 
     __getitem__ = get
     __setitem__ = set
+
+    def equals(self, other):
+        """
+        Check whether this mapper is equivalent to another mapper.
+
+        Parameters
+        ----------
+        other : neurokernel.plsel.PortMapper
+            Mapper to compare to this mapper.
+
+        Returns
+        -------
+        result : bool
+            True if the mappers map the same selectors to the same integer
+            indices and data.
+
+        Notes
+        -----
+        Mappers containing the same rows in different orders are not 
+        regarded as equivalent.
+        """
+
+        assert isinstance(other, PortMapper)
+        return self.portmap.equals(other.portmap) and (self.data == other.data).all()
 
     def __repr__(self):
         return 'map:\n'+self.portmap.__repr__()+'\n\ndata:\n'+self.data.__repr__()

@@ -425,6 +425,16 @@ class test_base_port_mapper(TestCase):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert len(pm) == 10
 
+    def test_equals(self):
+        pm0 = BasePortMapper('/foo[0:5],/bar[0:5]')
+        pm1 = BasePortMapper('/foo[0:5],/bar[0:5]')
+        assert pm0.equals(pm1)
+        assert pm1.equals(pm0)
+        pm0 = BasePortMapper('/foo[0:5],/bar[1:5]/bar[0]')
+        pm1 = BasePortMapper('/foo[0:5],/bar[0:5]')
+        assert not pm0.equals(pm1)
+        assert not pm1.equals(pm0)
+
     def test_from_index(self):
         # Without a specified port map:
         pm0 = BasePortMapper('/foo[0:5],/bar[0:5]')
@@ -473,6 +483,22 @@ class test_port_mapper(TestCase):
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
         assert pm.dtype == np.float64
 
+    def test_equals(self):
+        pm0 = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
+        pm1 = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
+        assert pm0.equals(pm1)
+        assert pm1.equals(pm0)
+        pm0 = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
+        pm1 = PortMapper('/foo/bar[0:10],/foo/baz[1:10],/foo/baz[0]', self.data)
+        assert not pm0.equals(pm1)
+        assert not pm1.equals(pm0)
+        pm0 = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', np.arange(20))
+        pm1 = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', 
+                         np.concatenate((np.arange(10), np.arange(10))))
+        assert not pm0.equals(pm1)
+        assert not pm1.equals(pm0)
+
+        
     def test_get(self):
         # Mapper with data:
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
