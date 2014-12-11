@@ -1652,7 +1652,7 @@ class BasePortMapper(object):
         return self.portmap.size
 
     def __repr__(self):
-        return 'map:\n'+self.portmap.__repr__()
+        return 'Map:\n----\n'+self.portmap.__repr__()
 
 class PortMapper(BasePortMapper):
     """
@@ -1857,4 +1857,4 @@ class PortMapper(BasePortMapper):
         return self.portmap.equals(other.portmap) and (self.data == other.data).all()
 
     def __repr__(self):
-        return 'map:\n'+self.portmap.__repr__()+'\n\ndata:\n'+self.data.__repr__()
+        return 'Map:\n----\n'+self.portmap.__repr__()+'\n\ndata:\n'+self.data.__repr__()
