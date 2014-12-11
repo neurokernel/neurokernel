@@ -502,6 +502,10 @@ class test_pattern(TestCase):
         else:
             raise Exception
 
+    def test_create_unequal_levels(self):
+        p = Pattern('/x[0:3]/y', '/z[0:3]')
+        p['/x[0]/y', '/z[0]'] = 1
+
     def test_src_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
