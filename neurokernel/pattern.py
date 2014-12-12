@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import PathLikeSelector
+from plsel import BasePortMapper, PathLikeSelector
 
 class Interface(object):
     """
@@ -400,6 +400,40 @@ class Interface(object):
             except:
                 return Interface()
 
+    def gpot_pm(self, i=None):
+        """
+        Return map between sequential integers and graded potential port identifiers.
+        """
+
+        if i is None:
+            try:
+                return BasePortMapper.from_index(self.data[self.data['type'] == 'gpot'].index)
+            except:
+                return BasePortMapper('')
+        else:
+            try:
+                return BasePortMapper.from_index(self.data[(self.data['type'] == 'gpot') & \
+                                                           (self.data['interface'] == i)].index)
+            except:
+                return BasePortMapper('')
+
+    def spike_pm(self, i=None):
+        """
+        Return map between sequential integers and spiking port identifiers.
+        """
+
+        if i is None:
+            try:
+                return BasePortMapper.from_index(self.data[self.data['type'] == 'spike'].index)
+            except:
+                return BasePortMapper('')
+        else:
+            try:
+                return BasePortMapper.from_index(self.data[(self.data['type'] == 'spike') & \
+                                                           (self.data['interface'] == i)].index)
+            except:
+                return BasePortMapper('')
+
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -760,6 +794,29 @@ class Interface(object):
         return self.from_df(self.data)
     copy = __copy__
     copy.__doc__ = __copy__.__doc__
+
+    def equals(self, other):
+        """
+        Check whether this interface is equivalent to another interface.
+
+        Parameters
+        ----------
+        other : neurokernel.pattern.Interface
+            Interface instance to compare to this Interface.
+
+        Returns
+        -------
+        result : bool
+            True if the interfaces are identical.
+
+        Notes
+        -----
+        Interfaces containing the same rows in different orders are not 
+        regarded as equivalent.
+        """
+
+        assert isinstance(other, Interface)
+        return self.data.equals(other.data)
 
     def __len__(self):
         return self.data.__len__()

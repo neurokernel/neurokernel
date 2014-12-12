@@ -159,7 +159,7 @@ class BaseModule(ControlledProcess):
         # Set up mapper between port identifiers and their associated data:
         assert len(data) == len(self.interface)
         self.data = data
-        self.pm = PortMapper(self.data, selector)
+        self.pm = PortMapper(selector, self.data)
 
         # Patterns connecting this module instance with other modules instances.
         # Keyed on the IDs of those modules:
@@ -898,7 +898,7 @@ class TimeListener(ControlledProcess):
         else:
             self.logger.info('not computing throughput')
         
-class Manager(object):
+class BaseManager(object):
     """
     Module manager.
 
