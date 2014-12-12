@@ -11,14 +11,11 @@ import os
 import re
 import string
 import sys
-import threading
 import time
 import collections
 
 import bidict
 import numpy as np
-import scipy.sparse
-import scipy as sp
 import twiggy
 import zmq
 from zmq.eventloop.ioloop import IOLoop
@@ -106,19 +103,20 @@ class BaseModule(ControlledProcess):
 
     # Define properties to perform validation when the maximum number of
     # execution steps set:
-    _steps = np.inf
+    _max_steps = float('inf')
     @property
-    def steps(self):
+    def max_steps(self):
         """
         Maximum number of steps to execute.
         """
-        return self._steps
-    @steps.setter
-    def steps(self, value):
+        return self._max_steps
+    @max_steps.setter
+    def max_steps(self, value):
         if value <= 0:
             raise ValueError('invalid maximum number of steps')
-        self.logger.info('maximum number of steps changed: %s -> %s' % (self._steps, value))
-        self._steps = value
+        self.logger.info('maximum number of steps changed: %s -> %s' % \
+                         (self._max_steps, value))
+        self._max_steps = value
 
     def __init__(self, selector, data, columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
@@ -333,6 +331,7 @@ class BaseModule(ControlledProcess):
         self.logger.info('initializing ctrl network connection')
         super(BaseModule, self)._init_net()
 
+        # Initialize data port handler:
         if self.net == 'none':
             self.logger.info('not initializing data network connection')
         else:
@@ -349,7 +348,7 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-                self.logger.info('network connection initialized')
+                self.logger.info('data network connection initialized')
 
                 # Set up a poller for detecting incoming data:
                 self.data_poller = zmq.Poller()
@@ -446,23 +445,29 @@ class BaseModule(ControlledProcess):
             # Receive inbound data:
             if self.net in ['in', 'full']:
 
-                # Wait until inbound data is received from all source modules:  
-                while not all((q for q in self._in_data.itervalues())):
+                # Wait until inbound data is received from all source modules:
+		recv_ids = set(self._in_ids)
+                while recv_ids:
                     # Use poller to avoid blocking:
                     if is_poll_in(self.sock_data, self.data_poller):
-                        in_id, data = msgpack.unpackb(self.sock_data.recv())
+                        data_packed = self.sock_data.recv()
+                        in_id, data = msgpack.unpackb(data_packed)
                         self.logger.info('recv from %s: %s ' % (in_id, str(data)))
 
                         # Ignore incoming data containing None:
                         if data is not None:
                             self._in_data[in_id].append(data)
 
+						# Remove source module ID from set of IDs from which to
+                        # expect data:
+                        recv_ids.discard(in_id)
+
                     # Stop the synchronization if a quit message has been received:
                     if not self.running:
                         self.logger.info('run loop stopped - stopping sync')
                         break
                 self.logger.info('recv data from all input IDs')
-                
+
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
@@ -559,9 +564,9 @@ class BaseModule(ControlledProcess):
             self.pre_run()
 
             self.running = True
-            curr_steps = 0
-            while curr_steps < self._steps:
-                self.logger.info('execution step: %s' % curr_steps)
+            self.steps = 0
+            while self.steps < self.max_steps:
+                self.logger.info('execution step: %s/%s' % (self.steps, self.max_steps))
 
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
@@ -596,7 +601,8 @@ class BaseModule(ControlledProcess):
                     self.logger.info('run loop stopped')
                     break
 
-                curr_steps += 1
+                self.steps += 1
+            self.logger.info('maximum number of steps reached')
 
             # Perform any post-emulation operations:
             self.post_run()
@@ -825,7 +831,7 @@ class BaseManager(object):
         self.routing_table = RoutingTable()
 
         # Number of emulation steps to run:
-        self.steps = np.inf
+        self.max_steps = float('inf')
 
     def connect(self, m_0, m_1, pat, int_0=0, int_1=1):
         """
@@ -878,7 +884,6 @@ class BaseManager(object):
             self.routing_table[m_1.id, m_0.id] = 1
 
         self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
-
 
     @property
     def N_brok(self):
@@ -938,7 +943,7 @@ class BaseManager(object):
             Maximum number of steps to execute.
         """
 
-        self.steps = steps
+        self.max_steps = steps
         with IgnoreKeyboardInterrupt():
             bi = 1
             mi = 1
@@ -948,7 +953,7 @@ class BaseManager(object):
                 self.logger.info('broker ' + str(bi) + ' started')
                 bi+=1
             for m in self.modules.values():
-                m.steps = steps
+                m.max_steps = steps
                 self.logger.info('module ' + str(mi) + ' about to start')
                 m.start()
                 self.logger.info('module ' + str(mi) + ' started')
@@ -1024,7 +1029,7 @@ class BaseManager(object):
         Stop execution of an emulation.
         """
 
-        if np.isinf(self.steps):
+        if np.isinf(self.max_steps):
             self.logger.info('stopping all modules')
             send_quit = True
         else:

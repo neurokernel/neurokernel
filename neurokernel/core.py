@@ -24,7 +24,7 @@ from tools.misc import catch_exception
 from uid import uid
 from pattern import Interface, Pattern
 from plsel import PathLikeSelector, PortMapper
-            
+
 class Module(BaseModule):
     """
     Processing module.
@@ -415,7 +415,7 @@ class Module(BaseModule):
 
             self.running = True
             curr_steps = 0
-            while curr_steps < self._steps:
+            while curr_steps < self.max_steps:
                 self.logger.info('execution step: %s' % curr_steps)
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
