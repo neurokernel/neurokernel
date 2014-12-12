@@ -14,7 +14,7 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
-from base import BaseModule, BaseManager, Broker, PORT_DATA, PORT_CTRL, setup_logger
+from base import BaseModule, BaseManager, Broker, PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
 
 from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
                           ExceptionOnSignal, TryExceptionOnSignal)
@@ -24,7 +24,7 @@ from tools.misc import catch_exception
 from uid import uid
 from pattern import Interface, Pattern
 from plsel import PathLikeSelector, PortMapper
-            
+
 class Module(BaseModule):
     """
     Processing module.
