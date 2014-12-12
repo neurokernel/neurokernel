@@ -1278,7 +1278,7 @@ if __name__ == '__main__':
     logger = setup_logger()
 
     # Set up emulation:
-    man = Manager(get_random_port(), get_random_port(), get_random_port())
+    man = BaseManager(get_random_port(), get_random_port(), get_random_port())
     man.add_brok()
 
     m1_int_sel = '/a[0:5]'; m1_int_sel_in = '/a[0:2]'; m1_int_sel_out = '/a[2:5]'
