@@ -338,18 +338,18 @@ class BaseModule(ControlledProcess):
         """
 
         # Initialize control port handler:
-        self.logger.info('initializing ctrl port')
+        self.logger.info('initializing ctrl network connection')
         super(BaseModule, self)._init_net()
 
-        # Initialize data port handler:
+		# Initialize data port handler:
         if self.net == 'none':
-            self.logger.info('not initializing data port')
+            self.logger.info('not initializing data network connection')
         else:
 
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
             with IgnoreKeyboardInterrupt():
-                self.logger.info('initializing data port')
+                self.logger.info('initializing data network connection')
 
                 # Use a nonblocking port for the data interface; set
                 # the linger period to prevent hanging on unsent
@@ -358,7 +358,7 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-                self.logger.info('data port initialized')
+                self.logger.info('data network connection initialized')
 
                 # Set up a poller for detecting incoming data:
                 self.data_poller = zmq.Poller()
@@ -464,9 +464,9 @@ class BaseModule(ControlledProcess):
             # Receive inbound data:
             if self.net in ['in', 'full']:
 
-                # Wait until inbound data is received from all source modules:  
-                nbytes = 0
+                # Wait until inbound data is received from all source modules:
                 recv_ids = set(self._in_ids)
+                nbytes = 0
                 start = time.time()
                 while recv_ids:
 
@@ -484,7 +484,7 @@ class BaseModule(ControlledProcess):
                             # Record number of bytes of transmitted serialized data:
                             nbytes += len(data_packed)
 
-                        # Remove source module ID from set of IDs from which to
+			# Remove source module ID from set of IDs from which to
                         # expect data:
                         recv_ids.discard(in_id)
 
@@ -526,7 +526,7 @@ class BaseModule(ControlledProcess):
     def run_step(self):
         """
         Module work method.
-    
+
         This method should be implemented to do something interesting with new 
         input port data in the module's `pm` attribute and update the attribute's
         output port data if necessary. It should not interact with any other 
@@ -581,7 +581,6 @@ class BaseModule(ControlledProcess):
 
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
-        self.steps = 0
         with IgnoreKeyboardInterrupt():
 
             # Initialize environment:
@@ -638,6 +637,7 @@ class BaseModule(ControlledProcess):
 
                 self.steps += 1
             self.logger.info('maximum number of steps reached')
+
             # Perform any post-emulation operations:
             self.post_run()
 
@@ -967,7 +967,7 @@ class BaseManager(object):
         self.routing_table = RoutingTable()
 
         # Number of emulation steps to run:
-        self.max_steps = np.inf
+        self.max_steps = float('inf')
 
         # Set up process to handle time data:
         self.time_listener = TimeListener(self.port_ctrl, self.port_time)
@@ -1188,7 +1188,7 @@ class BaseManager(object):
         """
 
         if np.isinf(self.max_steps):
-            self.logger.info('stopping all processes')
+            self.logger.info('stopping all modules')
             send_quit = True
         else:
             send_quit = False
@@ -1334,9 +1334,9 @@ if __name__ == '__main__':
     # Start emulation and allow it to run for a little while before shutting
     # down.  To set the emulation to exit after executing a fixed number of
     # steps, start it as follows and remove the sleep statement:
-    #man.start(steps=500)
+    # man.start(steps=500)
 
     man.start()
-    time.sleep(3)
+    time.sleep(2)
     man.stop()
     logger.info('all done')
