@@ -183,7 +183,6 @@ class Module(BaseModule):
         -----
         Must be called from within the `run()` method, not from within
         `__init__()`.
-
         """
 
         if self.device == None:
@@ -223,6 +222,7 @@ class Module(BaseModule):
         """
 
         self.logger.info('retrieving from input buffer')
+
         # Since fan-in is not permitted, the data from all source modules
         # must necessarily map to different ports; we can therefore write each
         # of the received data to the array associated with the module's ports
@@ -406,8 +406,8 @@ class Module(BaseModule):
 
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
-        self.steps = 0
         with IgnoreKeyboardInterrupt():
+
             # Initialize environment:
             self._init_net()
             
@@ -423,9 +423,10 @@ class Module(BaseModule):
             self.pre_run()
 
             self.running = True
-            curr_steps = 0
-            while curr_steps < self.max_steps:
-                self.logger.info('execution step: %s' % curr_steps)
+            self.steps = 0
+            while self.steps < self.max_steps:
+                self.logger.info('execution step: %s/%s' % (self.steps, self.max_steps))
+
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
                 if self.debug:
@@ -463,7 +464,8 @@ class Module(BaseModule):
                     self.logger.info('run loop stopped')
                     break
 
-                curr_steps += 1
+                self.steps += 1
+            self.logger.info('maximum number of steps reached')
 
             # Perform any post-emulation operations:
             self.post_run()
@@ -476,7 +478,6 @@ class Module(BaseModule):
             self.logger.info('sent to manager: %s' % ack)
                 
         self.logger.info('exiting')
-        
 
 class Manager(BaseManager):
     """
@@ -545,6 +546,10 @@ class Manager(BaseManager):
         if m_1.id not in self.modules:
             self.add_mod(m_1)
 
+        # Make the timing listener aware of the module IDs:
+        self.time_listener.add(m_0.id)
+        self.time_listener.add(m_1.id)
+
         # Pass the pattern to the modules being connected:
         self.logger.info('passing connection pattern to modules {0} and {1}'.format(m_0.id, m_1.id))
         m_0.connect(m_1, pat, int_0, int_1)
@@ -582,7 +587,6 @@ if __name__ == '__main__':
                                            columns, port_data, port_ctrl, port_time,
                                            id, None, True, True)
 
-            
             assert PathLikeSelector.is_in(sel_in_gpot, sel)
             assert PathLikeSelector.is_in(sel_out_gpot, sel)
             assert PathLikeSelector.are_disjoint(sel_in_gpot, sel_out_gpot)
