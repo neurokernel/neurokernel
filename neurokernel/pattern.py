@@ -74,14 +74,13 @@ class Interface(object):
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
-        
+
     def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
         """
 
-        if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
-                len(idx.unique()) < len(idx):
+        if idx.duplicated().any():
             raise ValueError('Duplicate interface index entries detected.')
 
     def __getitem__(self, key):
@@ -1177,16 +1176,14 @@ class Pattern(object):
         """
 
         # Prohibit duplicate connections:
-        if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
-           len(idx.unique()) < len(idx):
+        if idx.duplicated().any():
             raise ValueError('Duplicate pattern entries detected.')
             
         # Prohibit fan-in connections (i.e., patterns whose index has duplicate
         # 'from' port identifiers):
         from_idx, to_idx = self.split_multiindex(idx, 
                                                  self.from_slice, self.to_slice)
-        if (hasattr(to_idx, 'has_duplicates') and to_idx.has_duplicates) or \
-           len(to_idx.unique()) < len(to_idx):
+        if to_idx.duplicated().any():
             raise ValueError('Fan-in pattern entries detected.')
 
         # Prohibit ports that both receive input and send output:
