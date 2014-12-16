@@ -1626,27 +1626,36 @@ class BasePortMapper(object):
         
         self.portmap[self.sel.get_index(self.portmap, selector)] = portmap
 
-    def equals(self, other):
+    def equals(self, pm):
         """
         Check whether this mapper is equivalent to another mapper.
 
         Parameters
         ----------
-        other : neurokernel.plsel.BasePortMapper
+        pm : neurokernel.plsel.BasePortMapper
             Mapper to compare to this mapper.
 
         Returns
         -------
         result : bool
-            True if the mappers are identical.
+             True if the specified port mapper contains the same port
+             identifiers as this instance and maps them to the same integer
+             values.
 
         Notes
         -----
-        Mappers containing the same rows in different orders are not 
-        regarded as equivalent.
+        The port identifiers and maps in the specified port mapper need not be
+        in the same order as this instance to be deemed equal.
         """
 
-        return self.portmap.equals(other.portmap)
+        assert isinstance(pm, BasePortMapper)
+        pm0 = self.portmap.order()
+        pm1 = pm.portmap.order()
+        if np.array_equal(pm0.values, pm1.values) and \
+           pm0.index.equals(pm1.index):
+            return True
+        else:
+            return False
 
     def __len__(self):
         return self.portmap.size

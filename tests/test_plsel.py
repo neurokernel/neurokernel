@@ -426,10 +426,20 @@ class test_base_port_mapper(TestCase):
         assert len(pm) == 10
 
     def test_equals(self):
+        # Check that mappers containing the same ports/indices are deemed equal:
         pm0 = BasePortMapper('/foo[0:5],/bar[0:5]')
         pm1 = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert pm0.equals(pm1)
         assert pm1.equals(pm0)
+
+        # Check that mappers containing the same ports/indices in 
+        # different orders are deemed equal:
+        pm0 = BasePortMapper('/foo[0:5],/bar[0:5]', range(10))
+        pm1 = BasePortMapper('/bar[0:5],/foo[0:5]', range(5, 10)+range(5))
+        assert pm0.equals(pm1)
+        assert pm1.equals(pm0)
+
+        # Check that mappers containing different ports/indices are deemed non-equal:
         pm0 = BasePortMapper('/foo[0:5],/bar[1:5]/bar[0]')
         pm1 = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert not pm0.equals(pm1)
