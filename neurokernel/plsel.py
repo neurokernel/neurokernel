@@ -1517,6 +1517,8 @@ class BasePortMapper(object):
     @classmethod
     def from_index(cls, idx, portmap=None):
         """
+        Create port mapper from a Pandas index a sequence of integer indices.
+
         Parameters
         ----------
         index : pandas.MultiIndex
@@ -1525,6 +1527,12 @@ class BasePortMapper(object):
             Integer indices to map to port identifiers. If no map is specified,
             it is assumed to be an array of consecutive integers from 0
             through one less than the number of ports.
+
+        Notes
+        -----
+        If specified, the portmap sequence is copied into the new mapper to avoid 
+        side effects associated with modifying the specified sequence after
+        mapper instantiation.
         """
 
         pm = cls('')
@@ -1533,7 +1541,7 @@ class BasePortMapper(object):
             pm.portmap = pd.Series.from_array(np.arange(N), idx)
         else:
             assert len(portmap) == N
-            pm.portmap = pd.Series.from_array(np.asarray(portmap), idx)
+            pm.portmap = pd.Series.from_array(np.array(portmap), idx)
         return pm
 
     @property

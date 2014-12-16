@@ -4,6 +4,7 @@ from unittest import main, TestCase
 
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_array_equal
 from pandas.util.testing import assert_frame_equal, assert_index_equal, \
     assert_series_equal
 
@@ -455,6 +456,17 @@ class test_base_port_mapper(TestCase):
         pm0 = BasePortMapper('/foo[0:5],/bar[0:5]', range(5)*2)
         pm1 = BasePortMapper.from_index(pm0.index, range(5)*2)
         assert_series_equal(pm0.portmap, pm1.portmap)
+
+        # Ensure that modifying the map sequence used to create the
+        # port mapper doesn't have the side effect of altering the created
+        # mapper:
+        index = pd.MultiIndex(levels=[[u'foo'], [0, 1, 2, 3, 4]],
+                              labels=[[0, 0, 0, 0, 0], [0, 1, 2, 3, 4]],
+                              names=[0, 1])
+        portmap = np.arange(5)
+        pm1 = BasePortMapper.from_index(index, portmap)
+        portmap[0] = 10
+        assert_array_equal(pm1.portmap.values, np.arange(5))
 
     def test_inds_to_ports(self):
         # Without a specified port map:
