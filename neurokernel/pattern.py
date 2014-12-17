@@ -454,9 +454,20 @@ class Interface(object):
             except:
                 return Interface()
 
-    def get_common_ports(self, a, i, b):
+    def _merge_on_interfaces(self, a, i, b):
         """
-        Get port identifiers that appear in two Interface instances.
+        Merge contents of this and another Interface instance.
+        """
+
+        assert isinstance(i, Interface)
+        return pd.merge(self.data[self.data['interface'] == a],
+                        i.data[i.data['interface'] == b],
+                        left_index=True,
+                        right_index=True)
+
+    def get_common_ports(self, a, i, b, t=None):
+        """
+        Get port identifiers common to this and another Interface instance.
 
         Parameters
         ----------
@@ -466,6 +477,9 @@ class Interface(object):
             Interface instance containing the other interface.
         b : int
             Identifier of interface in instance `i`.
+        t : str or unicode
+            If not None, restrict output to those identifiers with the specified
+            port type.
 
         Returns
         -------
@@ -474,12 +488,13 @@ class Interface(object):
             instances.
         """
 
-        assert isinstance(i, Interface)
-        data_merged = pd.merge(self.data[self.data['interface'] == a],
-                               i.data[i.data['interface'] == b],
-                               left_index=True,
-                               right_index=True)
-        return data_merged.index.tolist()
+        data_merged = self._merge_on_interfaces(a, i, b)
+        if t is None:
+            return data_merged.index.tolist()
+        else:
+            return data_merged[data_merged.apply(lambda row: \
+                        (row['type_x'] == row['type_y']) and \
+                        (row['type_x'] == t), axis=1)].index.tolist()
 
     def is_compatible(self, a, i, b, allow_subsets=False):
         """
@@ -515,14 +530,9 @@ class Interface(object):
         Assumes that the port identifiers in both interfaces are sorted in the
         same order.
         """
-
-        assert isinstance(i, Interface)
         
         # Merge the interface data on their indices (i.e., their port identifiers):
-        data_merged = pd.merge(self.data[self.data['interface'] == a], 
-                               i.data[i.data['interface'] == b], 
-                               left_index=True,
-                               right_index=True)
+        data_merged = self._merge_on_interfaces(a, i, b)
 
         # Check whether there are compatible subsets, i.e., at least one pair of
         # ports from the two interfaces that are compatible with each other:

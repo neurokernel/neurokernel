@@ -46,12 +46,22 @@ class test_interface(TestCase):
         assert not j.equals(i)
 
     def test_get_common_ports(self):
+        # Without type:
         i = Interface('/foo[0:6]')
         i['/*', 'interface'] = 0
         j = Interface('/foo[3:9]')
         j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
         self.assertItemsEqual(i.get_common_ports(0, j, 0),
                               [('foo', 3), ('foo', 4), ('foo', 5)])
+
+        # With type:
+        i = Interface('/foo[0:6]')
+        i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/foo[3:9]')
+        j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'), 
+                              [('foo', 3), ('foo', 4)])
                                   
     def test_get_pm(self):
         i = Interface('/foo[0:2],/bar[0:2]')
