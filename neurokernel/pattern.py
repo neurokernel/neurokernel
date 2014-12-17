@@ -75,6 +75,9 @@ class Interface(object):
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
 
+        # Dictionary containing mappers for different port types:
+        self.pm = {}
+        
     def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
@@ -94,7 +97,6 @@ class Interface(object):
             selector = key[0]
         else:
             selector = key
-
         # Try using the selector to select data from the internal DataFrame:
         try:
             idx = self.sel.get_index(self.data, selector,
@@ -242,7 +244,7 @@ class Interface(object):
         --------
         >>> import plsel
         >>> import pandas
-        >>> idx = plsel.make_index('/foo[0:2]')
+        >>> idx = plsel.PathLikeSelector.make_index('/foo[0:2]')
         >>> data = [[0, 'in', 'spike'], [1, 'out', 'gpot']]
         >>> columns = ['interface', 'io', 'type']
         >>> df = pandas.DataFrame(data, index=idx, columns=columns)
@@ -399,40 +401,6 @@ class Interface(object):
             except:
                 return Interface()
 
-    def gpot_pm(self, i=None):
-        """
-        Return map between sequential integers and graded potential port identifiers.
-        """
-
-        if i is None:
-            try:
-                return BasePortMapper.from_index(self.data[self.data['type'] == 'gpot'].index)
-            except:
-                return BasePortMapper('')
-        else:
-            try:
-                return BasePortMapper.from_index(self.data[(self.data['type'] == 'gpot') & \
-                                                           (self.data['interface'] == i)].index)
-            except:
-                return BasePortMapper('')
-
-    def spike_pm(self, i=None):
-        """
-        Return map between sequential integers and spiking port identifiers.
-        """
-
-        if i is None:
-            try:
-                return BasePortMapper.from_index(self.data[self.data['type'] == 'spike'].index)
-            except:
-                return BasePortMapper('')
-        else:
-            try:
-                return BasePortMapper.from_index(self.data[(self.data['type'] == 'spike') & \
-                                                           (self.data['interface'] == i)].index)
-            except:
-                return BasePortMapper('')
-
     def in_ports(self, i=None):
         """
         Restrict Interface ports to input ports.
@@ -485,6 +453,33 @@ class Interface(object):
                 return self.from_df(self.data[self.data['interface'] == i])
             except:
                 return Interface()
+
+    def get_common_ports(self, a, i, b):
+        """
+        Get port identifiers that appear in two Interface instances.
+
+        Parameters
+        ----------
+        a : int
+            Identifier of interface in the current instance.
+        i : Interface
+            Interface instance containing the other interface.
+        b : int
+            Identifier of interface in instance `i`.
+
+        Returns
+        -------
+        result : list of tuple
+            Expanded port identifiers shared by the two specified Interface 
+            instances.
+        """
+
+        assert isinstance(i, Interface)
+        data_merged = pd.merge(self.data[self.data['interface'] == a],
+                               i.data[i.data['interface'] == b],
+                               left_index=True,
+                               right_index=True)
+        return data_merged.index.tolist()
 
     def is_compatible(self, a, i, b, allow_subsets=False):
         """
@@ -793,6 +788,19 @@ class Interface(object):
         return self.from_df(self.data)
     copy = __copy__
     copy.__doc__ = __copy__.__doc__
+
+    def set_pm(self, t, pm):
+        """
+        Set mapping of ports to integer indices. 
+        """
+
+        # Ensure that the ports in the specified port mapper are a subset of
+        # those in the interface associated with the specified type:
+        assert isinstance(pm, BasePortMapper)
+        if not self.sel.is_in(pm.index.tolist(), 
+                              self.pm[t].index.tolist()):
+            raise ValueError('cannot set mapper using undefined selectors')
+        self.pm[t] = BasePortMapper.from_pm(pm)
 
     def equals(self, other):
         """
