@@ -801,7 +801,14 @@ class Interface(object):
 
     def set_pm(self, t, pm):
         """
-        Set mapping of ports to integer indices. 
+        Set port mapper associated with a specific port type.
+
+        Parameters
+        ----------
+        t : str or unicode
+            Port type.
+        pm : neurokernel.plsel.BasePortMapper
+            Port mapper to save.
         """
 
         # Ensure that the ports in the specified port mapper are a subset of
@@ -810,7 +817,7 @@ class Interface(object):
         if not self.sel.is_in(pm.index.tolist(), 
                               self.pm[t].index.tolist()):
             raise ValueError('cannot set mapper using undefined selectors')
-        self.pm[t] = BasePortMapper.from_pm(pm)
+        self.pm[t] = pm.copy()
 
     def equals(self, other):
         """

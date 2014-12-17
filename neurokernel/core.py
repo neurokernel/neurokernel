@@ -14,7 +14,8 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
-from base import BaseModule, BaseManager, Broker, PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
+from base import BaseModule, BaseManager, Broker, \
+    PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
 
 from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
                           ExceptionOnSignal, TryExceptionOnSignal)
@@ -23,7 +24,7 @@ from tools.comm import get_random_port
 from tools.misc import catch_exception
 from uid import uid
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, PortMapper
+from plsel import PathLikeSelector, BasePortMapper, PortMapper
 
 class Module(BaseModule):
     """
@@ -299,13 +300,12 @@ class Module(BaseModule):
                 pat.dest_idx(from_int, to_int, 'spike', 'spike', out_spike_ports)
 
             # Find the integer indices corresponding to the destination module
-            # port identifiers so that the
-            spike_data_ind = \
-                pat.interface.spike_pm(to_int).ports_to_inds(spike_data)
+            # port identifiers to transmit instead of the actual port
+            # identifiers:
+            spike_data_ind = pat.interface.pm['spike'].get_map(spike_data)
 
+            # Attempt to stage the emitted port data for transmission:            
             try:
-
-                # Stage the emitted port data for transmission:
                 self._out_data.append((out_id, (gpot_data, spike_data_ind)))
             except:
                 self.logger.info('no output data to [%s] sent' % out_id)
@@ -532,12 +532,24 @@ class Manager(BaseManager):
         assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
         assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
 
-        # Check that the data port mappers map the same integer indices to ports
-        # as do those in the corresponding interfaces of the connecting pattern:
-        assert pat.interface.gpot_pm(int_0).equals(m_0.pm['gpot'])
-        assert pat.interface.spike_pm(int_0).equals(m_0.pm['spike'])
-        assert pat.interface.gpot_pm(int_1).equals(m_1.pm['gpot'])
-        assert pat.interface.spike_pm(int_1).equals(m_1.pm['spike'])
+        # Find the ports common to each of the pattern's interfaces and the
+        # respective interfaces of the modules connected to them; these two sets
+        # of ports should be disjoint:
+        common_spike_ports_0 = \
+            m_0.interface.get_common_ports(0, pat.interface, int_0, 'spike')
+        common_spike_ports_1 = \
+            m_1.interface.get_common_ports(0, pat.interface, int_1, 'spike')
+        assert set(common_spike_ports_0).isdisjoint(common_spike_ports_1)
+
+        # Set the mappings between port identifiers and integer indices in the
+        # pattern's interfaces to conform to those of the connected modules'
+        # respective interfaces. Note that only one port mapper instance is
+        # needed to store the mappings for both of the pattern's interfaces
+        # because the respective sets of ports in the interfaces are disjoint:
+        pat.interface.pm['spike'] = \
+            BasePortMapper(common_spike_ports_0+common_spike_ports_1,
+            np.concatenate((m_0.pm['spike'].get_map(common_spike_ports_0),
+                            m_1.pm['spike'].get_map(common_spike_ports_1))))
 
         # Add the module and pattern instances to the internal dictionaries of
         # the manager instance if they are not already there:
