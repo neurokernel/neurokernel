@@ -1531,7 +1531,7 @@ class BasePortMapper(object):
     @classmethod
     def from_index(cls, idx, portmap=None):
         """
-        Create port mapper from a Pandas index a sequence of integer indices.
+        Create port mapper from a Pandas index and a sequence of integer indices.
 
         Parameters
         ----------
@@ -1787,6 +1787,10 @@ class PortMapper(BasePortMapper):
         c.portmap = self.portmap.copy()
         c.data = self.data.copy()
         return c
+
+    @classmethod
+    def from_index(cls, idx, data, portmap=None):
+        raise NotImplementedError
 
     @classmethod
     def from_pm(cls, pm):
