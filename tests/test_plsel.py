@@ -422,6 +422,32 @@ class test_path_like_selector(TestCase):
                                     ['baz', 'qux']]) == 3
 
 class test_base_port_mapper(TestCase):
+    def test_create(self):
+        portmap = np.arange(5)
+        pm = BasePortMapper('/foo[0:5]', portmap)
+        s = pd.Series(np.arange(5),
+                      pd.MultiIndex(levels=[['foo'], [0, 1, 2, 3, 4]],
+                                    labels=[[0, 0, 0, 0, 0], 
+                                            [0, 1, 2, 3, 4]],
+                                    names=[0, 1]))
+        assert_series_equal(pm.portmap, s)
+
+    def test_from_pm(self):    
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        pm0 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm1 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm2 = BasePortMapper.from_pm(pm0)
+        pm0.portmap[('foo', 0)] = 10
+        assert_series_equal(pm2.portmap, pm1.portmap)
+
+    def test_copy(self):
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        pm0 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm1 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm2 = pm0.copy()
+        pm0.portmap[('foo', 0)] = 10
+        assert_series_equal(pm2.portmap, pm1.portmap)
+
     def test_len(self):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert len(pm) == 10
@@ -500,6 +526,44 @@ class test_base_port_mapper(TestCase):
 class test_port_mapper(TestCase):
     def setUp(self):
         self.data = np.random.rand(20)
+
+    def test_create(self):
+        data = np.random.rand(5)
+        portmap = np.arange(5)        
+        pm = PortMapper('/foo[0:5]', data, portmap)
+        assert_array_equal(pm.data, data)
+        s = pd.Series(np.arange(5),
+                      pd.MultiIndex(levels=[['foo'], [0, 1, 2, 3, 4]],
+                                    labels=[[0, 0, 0, 0, 0], 
+                                            [0, 1, 2, 3, 4]],
+                                    names=[0, 1]))
+        assert_series_equal(pm.portmap, s)
+
+    def test_from_pm(self):
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        data = np.random.rand(5)
+        portmap = np.arange(5)
+        pm0 = PortMapper('/foo[0:5]', data, portmap)
+        pm1 = PortMapper('/foo[0:5]', data, portmap)
+        pm2 = PortMapper.from_pm(pm0)
+        data[0] = 1.0
+        pm0.data[1] = 1.0
+        pm0.portmap[('foo', 0)] = 10
+        assert_array_equal(pm2.data, pm1.data)
+        assert_series_equal(pm2.portmap, pm1.portmap)
+
+    def test_copy(self):
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        data = np.random.rand(5)
+        portmap = np.arange(5)
+        pm0 = PortMapper('/foo[0:5]', data, portmap)
+        pm1 = PortMapper('/foo[0:5]', data, portmap)
+        pm2 = pm0.copy()
+        data[0] = 1.0
+        pm0.data[1] = 1.0
+        pm0.portmap[('foo', 0)] = 10
+        assert_array_equal(pm2.data, pm1.data)
+        assert_series_equal(pm2.portmap, pm1.portmap)
 
     def test_dtype(self):
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
