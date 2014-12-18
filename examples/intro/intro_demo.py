@@ -45,6 +45,10 @@ parser.add_argument('-d', '--port_data', default=None, type=int,
                     help='Data port [default: randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
+parser.add_argument('-t', '--port_time', default=None, type=int,
+                    help='Timing port [default: randomly selected]')
+parser.add_argument('-y', '--time_sync', default=False, action='store_true',
+                    help='Time data reception throughput [default: False]')
 parser.add_argument('-g', '--gpu_dev', default=[0, 1], type=int, nargs='+',
                     help='GPU device numbers [default: 0 1]')
 args = parser.parse_args()
@@ -58,15 +62,21 @@ if args.log.lower() in ['screen', 'both']:
 logger = base.setup_logger(file_name, screen)
 
 def run(connected):
-    if args.port_data is None and args.port_ctrl is None:
+    if args.port_data is None:        
         port_data = get_random_port()
-        port_ctrl = get_random_port()
     else:
         port_data = args.port_data
+    if args.port_ctrl is None:
+        port_ctrl = get_random_port()
+    else:
         port_ctrl = args.port_ctrl
+    if args.port_time is None:
+        port_time = get_random_port()
+    else:
+        port_time = args.port_time
 
     out_name = 'un' if not connected else 'co'
-    man = core.Manager(port_data, port_ctrl)
+    man = core.Manager(port_data, port_ctrl, port_time)
     man.add_brok()
 
     lpu_file_0 = './data/generic_lpu_0.gexf.gz'
@@ -76,20 +86,22 @@ def run(connected):
 
     lpu_0_id = 'lpu_0'
     lpu_0 = LPU(dt, n_dict_0, s_dict_0,
-               input_file='./data/generic_lpu_0_input.h5',
-               output_file='generic_lpu_0_%s_output.h5' % out_name,
-               port_ctrl=port_ctrl, port_data=port_data,
-               device=args.gpu_dev[0], id=lpu_0_id,
-               debug=args.debug)
+                input_file='./data/generic_lpu_0_input.h5',
+                output_file='generic_lpu_0_%s_output.h5' % out_name,
+                port_ctrl=port_ctrl, port_data=port_data,
+                port_time=port_time,
+                device=args.gpu_dev[0], id=lpu_0_id,
+                debug=args.debug, time_sync=args.time_sync)
     man.add_mod(lpu_0)
 
     lpu_1_id = 'lpu_1'
     lpu_1 = LPU(dt, n_dict_1, s_dict_1,
-               input_file='./data/generic_lpu_1_input.h5',
-               output_file='generic_lpu_1_%s_output.h5' % out_name,
-               port_ctrl=port_ctrl, port_data=port_data,
-               device=args.gpu_dev[1], id=lpu_1_id,
-               debug=args.debug)
+                input_file='./data/generic_lpu_1_input.h5',
+                output_file='generic_lpu_1_%s_output.h5' % out_name,
+                port_ctrl=port_ctrl, port_data=port_data,
+                port_time=port_time,
+                device=args.gpu_dev[1], id=lpu_1_id,
+                debug=args.debug, time_sync=args.time_sync)
     man.add_mod(lpu_1)
 
     # Create random connections between the input and output ports if the LPUs
@@ -145,3 +157,4 @@ random.seed(0)
 with futures.ProcessPoolExecutor() as executor:
     for connected in [False, True]:
         executor.submit(run, connected)
+
