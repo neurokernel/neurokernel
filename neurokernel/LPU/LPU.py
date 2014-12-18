@@ -206,8 +206,9 @@ class LPU(Module, object):
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA,
+                 port_time=base.PORT_TIME,
                  id=None, debug=False, columns = ['io', 'type', 'interface'],
-                 cuda_verbose=False):
+                 cuda_verbose=False, time_sync=False):
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
@@ -442,9 +443,8 @@ class LPU(Module, object):
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
         super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl,
-                                  get_random_port(), self.LPU_id,
-                                  device, debug)
+                                  columns, port_data, port_ctrl, port_time, 
+                                  self.LPU_id, device, debug, time_sync)
 
         self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
         self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
