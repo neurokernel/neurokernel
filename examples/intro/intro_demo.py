@@ -47,7 +47,7 @@ parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
 parser.add_argument('-t', '--port_time', default=None, type=int,
                     help='Timing port [default: randomly selected]')
-parser.add_argument('-y', '--time_sync', default=False, action='store_true',
+parser.add_argument('-r', '--time_sync', default=False, action='store_true',
                     help='Time data reception throughput [default: False]')
 parser.add_argument('-g', '--gpu_dev', default=[0, 1], type=int, nargs='+',
                     help='GPU device numbers [default: 0 1]')
