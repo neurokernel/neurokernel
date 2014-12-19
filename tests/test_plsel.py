@@ -528,6 +528,25 @@ class test_port_mapper(TestCase):
         self.data = np.random.rand(20)
 
     def test_create(self):
+
+        # Empty selector, empty data:
+        pm = PortMapper('')
+        assert_series_equal(pm.portmap, pd.Series([], dtype=np.int64))
+        assert_array_equal(pm.data, np.array([]))
+
+        # Non-empty selector, empty data:
+        pm = PortMapper('/foo[0:3]')
+        assert_series_equal(pm.portmap, 
+                            pd.Series(np.arange(3),
+                                      pd.MultiIndex(levels=[['foo'], [0, 1, 2]],
+                                                    labels=[[0, 0, 0], [0, 1, 2]],
+                                                    names=[0, 1])))
+        assert_array_equal(pm.data, np.array([]))
+
+        # Empty selector, non-empty data:
+        self.assertRaises(Exception, PortMapper, '', [1, 2, 3])
+
+        # Non-empty selector, non-empty data:
         data = np.random.rand(5)
         portmap = np.arange(5)        
         pm = PortMapper('/foo[0:5]', data, portmap)

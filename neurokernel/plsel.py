@@ -1759,7 +1759,7 @@ class PortMapper(BasePortMapper):
         N = len(self)
 
         # Can currently only handle unidimensional data structures:
-        if data is None:
+        if data is None or len(data) == 0:
             self.data = np.array([])
         else:
             assert np.ndim(data) == 1
