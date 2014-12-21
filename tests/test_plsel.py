@@ -259,6 +259,13 @@ class test_path_like_selector(TestCase):
                                  [('foo',),
                                   ('foo',)])
 
+    def test_get_tuples_empty(self):
+        result = self.sel.get_tuples(df, [['foo', 'xxx', 0]])
+        self.assertSequenceEqual(result, [])
+
+        result = self.sel.get_tuples(df_single, [['xxx']])
+        self.assertSequenceEqual(result, [])
+
     def test_is_ambiguous_str(self):
         assert self.sel.is_ambiguous('/foo/*') == True
         assert self.sel.is_ambiguous('/foo/[5:]') == True
