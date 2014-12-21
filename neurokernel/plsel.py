@@ -1657,7 +1657,7 @@ class BasePortMapper(object):
             Selected data.
         """
 
-        return np.asarray(self.portmap[self.sel.get_index(self.portmap, selector)])
+        return np.asarray(self.sel.select(self.portmap, selector).dropna())
 
     def set_map(self, selector, portmap):
         """

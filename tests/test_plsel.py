@@ -522,8 +522,12 @@ class test_base_port_mapper(TestCase):
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [14, 15])
 
     def test_get_map(self):
+        # Try to get selector that is in the mapper:
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         self.assertSequenceEqual(pm.get_map('/bar[0:5]').tolist(), range(5, 10))
+
+        # Try to get selector that is not in the mapper:
+        self.assertSequenceEqual(pm.get_map('/foo[5:10]').tolist(), [])
 
     def test_set_map(self):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
