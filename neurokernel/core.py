@@ -14,7 +14,8 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
-from base import BaseModule, BaseManager, Broker, PORT_DATA, PORT_CTRL, setup_logger
+from base import BaseModule, BaseManager, Broker, \
+    PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
 
 from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
                           ExceptionOnSignal, TryExceptionOnSignal)
@@ -23,7 +24,7 @@ from tools.comm import get_random_port
 from tools.misc import catch_exception
 from uid import uid
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, PortMapper
+from plsel import PathLikeSelector, BasePortMapper, PortMapper
 
 class Module(BaseModule):
     """
@@ -63,6 +64,10 @@ class Module(BaseModule):
         GPU device to use.
     debug : bool
         Debug flag.
+    time_sync : bool
+        Time synchronization flag. When True, debug messages are not emitted during
+        module synchronization and the time taken to receive all incoming data is 
+        computed.
         
     Notes
     -----
@@ -74,10 +79,11 @@ class Module(BaseModule):
 
     def __init__(self, selector, sel_gpot, sel_spike, data_gpot, data_spike,
                  columns=['interface', 'io', 'type'],
-                 port_data=PORT_DATA, port_ctrl=PORT_CTRL,
-                 id=None, device=None, debug=False):
+                 port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
+                 id=None, device=None, debug=False, time_sync=False):
 
         self.debug = debug
+        self.time_sync = time_sync
         self.device = device
         
         # Require several necessary attribute columns:
@@ -98,6 +104,9 @@ class Module(BaseModule):
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
         self.port_data = port_data
+        if port_time == port_ctrl or port_time == port_data:
+            raise ValueError('time port must differ from data and control ports')
+        self.port_time = port_time
 
         # Initial network connectivity:
         self.net = 'none'
@@ -175,7 +184,6 @@ class Module(BaseModule):
         -----
         Must be called from within the `run()` method, not from within
         `__init__()`.
-
         """
 
         if self.device == None:
@@ -215,6 +223,7 @@ class Module(BaseModule):
         """
 
         self.logger.info('retrieving from input buffer')
+
         # Since fan-in is not permitted, the data from all source modules
         # must necessarily map to different ports; we can therefore write each
         # of the received data to the array associated with the module's ports
@@ -291,13 +300,12 @@ class Module(BaseModule):
                 pat.dest_idx(from_int, to_int, 'spike', 'spike', out_spike_ports)
 
             # Find the integer indices corresponding to the destination module
-            # port identifiers so that the
-            spike_data_ind = \
-                pat.interface.spike_pm(to_int).ports_to_inds(spike_data)
+            # port identifiers to transmit instead of the actual port
+            # identifiers:
+            spike_data_ind = pat.interface.pm['spike'].get_map(spike_data)
 
+            # Attempt to stage the emitted port data for transmission:            
             try:
-
-                # Stage the emitted port data for transmission:
                 self._out_data.append((out_id, (gpot_data, spike_data_ind)))
             except:
                 self.logger.info('no output data to [%s] sent' % out_id)
@@ -399,6 +407,7 @@ class Module(BaseModule):
         # Don't allow keyboard interruption of process:
         self.logger.info('starting')
         with IgnoreKeyboardInterrupt():
+
             # Initialize environment:
             self._init_net()
             
@@ -414,9 +423,10 @@ class Module(BaseModule):
             self.pre_run()
 
             self.running = True
-            curr_steps = 0
-            while curr_steps < self.max_steps:
-                self.logger.info('execution step: %s' % curr_steps)
+            self.steps = 0
+            while self.steps < self.max_steps:
+                self.logger.info('execution step: %s/%s' % (self.steps, self.max_steps))
+
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
                 if self.debug:
@@ -454,7 +464,8 @@ class Module(BaseModule):
                     self.logger.info('run loop stopped')
                     break
 
-                curr_steps += 1
+                self.steps += 1
+            self.logger.info('maximum number of steps reached')
 
             # Perform any post-emulation operations:
             self.post_run()
@@ -467,7 +478,6 @@ class Module(BaseModule):
             self.logger.info('sent to manager: %s' % ack)
                 
         self.logger.info('exiting')
-        
 
 class Manager(BaseManager):
     """
@@ -522,12 +532,24 @@ class Manager(BaseManager):
         assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
         assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
 
-        # Check that the data port mappers map the same integer indices to ports
-        # as do those in the corresponding interfaces of the connecting pattern:
-        assert pat.interface.gpot_pm(int_0).equals(m_0.pm['gpot'])
-        assert pat.interface.spike_pm(int_0).equals(m_0.pm['spike'])
-        assert pat.interface.gpot_pm(int_1).equals(m_1.pm['gpot'])
-        assert pat.interface.spike_pm(int_1).equals(m_1.pm['spike'])
+        # Find the ports common to each of the pattern's interfaces and the
+        # respective interfaces of the modules connected to them; these two sets
+        # of ports should be disjoint:
+        common_spike_ports_0 = \
+            m_0.interface.get_common_ports(0, pat.interface, int_0, 'spike')
+        common_spike_ports_1 = \
+            m_1.interface.get_common_ports(0, pat.interface, int_1, 'spike')
+        assert set(common_spike_ports_0).isdisjoint(common_spike_ports_1)
+
+        # Set the mappings between port identifiers and integer indices in the
+        # pattern's interfaces to conform to those of the connected modules'
+        # respective interfaces. Note that only one port mapper instance is
+        # needed to store the mappings for both of the pattern's interfaces
+        # because the respective sets of ports in the interfaces are disjoint:
+        pat.interface.pm['spike'] = \
+            BasePortMapper(common_spike_ports_0+common_spike_ports_1,
+            np.concatenate((m_0.pm['spike'].get_map(common_spike_ports_0),
+                            m_1.pm['spike'].get_map(common_spike_ports_1))))
 
         # Add the module and pattern instances to the internal dictionaries of
         # the manager instance if they are not already there:
@@ -535,6 +557,10 @@ class Manager(BaseManager):
             self.add_mod(m_0)
         if m_1.id not in self.modules:
             self.add_mod(m_1)
+
+        # Make the timing listener aware of the module IDs:
+        self.time_listener.add(m_0.id)
+        self.time_listener.add(m_1.id)
 
         # Pass the pattern to the modules being connected:
         self.logger.info('passing connection pattern to modules {0} and {1}'.format(m_0.id, m_1.id))
@@ -563,17 +589,16 @@ if __name__ == '__main__':
                      sel_out_gpot, sel_out_spike,
                      data_gpot, data_spike,
                      columns=['interface', 'io', 'type'],
-                     port_data=PORT_DATA, port_ctrl=PORT_CTRL,
+                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                      id=None, device=None):                     
             super(MyModule, self).__init__(sel, ','.join([sel_in_gpot, 
                                                           sel_out_gpot]),
                                            ','.join([sel_in_spike,
                                                      sel_out_spike]),
                                            data_gpot, data_spike,
-                                           columns, port_data, port_ctrl,
-                                           id, None, True)
+                                           columns, port_data, port_ctrl, port_time,
+                                           id, None, True, True)
 
-            
             assert PathLikeSelector.is_in(sel_in_gpot, sel)
             assert PathLikeSelector.is_in(sel_out_gpot, sel)
             assert PathLikeSelector.are_disjoint(sel_in_gpot, sel_out_gpot)
@@ -612,7 +637,7 @@ if __name__ == '__main__':
         n = str(n)
 
         # Set up emulation:
-        man = Manager(get_random_port(), get_random_port())
+        man = Manager(get_random_port(), get_random_port(), get_random_port())
         man.add_brok()
 
         m1_int_sel_in_gpot = '/a/in/gpot0,/a/in/gpot1'
@@ -630,7 +655,7 @@ if __name__ == '__main__':
                       m1_int_sel_out_gpot, m1_int_sel_out_spike,
                       np.zeros(N1_gpot, np.float64),
                       np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, 'm1')
+                      man.port_data, man.port_ctrl, man.port_time, 'm1')
         man.add_mod(m1)
 
         m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
@@ -648,7 +673,7 @@ if __name__ == '__main__':
                       m2_int_sel_out_gpot, m2_int_sel_out_spike,
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, 'm2')
+                      man.port_data, man.port_ctrl, man.port_time, 'm2')
 
         # Make sure that all ports in the patterns' interfaces are set so 
         # that they match those of the modules:
@@ -690,9 +715,9 @@ if __name__ == '__main__':
     print('Simulation of size {} complete: Duration {} seconds'.format(
         size, time.time() - start_time))
     # Emulation 2
-    start_time = time.time()
-    size = 100
-    emulate(size, steps)
-    print('Simulation of size {} complete: Duration {} seconds'.format(
-        size, time.time() - start_time))
-    logger.info('all done')
+    # start_time = time.time()
+    # size = 100
+    # emulate(size, steps)
+    # print('Simulation of size {} complete: Duration {} seconds'.format(
+    #     size, time.time() - start_time))
+    # logger.info('all done')

@@ -45,23 +45,24 @@ class test_interface(TestCase):
         assert not i.equals(j)
         assert not j.equals(i)
 
-    def test_get_pm(self):
-        i = Interface('/foo[0:2],/bar[0:2]')
-        i['/foo[0]'] = [0, 'in', 'gpot']
-        i['/bar[0]'] = [0, 'out', 'gpot']
-        i['/foo[1]'] = [1, 'in', 'spike']
-        i['/bar[1]'] = [1, 'out', 'spike']
-        assert_series_equal(i.gpot_pm().portmap,
-                            pd.Series([0, 1],
-                                      index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
-                                                          labels=[[1, 0], [0, 0]],
-                                                          names=['0', '1'])))
-        assert_series_equal(i.spike_pm().portmap,
-                            pd.Series([0, 1],
-                                      index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
-                                                          labels=[[1, 0], [1, 1]],
-                                                          names=['0', '1'])))
+    def test_get_common_ports(self):
+        # Without type:
+        i = Interface('/foo[0:6]')
+        i['/*', 'interface'] = 0
+        j = Interface('/foo[3:9]')
+        j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
+        self.assertItemsEqual(i.get_common_ports(0, j, 0),
+                              [('foo', 3), ('foo', 4), ('foo', 5)])
 
+        # With type:
+        i = Interface('/foo[0:6]')
+        i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/foo[3:9]')
+        j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'), 
+                              [('foo', 3), ('foo', 4)])
+                                  
     def test_to_selectors(self):
         # Selector with multiple levels:
         i = Interface('/foo[0:4]')

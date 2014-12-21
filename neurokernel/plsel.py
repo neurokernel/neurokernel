@@ -1511,12 +1511,28 @@ class BasePortMapper(object):
             self.portmap = pd.Series(data=np.arange(N))
         else:
             assert len(portmap) == N
-            self.portmap = pd.Series(data=np.asarray(portmap))
+            self.portmap = pd.Series(data=np.array(portmap))
         self.portmap.index = self.sel.make_index(selector)
+
+    def copy(self):
+        """
+        Return copy of this port mapper.
+
+        Returns
+        -------
+        result : neurokernel.plsel.BasePortMapper
+            Copy of port mapper instance.
+        """
+
+        c = BasePortMapper('')
+        c.portmap = self.portmap.copy()
+        return c
 
     @classmethod
     def from_index(cls, idx, portmap=None):
         """
+        Create port mapper from a Pandas index and a sequence of integer indices.
+
         Parameters
         ----------
         index : pandas.MultiIndex
@@ -1525,6 +1541,17 @@ class BasePortMapper(object):
             Integer indices to map to port identifiers. If no map is specified,
             it is assumed to be an array of consecutive integers from 0
             through one less than the number of ports.
+
+        Returns
+        -------
+        result : neurokernel.plsel.BasePortMapper
+            New port mapper instance.
+
+        Notes
+        -----
+        If specified, the portmap sequence is copied into the new mapper to avoid 
+        side effects associated with modifying the specified sequence after
+        mapper instantiation.
         """
 
         pm = cls('')
@@ -1533,8 +1560,29 @@ class BasePortMapper(object):
             pm.portmap = pd.Series.from_array(np.arange(N), idx)
         else:
             assert len(portmap) == N
-            pm.portmap = pd.Series.from_array(np.asarray(portmap), idx)
+            pm.portmap = pd.Series.from_array(np.array(portmap), idx)
         return pm
+
+    @classmethod
+    def from_pm(cls, pm):
+        """
+        Create a new port mapper instance given an existing instance.
+
+        Parameters
+        ----------
+        result : neurokernel.plsel.BasePortMapper
+            Existing port mapper instance.
+
+        Returns
+        -------
+        result : neurokernel.plsel.BasePortMapper
+            New port mapper instance.
+        """
+
+        assert isinstance(pm, cls)
+        r = cls('')
+        r.portmap = pm.portmap.copy()
+        return r
 
     @property
     def index(self):
@@ -1609,7 +1657,7 @@ class BasePortMapper(object):
             Selected data.
         """
 
-        return np.asarray(self.portmap[self.sel.get_index(self.portmap, selector)])
+        return np.asarray(self.sel.select(self.portmap, selector).dropna())
 
     def set_map(self, selector, portmap):
         """
@@ -1626,27 +1674,36 @@ class BasePortMapper(object):
         
         self.portmap[self.sel.get_index(self.portmap, selector)] = portmap
 
-    def equals(self, other):
+    def equals(self, pm):
         """
         Check whether this mapper is equivalent to another mapper.
 
         Parameters
         ----------
-        other : neurokernel.plsel.BasePortMapper
+        pm : neurokernel.plsel.BasePortMapper
             Mapper to compare to this mapper.
 
         Returns
         -------
         result : bool
-            True if the mappers are identical.
+             True if the specified port mapper contains the same port
+             identifiers as this instance and maps them to the same integer
+             values.
 
         Notes
         -----
-        Mappers containing the same rows in different orders are not 
-        regarded as equivalent.
+        The port identifiers and maps in the specified port mapper need not be
+        in the same order as this instance to be deemed equal.
         """
 
-        return self.portmap.equals(other.portmap)
+        assert isinstance(pm, BasePortMapper)
+        pm0 = self.portmap.order()
+        pm1 = pm.portmap.order()
+        if np.array_equal(pm0.values, pm1.values) and \
+           pm0.index.equals(pm1.index):
+            return True
+        else:
+            return False
 
     def __len__(self):
         return self.portmap.size
@@ -1702,7 +1759,7 @@ class PortMapper(BasePortMapper):
         N = len(self)
 
         # Can currently only handle unidimensional data structures:
-        if data is None:
+        if data is None or len(data) == 0:
             self.data = np.array([])
         else:
             assert np.ndim(data) == 1
@@ -1714,8 +1771,49 @@ class PortMapper(BasePortMapper):
 
             # The port mapper may map identifiers to some portion of the data array:
             assert N <= len(data)
-            self.data = data
+            self.data = data.copy()
 
+    def copy(self):
+        """
+        Return copy of this port mapper.
+
+        Returns
+        -------
+        result : neurokernel.plsel.PortMapper
+            Copy of port mapper instance.
+        """
+
+        c = PortMapper('')
+        c.portmap = self.portmap.copy()
+        c.data = self.data.copy()
+        return c
+
+    @classmethod
+    def from_index(cls, idx, data, portmap=None):
+        raise NotImplementedError
+
+    @classmethod
+    def from_pm(cls, pm):
+        """
+        Create a new port mapper instance given an existing instance.
+
+        Parameters
+        ----------
+        result : neurokernel.plsel.PortMapper
+            Existing port mapper instance.
+
+        Returns
+        -------
+        result : neurokernel.plsel.PortMapper
+            New port mapper instance.
+        """
+
+        assert isinstance(pm, cls)
+        r = cls('')
+        r.portmap = pm.portmap.copy()
+        r.data = pm.data.copy()
+        return r
+        
     @property
     def dtype(self):
         """

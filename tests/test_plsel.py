@@ -4,6 +4,7 @@ from unittest import main, TestCase
 
 import numpy as np
 import pandas as pd
+from numpy.testing import assert_array_equal
 from pandas.util.testing import assert_frame_equal, assert_index_equal, \
     assert_series_equal
 
@@ -258,6 +259,13 @@ class test_path_like_selector(TestCase):
                                  [('foo',),
                                   ('foo',)])
 
+    def test_get_tuples_empty(self):
+        result = self.sel.get_tuples(df, [['foo', 'xxx', 0]])
+        self.assertSequenceEqual(result, [])
+
+        result = self.sel.get_tuples(df_single, [['xxx']])
+        self.assertSequenceEqual(result, [])
+
     def test_is_ambiguous_str(self):
         assert self.sel.is_ambiguous('/foo/*') == True
         assert self.sel.is_ambiguous('/foo/[5:]') == True
@@ -421,15 +429,51 @@ class test_path_like_selector(TestCase):
                                     ['baz', 'qux']]) == 3
 
 class test_base_port_mapper(TestCase):
+    def test_create(self):
+        portmap = np.arange(5)
+        pm = BasePortMapper('/foo[0:5]', portmap)
+        s = pd.Series(np.arange(5),
+                      pd.MultiIndex(levels=[['foo'], [0, 1, 2, 3, 4]],
+                                    labels=[[0, 0, 0, 0, 0], 
+                                            [0, 1, 2, 3, 4]],
+                                    names=[0, 1]))
+        assert_series_equal(pm.portmap, s)
+
+    def test_from_pm(self):    
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        pm0 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm1 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm2 = BasePortMapper.from_pm(pm0)
+        pm0.portmap[('foo', 0)] = 10
+        assert_series_equal(pm2.portmap, pm1.portmap)
+
+    def test_copy(self):
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        pm0 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm1 = BasePortMapper('/foo[0:5]', np.arange(5))
+        pm2 = pm0.copy()
+        pm0.portmap[('foo', 0)] = 10
+        assert_series_equal(pm2.portmap, pm1.portmap)
+
     def test_len(self):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert len(pm) == 10
 
     def test_equals(self):
+        # Check that mappers containing the same ports/indices are deemed equal:
         pm0 = BasePortMapper('/foo[0:5],/bar[0:5]')
         pm1 = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert pm0.equals(pm1)
         assert pm1.equals(pm0)
+
+        # Check that mappers containing the same ports/indices in 
+        # different orders are deemed equal:
+        pm0 = BasePortMapper('/foo[0:5],/bar[0:5]', range(10))
+        pm1 = BasePortMapper('/bar[0:5],/foo[0:5]', range(5, 10)+range(5))
+        assert pm0.equals(pm1)
+        assert pm1.equals(pm0)
+
+        # Check that mappers containing different ports/indices are deemed non-equal:
         pm0 = BasePortMapper('/foo[0:5],/bar[1:5]/bar[0]')
         pm1 = BasePortMapper('/foo[0:5],/bar[0:5]')
         assert not pm0.equals(pm1)
@@ -445,6 +489,17 @@ class test_base_port_mapper(TestCase):
         pm0 = BasePortMapper('/foo[0:5],/bar[0:5]', range(5)*2)
         pm1 = BasePortMapper.from_index(pm0.index, range(5)*2)
         assert_series_equal(pm0.portmap, pm1.portmap)
+
+        # Ensure that modifying the map sequence used to create the
+        # port mapper doesn't have the side effect of altering the created
+        # mapper:
+        index = pd.MultiIndex(levels=[[u'foo'], [0, 1, 2, 3, 4]],
+                              labels=[[0, 0, 0, 0, 0], [0, 1, 2, 3, 4]],
+                              names=[0, 1])
+        portmap = np.arange(5)
+        pm1 = BasePortMapper.from_index(index, portmap)
+        portmap[0] = 10
+        assert_array_equal(pm1.portmap.values, np.arange(5))
 
     def test_inds_to_ports(self):
         # Without a specified port map:
@@ -467,8 +522,12 @@ class test_base_port_mapper(TestCase):
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [14, 15])
 
     def test_get_map(self):
+        # Try to get selector that is in the mapper:
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         self.assertSequenceEqual(pm.get_map('/bar[0:5]').tolist(), range(5, 10))
+
+        # Try to get selector that is not in the mapper:
+        self.assertSequenceEqual(pm.get_map('/foo[5:10]').tolist(), [])
 
     def test_set_map(self):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
@@ -478,6 +537,63 @@ class test_base_port_mapper(TestCase):
 class test_port_mapper(TestCase):
     def setUp(self):
         self.data = np.random.rand(20)
+
+    def test_create(self):
+
+        # Empty selector, empty data:
+        pm = PortMapper('')
+        assert_series_equal(pm.portmap, pd.Series([], dtype=np.int64))
+        assert_array_equal(pm.data, np.array([]))
+
+        # Non-empty selector, empty data:
+        pm = PortMapper('/foo[0:3]')
+        assert_series_equal(pm.portmap, 
+                            pd.Series(np.arange(3),
+                                      pd.MultiIndex(levels=[['foo'], [0, 1, 2]],
+                                                    labels=[[0, 0, 0], [0, 1, 2]],
+                                                    names=[0, 1])))
+        assert_array_equal(pm.data, np.array([]))
+
+        # Empty selector, non-empty data:
+        self.assertRaises(Exception, PortMapper, '', [1, 2, 3])
+
+        # Non-empty selector, non-empty data:
+        data = np.random.rand(5)
+        portmap = np.arange(5)        
+        pm = PortMapper('/foo[0:5]', data, portmap)
+        assert_array_equal(pm.data, data)
+        s = pd.Series(np.arange(5),
+                      pd.MultiIndex(levels=[['foo'], [0, 1, 2, 3, 4]],
+                                    labels=[[0, 0, 0, 0, 0], 
+                                            [0, 1, 2, 3, 4]],
+                                    names=[0, 1]))
+        assert_series_equal(pm.portmap, s)
+
+    def test_from_pm(self):
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        data = np.random.rand(5)
+        portmap = np.arange(5)
+        pm0 = PortMapper('/foo[0:5]', data, portmap)
+        pm1 = PortMapper('/foo[0:5]', data, portmap)
+        pm2 = PortMapper.from_pm(pm0)
+        data[0] = 1.0
+        pm0.data[1] = 1.0
+        pm0.portmap[('foo', 0)] = 10
+        assert_array_equal(pm2.data, pm1.data)
+        assert_series_equal(pm2.portmap, pm1.portmap)
+
+    def test_copy(self):
+        # Ensure that modifying pm0 doesn't modify any other mapper created from it:
+        data = np.random.rand(5)
+        portmap = np.arange(5)
+        pm0 = PortMapper('/foo[0:5]', data, portmap)
+        pm1 = PortMapper('/foo[0:5]', data, portmap)
+        pm2 = pm0.copy()
+        data[0] = 1.0
+        pm0.data[1] = 1.0
+        pm0.portmap[('foo', 0)] = 10
+        assert_array_equal(pm2.data, pm1.data)
+        assert_series_equal(pm2.portmap, pm1.portmap)
 
     def test_dtype(self):
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
