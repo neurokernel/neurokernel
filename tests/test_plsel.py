@@ -179,6 +179,14 @@ class test_path_like_selector(TestCase):
                                         names=[0, 1, 2])
         assert_frame_equal(result, self.df.ix[idx])
 
+    def test_select_order(self):
+        data = np.random.rand(3)
+        df = pd.DataFrame(data,
+                          pd.MultiIndex.from_tuples([('foo', i) for i in xrange(3)],
+                                                    names=[0, 1]))
+        assert_array_equal(self.sel.select(df, '/foo[2,1,0]').values.flatten(),
+                           data[[2, 1, 0]])
+
     def test_are_disjoint(self):
         assert self.sel.are_disjoint('/foo[0:10]/baz',
                                      '/bar[10:20]/qux') == True
