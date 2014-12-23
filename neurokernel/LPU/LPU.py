@@ -660,7 +660,7 @@ class LPU(Module):
 
         # Save the states of the graded potential neurons and the indices of the
         # spiking neurons that have emitted a spike:
-        self.logger.info('Extracting out port data')
+        self.log_info('Extracting out port data')
         if len(self.out_ports_ids_gpot) > 0:
             self.pm['gpot'].data[self.sel_out_gpot_ids] = (self.out_port_data_gpot.get())
         if len(self.out_ports_ids_spk) > 0:
@@ -691,7 +691,7 @@ class LPU(Module):
                 self.num_input*self.synapse_state.dtype.itemsize)
             self.frame_count += 1
         else:
-            self.logger.info('Input end of file reached. '
+            self.log_info('Input end of file reached. '
                              'Subsequent behaviour is undefined.')
         # if all buffer frames were read, read from file
         if self.frame_count >= self._one_time_import and not self.input_eof:
@@ -800,7 +800,7 @@ class LPU(Module):
             try:
                 ind = int(t)
             except:
-                self.logger.info("Error instantiating neurons of model '%s'" % t)
+                self.log_info("Error instantiating neurons of model '%s'" % t)
                 return None
 
         if n['spiking'][0]:
@@ -831,7 +831,7 @@ class LPU(Module):
             try:
                 ind = int(t)
             except:
-                self.logger.info("Error instantiating synapses of model '%s'" % t)
+                self.log_info("Error instantiating synapses of model '%s'" % t)
                 return []
 
         return self._synapse_classes[ind](

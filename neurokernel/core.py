@@ -86,7 +86,7 @@ class Module(BaseModule):
         self.debug = debug
         self.time_sync = time_sync
         self.device = device
-        
+
         # Require several necessary attribute columns:
         assert 'interface' in columns
         assert 'io' in columns
@@ -191,16 +191,16 @@ class Module(BaseModule):
         """
 
         if self.device == None:
-            self.logger.info('no GPU specified - not initializing ')
+            self.log_info('no GPU specified - not initializing ')
         else:
             drv.init()
             try:
                 self.gpu_ctx = drv.Device(self.device).make_context()
             except Exception as e:
-                self.logger.info('_init_gpu exception: ' + e.message)
+                self.log_info('_init_gpu exception: ' + e.message)
             else:
                 atexit.register(self.gpu_ctx.pop)
-                self.logger.info('GPU initialized')
+                self.log_info('GPU initialized')
 
     @property
     def N_gpot_ports(self):
@@ -226,7 +226,7 @@ class Module(BaseModule):
         data received from other modules.
         """
 
-        self.logger.info('retrieving from input buffer')
+        self.log_info('retrieving from input buffer')
 
         # Since fan-in is not permitted, the data from all source modules
         # must necessarily map to different ports; we can therefore write each
@@ -243,9 +243,9 @@ class Module(BaseModule):
 
                 data = self._in_data[in_id].popleft()
             except:
-                self.logger.info('no input data from [%s] retrieved' % in_id)
+                self.log_info('no input data from [%s] retrieved' % in_id)
             else:
-                self.logger.info('input data from [%s] retrieved' % in_id)
+                self.log_info('input data from [%s] retrieved' % in_id)
 
                 # Assign transmitted graded potential values directly to port
                 # data array:
@@ -270,7 +270,7 @@ class Module(BaseModule):
         The output spike port selection algorithm could probably be made faster.
         """
 
-        self.logger.info('populating output buffer')
+        self.log_info('populating output buffer')
 
         # Clear output buffer before populating it:
         self._out_data = []
@@ -312,9 +312,9 @@ class Module(BaseModule):
             try:
                 self._out_data.append((out_id, (gpot_data, spike_data_ind)))
             except:
-                self.logger.info('no output data to [%s] sent' % out_id)
+                self.log_info('no output data to [%s] sent' % out_id)
             else:
-                self.logger.info('output data to [%s] sent' % out_id)
+                self.log_info('output data to [%s] sent' % out_id)
                 
     def run_step(self):
         """
@@ -326,7 +326,7 @@ class Module(BaseModule):
         class attributes.
         """
 
-        self.logger.info('running execution step')
+        self.log_info('running execution step')
 
     def _init_port_dicts(self):
         """
@@ -342,7 +342,7 @@ class Module(BaseModule):
 
         self._out_ids = self.out_ids
         for out_id in self._out_ids:
-            self.logger.info('extracting output ports for %s' % out_id)
+            self.log_info('extracting output ports for %s' % out_id)
 
             # Get interfaces of pattern connecting the current module to
             # destination module `out_id`; `from_int` is connected to the
@@ -371,7 +371,7 @@ class Module(BaseModule):
 
         self._in_ids = self.in_ids
         for in_id in self._in_ids:
-            self.logger.info('extracting input ports for %s' % in_id)
+            self.log_info('extracting input ports for %s' % in_id)
 
             # Get interfaces of pattern connecting the current module to
             # source module `out_id`; `to_int` is connected to the current
@@ -409,7 +409,7 @@ class Module(BaseModule):
         """
 
         # Don't allow keyboard interruption of process:
-        self.logger.info('starting')
+        self.log_info('starting')
         with IgnoreKeyboardInterrupt():
 
             # Initialize environment:
@@ -429,7 +429,7 @@ class Module(BaseModule):
             self.running = True
             self.steps = 0
             while self.steps < self.max_steps:
-                self.logger.info('execution step: %s/%s' % (self.steps, self.max_steps))
+                self.log_info('execution step: %s/%s' % (self.steps, self.max_steps))
 
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
@@ -451,25 +451,25 @@ class Module(BaseModule):
                 else:
 
                     # Get transmitted input data for processing:
-                    catch_exception(self._get_in_data, self.logger.info)
+                    catch_exception(self._get_in_data, self.log_info)
 
                     # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info)
+                    catch_exception(self.run_step, self.log_info)
 
                     # Stage generated output data for transmission to other
                     # modules:
-                    catch_exception(self._put_out_data, self.logger.info)
+                    catch_exception(self._put_out_data, self.log_info)
 
                     # Synchronize:
-                    catch_exception(self._sync, self.logger.info)
+                    catch_exception(self._sync, self.log_info)
 
                 # Exit run loop when a quit signal has been received:
                 if not self.running:
-                    self.logger.info('run loop stopped')
+                    self.log_info('run loop stopped')
                     break
 
                 self.steps += 1
-            self.logger.info('maximum number of steps reached')
+            self.log_info('maximum number of steps reached')
 
             # Perform any post-emulation operations:
             self.post_run()
@@ -479,9 +479,9 @@ class Module(BaseModule):
             self._ctrl_stream_shutdown()
             ack = 'shutdown'
             self.sock_ctrl.send(ack)
-            self.logger.info('sent to manager: %s' % ack)
+            self.log_info('sent to manager: %s' % ack)
                 
-        self.logger.info('exiting')
+        self.log_info('exiting')
 
 class Manager(BaseManager):
     """
@@ -526,12 +526,12 @@ class Manager(BaseManager):
         assert isinstance(pat, Pattern)
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
-        self.logger.info('connecting modules {0} and {1}'
+        self.log_info('connecting modules {0} and {1}'
                          .format(m_0.id, m_1.id))
 
         # Check whether the interfaces exposed by the modules and the
         # pattern share compatible subsets of ports:
-        self.logger.info('checking compatibility of modules {0} and {1} and'
+        self.log_info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(m_0.id, m_1.id))
         assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
         assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
@@ -567,18 +567,18 @@ class Manager(BaseManager):
         self.time_listener.add(m_1.id)
 
         # Pass the pattern to the modules being connected:
-        self.logger.info('passing connection pattern to modules {0} and {1}'.format(m_0.id, m_1.id))
+        self.log_info('passing connection pattern to modules {0} and {1}'.format(m_0.id, m_1.id))
         m_0.connect(m_1, pat, int_0, int_1)
         m_1.connect(m_0, pat, int_1, int_0)
 
         # Update the routing table:
-        self.logger.info('updating routing table')
+        self.log_info('updating routing table')
         if pat.is_connected(0, 1):
             self.routing_table[m_0.id, m_1.id] = 1
         if pat.is_connected(1, 0):
             self.routing_table[m_1.id, m_0.id] = 1
 
-        self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
+        self.log_info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
 
 if __name__ == '__main__':
     import time
@@ -620,11 +620,11 @@ if __name__ == '__main__':
 
             # Do something with input graded potential data:
             in_gpot_ports = self.interface.in_ports().gpot_ports().to_tuples()
-            self.logger.info('input gpot port data: '+str(self.pm['gpot'][in_gpot_ports]))
+            self.log_info('input gpot port data: '+str(self.pm['gpot'][in_gpot_ports]))
 
             # Do something with input spike data:
             in_spike_ports = self.interface.in_ports().spike_ports().to_tuples()
-            self.logger.info('input spike port data: '+str(self.pm['spike'][in_spike_ports]))
+            self.log_info('input spike port data: '+str(self.pm['spike'][in_spike_ports]))
 
             # Output random graded potential data:
             out_gpot_ports = self.interface.out_ports().gpot_ports().to_tuples()

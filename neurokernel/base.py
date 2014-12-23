@@ -79,7 +79,7 @@ class BaseModule(ControlledProcess):
         instances.
     pat_ints : dict of tuple of int
         Interface of each pattern that is connected to the module instance.
-        Keyed on the ID of the other module instances.   
+        Keyed on the ID of the other module instances.
     pm : plsel.PortMapper
         Map between a module's ports and the contents of the `data` attribute.
     data : numpy.ndarray
@@ -104,7 +104,7 @@ class BaseModule(ControlledProcess):
     def net(self, value):
         if value not in ['none', 'ctrl', 'in', 'out', 'full']:
             raise ValueError('invalid network connectivity value')
-        self.logger.info('net status changed: %s -> %s' % (self._net, value))
+        self.log_info('net status changed: %s -> %s' % (self._net, value))
         self._net = value
 
     # Define properties to perform validation when the maximum number of
@@ -120,8 +120,8 @@ class BaseModule(ControlledProcess):
     def max_steps(self, value):
         if value <= 0:
             raise ValueError('invalid maximum number of steps')
-        self.logger.info('maximum number of steps changed: %s -> %s' % \
-                         (self._max_steps, value))
+        self.log_info('maximum number of steps changed: %s -> %s' % \
+                        (self._max_steps, value))
         self._max_steps = value
 
     def __init__(self, selector, data, columns=['interface', 'io', 'type'],
@@ -250,7 +250,7 @@ class BaseModule(ControlledProcess):
         assert isinstance(m, BaseModule)
         assert isinstance(pat, Pattern)
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
-        self.logger.info('connecting to %s' % m.id)
+        self.log_info('connecting to %s' % m.id)
 
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
@@ -262,11 +262,11 @@ class BaseModule(ControlledProcess):
         # interfaces of all existing patterns connected to the current module
         # and ensuring that the input ports from the new pattern don't overlap:
         if self.patterns:
-            curr_in_ports = reduce(set.union, 
+            curr_in_ports = reduce(set.union,
                 [set(self.patterns[i].in_ports(self.pat_ints[i][0]).to_tuples()) \
                  for i in self.patterns.keys()])
             assert curr_in_ports.intersection(pat.in_ports(int_0).to_tuples())
-            
+
         # The pattern instances associated with the current
         # module are keyed on the IDs of the modules to which they connect:
         self.patterns[m.id] = pat
@@ -283,14 +283,14 @@ class BaseModule(ControlledProcess):
                 self.net = 'out'
             elif self.net == 'in':
                 self.net = 'full'
-            self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
+            self.log_info('net status changed: %s -> %s' % (old_net, self.net))
         if pat.is_connected(int_1, int_0):
             old_net = self.net
             if self.net == 'ctrl':
                 self.net = 'in'
             elif self.net == 'out':
                 self.net = 'full'
-            self.logger.info('net status changed: %s -> %s' % (old_net, self.net))
+            self.log_info('net status changed: %s -> %s' % (old_net, self.net))
 
     def _ctrl_stream_shutdown(self):
         """
@@ -302,18 +302,18 @@ class BaseModule(ControlledProcess):
             self.stream_ctrl.stop_on_recv()
             self.ioloop_ctrl.stop()
         except IOError:
-            self.logger.info('streams already closed')
+            self.log_info('streams already closed')
         except:
-            self.logger.info('other error occurred')
+            self.log_info('other error occurred')
         else:
-            self.logger.info('ctrl stream shut down')
+            self.log_info('ctrl stream shut down')
 
     def _ctrl_handler(self, msg):
         """
         Control port handler.
         """
 
-        self.logger.info('recv ctrl message: %s' % str(msg))
+        self.log_info('recv ctrl message: %s' % str(msg))
         if msg[0] == 'quit':
             self._ctrl_stream_shutdown()
 
@@ -324,13 +324,13 @@ class BaseModule(ControlledProcess):
         # One can define additional messages to be recognized by the control
         # handler:        
         # elif msg[0] == 'conn':
-        #     self.logger.info('conn payload: '+str(msgpack.unpackb(msg[1])))
+        #     self.log_info('conn payload: '+str(msgpack.unpackb(msg[1])))
         #     ack = 'ack'
         else:
             ack = 'ack'
 
         self.sock_ctrl.send(ack)
-        self.logger.info('sent to manager: %s' % ack)
+        self.log_info('sent to manager: %s' % ack)
 
     def _init_net(self):
         """
@@ -338,18 +338,18 @@ class BaseModule(ControlledProcess):
         """
 
         # Initialize control port handler:
-        self.logger.info('initializing ctrl network connection')
+        self.log_info('initializing ctrl network connection')
         super(BaseModule, self)._init_net()
 
         # Initialize data port handler:
         if self.net == 'none':
-            self.logger.info('not initializing data network connection')
+            self.log_info('not initializing data network connection')
         else:
 
             # Don't allow interrupts to prevent the handler from
             # completely executing each time it is called:
             with IgnoreKeyboardInterrupt():
-                self.logger.info('initializing data network connection')
+                self.log_info('initializing data network connection')
 
                 # Use a nonblocking port for the data interface; set
                 # the linger period to prevent hanging on unsent
@@ -358,20 +358,20 @@ class BaseModule(ControlledProcess):
                 self.sock_data.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
-                self.logger.info('data network connection initialized')
+                self.log_info('data network connection initialized')
 
                 # Set up a poller for detecting incoming data:
                 self.data_poller = zmq.Poller()
                 self.data_poller.register(self.sock_data, zmq.POLLIN)
 
                 # Initialize timing port:
-                self.logger.info('initializing time port')
+                self.log_info('initializing time port')
                 self.sock_time = self.zmq_ctx.socket(zmq.DEALER)
                 self.sock_time.setsockopt(zmq.IDENTITY, self.id)
                 self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
                 self.sock_time.connect("tcp://localhost:%i" % self.port_time)
                 sync_dealer(self.sock_time, self.id)
-                self.logger.info('time port initialized')
+                self.log_info('time port initialized')
 
     def _get_in_data(self):
         """
@@ -381,7 +381,7 @@ class BaseModule(ControlledProcess):
         data received from other modules.
         """
 
-        self.logger.info('retrieving from input buffer')
+        self.log_info('retrieving from input buffer')
 
         # Since fan-in is not permitted, the data from all source modules
         # must necessarily map to different ports; we can therefore write each
@@ -394,9 +394,9 @@ class BaseModule(ControlledProcess):
             try:
                 self.pm[self._in_port_dict[in_id]] = self._in_data[in_id].popleft()
             except:
-                self.logger.info('no input data from [%s] retrieved' % in_id)
+                self.log_info('no input data from [%s] retrieved' % in_id)
             else:
-                self.logger.info('input data from [%s] retrieved' % in_id)
+                self.log_info('input data from [%s] retrieved' % in_id)
 
     def _put_out_data(self):
         """
@@ -406,7 +406,7 @@ class BaseModule(ControlledProcess):
         output to other modules.
         """
 
-        self.logger.info('populating output buffer')
+        self.log_info('populating output buffer')
 
         # Clear output buffer before populating it:
         self._out_data = []
@@ -417,9 +417,9 @@ class BaseModule(ControlledProcess):
             try:
                 self._out_data.append((out_id, self.pm[self._out_port_dict[out_id]]))
             except:
-                self.logger.info('no output data to [%s] sent' % out_id)
+                self.log_info('no output data to [%s] sent' % out_id)
             else:
-                self.logger.info('output data to [%s] sent' % out_id)
+                self.log_info('output data to [%s] sent' % out_id)
 
     def _sync(self):
         """
@@ -438,9 +438,9 @@ class BaseModule(ControlledProcess):
         """
 
         if self.net in ['none', 'ctrl']:
-            self.logger.info('not synchronizing with network')
+            self.log_info('not synchronizing with network')
         else:
-            self.logger.info('synchronizing with network')
+            self.log_info('synchronizing with network')
 
             # Send outbound data:
             if self.net in ['out', 'full']:
@@ -450,16 +450,16 @@ class BaseModule(ControlledProcess):
                 for out_id, data in self._out_data:
                     self.sock_data.send(msgpack.packb((out_id, data)))
                     send_ids.remove(out_id)
-                    self.logger.info('sent to   %s: %s' % (out_id, str(data)))
+                    self.log_info('sent to   %s: %s' % (out_id, str(data)))
 
                 # Send data tuples containing None to those modules for which no
                 # actual data was generated to satisfy the barrier condition:
                 for out_id in send_ids:
                     self.sock_data.send(msgpack.packb((out_id, None)))
-                    self.logger.info('sent to   %s: %s' % (out_id, None))
+                    self.log_info('sent to   %s: %s' % (out_id, None))
 
                 # All output IDs should be sent data by this point:
-                self.logger.info('sent data to all output IDs')
+                self.log_info('sent data to all output IDs')
 
             # Receive inbound data:
             if self.net in ['in', 'full']:
@@ -475,7 +475,7 @@ class BaseModule(ControlledProcess):
                         data_packed = self.sock_data.recv()
                         in_id, data = msgpack.unpackb(data_packed)
                         if not self.time_sync:
-                            self.logger.info('recv from %s: %s' % (in_id, str(data)))
+                            self.log_info('recv from %s: %s' % (in_id, str(data)))
 
                         # Ignore incoming data containing None:
                         if data is not None:
@@ -491,14 +491,14 @@ class BaseModule(ControlledProcess):
                     # Stop the synchronization if a quit message has been received:
                     if not self.running:
                         if not self.time_sync:
-                            self.logger.info('run loop stopped - stopping sync')
+                            self.log_info('run loop stopped - stopping sync')
                         break
                 stop = time.time()
-                self.logger.info('recv data from all input IDs')
+                self.log_info('recv data from all input IDs')
 
                 # Transmit time taken to receive data:
                 if self.time_sync:
-                    self.logger.info('sent timing data to master')
+                    self.log_info('sent timing data to master')
                     self.sock_time.send(msgpack.packb((self.id, self.steps,
                                                        start, stop, nbytes)))
 
@@ -511,7 +511,7 @@ class BaseModule(ControlledProcess):
         main run loop begins.
         """
 
-        self.logger.info('performing pre-emulation operations')
+        self.log_info('performing pre-emulation operations')
 
     def post_run(self, *args, **kwargs):
         """
@@ -521,7 +521,7 @@ class BaseModule(ControlledProcess):
         terminated.
         """
 
-        self.logger.info('performing post-emulation operations')
+        self.log_info('performing post-emulation operations')
 
     def run_step(self):
         """
@@ -533,7 +533,7 @@ class BaseModule(ControlledProcess):
         class attributes.
         """
 
-        self.logger.info('running execution step')
+        self.log_info('running execution step')
 
     def _init_port_dicts(self):
         """
@@ -545,7 +545,7 @@ class BaseModule(ControlledProcess):
         self._out_port_dict = {}
         self._out_ids = self.out_ids
         for out_id in self._out_ids:
-            self.logger.info('extracting output ports for %s' % out_id)
+            self.log_info('extracting output ports for %s' % out_id)
 
             # Get interfaces of pattern connecting the current module to
             # destination module `out_id`; `from_int` is connected to the
@@ -562,7 +562,7 @@ class BaseModule(ControlledProcess):
         self._in_port_dict = {}
         self._in_ids = self.in_ids
         for in_id in self._in_ids:
-            self.logger.info('extracting input ports for %s' % in_id)
+            self.log_info('extracting input ports for %s' % in_id)
 
             # Get interfaces of pattern connecting the current module to
             # source module `out_id`; `to_int` is connected to the current
@@ -580,7 +580,7 @@ class BaseModule(ControlledProcess):
         """
 
         # Don't allow keyboard interruption of process:
-        self.logger.info('starting')
+        self.log_info('starting')
         with IgnoreKeyboardInterrupt():
 
             # Initialize environment:
@@ -600,7 +600,7 @@ class BaseModule(ControlledProcess):
             self.running = True
             self.steps = 0
             while self.steps < self.max_steps:
-                self.logger.info('execution step: %s/%s' % (self.steps, self.max_steps))
+                self.log_info('execution step: %s/%s' % (self.steps, self.max_steps))
 
                 # If the debug flag is set, don't catch exceptions so that
                 # errors will lead to visible failures:
@@ -619,24 +619,24 @@ class BaseModule(ControlledProcess):
                     self._sync()
                 else:
                     # Get input data:
-                    catch_exception(self._get_in_data, self.logger.info)
+                    catch_exception(self._get_in_data, self.log_info)
 
                     # Run the processing step:
-                    catch_exception(self.run_step, self.logger.info)
+                    catch_exception(self.run_step, self.log_info)
 
                     # Prepare the generated data for output:
-                    catch_exception(self._put_out_data, self.logger.info)
+                    catch_exception(self._put_out_data, self.log_info)
 
                     # Synchronize:
-                    catch_exception(self._sync, self.logger.info)
+                    catch_exception(self._sync, self.log_info)
 
                 # Exit run loop when a quit message has been received:
                 if not self.running:
-                    self.logger.info('run loop stopped')
+                    self.log_info('run loop stopped')
                     break
 
                 self.steps += 1
-            self.logger.info('maximum number of steps reached')
+            self.log_info('maximum number of steps reached')
 
             # Perform any post-emulation operations:
             self.post_run()
@@ -646,9 +646,9 @@ class BaseModule(ControlledProcess):
             self._ctrl_stream_shutdown()
             ack = 'shutdown'
             self.sock_ctrl.send(ack)
-            self.logger.info('sent to manager: %s' % ack)
+            self.log_info('sent to manager: %s' % ack)
 
-        self.logger.info('exiting')
+        self.log_info('exiting')
 
 class Broker(ControlledProcess):
     """
@@ -691,7 +691,7 @@ class Broker(ControlledProcess):
         Control port handler.
         """
 
-        self.logger.info('recv: '+str(msg))
+        self.log_info('recv: '+str(msg))
         if msg[0] == 'quit':
             try:
                 self.stream_ctrl.flush()
@@ -700,11 +700,11 @@ class Broker(ControlledProcess):
                 self.stream_data.stop_on_recv()
                 self.ioloop.stop()
             except IOError:
-                self.logger.info('streams already closed')
+                self.log_info('streams already closed')
             except Exception as e:
-                self.logger.info('other error occurred: '+e.message)
+                self.log_info('other error occurred: '+e.message)
             self.sock_ctrl.send('ack')
-            self.logger.info('sent to  broker: ack')
+            self.log_info('sent to  broker: ack')
 
     def _data_handler(self, msg):
         """
@@ -718,13 +718,13 @@ class Broker(ControlledProcess):
         """
 
         if len(msg) != 2:
-            self.logger.info('skipping malformed message: %s' % str(msg))
+            self.log_info('skipping malformed message: %s' % str(msg))
         else:
 
             # When a message arrives, increase the corresponding received_count
             in_id = msg[0]
             out_id, data = msgpack.unpackb(msg[1])
-            self.logger.info('recv from %s: %s' % (in_id, data))
+            self.log_info('recv from %s: %s' % (in_id, data))
 
             # Increase the appropriate count in recv_counts by 1
             self._recv_counts[(in_id, out_id)] += 1
@@ -734,9 +734,9 @@ class Broker(ControlledProcess):
             # every entry in the routing table has been received up to
             # the current time step, deliver the data in the buffer:
             if all(self._recv_counts.values()):
-                self.logger.info('recv from all modules')
+                self.log_info('recv from all modules')
                 for in_id, out_id, data in self._data_to_route:
-                    self.logger.info('sent to   %s: %s' % (out_id, data))
+                    self.log_info('sent to   %s: %s' % (out_id, data))
 
                     # Route to the destination ID and send the source ID
                     # along with the data:
@@ -750,7 +750,7 @@ class Broker(ControlledProcess):
                 # execution time_step has been succesfully completed
                 for k in self._recv_counts.iterkeys(): 
                     self._recv_counts[k]-=1
-                self.logger.info('----------------------')
+                self.log_info('----------------------')
 
     def _init_ctrl_handler(self):
         """
@@ -759,7 +759,7 @@ class Broker(ControlledProcess):
 
         # Set the linger period to prevent hanging on unsent messages
         # when shutting down:
-        self.logger.info('initializing ctrl handler')
+        self.log_info('initializing ctrl handler')
         self.sock_ctrl = self.zmq_ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
@@ -775,7 +775,7 @@ class Broker(ControlledProcess):
 
         # Set the linger period to prevent hanging on unsent
         # messages when shutting down:
-        self.logger.info('initializing data handler')
+        self.log_info('initializing data handler')
         self.sock_data = self.zmq_ctx.socket(zmq.ROUTER)
         self.sock_data.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_data.bind("tcp://*:%i" % self.port_data)
@@ -802,13 +802,13 @@ class Broker(ControlledProcess):
         """
 
         # Don't allow keyboard interruption of process:
-        self.logger.info('starting')
+        self.log_info('starting')
         with IgnoreKeyboardInterrupt():
             conn = self.routing_table.connections
             self._recv_counts = dict(zip(conn,
                 np.zeros(len(conn), dtype=np.int32))) 
             self._init_net()
-        self.logger.info('exiting')
+        self.log_info('exiting')
 
 class TimeListener(ControlledProcess):
     """
@@ -861,7 +861,7 @@ class TimeListener(ControlledProcess):
         sock_time = self.zmq_ctx.socket(zmq.ROUTER)
         sock_time.bind('tcp://*:%s' % self.port_time)
         sync_router(sock_time, self.ids)
-        self.logger.info('time port initialized')
+        self.log_info('time port initialized')
         self.running = True
         counter = 0
         while True:
@@ -874,13 +874,13 @@ class TimeListener(ControlledProcess):
                                                'stop': stop,
                                                'bytes': nbytes}
 
-                self.logger.info('time data: %s' % \
+                self.log_info('time data: %s' % \
                                  str(msgpack.unpackb(data)))
 
             if not self.running:
-                self.logger.info('stopping run loop')
+                self.log_info('stopping run loop')
                 break
-        self.logger.info('done')
+        self.log_info('done')
 
         # Compute throughput using accumulated timing data:
         total_time = 0.0
@@ -893,10 +893,10 @@ class TimeListener(ControlledProcess):
             total_time += stop-start
             total_bytes += nbytes
         if total_time > 0:
-            self.logger.info('average received throughput: %s bytes/s' % \
+            self.log_info('average received throughput: %s bytes/s' % \
                              (total_bytes/total_time))
         else:
-            self.logger.info('not computing throughput')
+            self.log_info('not computing throughput')
         
 class BaseManager(LoggerMixin):
     """
@@ -994,12 +994,12 @@ class BaseManager(LoggerMixin):
         assert isinstance(pat, Pattern)
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
-        self.logger.info('connecting modules {0} and {1}'
+        self.log_info('connecting modules {0} and {1}'
                          .format(m_0.id, m_1.id))
 
         # Check whether the interfaces exposed by the modules and the
         # pattern share compatible subsets of ports:
-        self.logger.info('checking compatibility of modules {0} and {1} and'
+        self.log_info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(m_0.id, m_1.id))
         assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
         assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
@@ -1016,19 +1016,19 @@ class BaseManager(LoggerMixin):
         self.time_listener.add(m_1.id)
 
         # Pass the pattern to the modules being connected:
-        self.logger.info('passing connection pattern to modules {0} and {1}'
+        self.log_info('passing connection pattern to modules {0} and {1}'
             .format(m_0.id, m_1.id))
         m_0.connect(m_1, pat, int_0, int_1)
         m_1.connect(m_0, pat, int_1, int_0)
 
         # Update the routing table:
-        self.logger.info('updating routing table')
+        self.log_info('updating routing table')
         if pat.is_connected(0, 1):
             self.routing_table[m_0.id, m_1.id] = 1
         if pat.is_connected(1, 0):
             self.routing_table[m_1.id, m_0.id] = 1
 
-        self.logger.info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
+        self.log_info('connected modules {0} and {1}'.format(m_0.id, m_1.id))
 
     @property
     def N_brok(self):
@@ -1059,7 +1059,7 @@ class BaseManager(LoggerMixin):
                        port_ctrl=self.port_ctrl,
                        routing_table=self.routing_table)
         self.brokers[b.id] = b
-        self.logger.info('added broker %s' % b.id)
+        self.log_info('added broker %s' % b.id)
         return b
 
     def add_mod(self, m=None):
@@ -1076,7 +1076,7 @@ class BaseManager(LoggerMixin):
             m = BaseModule(port_data=self.port_data,
                            port_ctrl=self.port_ctrl, port_time=self.port_time)
         self.modules[m.id] = m
-        self.logger.info('added module %s' % m.id)
+        self.log_info('added module %s' % m.id)
         return m
 
     def start(self, steps=np.inf):
@@ -1091,21 +1091,21 @@ class BaseManager(LoggerMixin):
 
         self.max_steps = steps
         with IgnoreKeyboardInterrupt():
-            self.logger.info('time listener about to start')
+            self.log_info('time listener about to start')
             self.time_listener.start()
-            self.logger.info('time listener started')
+            self.log_info('time listener started')
             bi = 1
             mi = 1
             for b in self.brokers.values():
-                self.logger.info('broker ' + str(bi) + ' about to start')
+                self.log_info('broker ' + str(bi) + ' about to start')
                 b.start()
-                self.logger.info('broker ' + str(bi) + ' started')
+                self.log_info('broker ' + str(bi) + ' started')
                 bi+=1
             for m in self.modules.values():
                 m.max_steps = steps
-                self.logger.info('module ' + str(mi) + ' about to start')
+                self.log_info('module ' + str(mi) + ' about to start')
                 m.start()
-                self.logger.info('module ' + str(mi) + ' started')
+                self.log_info('module ' + str(mi) + ' started')
                 mi+=1
 
     def send_ctrl_msg(self, i, *msg):
@@ -1114,11 +1114,11 @@ class BaseManager(LoggerMixin):
         """
 
         self.sock_ctrl.send_multipart([i]+msg)
-        self.logger.info('sent to   %s: %s' % (i, msg))
+        self.log_info('sent to   %s: %s' % (i, msg))
         while True:
             if is_poll_in(self.sock_ctrl, self.ctrl_poller):
                 j, data = self.sock_ctrl.recv_multipart()
-                self.logger.info('recv from %s: ack' % j)
+                self.log_info('recv from %s: ack' % j)
                 break
 
     def stop_brokers(self):
@@ -1126,23 +1126,23 @@ class BaseManager(LoggerMixin):
         Stop execution of all brokers.
         """
 
-        self.logger.info('stopping all brokers')
+        self.log_info('stopping all brokers')
         for i in self.brokers.keys():
-            self.logger.info('sent to   %s: quit' % i)
+            self.log_info('sent to   %s: quit' % i)
             self.sock_ctrl.send_multipart([i, 'quit'])
             self.brokers[i].join(1)
-        self.logger.info('all brokers stopped')
+        self.log_info('all brokers stopped')
         
     def stop_listener(self):
         """
         Stop execution of the time listener.
         """
 
-        self.logger.info('stopping time listener')
-        self.logger.info('sent to   %s: quit' % self.time_listener.id)
+        self.log_info('stopping time listener')
+        self.log_info('sent to   %s: quit' % self.time_listener.id)
         self.sock_ctrl.send_multipart([self.time_listener.id, 'quit'])
         self.time_listener.join(1)
-        self.logger.info('time listener stopped')
+        self.log_info('time listener stopped')
 
     def join_modules(self, send_quit=False):
         """
@@ -1154,35 +1154,35 @@ class BaseManager(LoggerMixin):
             If True, send quit messages to all modules.            
         """
 
-        self.logger.info('waiting for modules to shut down')
+        self.log_info('waiting for modules to shut down')
         recv_ids = self.modules.keys()
         while recv_ids:
             i = recv_ids[0]
             
             # Send quit messages to all live modules:
             if send_quit:                
-                self.logger.info('live modules: '+str(recv_ids))
-                self.logger.info('sent to   %s: quit' % i)
+                self.log_info('live modules: '+str(recv_ids))
+                self.log_info('sent to   %s: quit' % i)
                 self.sock_ctrl.send_multipart([i, 'quit'])
 
             # If a module acknowledges receiving a quit message,
             # wait for it to shutdown:
             if is_poll_in(self.sock_ctrl, self.ctrl_poller):
                  j, data = self.sock_ctrl.recv_multipart()
-                 self.logger.info('recv from %s: %s' % (j, data))                 
+                 self.log_info('recv from %s: %s' % (j, data))                 
                  if j in recv_ids and data == 'shutdown':
-                     self.logger.info('waiting for module %s to shut down' % j)
+                     self.log_info('waiting for module %s to shut down' % j)
                      recv_ids.remove(j)
                      self.modules[j].join(1)
-                     self.logger.info('module %s shut down' % j)
+                     self.log_info('module %s shut down' % j)
                      
             # Sometimes quit messages are received but the acknowledgements are
             # lost; if so, the module will eventually shutdown:
             # XXX this shouldn't be necessary XXX
             if not self.modules[i].is_alive() and i in recv_ids:
-                self.logger.info('%s shutdown without ack' % i)
+                self.log_info('%s shutdown without ack' % i)
                 recv_ids.remove(i)                
-        self.logger.info('all modules stopped')
+        self.log_info('all modules stopped')
 
     def stop(self):
         """
@@ -1190,7 +1190,7 @@ class BaseManager(LoggerMixin):
         """
 
         if np.isinf(self.max_steps):
-            self.logger.info('stopping all modules')
+            self.log_info('stopping all modules')
             send_quit = True
         else:
             send_quit = False
@@ -1279,12 +1279,12 @@ if __name__ == '__main__':
 
             # Do something with input data:
             in_ports = self.interface.in_ports().to_tuples()
-            self.logger.info('input port data: '+str(self.pm[in_ports]))
+            self.log_info('input port data: '+str(self.pm[in_ports]))
 
             # Output random data:
             out_ports = self.interface.out_ports().to_tuples()
             self.pm[out_ports] = np.random.rand(len(out_ports))
-            self.logger.info('output port data: '+str(self.pm[out_ports]))
+            self.log_info('output port data: '+str(self.pm[out_ports]))
 
     # Set up logging:
     logger = setup_logger()

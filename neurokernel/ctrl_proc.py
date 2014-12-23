@@ -68,16 +68,16 @@ class ControlledProcess(mixins.LoggerMixin, mp.Process):
         Control port handler.
         """
 
-        self.logger.info('recv: %s' % str(msg))
+        self.log_info('recv: %s' % str(msg))
         if msg[0] == 'quit':
             try:
                 self.stream_ctrl.flush()
                 self.stream_ctrl.stop_on_recv()
                 self.ioloop_ctrl.stop()
             except IOError:
-                self.logger.info('streams already closed')
+                self.log_info('streams already closed')
             except Exception as e:
-                self.logger.info('other error occurred: '+e.message)
+                self.log_info('other error occurred: '+e.message)
             self.running = False
 
     def _init_ctrl_handler(self):
@@ -87,7 +87,7 @@ class ControlledProcess(mixins.LoggerMixin, mp.Process):
 
         # Set the linger period to prevent hanging on unsent messages
         # when shutting down:
-        self.logger.info('initializing ctrl handler')
+        self.log_info('initializing ctrl handler')
         self.sock_ctrl = self.zmq_ctx.socket(zmq.DEALER)
         self.sock_ctrl.setsockopt(zmq.IDENTITY, self.id)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
@@ -127,9 +127,9 @@ class ControlledProcess(mixins.LoggerMixin, mp.Process):
         self._init_net()
         self.running = True
         while True:
-            self.logger.info('idling')
+            self.log_info('idling')
             if not self.running:
-                self.logger.info('stopping run loop')
+                self.log_info('stopping run loop')
                 break
         self.logger.info('done')
 
@@ -159,11 +159,11 @@ if __name__ == '__main__':
             while True:
                 sock_out.send(str(counter))
                 counter += 1
-                self.logger.info('sent %s' % counter)
+                self.log_info('sent %s' % counter)
                 if not self.running:
-                    self.logger.info('stopping run loop')
+                    self.log_info('stopping run loop')
                     break
-            self.logger.info('done')
+            self.log_info('done')
 
     class MyListenerProcess(ControlledProcess):
         def run(self):
@@ -181,11 +181,11 @@ if __name__ == '__main__':
             while True:
                 if sock_out.poll(10):
                     data = sock_out.recv()
-                    self.logger.info('received %s' % data)
+                    self.log_info('received %s' % data)
                 if not self.running:
-                    self.logger.info('stopping run loop')
+                    self.log_info('stopping run loop')
                     break
-            self.logger.info('done')
+            self.log_info('done')
 
     # Sockets for controlling started processes:
     zmq_ctx = zmq.Context()
