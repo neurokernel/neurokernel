@@ -22,6 +22,7 @@ nx.readwrite.gexf.GEXF.convert_bool['False'] = False
 nx.readwrite.gexf.GEXF.convert_bool['true'] = True
 nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
+from neurokernel.mixins import LoggerMixin
 from neurokernel.core import Module
 import neurokernel.base as base
 from neurokernel.tools.comm import get_random_port
@@ -36,11 +37,10 @@ from synapses import *
 
 import pdb
 
-
 PORT_IN_GPOT = 'port_in_gpot'
 PORT_IN_SPK = 'port_in_spk'
 
-class LPU(Module, object):
+class LPU(Module):
     """
     Local Processing Unit (LPU).
 
@@ -220,6 +220,8 @@ class LPU(Module, object):
             self.compile_options = ['--ptxas-options=-v']
         else:
             self.compile_options = []
+
+        LoggerMixin.__init__(self, 'mod %s' % self.LPU_id)
 
         # handle file I/O
         self.output_file = output_file

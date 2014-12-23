@@ -22,6 +22,7 @@ from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 import msgpack_numpy as msgpack
 
+from mixins import LoggerMixin
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
@@ -135,8 +136,8 @@ class BaseModule(ControlledProcess):
 
         super(BaseModule, self).__init__(port_ctrl, id)
 
-        # Logging:
-        self.logger = twiggy.log.name('module %s' % self.id)
+        # Reformat logger name:
+        LoggerMixin.__init__(self, 'mod %s' % self.id)
 
         # Data port:
         if port_data == port_ctrl:
@@ -671,8 +672,8 @@ class Broker(ControlledProcess):
                  routing_table=None):
         super(Broker, self).__init__(port_ctrl, uid())
 
-        # Logging:
-        self.logger = twiggy.log.name('broker %s' % self.id)
+        # Reformat logger name:
+        LoggerMixin.__init__(self, 'brk %s' % self.id)
 
         # Data port:
         if port_data == port_ctrl:
@@ -834,8 +835,8 @@ class TimeListener(ControlledProcess):
     def __init__(self, port_ctrl, port_time, ids=set()):
         super(TimeListener, self).__init__(port_ctrl, uid())
 
-        # Logging:
-        self.logger = twiggy.log.name('listen %s' % self.id)
+        # Reformat logger name:
+        LoggerMixin.__init__(self, 'lis %s' % self.id)
 
         # Time port:
         if port_time == port_ctrl:
@@ -897,7 +898,7 @@ class TimeListener(ControlledProcess):
         else:
             self.logger.info('not computing throughput')
         
-class BaseManager(object):
+class BaseManager(LoggerMixin):
     """
     Module manager.
 
@@ -939,7 +940,9 @@ class BaseManager(object):
         # Unique object ID:
         self.id = uid()
 
-        self.logger = twiggy.log.name('manage %s' % self.id)
+        # Set logger name:
+        LoggerMixin.__init__(self, 'man %s' % self.id)
+
         self.port_data = port_data
         self.port_ctrl = port_ctrl
         self.port_time = port_time
@@ -1195,7 +1198,8 @@ class BaseManager(object):
         self.stop_brokers()
         self.stop_listener()
         
-def setup_logger(file_name='neurokernel.log', screen=True, port=None):
+def setup_logger(file_name='neurokernel.log', screen=True, port=None,
+                 name_format=('{0:%s}' % 10).format):
     """
     Convenience function for setting up logging with twiggy.
 
@@ -1208,6 +1212,8 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     port : int
         If set to a ZeroMQ port number, publish 
         logging output to that port.
+    name_format : function (default = {0:10}.format)
+        Function with one parameter that formats the object name.
 
     Returns
     -------
@@ -1220,23 +1226,30 @@ def setup_logger(file_name='neurokernel.log', screen=True, port=None):
     process.
     """
 
+    fmt = copy.copy(twiggy.formats.line_format)
+    fmt.conversion.delete('name')
+
+    # Apply name format to the value (i.e., the name), not the key (i.e., the
+    # field name "name"):
+    fmt.conversion.add('name', str, lambda k, v: name_format(v))
+        
     if file_name:
         file_output = \
-          twiggy.outputs.FileOutput(file_name, twiggy.formats.line_format, 'w')
-        twiggy.addEmitters(('file', twiggy.levels.DEBUG, None, file_output))
+          twiggy.outputs.FileOutput(file_name, fmt, 'w')
+        twiggy.addEmitters(('file', twiggy.levels.DEBUG, fmt, file_output))
 
     if screen:
         screen_output = \
-          twiggy.outputs.StreamOutput(twiggy.formats.line_format,
+          twiggy.outputs.StreamOutput(fmt,
                                       stream=sys.stdout)
-        twiggy.addEmitters(('screen', twiggy.levels.DEBUG, None, screen_output))
+        twiggy.addEmitters(('screen', twiggy.levels.DEBUG, fmt, screen_output))
 
     if port:
         port_output = ZMQOutput('tcp://*:%i' % port,
-                               twiggy.formats.line_format)
-        twiggy.addEmitters(('port', twiggy.levels.DEBUG, None, port_output))
+                                fmt)
+        twiggy.addEmitters(('port', twiggy.levels.DEBUG, fmt, port_output))
 
-    return twiggy.log.name(('{name:%s}' % 12).format(name='main'))
+    return twiggy.log.name(name_format('main'))
 
 if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix

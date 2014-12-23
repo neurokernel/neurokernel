@@ -14,6 +14,7 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 import bidict
 
+from mixins import LoggerMixin
 from base import BaseModule, BaseManager, Broker, \
     PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
 
@@ -95,10 +96,13 @@ class Module(BaseModule):
         if id is None:
             id = uid()
 
+        # Call super for BaseModule rather than Module because most of the
+        # functionality of the former's constructor must be overridden in any case:
         super(BaseModule, self).__init__(port_ctrl, id)
 
-        # Logging:
-        self.logger = twiggy.log.name('module %s' % self.id)
+        # Reformat logger name:
+        LoggerMixin.__init__(self, 'mod %s' % self.id)
+
 
         # Data port:
         if port_data == port_ctrl:
@@ -705,7 +709,7 @@ if __name__ == '__main__':
         return m1
 
     # Set up logging:
-    logger = setup_logger(screen=True)
+    logger = setup_logger()
     steps = 100
 
     # Emulation 1
