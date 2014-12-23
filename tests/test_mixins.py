@@ -28,29 +28,29 @@ class test_loggermixin(TestCase):
         twiggy.emitters['*'] = twiggy.filters.Emitter(twiggy.levels.DEBUG, filt, output)
         self.lm = mixins.LoggerMixin('log')
 
-    def test_debug(self):
-        self.lm.debug('abc')
-        self.lm.info('abc')
-        self.lm.warning('abc')
-        self.lm.error('abc')
-        self.lm.critical('abc')
+    def test_methods(self):
+        self.lm.log_debug('abc')
+        self.lm.log_info('abc')
+        self.lm.log_warning('abc')
+        self.lm.log_error('abc')
+        self.lm.log_critical('abc')
 
         # All output to stdout is buffered within a single test before emission:
-        self.assertEquals(sys.stdout.getvalue().strip(), 
+        self.assertEquals(sys.stdout.getvalue().strip(),
                           'log:DEBUG:abc\n'
                           'log:INFO:abc\n'
                           'log:WARNING:abc\n'
                           'log:ERROR:abc\n'
                           'log:CRITICAL:abc')
 
-    def test_on(self):
-        self.lm.on = False
-        self.lm.debug('abc')
-        self.lm.info('abc')
-        self.lm.warning('abc')
-        self.lm.error('abc')
-        self.lm.critical('abc')
+    def test_log_on(self):
+        self.lm.log_on = False
+        self.lm.log_debug('abc')
+        self.lm.log_info('abc')
+        self.lm.log_warning('abc')
+        self.lm.log_error('abc')
+        self.lm.log_critical('abc')
         self.assertEquals(sys.stdout.getvalue().strip(), '')
-        
+
 if __name__ == '__main__':
     main(buffer=True)
