@@ -23,11 +23,13 @@ import zmq
 from zmq.eventloop.ioloop import IOLoop
 from zmq.eventloop.zmqstream import ZMQStream
 
+import mixins
+
 # Use a finite linger time to prevent sockets from either hanging or
 # being uncleanly terminated when shutdown:
 LINGER_TIME = 2
 
-class ControlledProcess(mp.Process):
+class ControlledProcess(mixins.LoggerMixin, mp.Process):
     """
     Process subclass with control port.
 
@@ -51,7 +53,7 @@ class ControlledProcess(mp.Process):
         self.id = id
 
         # Logging:
-        self.logger = twiggy.log.name(self.id)
+        mixins.LoggerMixin.__init__(self, id)
 
         # Control port:
         self.port_ctrl = port_ctrl
@@ -59,7 +61,7 @@ class ControlledProcess(mp.Process):
         # Flag to use when stopping the process:
         self.running = False
 
-        super(ControlledProcess, self).__init__(*args, **kwargs)
+        mp.Process.__init__(self, *args, **kwargs)
 
     def _ctrl_handler(self, msg):
         """
