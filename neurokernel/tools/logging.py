@@ -53,7 +53,7 @@ def set_excepthook(logger, multiline=False):
 def setup_logger(name='', level=twiggy.levels.DEBUG,
                  fmt=twiggy.formats.line_format,
                  fmt_name=('{0:%s}' % 10).format,
-                 stdout=None, file_name=None, zmq_addr=None,
+                 screen=None, file_name=None, zmq_addr=None,
                  log_exceptions=True, multiline=False):
     """
     Setup a twiggy logger.
