@@ -48,7 +48,7 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name, screen)
+logger = base.setup_logger(file_name=file_name, screen=screen)
 
 if args.port_data is None and args.port_ctrl is None:
     port_data = get_random_port()

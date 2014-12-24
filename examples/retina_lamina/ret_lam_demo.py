@@ -20,7 +20,7 @@ import numpy as np
 import neurokernel.LPU.utils.visualizer as vis
 
 from matplotlib.colors import Normalize
-    
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--rec-micro', dest='record_microvilli',
                     action="store_true", help='records microvilli if set')
@@ -57,14 +57,14 @@ parser.add_argument('-s', '--suppress', action="store_true",
                     help='supresses simulation')
 parser.add_argument('-t', '--type', type=str, default='bar',
                     help='type of input: image/video, ball/bar (default)/grating')
-                    
+
 parser.add_argument('--log', default='file', type=str,
                     help='Log output to screen [file, screen, both, or none;'
                          ' default:none]')
 
 parser.add_argument('--steps', default=10, type=int,
                     help='simulation steps')
-                    
+
 parser.add_argument('--model', default='r', type=str,
                     help='set the initials of the LPUs to simulate: r(etina)'
                          ' l(amina) m(edulla), default "r", checks for'
@@ -72,14 +72,13 @@ parser.add_argument('--model', default='r', type=str,
 
 args = parser.parse_args()
 
-#logging setup
 file_name = None
 screen = False
 if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name, screen)
+logger = base.setup_logger(file_name=file_name, screen=screen)
 
 
 dt = 1e-4

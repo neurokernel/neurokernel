@@ -4,6 +4,7 @@
 Logging tools.
 """
 
+import copy
 import sys
 import traceback
 
@@ -11,25 +12,6 @@ import mpi4py.MPI
 import twiggy
 
 from comm import MPIOutput, ZMQOutput
-
-def format_name(name, width=20):
-    """
-    Pad process name with spaces.
-
-    Parameters
-    ----------
-    name : str
-        Name to pad.
-    width : int
-        Total width of padded name.
-
-    Returns
-    -------
-    padded : str
-        Padded name.
-    """
-
-    return ('{name:%s}' % width).format(name=name)
 
 def log_exception(type, value, tb, logger=twiggy.log, multiline=False):
     """
@@ -64,7 +46,6 @@ def set_excepthook(logger, multiline=False):
         Configured logger.
     multiline : bool
         If True, log exception messages on multiple lines.
-
     """
 
     sys.excepthook = \
@@ -72,8 +53,9 @@ def set_excepthook(logger, multiline=False):
 
 def setup_logger(name='', level=twiggy.levels.DEBUG,
                  fmt=twiggy.formats.line_format,
-                 stdout=None, file_name=None,
-                 mpi_comm=None, sock=None,
+                 fmt_name=('{0:%s}' % 10).format,
+                 screen=None, file_name=None,
+                 mpi_comm=None, zmq_addr=None,
                  log_exceptions=True, multiline=False):
     """
     Setup a twiggy logger.
@@ -84,16 +66,18 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         Logger name.
     level : twiggy.levels.LogLevel
         Logging level.
-    fmt : str
-        Format string.
-    stdout : bool
-        Create output stream handler to stdout if True.
+    fmt : twiggy.formats.LineFormat
+        Logging formatter class instance.
+    fmt_name : function
+        Function with one parameter that formats the message name.
+    screen : bool
+        Create output stream handler to the screen if True.
     file_name : str
         Create output handler to specified file.
     mpi_comm : mpi4py.MPI.Intracomm
         If not None, use MPI I/O with the specified communicator for output file handler.
         The `file_name` parameter must also be specified.
-    sock : str
+    zmq_addr : str
         ZeroMQ socket address.
     log_exceptions : bool
         If True, exception messages are written to the logger.
@@ -104,7 +88,19 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
     -------
     logger : twiggy.logger.Logger
         Configured logger.
+
+    Bug
+    ---
+    To use the ZeroMQ output class with multiprocessing, it must be added 
+    as an emitter within each process.
     """
+
+    fmt = copy.copy(fmt)
+    fmt.conversion.delete('name')
+
+    # Apply name format to the value (i.e., the name), not the key (i.e., the
+    # field name "name"):
+    fmt.conversion.add('name', str, lambda k, v: fmt_name(v))
 
     if mpi_comm and not file_name:
         raise ValueError('MPI I/O requires output file name')
@@ -118,16 +114,16 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
                 twiggy.outputs.FileOutput(file_name, fmt, 'w')
         twiggy.addEmitters(('file', level, None, file_output))
 
-    if stdout:
-        stdout_output = \
-          twiggy.outputs.StreamOutput(fmt, stream=stdout)
-        twiggy.addEmitters(('stdout', level, None, stdout_output))
+    if screen:
+        screen_output = \
+          twiggy.outputs.StreamOutput(fmt, stream=sys.stdout)
+        twiggy.addEmitters(('screen', level, None, screen_output))
 
-    if sock:
-        port_output = ZMQOutput(sock, fmt)
-        twiggy.addEmitters(('sock', level, None, sock_output))
+    if zmq_addr:
+        zmq_output = ZMQOutput(zmq_addr, fmt)
+        twiggy.addEmitters(('zmq', level, None, zmq_output))
 
-    logger = twiggy.log.name(format_name(name))
+    logger = twiggy.log.name(fmt_name(name))
     if log_exceptions:
         set_excepthook(logger, multiline)
 
