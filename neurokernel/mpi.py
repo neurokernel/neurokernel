@@ -16,6 +16,7 @@ import shortuuid
 import twiggy
 import zmq
 
+from mixins import LoggerMixin
 from tools.logging import format_name, setup_logger, set_excepthook
 from tools.misc import memoized_property
 
@@ -114,7 +115,7 @@ class PollerChecker(object):
         else:
             return False
 
-class Worker(object):
+class Worker(LoggerMixin):
     """
     MPI worker class.
 
@@ -129,7 +130,7 @@ class Worker(object):
     """
 
     def __init__(self, data_tag=0, ctrl_tag=1):
-        self.logger = twiggy.log.name(format_name('worker %s' % self.rank))
+        LoggerMixin.__init__(self, 'wrk %s' % self.rank)
         set_excepthook(self.logger, True)
 
         # Tags used to distinguish MPI messages:
@@ -167,8 +168,8 @@ class Worker(object):
     def max_steps(self, value):
         if value < 0:
             raise ValueError('invalid maximum number of steps')
-        self.logger.info('maximum number of steps changed: %s -> %s' % \
-                         (self._max_steps, value))
+        self.log_info('maximum number of steps changed: %s -> %s' % \
+                      (self._max_steps, value))
         self._max_steps = value
 
     def do_work(self):
@@ -180,14 +181,14 @@ class Worker(object):
         control message. It should be overridden by child classes.
         """
 
-        self.logger.info('executing do_work')
+        self.log_info('executing do_work')
 
     def run(self):
         """
         Main body of worker process.
         """
 
-        self.logger.info('running body of worker %s' % self.rank)
+        self.log_info('running body of worker %s' % self.rank)
 
         # Start listening for control messages:
         r_ctrl = []
@@ -206,16 +207,16 @@ class Worker(object):
 
                 # Start executing work method:
                 if msg[0] == 'start':
-                    self.logger.info('starting')
+                    self.log_info('starting')
                     running = True
 
                 # Stop executing work method::
                 elif msg[0] == 'stop':
                     if self.max_steps == float('inf'):
-                        self.logger.info('stopping')
+                        self.log_info('stopping')
                         running = False
                     else:
-                        self.logger.info('max steps set - not stopping')
+                        self.log_info('max steps set - not stopping')
 
                 # Set maximum number of execution steps:
                 elif msg[0] == 'steps':
@@ -223,15 +224,15 @@ class Worker(object):
                         self.max_steps = float('inf')
                     else:
                         self.max_steps = int(msg[1])
-                    self.logger.info('setting maximum steps to %s' % self.max_steps)
+                    self.log_info('setting maximum steps to %s' % self.max_steps)
 
                 # Quit:
                 elif msg[0] == 'quit':
                     if self.max_steps == float('inf'):
-                        self.logger.info('quitting')
+                        self.log_info('quitting')
                         break
                     else:
-                        self.logger.info('max steps set - not quitting')
+                        self.log_info('max steps set - not quitting')
 
                 # Get next message:
                 r_ctrl = []
@@ -244,19 +245,19 @@ class Worker(object):
             if running:
                 self.do_work()
                 self.steps += 1
-                self.logger.info('execution step: %s' % self.steps)
+                self.log_info('execution step: %s' % self.steps)
 
             # Leave loop if maximum number of steps has been reached:
             if self.steps > self.max_steps:
-                self.logger.info('maximum steps reached')
+                self.log_info('maximum steps reached')
                 break
 
         # Send acknowledgment message:
         MPI.COMM_WORLD.isend(['done', self.rank],
                              dest=0, tag=self._ctrl_tag)
-        self.logger.info('done')
+        self.log_info('done')
 
-class Manager(object):
+class Manager(LoggerMixin):
     """
     Self-launching MPI worker manager.
 
@@ -301,11 +302,11 @@ class Manager(object):
 
         # Make logger name reflect process identity:
         if self._is_launcher():
-            self.logger = twiggy.log.name(format_name('launcher/manager'))
+            LoggerMixin.__init__(self, 'lau/man')
         elif self._is_master():
-            self.logger = twiggy.log.name(format_name('master/manager'))
+            LoggerMixin.__init__(self, 'mst/mst')
         else:
-            self.logger = twiggy.log.name(format_name('worker %s/manager' % MPI.COMM_WORLD.Get_rank()))
+            LoggerMixin.__init__(self, 'wrk %s/man' % MPI.COMM_WORLD.Get_rank())
         set_excepthook(self.logger, True)
 
         # Tags used to distinguish MPI messages:
@@ -359,7 +360,7 @@ class Manager(object):
         # knows how many MPI processes to start), the workers (so that they
         # know how to instantiate their respective classes), and the master (so
         # that it will be aware of all of the MPI processes):
-        self.logger.info('adding class %s' % target.__name__)
+        self.log_info('adding class %s' % target.__name__)
         assert issubclass(target, Worker)
 
         rank = self._rank
@@ -401,10 +402,10 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping launch')
+            self.log_info('not in launcher - skipping launch')
             return
         else:
-            self.logger.info('launching application (%s)' % self._rank)
+            self.log_info('launching application (%s)' % self._rank)
 
         # Create random IPC interface name:
         env = os.environ.copy()
@@ -427,7 +428,7 @@ class Manager(object):
                                               stderr=sys.stderr,
                                               stdin=sys.stdin,
                                               env=env)
-        self.logger.info('application launched')
+        self.log_info('application launched')
 
         # Synchronize connection:
         while True:
@@ -435,14 +436,14 @@ class Manager(object):
             if self._pc.check(10):
                 self._sock.recv_multipart()
                 break
-        self.logger.info('launcher synchronized')
+        self.log_info('launcher synchronized')
 
     def process_worker_msg(self, msg):
         """
         Process the specified deserialized message from a worker.
         """
 
-        self.logger.info('got ctrl msg: %s' % str(msg))
+        self.log_info('got ctrl msg: %s' % str(msg))
 
     def _run_master(self):
         """
@@ -453,10 +454,10 @@ class Manager(object):
         """
 
         if not self._is_master():
-            self.logger.info('not in master - skipping _run_master')
+            self.log_info('not in master - skipping _run_master')
             return
         else:
-            self.logger.info('running body of master')
+            self.log_info('running body of master')
 
         ctx = zmq.Context()
         self._sock = ctx.socket(zmq.DEALER)
@@ -470,7 +471,7 @@ class Manager(object):
                 self._sock.recv()
                 self._sock.send('')
                 break
-        self.logger.info('master synchronized')
+        self.log_info('master synchronized')
 
         # Relay messages from launcher to workers until a quit or step
         # message is received: XXX currently only broadcasts messages
@@ -488,7 +489,7 @@ class Manager(object):
                 msg = self._sock.recv_multipart()
 
                 # Pass any messages on to all of the workers:
-                self.logger.info('sending message to workers: '+str(msg))
+                self.log_info('sending message to workers: '+str(msg))
                 for i in xrange(1, self.size):
                     MPI.COMM_WORLD.isend(msg, dest=i, tag=self._ctrl_tag)
 
@@ -497,7 +498,7 @@ class Manager(object):
             if flag:
                 msg = msg_list[0]
                 if msg[0] == 'done':
-                    self.logger.info('removing %s from worker list' % msg[1])
+                    self.log_info('removing %s from worker list' % msg[1])
                     workers.remove(msg[1])
 
                 # Additional control messages from the workers are
@@ -512,7 +513,7 @@ class Manager(object):
 
             # Exit when all workers are finished running:
             if not workers:
-                self.logger.info('finished running master')
+                self.log_info('finished running master')
                 break
 
     def run(self):
@@ -537,7 +538,7 @@ class Manager(object):
             rank = MPI.COMM_WORLD.Get_rank()
             t = self._targets[rank](**self._kwargs[rank])
             t.run()
-            self.logger.info('finished running %s' % rank)
+            self.log_info('finished running %s' % rank)
 
     def start(self, steps=float('inf')):
         """
@@ -545,11 +546,11 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping start')
+            self.log_info('not in launcher - skipping start')
             return
-        self.logger.info('sending steps message (%s)' % steps)
+        self.log_info('sending steps message (%s)' % steps)
         self._sock.send_multipart(['master', 'steps', str(steps)])
-        self.logger.info('sending start message')
+        self.log_info('sending start message')
         self._sock.send_multipart(['master', 'start'])
 
     def stop(self):
@@ -558,9 +559,9 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping stop')
+            self.log_info('not in launcher - skipping stop')
             return
-        self.logger.info('sending stop message')
+        self.log_info('sending stop message')
         self._sock.send_multipart(['master', 'stop'])
 
     def quit(self):
@@ -569,9 +570,9 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping quit')
+            self.log_info('not in launcher - skipping quit')
             return
-        self.logger.info('sending quit message')
+        self.log_info('sending quit message')
         self._sock.send_multipart(['master', 'quit'])
 
     def kill(self):
@@ -580,9 +581,9 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping kill')
+            self.log_info('not in launcher - skipping kill')
             return
-        self.logger.info('killing launcher')
+        self.log_info('killing launcher')
         self._mpiexec_proc.kill()
 
     def wait(self):
@@ -591,9 +592,9 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping wait')
+            self.log_info('not in launcher - skipping wait')
             return
-        self.logger.info('waiting for launcher to exit')
+        self.log_info('waiting for launcher to exit')
         self._mpiexec_proc.wait()
 
     def terminate(self):
@@ -602,9 +603,9 @@ class Manager(object):
         """
 
         if not self._is_launcher():
-            self.logger.info('not in launcher - skipping')
+            self.log_info('not in launcher - skipping')
             return
-        self.logger.info('terminating launcher')
+        self.log_info('terminating launcher')
         self._mpiexec_proc.terminate()
 
 if __name__ == '__main__':
@@ -618,9 +619,9 @@ if __name__ == '__main__':
         def __init__(self, x, y, z=None):
             super(MyWorker, self).__init__()
             name = MPI.Get_processor_name()
-            self.logger.info('I am process %d of %d on %s.' % (self.rank, 
+            self.log_info('I am process %d of %d on %s.' % (self.rank, 
                                                                self.size, name))
-            self.logger.info('init args: %s, %s, %s' % (x, y, z))
+            self.log_info('init args: %s, %s, %s' % (x, y, z))
 
     man = Manager()
     man.add(target=MyWorker, x=1, y=2, z=3)

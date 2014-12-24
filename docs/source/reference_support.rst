@@ -74,6 +74,13 @@ Visualization Tools
 
 Other
 -----
+.. currentmodule:: neurokernel.mixins
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+   LoggerMixin
+
 .. currentmodule:: neurokernel.tools.misc
 .. autosummary::
    :toctree: generated/

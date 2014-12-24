@@ -43,6 +43,10 @@ parser.add_argument('-d', '--port_data', default=None, type=int,
                     help='Data port [default: randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
+parser.add_argument('-t', '--port_time', default=None, type=int,
+                    help='Timing port [default: randomly selected]')
+parser.add_argument('-r', '--time_sync', default=False, action='store_true',
+                    help='Time data reception throughput [default: False]')
 parser.add_argument('-y', '--num_sensory', default=N_sensory, type=int,
                     help='Number of sensory neurons associated with LPU 0 [default: %s]' % N_sensory)
 parser.add_argument('-n', '--num_local', default=N_local, type=int,
@@ -77,12 +81,18 @@ g.create_input(in_file_name_0, neu_dict[0][0], dt, dur, start, stop, I_max)
 lpu_dict = {}
 
 # Create several LPUs:
-if args.port_data is None and args.port_ctrl is None:
+if args.port_data is None:        
     port_data = get_random_port()
-    port_ctrl = get_random_port()
 else:
     port_data = args.port_data
+if args.port_ctrl is None:
+    port_ctrl = get_random_port()
+else:
     port_ctrl = args.port_ctrl
+if args.port_time is None:
+    port_time = get_random_port()
+else:
+    port_time = args.port_time
 
 for i, neu_num in neu_dict.iteritems():
     lpu_entry = {}
@@ -102,8 +112,9 @@ for i, neu_num in neu_dict.iteritems():
     lpu = LPU(dt, n_dict, s_dict, input_file=in_file_name,
               output_file=out_file_name,
               port_ctrl=port_ctrl, port_data=port_data,
+              port_time=port_time,
               device=i, id=id,
-              debug=args.debug)
+              debug=args.debug, time_sync=args.time_sync)
 
     lpu_entry['lpu_file_name'] = lpu_file_name
     lpu_entry['in_file_name'] = in_file_name
@@ -113,7 +124,7 @@ for i, neu_num in neu_dict.iteritems():
 
     lpu_dict[i] = lpu_entry
 
-man = core.Manager(port_data, port_ctrl)
+man = core.Manager(port_data, port_ctrl, port_time)
 man.add_brok()
 
 random.seed(0)

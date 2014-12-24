@@ -5,7 +5,8 @@ from unittest import main, TestCase
 import numpy as np
 import pandas as pd
 import networkx as nx
-from pandas.util.testing import assert_frame_equal, assert_index_equal
+from pandas.util.testing import assert_frame_equal, assert_index_equal, \
+    assert_series_equal
 
 from neurokernel.pattern import Interface, Pattern
 
@@ -27,6 +28,41 @@ class test_interface(TestCase):
     def test_create_dup_identifiers(self):
         self.assertRaises(Exception, Interface, '/foo[0],/foo[0]')
 
+    def test_equals(self):
+        i = Interface('/foo[0:2],/bar[0:2]')
+        i['/foo[0]'] = [0, 'in', 'gpot']
+        i['/bar[0]'] = [0, 'out', 'gpot']
+        i['/foo[1]'] = [1, 'in', 'spike']
+        i['/bar[1]'] = [1, 'out', 'spike']
+        j = Interface('/foo[0:2],/bar[0:2]')
+        j['/foo[0]'] = [0, 'in', 'gpot']
+        j['/bar[0]'] = [0, 'out', 'gpot']
+        j['/foo[1]'] = [1, 'in', 'spike']
+        j['/bar[1]'] = [1, 'out', 'spike']
+        assert i.equals(j)
+        assert j.equals(i)
+        j['/foo[0]'] = [0, 'in', 'spike']
+        assert not i.equals(j)
+        assert not j.equals(i)
+
+    def test_get_common_ports(self):
+        # Without type:
+        i = Interface('/foo[0:6]')
+        i['/*', 'interface'] = 0
+        j = Interface('/foo[3:9]')
+        j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
+        self.assertItemsEqual(i.get_common_ports(0, j, 0),
+                              [('foo', 3), ('foo', 4), ('foo', 5)])
+
+        # With type:
+        i = Interface('/foo[0:6]')
+        i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/foo[3:9]')
+        j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'), 
+                              [('foo', 3), ('foo', 4)])
+                                  
     def test_to_selectors(self):
         # Selector with multiple levels:
         i = Interface('/foo[0:4]')
@@ -467,6 +503,10 @@ class test_pattern(TestCase):
         else:
             raise Exception
 
+    def test_create_unequal_levels(self):
+        p = Pattern('/x[0:3]/y', '/z[0:3]')
+        p['/x[0]/y', '/z[0]'] = 1
+
     def test_src_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
@@ -717,6 +757,28 @@ class test_pattern(TestCase):
                            pd.MultiIndex(levels=[['b', 'c'], ['d', 'e'], [0, 1, 2]],
                                          labels=[[0, 0, 1, 1], [0, 1, 0, 1],
                                                  [0, 1, 1, 2]]))
+
+    def test_from_concat(self):
+        p = Pattern.from_concat('/[foo,bar]', '/[baz,qux]',
+                                from_sel='/[foo,bar]', to_sel='/[baz,qux]',
+                                data=1)
+        df = pd.DataFrame(data=[1, 1],
+                    index=pd.MultiIndex(levels=[['bar', 'foo'], ['baz', 'qux']],
+                                        labels=[[1, 0], [0, 1]],
+                                        names=['from_0', 'to_0'], dtype=object),
+                    columns=['conn'])
+        assert_frame_equal(p.data, df)
+
+        p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
+                                from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                                data=1)
+        df = pd.DataFrame(data=[1, 1],
+                index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
+                                    labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
+                                    names=['from_0', 'from_1', 'to_0', 'to_1'], 
+                                    dtype=object),
+                    columns=['conn'])
+        assert_frame_equal(p.data, df)
 
     def test_from_df(self):
         p = Pattern('/[aaa,bbb]/0', '/[ccc,ddd]/0')

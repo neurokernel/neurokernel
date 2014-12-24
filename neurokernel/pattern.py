@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import PathLikeSelector
+from plsel import BasePortMapper, PathLikeSelector
 
 class Interface(object):
     """
@@ -74,14 +74,16 @@ class Interface(object):
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
+
+        # Dictionary containing mappers for different port types:
+        self.pm = {}
         
     def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
         """
 
-        if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
-                len(idx.unique()) < len(idx):
+        if idx.duplicated().any():
             raise ValueError('Duplicate interface index entries detected.')
 
     def __getitem__(self, key):
@@ -95,7 +97,6 @@ class Interface(object):
             selector = key[0]
         else:
             selector = key
-
         # Try using the selector to select data from the internal DataFrame:
         try:
             idx = self.sel.get_index(self.data, selector,
@@ -243,7 +244,7 @@ class Interface(object):
         --------
         >>> import plsel
         >>> import pandas
-        >>> idx = plsel.make_index('/foo[0:2]')
+        >>> idx = plsel.PathLikeSelector.make_index('/foo[0:2]')
         >>> data = [[0, 'in', 'spike'], [1, 'out', 'gpot']]
         >>> columns = ['interface', 'io', 'type']
         >>> df = pandas.DataFrame(data, index=idx, columns=columns)
@@ -453,6 +454,48 @@ class Interface(object):
             except:
                 return Interface()
 
+    def _merge_on_interfaces(self, a, i, b):
+        """
+        Merge contents of this and another Interface instance.
+        """
+
+        assert isinstance(i, Interface)
+        return pd.merge(self.data[self.data['interface'] == a],
+                        i.data[i.data['interface'] == b],
+                        left_index=True,
+                        right_index=True)
+
+    def get_common_ports(self, a, i, b, t=None):
+        """
+        Get port identifiers common to this and another Interface instance.
+
+        Parameters
+        ----------
+        a : int
+            Identifier of interface in the current instance.
+        i : Interface
+            Interface instance containing the other interface.
+        b : int
+            Identifier of interface in instance `i`.
+        t : str or unicode
+            If not None, restrict output to those identifiers with the specified
+            port type.
+
+        Returns
+        -------
+        result : list of tuple
+            Expanded port identifiers shared by the two specified Interface 
+            instances.
+        """
+
+        data_merged = self._merge_on_interfaces(a, i, b)
+        if t is None:
+            return data_merged.index.tolist()
+        else:
+            return data_merged[data_merged.apply(lambda row: \
+                        (row['type_x'] == row['type_y']) and \
+                        (row['type_x'] == t), axis=1)].index.tolist()
+
     def is_compatible(self, a, i, b, allow_subsets=False):
         """
         Check whether two interfaces can be connected.
@@ -487,14 +530,9 @@ class Interface(object):
         Assumes that the port identifiers in both interfaces are sorted in the
         same order.
         """
-
-        assert isinstance(i, Interface)
         
         # Merge the interface data on their indices (i.e., their port identifiers):
-        data_merged = pd.merge(self.data[self.data['interface'] == a], 
-                               i.data[i.data['interface'] == b], 
-                               left_index=True,
-                               right_index=True)
+        data_merged = self._merge_on_interfaces(a, i, b)
 
         # Check whether there are compatible subsets, i.e., at least one pair of
         # ports from the two interfaces that are compatible with each other:
@@ -760,6 +798,49 @@ class Interface(object):
         return self.from_df(self.data)
     copy = __copy__
     copy.__doc__ = __copy__.__doc__
+
+    def set_pm(self, t, pm):
+        """
+        Set port mapper associated with a specific port type.
+
+        Parameters
+        ----------
+        t : str or unicode
+            Port type.
+        pm : neurokernel.plsel.BasePortMapper
+            Port mapper to save.
+        """
+
+        # Ensure that the ports in the specified port mapper are a subset of
+        # those in the interface associated with the specified type:
+        assert isinstance(pm, BasePortMapper)
+        if not self.sel.is_in(pm.index.tolist(), 
+                              self.pm[t].index.tolist()):
+            raise ValueError('cannot set mapper using undefined selectors')
+        self.pm[t] = pm.copy()
+
+    def equals(self, other):
+        """
+        Check whether this interface is equivalent to another interface.
+
+        Parameters
+        ----------
+        other : neurokernel.pattern.Interface
+            Interface instance to compare to this Interface.
+
+        Returns
+        -------
+        result : bool
+            True if the interfaces are identical.
+
+        Notes
+        -----
+        Interfaces containing the same rows in different orders are not 
+        regarded as equivalent.
+        """
+
+        assert isinstance(other, Interface)
+        return self.data.equals(other.data)
 
     def __len__(self):
         return self.data.__len__()
@@ -1120,16 +1201,14 @@ class Pattern(object):
         """
 
         # Prohibit duplicate connections:
-        if (hasattr(idx, 'has_duplicates') and idx.has_duplicates) or \
-           len(idx.unique()) < len(idx):
+        if idx.duplicated().any():
             raise ValueError('Duplicate pattern entries detected.')
             
         # Prohibit fan-in connections (i.e., patterns whose index has duplicate
         # 'from' port identifiers):
         from_idx, to_idx = self.split_multiindex(idx, 
                                                  self.from_slice, self.to_slice)
-        if (hasattr(to_idx, 'has_duplicates') and to_idx.has_duplicates) or \
-           len(to_idx.unique()) < len(to_idx):
+        if to_idx.duplicated().any():
             raise ValueError('Fan-in pattern entries detected.')
 
         # Prohibit ports that both receive input and send output:

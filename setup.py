@@ -75,7 +75,7 @@ if __name__ == "__main__":
             'networkx >= 1.9',
             'numexpr >= 2.3',
             'numpy >= 1.2.0',
-            'pandas >= 0.14.1',
+            'pandas >= 0.15.0',
             'ply >= 3.4',
             'psutil >= 2.0',
             'pycuda >= 2014.1',

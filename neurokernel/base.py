@@ -18,6 +18,7 @@ from mpi4py import MPI
 import numpy as np
 import twiggy
 
+from mixins import LoggerMixin
 import mpi
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
@@ -103,8 +104,8 @@ class BaseModule(mpi.Worker):
                 raise ValueError('routing table must contain specified module ID')
             self.id = id
 
-        # Logging:
-        self.logger = twiggy.log.name(mpi.format_name('module %s' % self.id))
+        # Reformat logger name:
+        LoggerMixin.__init__(self, 'mod %s' % self.id)
 
         # Create module interface given the specified ports:
         self.interface = Interface(ports, columns)
@@ -123,7 +124,7 @@ class BaseModule(mpi.Worker):
         # Set up mapper between port identifiers and their associated data:
         assert len(data) == len(self.interface)
         self.data = data
-        self.pm = PortMapper(self.data, ports)
+        self.pm = PortMapper(ports, self.data)
 
     def _sync(self):
         """
@@ -150,14 +151,14 @@ class BaseModule(mpi.Worker):
             data = self.pm[idx_out]
             dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
-                self.logger.info('data being sent to %s: %s' % (dest_id, str(data)))
+                self.log_info('data being sent to %s: %s' % (dest_id, str(data)))
             r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
                                      dest_rank)
             requests.append(r)
             if not self.time_sync:
-                self.logger.info('sending to %s' % dest_id)
+                self.log_info('sending to %s' % dest_id)
         if not self.time_sync:
-            self.logger.info('sent all data from %s' % self.id)
+            self.log_info('sent all data from %s' % self.id)
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
@@ -180,10 +181,10 @@ class BaseModule(mpi.Worker):
             received.append(data)
             idx_in_list.append(idx_in)
             if not self.time_sync:
-                self.logger.info('receiving from %s' % src_id)
+                self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
         if not self.time_sync:
-            self.logger.info('received all data received by %s' % self.id)
+            self.log_info('received all data received by %s' % self.id)
         else:
             stop = time.time()
 
@@ -195,13 +196,13 @@ class BaseModule(mpi.Worker):
 
         # Save timing data:
         if self.time_sync:
-            self.logger.info('sent timing data to master')
+            self.log_info('sent timing data to master')
             MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,
                                            start, stop,
                                            n*self.pm.dtype.itemsize)],
                                  dest=0, tag=self._ctrl_tag)
         else:
-            self.logger.info('saved all data received by %s' % self.id)
+            self.log_info('saved all data received by %s' % self.id)
 
     def pre_run(self, *args, **kwargs):
         """
@@ -212,7 +213,7 @@ class BaseModule(mpi.Worker):
         main run loop begins.
         """
 
-        self.logger.info('performing pre-emulation operations')
+        self.log_info('performing pre-emulation operations')
 
     def post_run(self, *args, **kwargs):
         """
@@ -222,7 +223,7 @@ class BaseModule(mpi.Worker):
         terminated.
         """
 
-        self.logger.info('performing post-emulation operations')
+        self.log_info('performing post-emulation operations')
 
     def run_step(self):
         """
@@ -234,7 +235,7 @@ class BaseModule(mpi.Worker):
         class attributes.
         """
 
-        self.logger.info('running execution step')
+        self.log_info('running execution step')
 
     def run(self):
         """
@@ -274,10 +275,10 @@ class BaseModule(mpi.Worker):
         else:
 
             # Run the processing step:
-            catch_exception(self.run_step, self.logger.info)
+            catch_exception(self.run_step, self.log_info)
 
             # Synchronize:
-            catch_exception(self._sync, self.logger.info)
+            catch_exception(self._sync, self.log_info)
 
 class Manager(mpi.Manager):
     """
@@ -318,7 +319,7 @@ class Manager(mpi.Manager):
 
         self.timing_data = {}
 
-        self.logger.info('manager instantiated')
+        self.log_info('manager instantiated')
 
     def add(self, target, id, *args, **kwargs):
         """
@@ -389,7 +390,7 @@ class Manager(mpi.Manager):
         rank_0 = self.rank_to_id.inv[id_0]
         rank_1 = self.rank_to_id.inv[id_1]
 
-        self.logger.info('checking compatibility of modules {0} and {1} and'
+        self.log_info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(id_0, id_1))
         mod_int_0 = Interface(self._kwargs[rank_0]['ports'])
         mod_int_0[self._kwargs[rank_0]['ports']] = 0
@@ -407,7 +408,7 @@ class Manager(mpi.Manager):
         # XXX Need to check for fan-in XXX
 
         # Store the pattern information in the routing table:
-        self.logger.info('updating routing table with pattern')
+        self.log_info('updating routing table with pattern')
         if pat.is_connected(0, 1):
             self.routing_table[id_0, id_1] = {'pattern': pat,
                                               'int_0': int_0, 'int_1': int_1}
@@ -428,7 +429,7 @@ class Manager(mpi.Manager):
                                              'stop': stop,
                                              'bytes': nbytes}
 
-            self.logger.info('time data: %s' % str(msg[1]))
+            self.log_info('time data: %s' % str(msg[1]))
 
     def _run_master(self):
         super(Manager, self)._run_master()
@@ -445,10 +446,10 @@ class Manager(mpi.Manager):
                 total_time += stop-start
                 total_bytes += nbytes
             if total_time > 0:
-                self.logger.info('average received throughput: %s bytes/s' % \
+                self.log_info('average received throughput: %s bytes/s' % \
                                  (total_bytes/total_time))
             else:
-                self.logger.info('not computing throughput')
+                self.log_info('not computing throughput')
 
 if __name__ == '__main__':
     class MyModule(BaseModule):
@@ -462,11 +463,11 @@ if __name__ == '__main__':
 
             # Do something with input data; for the sake of illustration, we
             # just record the current values:
-            self.logger.info('input port data: '+str(self.pm[self.in_ports]))
+            self.log_info('input port data: '+str(self.pm[self.in_ports]))
 
             # Output random data:
             self.pm[self.out_ports] = np.random.rand(len(self.out_ports))
-            self.logger.info('output port data: '+str(self.pm[self.out_ports]))
+            self.log_info('output port data: '+str(self.pm[self.out_ports]))
 
     logger = mpi.setup_logger(stdout=sys.stdout, file_name='log',
                               mpi_comm=MPI.COMM_WORLD, multiline=True)

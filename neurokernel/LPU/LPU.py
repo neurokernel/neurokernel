@@ -22,8 +22,10 @@ nx.readwrite.gexf.GEXF.convert_bool['False'] = False
 nx.readwrite.gexf.GEXF.convert_bool['true'] = True
 nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
+from neurokernel.mixins import LoggerMixin
 from neurokernel.core import Module
 import neurokernel.base as base
+from neurokernel.tools.comm import get_random_port
 
 from types import *
 from collections import Counter
@@ -35,11 +37,10 @@ from synapses import *
 
 import pdb
 
-
 PORT_IN_GPOT = 'port_in_gpot'
 PORT_IN_SPK = 'port_in_spk'
 
-class LPU(Module, object):
+class LPU(Module):
     """
     Local Processing Unit (LPU).
 
@@ -205,8 +206,9 @@ class LPU(Module, object):
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA,
+                 port_time=base.PORT_TIME,
                  id=None, debug=False, columns = ['io', 'type', 'interface'],
-                 cuda_verbose=False):
+                 cuda_verbose=False, time_sync=False):
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
@@ -218,6 +220,8 @@ class LPU(Module, object):
             self.compile_options = ['--ptxas-options=-v']
         else:
             self.compile_options = []
+
+        LoggerMixin.__init__(self, 'mod %s' % self.LPU_id)
 
         # handle file I/O
         self.output_file = output_file
@@ -441,8 +445,8 @@ class LPU(Module, object):
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
         super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl, self.LPU_id,
-                                  device, debug)
+                                  columns, port_data, port_ctrl, port_time, 
+                                  self.LPU_id, device, debug, time_sync)
 
         self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
         self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
@@ -656,7 +660,7 @@ class LPU(Module, object):
 
         # Save the states of the graded potential neurons and the indices of the
         # spiking neurons that have emitted a spike:
-        self.logger.info('Extracting out port data')
+        self.log_info('Extracting out port data')
         if len(self.out_ports_ids_gpot) > 0:
             self.pm['gpot'].data[self.sel_out_gpot_ids] = (self.out_port_data_gpot.get())
         if len(self.out_ports_ids_spk) > 0:
@@ -687,7 +691,7 @@ class LPU(Module, object):
                 self.num_input*self.synapse_state.dtype.itemsize)
             self.frame_count += 1
         else:
-            self.logger.info('Input end of file reached. '
+            self.log_info('Input end of file reached. '
                              'Subsequent behaviour is undefined.')
         # if all buffer frames were read, read from file
         if self.frame_count >= self._one_time_import and not self.input_eof:
@@ -796,7 +800,7 @@ class LPU(Module, object):
             try:
                 ind = int(t)
             except:
-                self.logger.info("Error instantiating neurons of model '%s'" % t)
+                self.log_info("Error instantiating neurons of model '%s'" % t)
                 return None
 
         if n['spiking'][0]:
@@ -827,7 +831,7 @@ class LPU(Module, object):
             try:
                 ind = int(t)
             except:
-                self.logger.info("Error instantiating synapses of model '%s'" % t)
+                self.log_info("Error instantiating synapses of model '%s'" % t)
                 return []
 
         return self._synapse_classes[ind](
