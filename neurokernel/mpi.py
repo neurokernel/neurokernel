@@ -17,7 +17,7 @@ import twiggy
 import zmq
 
 from mixins import LoggerMixin
-from tools.logging import format_name, setup_logger, set_excepthook
+from tools.logging import setup_logger, set_excepthook
 from tools.misc import memoized_property
 
 def getargnames(f):
@@ -611,7 +611,7 @@ class Manager(LoggerMixin):
 if __name__ == '__main__':
     import time
 
-    setup_logger(stdout=sys.stdout, file_name = 'log', mpi_comm=MPI.COMM_WORLD)
+    setup_logger(screen=True, file_name='neurokernel.log', mpi_comm=MPI.COMM_WORLD)
 
     # Define a class whose constructor takes arguments so as to test
     # instantiation of the class by the manager:
@@ -619,7 +619,7 @@ if __name__ == '__main__':
         def __init__(self, x, y, z=None):
             super(MyWorker, self).__init__()
             name = MPI.Get_processor_name()
-            self.log_info('I am process %d of %d on %s.' % (self.rank, 
+            self.log_info('I am process %d of %d on %s.' % (self.rank,
                                                                self.size, name))
             self.log_info('init args: %s, %s, %s' % (x, y, z))
 
@@ -627,7 +627,7 @@ if __name__ == '__main__':
     man.add(target=MyWorker, x=1, y=2, z=3)
     man.add(MyWorker, 3, 4, 5)
     man.add(MyWorker, 6, 7, 8)
-    man.run()  
+    man.run()
 
     # To run for a specific number of steps, 
     # run 
