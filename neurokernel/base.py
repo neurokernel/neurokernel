@@ -27,6 +27,7 @@ from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 from tools.comm import is_poll_in, get_random_port, sync_router, sync_dealer
+from tools.logging import setup_logger
 from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
@@ -1197,59 +1198,6 @@ class BaseManager(LoggerMixin):
         self.join_modules(send_quit)
         self.stop_brokers()
         self.stop_listener()
-        
-def setup_logger(file_name='neurokernel.log', screen=True, port=None,
-                 name_format=('{0:%s}' % 10).format):
-    """
-    Convenience function for setting up logging with twiggy.
-
-    Parameters
-    ----------
-    file_name : str
-        Log file.
-    screen : bool
-        If true, write logging output to stdout.
-    port : int
-        If set to a ZeroMQ port number, publish 
-        logging output to that port.
-    name_format : function (default = {0:10}.format)
-        Function with one parameter that formats the object name.
-
-    Returns
-    -------
-    logger : twiggy.logger.Logger
-        Logger object.
-
-    Bug
-    ---
-    To use the ZeroMQ output class, it must be added as an emitter within each
-    process.
-    """
-
-    fmt = copy.copy(twiggy.formats.line_format)
-    fmt.conversion.delete('name')
-
-    # Apply name format to the value (i.e., the name), not the key (i.e., the
-    # field name "name"):
-    fmt.conversion.add('name', str, lambda k, v: name_format(v))
-        
-    if file_name:
-        file_output = \
-          twiggy.outputs.FileOutput(file_name, fmt, 'w')
-        twiggy.addEmitters(('file', twiggy.levels.DEBUG, fmt, file_output))
-
-    if screen:
-        screen_output = \
-          twiggy.outputs.StreamOutput(fmt,
-                                      stream=sys.stdout)
-        twiggy.addEmitters(('screen', twiggy.levels.DEBUG, fmt, screen_output))
-
-    if port:
-        port_output = ZMQOutput('tcp://*:%i' % port,
-                                fmt)
-        twiggy.addEmitters(('port', twiggy.levels.DEBUG, fmt, port_output))
-
-    return twiggy.log.name(name_format('main'))
 
 if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix
@@ -1287,7 +1235,7 @@ if __name__ == '__main__':
             self.log_info('output port data: '+str(self.pm[out_ports]))
 
     # Set up logging:
-    logger = setup_logger()
+    logger = setup_logger(screen=True)
 
     # Set up emulation:
     man = BaseManager(get_random_port(), get_random_port(), get_random_port())

@@ -209,8 +209,7 @@ if __name__ == '__main__':
         file_name = 'neurokernel.log'
     if args.log.lower() in ['screen', 'both']:
         screen = True
-    logger = setup_logger(file_name, screen)
+    logger = setup_logger(file_name=file_name, screen=screen)
 
     emulate(args.num_lpus, args.num_spike, args.num_gpot, args.max_steps)
 
-        

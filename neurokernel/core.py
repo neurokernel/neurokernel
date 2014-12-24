@@ -16,11 +16,11 @@ import bidict
 
 from mixins import LoggerMixin
 from base import BaseModule, BaseManager, Broker, \
-    PORT_DATA, PORT_CTRL, PORT_TIME, setup_logger
+    PORT_DATA, PORT_CTRL, PORT_TIME
 
 from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
                           ExceptionOnSignal, TryExceptionOnSignal)
-
+from tools.logging import setup_logger
 from tools.comm import get_random_port
 from tools.misc import catch_exception
 from uid import uid
@@ -37,7 +37,7 @@ class Module(BaseModule):
     Parameters
     ----------
     selector : str, unicode, or sequence
-        Path-like selector describing the module's interface of 
+        Path-like selector describing the module's interface of
         exposed ports.
     sel_gpot : str, unicode, or sequence
         Path-like selector describing the graded potential ports in the module's
@@ -709,7 +709,7 @@ if __name__ == '__main__':
         return m1
 
     # Set up logging:
-    logger = setup_logger()
+    logger = setup_logger(screen=True)
     steps = 100
 
     # Emulation 1

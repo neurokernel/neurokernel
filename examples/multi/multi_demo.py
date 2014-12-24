@@ -63,7 +63,7 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name, screen)
+logger = base.setup_logger(file_name=file_name, screen=screen)
 
 # Set number of local and projection neurons in each LPU:
 N = args.num_lpus
@@ -81,7 +81,7 @@ g.create_input(in_file_name_0, neu_dict[0][0], dt, dur, start, stop, I_max)
 lpu_dict = {}
 
 # Create several LPUs:
-if args.port_data is None:        
+if args.port_data is None:
     port_data = get_random_port()
 else:
     port_data = args.port_data
