@@ -28,7 +28,6 @@ from tools.misc import catch_exception
 from pattern import Interface, Pattern
 from plsel import PathLikeSelector, PortMapper
 
-DATA_TAG = 0
 CTRL_TAG = 1
 
 class BaseModule(mpi.Worker):
@@ -40,7 +39,7 @@ class BaseModule(mpi.Worker):
 
     Parameters
     ----------
-    ports, ports_in, ports_out : str, unicode, or sequence
+    sel, sel_in, sel_out : str, unicode, or sequence
         Path-like selectors respectively describing the module's 
         interface of exposed ports and all input and output ports.
     data : numpy.ndarray
@@ -49,6 +48,8 @@ class BaseModule(mpi.Worker):
     columns : list of str
         Interface port attributes.
         Network port for controlling the module instance.
+    ctrl_tag : int
+        MPI tag to identify control messages transmitted to worker nodes.
     id : str
         Module identifier. If no identifier is specified, a unique 
         identifier is automatically generated.
@@ -73,21 +74,25 @@ class BaseModule(mpi.Worker):
         Array of data associated with a module's ports.
     """
 
-    def __init__(self, ports, ports_in, ports_out,
+    def __init__(self, sel, sel_in, sel_out,
                  data, columns=['interface', 'io', 'type'],
-                 data_tag=DATA_TAG, ctrl_tag=CTRL_TAG,
-                 id=None, routing_table=None, rank_to_id=None, 
+                 ctrl_tag=CTRL_TAG, id=None, routing_table=None, rank_to_id=None,
                  debug=False, time_sync=False):
-        super(BaseModule, self).__init__(data_tag, ctrl_tag)
+        super(BaseModule, self).__init__(ctrl_tag)
         self.debug = debug
         self.time_sync = time_sync
+
+        # Require several necessary attribute columns:
+        assert 'interface' in columns
+        assert 'io' in columns
+        assert 'type' in columns
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        assert PathLikeSelector.is_in(ports_in, ports)
-        assert PathLikeSelector.is_in(ports_out, ports)
-        assert PathLikeSelector.are_disjoint(ports_in, ports_out)
+        assert PathLikeSelector.is_in(sel_in, sel)
+        assert PathLikeSelector.is_in(sel_out, sel)
+        assert PathLikeSelector.are_disjoint(sel_in, sel_out)
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -108,14 +113,14 @@ class BaseModule(mpi.Worker):
         LoggerMixin.__init__(self, 'mod %s' % self.id)
 
         # Create module interface given the specified ports:
-        self.interface = Interface(ports, columns)
+        self.interface = Interface(sel, columns)
 
         # Set the interface ID to 0; we assume that a module only has one interface:
-        self.interface[ports, 'interface'] = 0
+        self.interface[sel, 'interface'] = 0
 
         # Set the port attributes:
-        self.interface[ports_in, 'io'] = 'in'
-        self.interface[ports_out, 'io'] = 'out'
+        self.interface[sel_in, 'io'] = 'in'
+        self.interface[sel_out, 'io'] = 'out'
 
         # Find the input and output ports:
         self.in_ports = self.interface.in_ports().to_tuples()
@@ -124,7 +129,7 @@ class BaseModule(mpi.Worker):
         # Set up mapper between port identifiers and their associated data:
         assert len(data) == len(self.interface)
         self.data = data
-        self.pm = PortMapper(ports, self.data)
+        self.pm = PortMapper(sel, self.data)
 
     def _sync(self):
         """
@@ -290,8 +295,6 @@ class Manager(mpi.Manager):
 
     Attributes
     ----------
-    data_tag : int
-        MPI tag to identify data messages.
     ctrl_tag : int
         MPI tag to identify control messages.
     modules : dict
@@ -302,8 +305,8 @@ class Manager(mpi.Manager):
         Mapping between MPI ranks and module object IDs.
     """
 
-    def __init__(self, mpiexec='mpiexec', mpiargs=(), data_tag=0, ctrl_tag=1):
-        super(Manager, self).__init__(mpiexec, mpiargs, data_tag, ctrl_tag)
+    def __init__(self, mpiexec='mpiexec', mpiargs=(), ctrl_tag=CTRL_TAG):
+        super(Manager, self).__init__(mpiexec, mpiargs, ctrl_tag)
 
         # One-to-one mapping between MPI rank and module ID:
         self.rank_to_id = bidict.bidict()
@@ -345,9 +348,9 @@ class Manager(mpi.Manager):
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
-        assert 'ports' in argnames
-        assert 'ports_in' in argnames
-        assert 'ports_out' in argnames
+        assert 'sel' in argnames
+        assert 'sel_in' in argnames
+        assert 'sel_out' in argnames
 
         # Need to associate an ID and the routing table with each module class
         # to instantiate:
@@ -373,7 +376,7 @@ class Manager(mpi.Manager):
 
         Notes
         -----
-        Assumes that the constructors of the module types contain a `ports`
+        Assumes that the constructors of the module types contain a `sel`
         parameter.
         """
 
@@ -392,15 +395,15 @@ class Manager(mpi.Manager):
 
         self.log_info('checking compatibility of modules {0} and {1} and'
                          ' assigned pattern'.format(id_0, id_1))
-        mod_int_0 = Interface(self._kwargs[rank_0]['ports'])
-        mod_int_0[self._kwargs[rank_0]['ports']] = 0
-        mod_int_1 = Interface(self._kwargs[rank_1]['ports'])
-        mod_int_1[self._kwargs[rank_1]['ports']] = 0
+        mod_int_0 = Interface(self._kwargs[rank_0]['sel'])
+        mod_int_0[self._kwargs[rank_0]['sel']] = 0
+        mod_int_1 = Interface(self._kwargs[rank_1]['sel'])
+        mod_int_1[self._kwargs[rank_1]['sel']] = 0
 
-        mod_int_0[self._kwargs[rank_0]['ports_in'], 'io'] = 'in'
-        mod_int_0[self._kwargs[rank_0]['ports_out'], 'io'] = 'out'
-        mod_int_1[self._kwargs[rank_1]['ports_in'], 'io'] = 'in'
-        mod_int_1[self._kwargs[rank_1]['ports_out'], 'io'] = 'out'
+        mod_int_0[self._kwargs[rank_0]['sel_in'], 'io'] = 'in'
+        mod_int_0[self._kwargs[rank_0]['sel_out'], 'io'] = 'out'
+        mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
+        mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
 
         assert mod_int_0.is_compatible(0, pat.interface, int_0)
         assert mod_int_1.is_compatible(0, pat.interface, int_1)
@@ -469,7 +472,7 @@ if __name__ == '__main__':
             self.pm[self.out_ports] = np.random.rand(len(self.out_ports))
             self.log_info('output port data: '+str(self.pm[self.out_ports]))
 
-    logger = mpi.setup_logger(stdout=sys.stdout, file_name='log',
+    logger = mpi.setup_logger(screen=True, file_name='neurokernel.log',
                               mpi_comm=MPI.COMM_WORLD, multiline=True)
 
     man = Manager()
@@ -484,17 +487,17 @@ if __name__ == '__main__':
     man.add(MyModule, m1_id, m1_int_sel, m1_int_sel_in, m1_int_sel_out,
             np.zeros(5, dtype=np.float),
             ['interface', 'io', 'type'],
-            DATA_TAG, CTRL_TAG, time_sync=True)
+            CTRL_TAG, time_sync=True)
     m2_id = 'm2   '
     man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
             np.zeros(5, dtype=np.float),
             ['interface', 'io', 'type'],
-            DATA_TAG, CTRL_TAG, time_sync=True)
+            CTRL_TAG, time_sync=True)
     # m3_id = 'm3   '
     # man.add(MyModule, m3_id, m3_int_sel, m3_int_sel_in, m3_int_sel_out,
     #         np.zeros(4, dtype=np.float),
     #         ['interface', 'io', 'type'],
-    #         DATA_TAG, CTRL_TAG)
+    #         CTRL_TAG)
 
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:

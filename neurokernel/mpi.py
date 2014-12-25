@@ -123,18 +123,15 @@ class Worker(LoggerMixin):
 
     Parameters
     ----------
-    data_tag : int
-        MPI tag to identify data messages transmitted between worker nodes.
     ctrl_tag : int
         MPI tag to identify control messages transmitted to worker nodes.
     """
 
-    def __init__(self, data_tag=0, ctrl_tag=1):
+    def __init__(self, ctrl_tag=1):
         LoggerMixin.__init__(self, 'wrk %s' % self.rank)
         set_excepthook(self.logger, True)
 
-        # Tags used to distinguish MPI messages:
-        self._data_tag = data_tag
+        # Tag used to distinguish control messages:
         self._ctrl_tag = ctrl_tag
 
         # Execution step counter:
@@ -278,10 +275,9 @@ class Manager(LoggerMixin):
         Name of MPI launcher executable.
     mpiargs : tuple
         Additional arguments to pass to MPI launcher.
-    data_tag : int
-        MPI tag to identify data messages transmitted between worker nodes.
     ctrl_tag : int
         MPI tag to identify control messages transmitted to worker nodes.
+        May not be equal to mpi4py.MPI.ANY_TAG
 
     Notes
     -----
@@ -292,9 +288,9 @@ class Manager(LoggerMixin):
     Worker
     """
 
-    def __init__(self, mpiexec='mpiexec', mpiargs=(), data_tag=0, ctrl_tag=1):
-        assert data_tag != ctrl_tag and data_tag != MPI.ANY_TAG and \
-                           ctrl_tag != MPI.ANY_TAG
+    def __init__(self, mpiexec='mpiexec', mpiargs=(), ctrl_tag=1):
+        # Validate control tag.
+        assert ctrl_tag != MPI.ANY_TAG                           
 
         # MPI launch info:
         self._mpiexec = mpiexec
@@ -309,8 +305,7 @@ class Manager(LoggerMixin):
             LoggerMixin.__init__(self, 'wrk %s/man' % MPI.COMM_WORLD.Get_rank())
         set_excepthook(self.logger, True)
 
-        # Tags used to distinguish MPI messages:
-        self._data_tag = data_tag
+        # Tag used to distinguish MPI control messages:
         self._ctrl_tag = ctrl_tag
 
         # Worker classes to instantiate:
