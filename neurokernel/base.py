@@ -35,7 +35,7 @@ class BaseModule(mpi.Worker):
     Processing module.
 
     This class repeatedly executes a work method until it receives a
-    quit message via its control network port. 
+    quit message via its control network port.
 
     Parameters
     ----------
@@ -44,18 +44,18 @@ class BaseModule(mpi.Worker):
         interface of exposed ports and all input and output ports.
     data : numpy.ndarray
         Data array to associate with ports. Array length must equal the number
-        of ports in a module's interface.    
+        of ports in a module's interface.
     columns : list of str
         Interface port attributes.
         Network port for controlling the module instance.
     ctrl_tag : int
         MPI tag to identify control messages transmitted to worker nodes.
     id : str
-        Module identifier. If no identifier is specified, a unique 
+        Module identifier. If no identifier is specified, a unique
         identifier is automatically generated.
     routing_table : neurokernel.routing_table.RoutingTable
         Routing table describing data connections between modules. If no routing
-        table is specified, the module will be executed in isolation.   
+        table is specified, the module will be executed in isolation.
     debug : bool
         Debug flag. When True, exceptions raised during the work method
         are not be suppressed.
@@ -67,7 +67,7 @@ class BaseModule(mpi.Worker):
     Attributes
     ----------
     interface : Interface
-        Object containing information about a module's ports.    
+        Object containing information about a module's ports.
     pm : plsel.PortMapper
         Map between a module's ports and the contents of the `data` attribute.
     data : numpy.ndarray
@@ -131,6 +131,47 @@ class BaseModule(mpi.Worker):
         self.data = data
         self.pm = PortMapper(sel, self.data)
 
+    def _init_port_dicts(self):
+        """
+        Initial dictionaries of source/destination ports in current module.
+        """
+
+        # Extract identifiers of source ports in the current module's interface
+        # for all modules receiving output from the current module:
+        self._out_port_dict = {}
+        self._out_ids = self.routing_table.dest_ids(self.id)
+        for out_id in self._out_ids:
+            self.log_info('extracting output ports for %s' % out_id)
+
+            # Get interfaces of pattern connecting the current module to
+            # destination module `out_id`; `int_0` is connected to the
+            # current module, `int_1` is connected to the other module:
+            pat = self.routing_table[self.id, out_id]['pattern']
+            int_0 = self.routing_table[self.id, out_id]['int_0']
+            int_1 = self.routing_table[self.id, out_id]['int_1']
+
+            # Get ports in interface (`int_0`) connected to the current
+            # module that are connected to the other module via the pattern:
+            self._out_port_dict[out_id] = pat.src_idx(int_0, int_1)
+
+        # Extract identifiers of destination ports in the current module's
+        # interface for all modules sending input to the current module:
+        self._in_port_dict = {}
+        self._in_ids = self.routing_table.src_ids(self.id)
+        for in_id in self._in_ids:
+            self.log_info('extracting input ports for %s' % in_id)
+
+            # Get interfaces of pattern connecting the current module to
+            # source module `in_id`; `int_1` is connected to the current
+            # module, `int_0` is connected to the other module:
+            pat = self.routing_table[in_id, self.id]['pattern']
+            int_0 = self.routing_table[in_id, self.id]['int_0']
+            int_1 = self.routing_table[in_id, self.id]['int_1']
+
+            # Get ports in interface (`int_1`) connected to the current
+            # module that are connected to the other module via the pattern:
+            self._in_port_dict[in_id] = pat.dest_idx(int_0, int_1)
+
     def _sync(self):
         """
         Send output data and receive input data.
@@ -146,14 +187,10 @@ class BaseModule(mpi.Worker):
         # transmit the latter:
         dest_ids = self.routing_table.dest_ids(self.id)
         for dest_id in dest_ids:
-            pat = self.routing_table[self.id, dest_id]['pattern']
-            int_0 = self.routing_table[self.id, dest_id]['int_0']
-            int_1 = self.routing_table[self.id, dest_id]['int_1']
 
             # Get source ports in current module that are connected to the
             # destination module:
-            idx_out = pat.src_idx(int_0, int_1)
-            data = self.pm[idx_out]
+            data = self.pm[self._out_port_dict[dest_id]]
             dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % (dest_id, str(data)))
@@ -171,13 +208,10 @@ class BaseModule(mpi.Worker):
             start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
-            pat = self.routing_table[src_id, self.id]['pattern']
-            int_0 = self.routing_table[src_id, self.id]['int_0']
-            int_1 = self.routing_table[src_id, self.id]['int_1']
 
             # Get destination ports in current module that are connected to the
             # source module:
-            idx_in = pat.dest_idx(int_0, int_1) # XXX could be precomputed
+            idx_in = self._in_port_dict[src_id]
             data = np.empty(np.shape(idx_in), self.pm.dtype)
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
@@ -249,6 +283,9 @@ class BaseModule(mpi.Worker):
 
         # Don't allow keyboard interruption of process:
         with IgnoreKeyboardInterrupt():
+
+            # Initialize _out_port_dict and _in_port_dict attributes:
+            self._init_port_dicts()
 
             # Perform any pre-emulation operations:
             self.pre_run()
