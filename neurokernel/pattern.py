@@ -1320,11 +1320,14 @@ class Pattern(object):
         self.interface[key[1], 'io'] = 'out'
 
     def __getitem__(self, key):
+        assert len(key) >= 2
+        sel_0 = self.sel.expand(key[0])
+        sel_1 = self.sel.expand(key[1])
+        selector = [f+t for f, t in itertools.product(sel_0, sel_1)]
         if len(key) > 2:
-            return self.sel.select(self.data[list(key[2:])],
-                                             selector = '+'.join(key[0:2]))
+            return self.sel.select(self.data[list(key[2:])], selector=selector)                                             
         else:
-            return self.sel.select(self.data, selector = '+'.join(key))
+            return self.sel.select(self.data, selector=selector)
 
     def src_idx(self, src_int, dest_int, 
                 src_type=None, dest_type=None, dest_ports=None):                
