@@ -226,30 +226,33 @@ class Module(BaseModule):
         data received from other modules.
         """
 
-        self.log_info('retrieving from input buffer')
+        if self.net in ['none', 'ctrl']:
+            self.log_info('not retrieving from input buffer')
+        else:
+            self.log_info('retrieving from input buffer')
 
-        # Since fan-in is not permitted, the data from all source modules
-        # must necessarily map to different ports; we can therefore write each
-        # of the received data to the array associated with the module's ports
-        # here without worry of overwriting the data from each source module:
-        for in_id in self._in_ids:
-            # Check for exceptions so as to not fail on the first emulation
-            # step when there is no input data to retrieve:
-            try:
-                
-                # The first entry of `data` contains graded potential values,
-                # while the second contains integer indices of the current
-                # module's ports that should receive transmitted spikes:
+            # Since fan-in is not permitted, the data from all source modules
+            # must necessarily map to different ports; we can therefore write each
+            # of the received data to the array associated with the module's ports
+            # here without worry of overwriting the data from each source module:
+            for in_id in self._in_ids:
+                # Check for exceptions so as to not fail on the first emulation
+                # step when there is no input data to retrieve:
+                try:
 
-                data = self._in_data[in_id].popleft()
-            except:
-                self.log_info('no input data from [%s] retrieved' % in_id)
-            else:
-                self.log_info('input data from [%s] retrieved' % in_id)
+                    # The first entry of `data` contains graded potential values,
+                    # while the second contains integer indices of the current
+                    # module's ports that should receive transmitted spikes:
 
-                # Assign transmitted values directly to port data array:
-                self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
-                self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[0]
+                    data = self._in_data[in_id].popleft()
+                except:
+                    self.log_info('no input data from [%s] retrieved' % in_id)
+                else:
+                    self.log_info('input data from [%s] retrieved' % in_id)
+
+                    # Assign transmitted values directly to port data array:
+                    self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
+                    self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[0]
 
     def _put_out_data(self):
         """
@@ -263,26 +266,29 @@ class Module(BaseModule):
         The output spike port selection algorithm could probably be made faster.
         """
 
-        self.log_info('populating output buffer')
+        if self.net in ['none', 'ctrl']:
+            self.log_info('not populating output buffer')
+        else:
+            self.log_info('populating output buffer')
 
-        # Clear output buffer before populating it:
-        self._out_data = []
+            # Clear output buffer before populating it:
+            self._out_data = []
 
-        # Select data that should be sent to each destination module and append
-        # it to the outgoing queue:
-        for out_id in self._out_ids:
-            # Select port data using list of graded potential ports that can
-            # transmit output:
-            gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
-            spike_data = self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
-            
-            # Attempt to stage the emitted port data for transmission:            
-            try:
-                self._out_data.append((out_id, (gpot_data, spike_data)))
-            except:
-                self.log_info('no output data to [%s] sent' % out_id)
-            else:
-                self.log_info('output data to [%s] sent' % out_id)
+            # Select data that should be sent to each destination module and append
+            # it to the outgoing queue:
+            for out_id in self._out_ids:
+                # Select port data using list of graded potential ports that can
+                # transmit output:
+                gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                spike_data = self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+
+                # Attempt to stage the emitted port data for transmission:            
+                try:
+                    self._out_data.append((out_id, (gpot_data, spike_data)))
+                except:
+                    self.log_info('no output data to [%s] sent' % out_id)
+                else:
+                    self.log_info('output data to [%s] sent' % out_id)
                 
     def run_step(self):
         """
