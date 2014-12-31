@@ -73,6 +73,7 @@ Neurokernel currently requires the following Python packages:
 * `bottleneck <http://pypi.python.org/pypi/bottleneck/>`_ 0.7.0 or later.
 * `futures <https://pypi.python.org/pypi/futures/>`_ 2.1.5 or later.
 * `h5py <http://www.h5py.org/>`_ 2.2.1 or later.
+* `lxml <http://lxml.de/>`_ 3.3.0 or later.
 * `matplotlib <http://matplotlib.org/>`_ 1.3.0 or later.
 * `msgpack-numpy <http://pypi.python.org/pypi/msgpack-numpy>`_ 0.3.1.1 or later.
 * `networkx <https://networkx.github.io>`_ 1.9 or later
