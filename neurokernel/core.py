@@ -247,16 +247,9 @@ class Module(BaseModule):
             else:
                 self.log_info('input data from [%s] retrieved' % in_id)
 
-                # Assign transmitted graded potential values directly to port
-                # data array:
+                # Assign transmitted values directly to port data array:
                 self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
-
-                # Clear all input spike port data..
-                self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = 0
-                    
-                # ..and then set the port data using the transmitted
-                # integer indices corresponding to spike ports:
-                self.pm['spike'].data[data[1]] = 1
+                self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[0]
 
     def _put_out_data(self):
         """
@@ -278,39 +271,14 @@ class Module(BaseModule):
         # Select data that should be sent to each destination module and append
         # it to the outgoing queue:
         for out_id in self._out_ids:
-            # Select graded potential data using list of 
-            # graded potential ports that can transmit output:
+            # Select port data using list of graded potential ports that can
+            # transmit output:
             gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
-                
-            # Select spiking ports that can transmit output:
-            out_spike_ports_all = self._out_port_dict['spike'][out_id]
-
-            # Find those ports that have emitted a spike:
-            out_spike_ports_with_spikes = \
-                self.pm['spike'].get_ports_nonzero()
-
-            # Compute the intersection of the two sets of spiking
-            # ports obtained above to determine which ports the destination
-            # module must be informed about:
-            out_spike_ports = \
-                list(set(out_spike_ports_all).intersection(out_spike_ports_with_spikes))
-
-            # Find the input ports in the destination module's interface to
-            # which the spikes emitted by the current module's spiking ports
-            # must be sent:
-            from_int, to_int = self.pat_ints[out_id]
-            pat = self.patterns[out_id]
-            spike_data = \
-                pat.dest_idx(from_int, to_int, 'spike', 'spike', out_spike_ports)
-
-            # Find the integer indices corresponding to the destination module
-            # port identifiers to transmit instead of the actual port
-            # identifiers:
-            spike_data_ind = pat.interface.pm['spike'].get_map(spike_data)
-
+            spike_data = self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+            
             # Attempt to stage the emitted port data for transmission:            
             try:
-                self._out_data.append((out_id, (gpot_data, spike_data_ind)))
+                self._out_data.append((out_id, (gpot_data, spike_data)))
             except:
                 self.log_info('no output data to [%s] sent' % out_id)
             else:
