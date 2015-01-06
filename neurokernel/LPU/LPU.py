@@ -666,7 +666,7 @@ class LPU(Module):
         if len(self.out_ports_ids_gpot) > 0:
             self.pm['gpot'].data[self.sel_out_gpot_ids] = (self.out_port_data_gpot.get())
         if len(self.out_ports_ids_spk) > 0:
-            self.pm['spike'][self.sel_out_spk] = (self.out_port_data_spk.get())
+            self.pm['spike'].data[self.sel_out_spk_ids] = (self.out_port_data_spk.get())
 
     def _write_output(self):
         """
