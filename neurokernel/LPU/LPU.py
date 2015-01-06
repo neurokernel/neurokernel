@@ -445,7 +445,7 @@ class LPU(Module):
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
         super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl, port_time, 
+                                  columns, port_data, port_ctrl, port_time,
                                   self.LPU_id, device, debug, time_sync)
 
         self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
@@ -454,13 +454,15 @@ class LPU(Module):
         self.interface[sel_out_spk, 'io', 'type'] = ['out', 'spike']
         self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
         self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
-        
+        self.sel_in_spk_ids = self.pm['spike'].ports_to_inds(self.sel_in_spk)
+        self.sel_out_spk_ids = self.pm['spike'].ports_to_inds(self.sel_out_spk)
+
     def pre_run(self):
         super(LPU, self).pre_run()
         self._initialize_gpu_ds()
         self._init_objects()
         self.first_step = True
-        
+
     def post_run(self):
         super(LPU, self).post_run()
         if self.output:
@@ -478,7 +480,7 @@ class LPU(Module):
             neuron.post_run()
             if self.debug and not neuron.update_I_override:
                 neuron._BaseNeuron__post_run()
-                
+
         for synapse in self.synapses:
             synapse.post_run()
 
@@ -635,7 +637,7 @@ class LPU(Module):
                 int(int(self.spike_state.gpudata) +
                 self.spike_state.dtype.itemsize*
                 self.idx_start_spike[self.ports_in_spk_mem_ind]),
-                self.pm['spike'][self.sel_in_spk])
+                self.pm['spike'].data[self.sel_in_spk_ids])
 
     def _extract_output(self, st=None):
         """
