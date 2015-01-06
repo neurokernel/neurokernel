@@ -57,7 +57,8 @@ else:
     port_data = args.port_data
     port_ctrl = args.port_ctrl
 
-man = core.Manager(port_data, port_ctrl)
+port_time = get_random_port()
+man = core.Manager(port_data, port_ctrl, port_time)
 man.add_brok()
 
 (n_dict, s_dict) = LPU.lpu_parser('./data/generic_lpu.gexf.gz')
