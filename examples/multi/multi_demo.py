@@ -8,6 +8,8 @@ import argparse
 import itertools
 import random
 
+import numpy as np
+
 import data.gen_generic_lpu as g
 
 import neurokernel.core as core
@@ -73,6 +75,10 @@ neu_dict = {i: [0, args.num_local, args.num_output] for i in xrange(N)}
 # of sensory neurons:
 neu_dict[0][0] = args.num_sensory
 
+# Initialize RNG:
+random.seed(0)
+np.random.seed(0)
+
 # Create input signal for LPU 0:
 in_file_name_0 = 'generic_input.h5'
 g.create_input(in_file_name_0, neu_dict[0][0], dt, dur, start, stop, I_max)
@@ -126,8 +132,6 @@ for i, neu_num in neu_dict.iteritems():
 
 man = core.Manager(port_data, port_ctrl, port_time)
 man.add_brok()
-
-random.seed(0)
 
 # Create connectivity patterns between each combination of LPU pairs:
 for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
