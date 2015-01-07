@@ -1502,6 +1502,8 @@ class BasePortMapper(object):
     Notes
     -----
     The selectors may not contain any '*' or '[:]' characters.
+    A single port identifier may be mapped to multiple integer indices, 
+    but not vice-versa.
     """
 
     def __init__(self, selector, portmap=None):
@@ -1867,6 +1869,18 @@ class PortMapper(BasePortMapper):
         else:
             idx = self.portmap[f].index
         return self.sel.index_to_selector(idx)
+
+    def get_inds_nonzero(self):
+        """
+        Select indices of ports with nonzero data.
+        
+        Returns
+        -------
+        inds : numpy.ndarray
+            Array of integer indices.
+        """
+
+        return np.nonzero(self.data)[0]
 
     def get_ports_nonzero(self):
         """

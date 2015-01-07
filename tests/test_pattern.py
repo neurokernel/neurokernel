@@ -916,5 +916,17 @@ class test_pattern(TestCase):
         assert len(p) == 0
         assert len(p.interface) == 0
 
+    def test_get_expanded(self):
+        p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+        p['/aaa[0]', '/bbb[0]'] = 1
+        p['/aaa[1]', '/bbb[1]'] = 1
+        p['/aaa[2]', '/bbb[2]'] = 1
+        df = pd.DataFrame({'conn': [1]},
+            index=pd.MultiIndex(levels=[['aaa'], [0, 1, 2], ['bbb'], [0, 1, 2]],
+                                labels=[[0], [0], [0], [0]],
+                                names=['from_0', 'from_1', 'to_0', 'to_1']),
+                          dtype=object)
+        assert_frame_equal(p[[('aaa', 0)], [('bbb', 0)]], df)
+
 if __name__ == '__main__':
     main()
