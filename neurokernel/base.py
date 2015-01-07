@@ -574,8 +574,6 @@ if __name__ == '__main__':
 
     man.run()
     man.start()
-#    man.steps(10)
-    man.start()
     time.sleep(6)
     man.stop()
     man.quit()
