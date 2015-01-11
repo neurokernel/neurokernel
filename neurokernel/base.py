@@ -423,6 +423,9 @@ class Manager(mpi.Manager):
         assert id_1 in self.rank_to_id.values()
         assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
 
+        self.log_info('connecting modules {0} and {1}'
+                      .format(id_0, id_1))
+
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern; since the manager only contains module classes and not class
         # instances, we need to create Interface instances from the selectors
@@ -455,6 +458,8 @@ class Manager(mpi.Manager):
         if pat.is_connected(1, 0):
             self.routing_table[id_1, id_0] = {'pattern': pat,
                                               'int_0': int_1, 'int_1': int_0}
+
+        self.log_info('connected modules {0} and {1}'.format(id_0, id_1))
 
     def process_worker_msg(self, msg):
 
@@ -573,7 +578,6 @@ if __name__ == '__main__':
     # man.start(steps=500)
 
     man.run()
-    man.start()
-    time.sleep(6)
+    man.start(steps=100)
     man.stop()
     man.quit()
