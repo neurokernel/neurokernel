@@ -6,13 +6,11 @@ Core Neurokernel classes.
 
 import atexit
 import collections
-import numpy as np
 import time
 
-import pycuda.driver as drv
-import pycuda.gpuarray as gpuarray
-import twiggy
 import bidict
+import numpy as np
+import twiggy
 
 from mixins import LoggerMixin
 from base import BaseModule, BaseManager, Broker, \
@@ -179,7 +177,7 @@ class Module(BaseModule):
 
         self._out_ids = []
         self._in_ids = []
-        
+
     def _init_gpu(self):
         """
         Initialize GPU device.
@@ -193,6 +191,10 @@ class Module(BaseModule):
         if self.device == None:
             self.log_info('no GPU specified - not initializing ')
         else:
+
+            # Import pycuda.driver here so as to facilitate the
+            # subclassing of Module to create pure Python LPUs that don't use GPUs:
+            import pycuda.driver as drv
             drv.init()
             try:
                 self.gpu_ctx = drv.Device(self.device).make_context()
@@ -364,17 +366,17 @@ class Module(BaseModule):
                                               'spike', 'spike')
             self._in_port_dict_ids['spike'][in_id] = \
                 self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
-            
+
     def pre_run(self, *args, **kwargs):
         """
         Code to run before main module run loop.
 
         Code in this method will be executed after a module's process has been
         launched and all connectivity objects made available, but before the
-        main run loop begins.
+        main run loop begins. Initialization routines (such as GPU
+        initialization) should be performed in this method.
         """
-        
-        self._init_gpu()
+
         pass
 
     def run(self):
