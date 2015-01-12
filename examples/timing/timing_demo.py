@@ -6,6 +6,8 @@ Create and run multiple empty LPUs to time data reception throughput.
 
 import argparse
 import itertools
+import time
+
 import numpy as np
 import pycuda.driver as drv
 
@@ -21,10 +23,10 @@ class MyModule(Module):
 
     This module class doesn't do anything in its execution step apart from
     transmit/receive dummy data. All spike ports are assumed to
-    produce/consume data at every step.        
+    produce/consume data at every step.
     """
 
-    def __init__(self, sel, 
+    def __init__(self, sel,
                  sel_in_gpot, sel_in_spike,
                  sel_out_gpot, sel_out_spike,
                  data_gpot=None, data_spike=None,
@@ -33,11 +35,11 @@ class MyModule(Module):
                  id=None, device=None, debug=False):
         sel_gpot = ','.join([sel_in_gpot, sel_out_gpot])
         sel_spike = ','.join([sel_in_spike, sel_out_spike])
-        if data_gpot is None:    
+        if data_gpot is None:
             data_gpot = np.zeros(PathLikeSelector.count_ports(sel_gpot), float)
-        if data_spike is None:    
-            data_spike = np.zeros(PathLikeSelector.count_ports(sel_gpot), int)
-                
+        if data_spike is None:
+            data_spike = np.zeros(PathLikeSelector.count_ports(sel_spike), int)
+
         super(MyModule, self).__init__(sel, sel_gpot, sel_spike,
                                        data_gpot, data_spike,
                                        columns, port_data, port_ctrl, port_time,
@@ -90,25 +92,25 @@ def gen_sels(n_lpu, n_spike, n_gpot):
     results = {}
 
     for i in xrange(n_lpu):
-        lpu_id = 'lpu%s' % i            
+        lpu_id = 'lpu%s' % i
         other_lpu_ids = '['+','.join(['lpu%s' % j for j in xrange(n_lpu) if j != i])+']'
 
         # Structure ports as 
         # /lpu_id/in_or_out/spike_or_gpot/[other_lpu_ids,..]/[0:n_spike]
         sel_in_gpot = '/%s/in/gpot/%s/[0:%i]' % (lpu_id,
-                                                 other_lpu_ids, 
+                                                 other_lpu_ids,
                                                  n_gpot)
         sel_in_spike = '/%s/in/spike/%s/[0:%i]' % (lpu_id,
-                                                   other_lpu_ids, 
+                                                   other_lpu_ids,
                                                    n_spike)
-        sel_out_gpot = '/%s/out/gpot/%s/[0:%i]' % (lpu_id, 
+        sel_out_gpot = '/%s/out/gpot/%s/[0:%i]' % (lpu_id,
                                                    other_lpu_ids,
                                                    n_gpot)
-        sel_out_spike = '/%s/out/spike/%s/[0:%i]' % (lpu_id, 
+        sel_out_spike = '/%s/out/spike/%s/[0:%i]' % (lpu_id,
                                                      other_lpu_ids,
                                                      n_spike)
         results[lpu_id] = (sel_in_gpot, sel_in_spike,
-                           sel_out_gpot, sel_out_spike)                        
+                           sel_out_gpot, sel_out_spike)
                            
     return results
 
@@ -149,13 +151,13 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         lpu_i = 'lpu%s' % i
         sel = ','.join(sel_dict[lpu_i])
         sel_in_gpot, sel_in_spike, sel_out_gpot, sel_out_spike = sel_dict[lpu_i]
-        m = MyModule(sel, 
+        m = MyModule(sel,
                      sel_in_gpot, sel_in_spike, sel_out_gpot, sel_out_spike,
                      port_data=man.port_data, port_ctrl=man.port_ctrl,
                      port_time=man.port_time,
                      id=lpu_i, device=i, debug=args.debug)
         man.add_mod(m)
-    
+
     # Set up connections between module pairs:
     for i, j in itertools.combinations(xrange(n_lpu), 2):
         lpu_i = 'lpu%s' % i
@@ -177,9 +179,11 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         pat.interface[sel_in_spike_j] = [1, 'out', 'spike']
         pat.interface[sel_out_spike_j] = [1, 'in', 'spike']
         man.connect(man.modules[lpu_i], man.modules[lpu_j], pat, 0, 1)
-        
+ 
+    #start = time.time()
     man.start(steps=steps)
     man.stop()
+    #print 'run time: %s' % (time.time()-start)
 
 if __name__ == '__main__':
     num_lpus = 2
