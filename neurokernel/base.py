@@ -900,16 +900,16 @@ class TimeListener(ControlledProcess):
             total_time += stop-start
             total_bytes += nbytes
         if total_time > 0:
-            self.log_info('average received throughput: %s bytes/s' % \
-                             (total_bytes/total_time))
+            self.throughput = total_bytes/total_time
         else:
-            self.log_info('not computing throughput')
-        
+            self.throughput = 0.0
+        self.log_info('average received throughput: %s bytes/s' % self.throughput)
+
 class BaseManager(LoggerMixin):
     """
     Module manager.
 
-    Instantiates, connects, starts, and stops modules comprised by an 
+    Instantiates, connects, starts, and stops modules comprised by an
     emulation.
 
     Parameters
