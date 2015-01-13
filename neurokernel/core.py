@@ -654,6 +654,7 @@ if __name__ == '__main__':
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
                       man.port_data, man.port_ctrl, man.port_time, 'm2')
+        man.add_mod(m2)
 
         # Make sure that all ports in the patterns' interfaces are set so 
         # that they match those of the modules:
