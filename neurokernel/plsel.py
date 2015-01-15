@@ -1325,6 +1325,7 @@ class PathLikeSelector(object):
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
 
+    @classmethod
     def make_index(cls, selector, names=[]):
         """
         Create an index from the specified selector.
@@ -1332,8 +1333,8 @@ class PathLikeSelector(object):
         Parameters
         ----------
         selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]).            
+            Selector string (e.g., '/foo[0:2]') or sequence of token
+            sequences (e.g., [['foo', (0, 2)]]).
         names : list
             Names of levels to use in generated MultiIndex. If no names are
             specified, the levels are assigned increasing integers starting with
