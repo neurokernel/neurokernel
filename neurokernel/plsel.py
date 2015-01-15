@@ -181,7 +181,7 @@ class PathLikeSelector(object):
             for j in xrange(len(p[3][i])):
                 if type(p[3][i][j]) in [int, str, unicode]:
                     p[3][i][j] = [p[3][i][j]]
-                if type(p[3][i][j]) == tuple:
+                elif type(p[3][i][j]) == tuple:
                     p[3][i][j] = range(p[3][i][j][0], p[3][i][j][1])
                     
         # Fully expand both selectors into individual identifiers
@@ -1320,12 +1320,11 @@ class PathLikeSelector(object):
                 if len(labels) < j+1:
                     labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
-                    
+
         if not names:
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
 
-    @classmethod
     def make_index(cls, selector, names=[]):
         """
         Create an index from the specified selector.
@@ -1845,6 +1844,23 @@ class PortMapper(BasePortMapper):
 
         return self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)]
 
+    def get_by_inds(self, inds):
+        """
+        Retrieve mapped data specified by integer index.
+        
+        Parameters
+        ----------
+        inds : sequence of int
+            Integer indices of data elements to return.
+        
+        Returns
+        -------
+        result : numpy.ndarray
+            Selected data.
+        """
+
+        return self.data[inds]
+
     def get_ports(self, f):
         """
         Select ports using a data selection function.
@@ -1940,6 +1956,20 @@ class PortMapper(BasePortMapper):
         # sel.select will return a Series with nan for selector [()], hence dropna
         # is necessary here
         self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
+
+    def set_by_ind(self, inds, data):
+        """
+        Set mapped data by integer indices.
+
+        Parameters
+        ----------
+        inds : sequence of int
+            Integer indices of data elements to update.
+        data : numpy.ndarray
+            Data to assign.
+        """
+
+        self.data[inds] = data
 
     __getitem__ = get
     __setitem__ = set
