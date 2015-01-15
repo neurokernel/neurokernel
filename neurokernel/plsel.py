@@ -14,19 +14,74 @@ import pandas as pd
 import ply.lex as lex
 import ply.yacc as yacc
 
-class PathLikeSelector(object):
-    """Class for selecting rows of a pandas DataFrame using path-like selectors.
+class Selector(object):
+    """
+    Validated and expanded port selector.
 
-    Select rows from a pandas DataFrame using path-like selectors.
-    Assumes that the DataFrame instance has a MultiIndex where each level
-    corresponds to a level of the selector. An index level may either be a
+    Parameters
+    ----------
+    s : str or unicode
+        String representation of selector. The selector may not be ambiguous.
+
+    Attributes
+    ----------
+    str : str
+        String representation of selector.
+    expanded : tuple of tuples
+        Expanded selector.
+    max_levels : int
+        Maximum number of levels in selector.
+    """
+
+    def __init__(self, s):
+        assert isinstance(s, basestring) # python2 dependency
+        self._str = copy.copy(s)
+
+        # Save expanded selector as tuple because it shouldn't need to be
+        # modified after expansion:
+        self._expanded = tuple(SelectorMethods.expand(s))
+        self._max_levels = max(map(len, self._expanded))
+
+    @property
+    def str(self):
+        """
+        String representation of selector.
+        """
+
+        return self._str
+
+    @property
+    def expanded(self):
+        """
+        Expanded selector.
+        """
+        
+        return self._expanded
+
+    @property
+    def max_levels(self):
+        """
+        Maximum number of levels in selector.
+        """
+        
+        return self._max_levels
+
+    def __repr__(self):
+        return 'Selector(\'%s\')' % self._str
+
+class SelectorParser(object):
+    """
+    This class implements a parser for path-like selectors that can
+    be associated with elements in a sequential data structure such as a 
+    Pandas DataFrame; in the latter case, each level of the selector corresponds
+    to a level of a Pandas MultiIndex. An index level may either be a
     denoted by a string label (e.g., 'foo') or a numerical index (e.g., 0, 1,
     2); a selector level may additionally be a list of strings (e.g.,
     '[foo,bar]') or integers (e.g., '[0,2,4]') or continuous intervals 
     (e.g., '[0:5]'). The '*' symbol matches any value in a level, while a 
     range with an open upper bound (e.g., '[5:]') will match all integers
     greater than or equal to the lower bound.
-        
+
     Examples of valid selectors include
 
     ==================  =================================
@@ -47,22 +102,18 @@ class PathLikeSelector(object):
     /[foo,bar].+/[0:2]  equivalent to /foo[0],/bar[1]
     ==================  =================================
 
-    An empty string is deemed to be a valid selector.
-
-    The class can also be used to create new MultiIndex instances from selectors
-    that can be fully expanded into an explicit set of identifiers (and
-    therefore contain no ambiguous symbols such as '*' or '[:]').
-
     Notes
     -----
+    An empty string is deemed to be a valid selector.
+
     Since there is no need to maintain multiple instances of the lexer/parser
     used to process path-like selectors, they are associated with the class
     rather than class instances; likewise, all of the class' methods are
     classmethods.
 
-    Numerical indices in path-like selectors are assumed to be
+    Numerical indices in selectors are assumed to be
     zero-based. Intervals do not include the end element (i.e., like numpy, not
-    like pandas).
+    like Pandas).
     """
 
     tokens = ('ASTERISK', 'COMMA', 'DOTPLUS', 'INTEGER', 'INTEGER_SET',
@@ -275,6 +326,18 @@ class PathLikeSelector(object):
             return [[]]
         else:
             return cls.parser.parse(selector, lexer=cls.lexer)
+
+class SelectorMethods(SelectorParser):
+    """
+    Class for manipulating and using path-like selectors.
+
+    Contains class methods for expanding selectors, selecting rows from a 
+    Pandas DataFrame using a selector, etc.
+
+    The class can also be used to create new MultiIndex instances from selectors
+    that can be fully expanded into an explicit set of identifiers (and
+    therefore contain no ambiguous symbols such as '*' or '[:]').
+    """
 
     @classmethod
     def is_identifier(cls, s):
@@ -1325,6 +1388,7 @@ class PathLikeSelector(object):
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
 
+    @classmethod
     def make_index(cls, selector, names=[]):
         """
         Create an index from the specified selector.
@@ -1465,9 +1529,9 @@ class PathLikeSelector(object):
 # Set the option optimize=1 in the production version; need to perform these
 # assignments after definition of the rest of the class because the class'
 # internal namespace can't be accessed within its body definition:
-PathLikeSelector.lexer = lex.lex(module=PathLikeSelector)
-PathLikeSelector.parser = yacc.yacc(module=PathLikeSelector, 
-                                    debug=0, write_tables=0)
+SelectorParser.lexer = lex.lex(module=SelectorParser)
+SelectorParser.parser = yacc.yacc(module=SelectorParser, 
+                                  debug=0, write_tables=0)
 
 class BasePortMapper(object):
     """
