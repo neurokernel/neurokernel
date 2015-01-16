@@ -86,6 +86,12 @@ class Selector(object):
         
         return self._max_levels
 
+    def __len__(self):
+        if len(self._expanded) == 1 and not self._expanded[0]:
+            return 0
+        else:
+            return 1
+
     def __repr__(self):
         return 'Selector(\'%s\')' % self._str
 
@@ -365,9 +371,10 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        s : sequence, str, or unicode
-            Selector string (e.g., '/foo[0:2]'), sequence of token sequences
-            (e.g., [['foo', (0, 2)]]), or sequence of tokens (e.g., ['foo', 0]).
+        s : Selector, str, unicode, or sequence
+            Selector class instance, raw selector string (e.g., '/foo[0:2]'), 
+            sequence of token sequences (e.g., [['foo', (0, 2)]]), or sequence
+            of tokens (e.g., ['foo', 0]).
         
         Returns
         -------
@@ -381,7 +388,10 @@ class SelectorMethods(SelectorParser):
         Can check sequences of tokens (even though a sequence of tokens is not a
         valid selector).
         """
-        
+
+        if isinstance(s, Selector):
+            return len(s) == 1
+
         if np.iterable(s):
             
             # Try to expand string:
@@ -462,15 +472,19 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode or sequence
+            Selector class instance, selector string (e.g., '/foo[0:2]'), 
+            or sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
         result : bool
             True if the selector is ambiguous, False otherwise.
         """
+
+        # The Selector class can only encapsulate an unambiguous selector:
+        if isinstance(selector, Selector):
+            return True
 
         if type(selector) in [str, unicode]:
             if re.search(r'(?:\*)|(?:\:\])', selector):
@@ -507,7 +521,10 @@ class SelectorMethods(SelectorParser):
         -----
         Ambiguous selectors are not deemed to be empty.
         """
-        
+
+        if isinstance(selector, Selector): 
+            return len(selector) == 0
+
         if type(selector) in [str, unicode] and \
            re.search('^\s*$', selector):
             return True

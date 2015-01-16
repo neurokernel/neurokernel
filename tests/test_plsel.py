@@ -326,6 +326,7 @@ class test_path_like_selector(TestCase):
         assert self.sel.is_expandable([['foo', 'bar']]) == False
 
         assert self.sel.is_expandable('/foo[0:2]') == True
+        assert self.sel.is_expandable('/foo[0,1,2]') == True
         assert self.sel.is_expandable('[0:2]') == True
 
         assert self.sel.is_expandable([['foo', [0, 1]]]) == True
