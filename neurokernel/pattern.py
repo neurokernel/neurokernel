@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import BasePortMapper, PathLikeSelector
+from plsel import BasePortMapper, SelectorMethods
 
 class Interface(object):
     """
@@ -59,7 +59,7 @@ class Interface(object):
 
     See Also
     --------
-    plsel.PathLikeSelector
+    plsel.SelectorMethods
     """
 
     def __init__(self, selector='', columns=['interface', 'io', 'type']):
@@ -67,7 +67,7 @@ class Interface(object):
         # All ports in an interface must contain at least the following
         # attributes:
         assert set(columns).issuperset(['interface', 'io', 'type'])
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
         assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
@@ -244,7 +244,7 @@ class Interface(object):
         --------
         >>> import plsel
         >>> import pandas
-        >>> idx = plsel.PathLikeSelector.make_index('/foo[0:2]')
+        >>> idx = plsel.SelectorMethods.make_index('/foo[0:2]')
         >>> data = [[0, 'in', 'spike'], [1, 'out', 'gpot']]
         >>> columns = ['interface', 'io', 'type']
         >>> df = pandas.DataFrame(data, index=idx, columns=columns)
@@ -897,12 +897,12 @@ class Pattern(object):
 
     See Also
     --------
-    plsel.PathLikeSelector
+    plsel.SelectorMethods
     """
 
     def __init__(self, *selectors, **kwargs):
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
 
         # Force sets of identifiers to be disjoint so that no identifier can
         # denote a port in more than one set:
@@ -1586,7 +1586,7 @@ class Pattern(object):
         # Group ports by interface number:
         ports_by_int = {}
         for n, data in g.nodes(data=True):
-            assert PathLikeSelector.is_identifier(n)
+            assert SelectorMethods.is_identifier(n)
             assert data.has_key('interface')
             if not ports_by_int.has_key(data['interface']):
                 ports_by_int[data['interface']] = {}

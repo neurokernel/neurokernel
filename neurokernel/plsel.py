@@ -608,8 +608,8 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        s : str, unicode, or sequence
-            String or sequence to test.
+        s : Selector, str, unicode, or sequence
+            Selector instance, string, or sequence to test.
 
         Returns
         -------
@@ -619,7 +619,9 @@ class SelectorMethods(SelectorParser):
             (e.g., [['foo', (0, 2)]], [['bar', 'baz'], ['qux', 0]]).
         """
 
-        if type(s) in [str, unicode]:
+        if isinstance(s, Selector):
+            return True
+        elif type(s) in [str, unicode]:
             return cls.is_selector_str(s)
         elif np.iterable(s):
             return cls.is_selector_seq(s)
@@ -633,9 +635,9 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            of token sequences (e.g., [['foo', (0, 2)]]).
         pad_len : int
             Length to which expanded token sequences should be padded with blanks.
 
@@ -656,7 +658,10 @@ class SelectorMethods(SelectorParser):
         >>> SelectorMethods.expand('/bar,/foo[0:2]', 3)
         [('bar', '', ''), ('foo', 0, ''), ('foo', 1, '')]
         """
-        
+
+        if isinstance(selector, Selector):
+            return selector.expanded
+
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
@@ -694,21 +699,22 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or 
+            sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
         result : bool
             True if the selector contains any intervals or sets of
             strings/integers, False otherwise. Ambiguous selectors are
-            not deemed to be expandable, nor are fully expanded selectors.
+            not deemed to be expandable, nor are fully expanded selectors or
+            Selector instances.
         """
 
         assert cls.is_selector(selector)
 
-        if cls.is_ambiguous(selector):
+        if isinstance(selector, Selector) or cls.is_ambiguous(selector):
             return False
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
@@ -899,9 +905,9 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), 
+            or sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -949,7 +955,9 @@ class SelectorMethods(SelectorParser):
         try:
             return cls.__max_levels_cache[h]
         except:
-            if type(selector) in [str, unicode]:
+            if isinstance(selector, Selector):
+                return selector.max_levels
+            elif type(selector) in [str, unicode]:
                 try:
                     count = max(map(len, cls.parse(selector)))
                 except:
@@ -1089,10 +1097,10 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        s, t : str, unicode, or sequence
+        s, t : Selector, str, unicode, or sequence
             Check whether selector `s` is in `t`. Each selector is either a
-            string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+            Selector class instance, a string (e.g., '/foo[0:2]'), or a sequence 
+            of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -1122,9 +1130,9 @@ class SelectorMethods(SelectorParser):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            of token sequences (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
             If the index of `df` is an Index, these are ignored.
@@ -1138,7 +1146,9 @@ class SelectorMethods(SelectorParser):
 
         assert cls.is_selector(selector)
         max_levels = cls.max_levels(selector)
-        if type(selector) in [str, unicode]:
+        if isinstance(selector, Selector):
+            parse_list = selector.expanded
+        elif type(selector) in [str, unicode]:
             try:
                 parse_list = cls.expand(selector, max_levels)
             except:
