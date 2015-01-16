@@ -14,6 +14,26 @@ import pandas as pd
 import ply.lex as lex
 import ply.yacc as yacc
 
+# Work around lack of support for serializing slices in msgpack 0.4.4:
+def _encode(obj):
+    if isinstance(obj, slice):
+        return {'type': 'slice',
+                'data': (obj.start, obj.stop, obj.step)}
+    else:
+        return obj
+
+def _decode(obj):
+    try:
+        if obj['type'] == 'slice':
+            return slice(*obj['data'])
+        else:
+            return obj
+    except:
+        return obj
+
+_packb = lambda x: msgpack.packb(x, default=_encode)
+_unpackb = lambda x: msgpack.unpackb(x, object_hook=_decode)
+
 class Selector(object):
     """
     Validated and expanded port selector.
@@ -122,8 +142,7 @@ class SelectorParser(object):
     @classmethod
     def _parse_interval_str(cls, s):
         """
-        Convert string representation of interval to tuple containing numerical
-        start and stop values.
+        Convert string representation of interval to slice.
         """
 
         start, stop = s.split(':')
@@ -132,10 +151,10 @@ class SelectorParser(object):
         else:
             start = int(start)
         if stop == '':
-            stop = np.inf
+            stop = None
         else:
             stop = int(stop)
-        return (start, stop)
+        return slice(start, stop)
 
     @classmethod
     def t_PLUS(cls, t):
@@ -226,14 +245,14 @@ class SelectorParser(object):
             for j in xrange(len(p[1][i])): 
                 if type(p[1][i][j]) in [int, str, unicode]:
                     p[1][i][j] = [p[1][i][j]]
-                elif type(p[1][i][j]) == tuple:
-                    p[1][i][j] = range(p[1][i][j][0], p[1][i][j][1])
+                elif type(p[1][i][j]) == slice:
+                    p[1][i][j] = range(p[1][i][j].start, p[1][i][j].stop)
         for i in xrange(len(p[3])):
             for j in xrange(len(p[3][i])):
                 if type(p[3][i][j]) in [int, str, unicode]:
                     p[3][i][j] = [p[3][i][j]]
-                elif type(p[3][i][j]) == tuple:
-                    p[3][i][j] = range(p[3][i][j][0], p[3][i][j][1])
+                elif type(p[3][i][j]) == slice:
+                    p[3][i][j] = range(p[3][i][j].start, p[3][i][j].stop)
                     
         # Fully expand both selectors into individual identifiers
         ids_1 = [list(x) for y in p[1] for x in itertools.product(*y)]
@@ -319,7 +338,7 @@ class SelectorParser(object):
 
         See Also
         --------
-        PathLikeSelector.expand
+        SelectorMethods.expand
         """
 
         if re.search('^\s*$', selector):
@@ -378,7 +397,7 @@ class SelectorMethods(SelectorParser):
                         return False
 
             # If all entries are lists or tuples, try to expand:
-            elif all([(type(x) in [list, tuple]) for x in s]):
+            elif all([(type(x) in [list, slice]) for x in s]):
                 if len(cls.expand(s)) == 1:
                     return True
                 else:
@@ -397,7 +416,7 @@ class SelectorMethods(SelectorParser):
     @classmethod
     def to_identifier(cls, s):
         """
-        Convert an expanded selector or token sequence into a single port identifier string.
+        Convert an expanded selector/token sequence into a single port identifier string.
 
         Parameters
         ----------
@@ -438,7 +457,7 @@ class SelectorMethods(SelectorParser):
         """
         Check whether a selector cannot be expanded into an explicit list of identifiers.
 
-        A selector is ambiguous if it contains the symbols '*' or '[0:]' (i.e., a
+        A selector is ambiguous if it contains the symbols '*' or ':]' (i.e., a
         range with no upper bound).
 
         Parameters
@@ -458,11 +477,11 @@ class SelectorMethods(SelectorParser):
                 return True
             else:
                 return False
-        elif type(selector) in [list, tuple]:
+        elif type(selector) in [list, slice]:
             for tokens in selector:
                 for token in tokens:
                     if token == '*' or \
-                       (type(token) == tuple and token[1] == np.inf):
+                       (type(token) == slice and token.stop is None):
                         return True
             return False
         else:
@@ -526,18 +545,15 @@ class SelectorMethods(SelectorParser):
             if not np.iterable(tokens):
                 return False
 
-            # Each token must either be a string, integer, 2-element tuple,
+            # Each token must either be a string, integer, slice,
             # list of strings, or list of integers:
             for token in tokens:
-                if type(token) == tuple:
-                    if len(token) != 2:
-                        return False
-                elif type(token) == list:
+                if type(token) == list:
                     token_types = set(map(type, token))
                     if not (token_types.issubset([str, unicode]) or \
                             token_types == set([int])):
                         return False
-                elif type(token) not in [str, unicode, int]:
+                elif type(token) not in [slice, str, unicode, int]:
                     return False
 
         # All tokens are valid:
@@ -615,12 +631,12 @@ class SelectorMethods(SelectorParser):
         
         Examples
         --------
-        >>> from neurokernel.plsel import PathLikeSelector
-        >>> PathLikeSelector.expand('/foo[0:2]')
+        >>> from neurokernel.plsel import SelectorMethods
+        >>> SelectorMethods.expand('/foo[0:2]')
         [('foo', 0), ('foo', 1)]
-        >>> PathLikeSelector.expand('/foo[0:2]', 3)
+        >>> SelectorMethods.expand('/foo[0:2]', 3)
         [('foo', 0, ''), ('foo', 1, '')]
-        >>> PathLikeSelector.expand('/bar,/foo[0:2]', 3)
+        >>> SelectorMethods.expand('/bar,/foo[0:2]', 3)
         [('bar', '', ''), ('foo', 0, ''), ('foo', 1, '')]
         """
         
@@ -649,9 +665,9 @@ class SelectorMethods(SelectorParser):
                 if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
 
-                # Expand tuples into ranges:
-                elif type(p[i][j]) == tuple:
-                    p[i][j] = range(p[i][j][0], p[i][j][1])
+                # Expand slices into ranges:
+                elif type(p[i][j]) == slice:
+                    p[i][j] = range(p[i][j].start, p[i][j].stop)
         return [tuple(x)+('',)*(pad_len-len(x)) for y in p for x in itertools.product(*y)]
     
     @classmethod
@@ -688,9 +704,8 @@ class SelectorMethods(SelectorParser):
                 if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
 
-                # Tuples must only contain 2 elements:
-                elif type(p[i][j]) == tuple and len(p[i][j]) == 2:
-                    p[i][j] = range(p[i][j][0], p[i][j][1])
+                elif type(p[i][j]) == slice:
+                    p[i][j] = range(p[i][j].start, p[i][j].stop)
 
                     # The presence of a range containing more than 1 element
                     # implies expandability:
@@ -909,7 +924,7 @@ class SelectorMethods(SelectorParser):
         try:
             hash(selector)
         except:
-            h = msgpack.dumps(selector)
+            h = _packb(selector)
         else:
             h = selector
 
@@ -971,17 +986,29 @@ class SelectorMethods(SelectorParser):
             # not return True; this forces checking of the subsequent token
             # lists:
             for i, token in enumerate(tokens):
+
+                # '*' matches everything:
                 if token == '*':
                     continue
+
+                # Integers and strings must match exactly:
                 elif type(token) in [int, str, unicode]:
                     if row_sub[i] != token:
                         break
+
+                # Tokens must be in a set of values:
                 elif type(token) == list:
                     if row_sub[i] not in token:
                         break
-                elif type(token) == tuple:
-                    i_start, i_stop = token
-                    if not(row_sub[i] >= i_start and row_sub[i] < i_stop):
+
+                # Token must be within range of an interval:
+                elif type(token) == slice:
+                    i_start = token.start
+                    i_stop = token.stop
+
+                    # Handle intervals with ambiguous start or stop values:
+                    if (i_start is not None and row_sub[i] < i_start) or \
+                       (i_stop is not None and row_sub[i] >= i_stop):
                         break
                 else:
                     continue
@@ -1028,9 +1055,11 @@ class SelectorMethods(SelectorParser):
             elif type(tokens[0]) == list:
                 if row in tokens[0]:
                     return True
-            elif type(tokens[0]) == tuple:
-                i_start, i_stop = tokens[0]
-                if row >= i_start and row < i_stop:
+            elif type(tokens[0]) == slice:
+                i_start = tokens[0].start
+                i_stop = tokens[0].stop
+                if (i_start is None or row >= i_start) and \
+                   (i_stop is None or row < i_stop):
                     return True
             else:
                 continue
@@ -1570,7 +1599,7 @@ class BasePortMapper(object):
     """
 
     def __init__(self, selector, portmap=None):
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
         N = self.sel.count_ports(selector)
         if portmap is None:
             self.portmap = pd.Series(data=np.arange(N))
