@@ -32,7 +32,7 @@ from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, PortMapper
+from plsel import SelectorMethods, PortMapper
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
