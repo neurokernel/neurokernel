@@ -418,6 +418,13 @@ class test_path_like_selector(TestCase):
                                               labels=[[1, 1, 1, 0, 0, 0],
                                                       [0, 1, 2, 0, 1, 2]]))
 
+    def test_make_index_str_multiple_different_levels(self):
+        idx = self.sel.make_index('/foo[0:3],/bar')
+        assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
+                                                      [0, 1, 2, '']],
+                                              labels=[[1, 1, 1, 0],
+                                                      [0, 1, 2, 3]]))
+
     def test_make_index_list_single_level(self):
         idx = self.sel.make_index([['foo']])
         assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
@@ -430,6 +437,13 @@ class test_path_like_selector(TestCase):
                                                       [0, 1, 2]],
                                               labels=[[1, 1, 1, 0, 0, 0],
                                                       [0, 1, 2, 0, 1, 2]]))
+
+    def test_make_index_list_multiple_different_levels(self):
+        idx = self.sel.make_index([['foo', [0, 1, 2]], ['bar']])
+        assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
+                                                      [0, 1, 2, '']],
+                                              labels=[[1, 1, 1, 0],
+                                                      [0, 1, 2, 3]]))
 
     def test_make_index_invalid(self):
         self.assertRaises(Exception, self.sel.make_index, 'foo/bar[')

@@ -1502,54 +1502,53 @@ class SelectorMethods(SelectorParser):
         selectors = cls.expand(selector)
 
         N_sel = len(selectors)
-        lens =  map(len, selectors)
-        max_levels = max(lens) if N_sel else 0
-        
+        sel_lens =  map(len, selectors)
+        max_levels = max(sel_lens) if N_sel else 0
 
         # NaNs in index are not supported by MultiIndex. Create from tuples
         # only if all selectors have same levels.
-        if len(set(lens)) == 1:
+        if len(set(sel_lens)) == 1:
             if not names:
                 names = range(max_levels)
-                
+
             if selectors == [()]:
                 return pd.MultiIndex(levels=[[]], labels=[[]], names=names)
             else:
                 return pd.MultiIndex.from_tuples(selectors, names=names)
-        
 
-        
         # Start with at least one level so that a valid Index will be returned
         # if the selector is empty:
-        levels = [[]]
+        levels = [set()]
 
         # Accumulate unique values for each level of the MultiIndex:
-        for i in xrange(N_sel):
-
-            # Pad expanded selectors:
-            selectors[i] = list(selectors[i])
-            n = len(selectors[i])
-            if n < max_levels:
-                selectors[i].extend(['' for k in xrange(max_levels-n)])
-            for j in xrange(max_levels):
+        for i in xrange(N_sel):            
+            for j in xrange(sel_lens[i]):
                 if len(levels) < j+1:
-                    levels.append([])
-                levels[j].append(selectors[i][j])
+                    levels.append(set())
+                levels[j].add(selectors[i][j])
+            for j in xrange(sel_lens[i], max_levels):
+                if len(levels) < j+1:
+                    levels.append(set())
+                levels[j].add('')
 
-        # Discard duplicates:
-        levels = [sorted(set(level)) for level in levels]
-            
+        # Sort levels:
+        levels = [sorted(level) for level in levels]
+
         # Start with at least one label so that a valid Index will be returned
         # if the selector is empty:        
         labels = [[]]
 
         # Construct label indices:
         for i in xrange(N_sel):
-            for j in xrange(max_levels):
+            for j in xrange(sel_lens[i]):
                 if len(labels) < j+1:
                     labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
-                    
+            for j in xrange(sel_lens[i], max_levels):
+                if len(labels) < j+1:
+                    labels.append([])
+                labels[j].append(levels[j].index(''))
+
         if not names:
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
