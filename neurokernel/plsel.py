@@ -499,7 +499,7 @@ class SelectorMethods(SelectorParser):
 
         # The Selector class can only encapsulate an unambiguous selector:
         if isinstance(selector, Selector):
-            return True
+            return False
 
         if type(selector) in [str, unicode]:
             if re.search(r'(?:\*)|(?:\:\])', selector):
