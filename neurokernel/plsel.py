@@ -1516,37 +1516,23 @@ class SelectorMethods(SelectorParser):
             else:
                 return pd.MultiIndex.from_tuples(selectors, names=names)
 
-        # Start with at least one level so that a valid Index will be returned
-        # if the selector is empty:
-        levels = [set()]
-
         # Accumulate unique values for each level of the MultiIndex:
+        levels = [set() for i in xrange(max_levels)]
         for i in xrange(N_sel):            
             for j in xrange(sel_lens[i]):
-                if len(levels) < j+1:
-                    levels.append(set())
                 levels[j].add(selectors[i][j])
             for j in xrange(sel_lens[i], max_levels):
-                if len(levels) < j+1:
-                    levels.append(set())
                 levels[j].add('')
 
         # Sort levels:
         levels = [sorted(level) for level in levels]
 
-        # Start with at least one label so that a valid Index will be returned
-        # if the selector is empty:        
-        labels = [[]]
-
         # Construct label indices:
+        labels = [[] for i in xrange(max_levels)]
         for i in xrange(N_sel):
             for j in xrange(sel_lens[i]):
-                if len(labels) < j+1:
-                    labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
             for j in xrange(sel_lens[i], max_levels):
-                if len(labels) < j+1:
-                    labels.append([])
                 labels[j].append(levels[j].index(''))
 
         if not names:
