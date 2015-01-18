@@ -40,8 +40,10 @@ class Selector(object):
 
     Parameters
     ----------
-    s : str or unicode
-        String representation of selector. The selector may not be ambiguous.
+    s : Selector, str, or unicode
+        Existing Selector class instance or string representation.
+        The selector may not be ambiguous. If an existing Selector instance
+        is specified, the new instance is a copy of the existing instance.
 
     Attributes
     ----------
@@ -54,13 +56,18 @@ class Selector(object):
     """
 
     def __init__(self, s):
-        assert isinstance(s, basestring) # python2 dependency
-        self._str = copy.copy(s)
+        if isinstance(s, Selector):
+            self._str = copy.copy(s._str)
+            self._expanded = copy.copy(s._expanded)
+            self._max_levels = copy.copy(s._max_levels)
+        else:
+            assert isinstance(s, basestring) # python2 dependency
+            self._str = copy.copy(s)
 
-        # Save expanded selector as tuple because it shouldn't need to be
-        # modified after expansion:
-        self._expanded = tuple(SelectorMethods.expand(s))
-        self._max_levels = max(map(len, self._expanded))
+            # Save expanded selector as tuple because it shouldn't need to be
+            # modified after expansion:
+            self._expanded = tuple(SelectorMethods.expand(s))
+            self._max_levels = max(map(len, self._expanded))
 
     @property
     def str(self):
