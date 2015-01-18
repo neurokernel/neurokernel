@@ -75,7 +75,7 @@ class Selector(object):
         """
         Expanded selector.
         """
-        
+
         return self._expanded
 
     @property
@@ -83,8 +83,16 @@ class Selector(object):
         """
         Maximum number of levels in selector.
         """
-        
+
         return self._max_levels
+
+    def __add__(self, y):
+        assert isinstance(y, self.__class__)
+        out = self.__class__('')
+        out._str = self.str+','+y.str
+        out._expanded = self.expanded + y.expanded
+        out._max_levels = max(self.max_levels, y.max_levels)
+        return out
 
     def __len__(self):
         if len(self._expanded) == 1 and not self._expanded[0]:
@@ -636,7 +644,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : Selector, str, unicode, or sequence
-            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence
             of token sequences (e.g., [['foo', (0, 2)]]).
         pad_len : int
             Length to which expanded token sequences should be padded with blanks.
@@ -647,7 +655,7 @@ class SelectorMethods(SelectorParser):
             List of identifiers. If the number of levels in the selector is 1,
             each is a string or integer token; otherwise, each identifier is a tuple
             of identifier is a tuple of tokens.
-        
+
         Examples
         --------
         >>> from neurokernel.plsel import SelectorMethods
@@ -668,14 +676,17 @@ class SelectorMethods(SelectorParser):
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
         elif np.iterable(selector):
-            
+
+            # An empty iterable is not a valid selector:
+            assert len(selector)
+
             # Copy the selector to avoid modifying it:
-            p = copy.copy(selector) 
+            p = copy.copy(selector)
         else:
             raise ValueError('invalid selector type')
-        
+
         for i in xrange(len(p)):
-            
+
             # p[i] needs to be mutable in order to perform
             # the manipulations below:
             p[i] = list(p[i])
@@ -690,8 +701,15 @@ class SelectorMethods(SelectorParser):
                 # Expand slices into ranges:
                 elif type(p[i][j]) == slice:
                     p[i][j] = range(p[i][j].start, p[i][j].stop)
-        return [tuple(x)+('',)*(pad_len-len(x)) for y in p for x in itertools.product(*y)]
-    
+        result = [tuple(x)+('',)*(pad_len-len(x)) \
+                  for y in p for x in itertools.product(*y)]
+
+        # If the selector doesn't expand to anything, return a list containing
+        # an empty tuple:
+        if result:
+            return result
+        else:
+            return [()]
     @classmethod
     def is_expandable(cls, selector):
         """

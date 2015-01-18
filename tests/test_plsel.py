@@ -215,7 +215,7 @@ class test_path_like_selector(TestCase):
         self.assertSequenceEqual(result,
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
-                                  ('moo', 'qux'), 
+                                  ('moo', 'qux'),
                                   ('moo', 'baz')])
 
     def test_expand_list(self):
@@ -224,8 +224,13 @@ class test_path_like_selector(TestCase):
         self.assertSequenceEqual(result,
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
-                                  ('moo', 'qux'), 
+                                  ('moo', 'qux'),
                                   ('moo', 'baz')])
+
+    def test_expand_empty(self):
+        self.assertSequenceEqual(self.sel.expand([()]), [()])
+        self.assertSequenceEqual(self.sel.expand(''), [()])
+        self.assertSequenceEqual(self.sel.expand('/foo[0:0]'), [()])
 
     def test_get_index_str(self):
         idx = self.sel.get_index(self.df, '/foo/mof/*')
