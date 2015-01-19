@@ -8,7 +8,7 @@ from numpy.testing import assert_array_equal
 from pandas.util.testing import assert_frame_equal, assert_index_equal, \
     assert_series_equal
 
-from neurokernel.plsel import SelectorMethods, BasePortMapper, PortMapper
+from neurokernel.plsel import Selector, SelectorMethods, BasePortMapper, PortMapper
 
 df = pd.DataFrame(data={'data': np.random.rand(10),
                   0: ['foo', 'foo', 'foo', 'foo', 'foo',
@@ -40,7 +40,7 @@ df2 = pd.DataFrame(data={'data': np.random.rand(10),
                       'bar', 'bar', 'bar', 'baz', 'baz'],
                   1: ['qux', 'qux', 'mof', 'mof', 'mof',
                       'qux', 'qux', 'qux', 'qux', 'mof'],
-                  2: [0, 1, 0, 1, 2, 
+                  2: [0, 1, 0, 1, 2,
                       0, 1, 2, 0, 0]})
 df2.set_index(0, append=False, inplace=True)
 df2.set_index(1, append=True, inplace=True)
@@ -49,6 +49,27 @@ df2.set_index(2, append=True, inplace=True)
 df_single = pd.DataFrame(data={'data': np.random.rand(5),
     0: ['foo', 'foo', 'bar', 'bar', 'baz']})
 df_single.set_index(0, append=False, inplace=True)
+
+class test_selector_class(TestCase):
+    def test_selector_add_empty(self):
+        s = Selector('')+Selector('')
+        assert len(s) == 0
+        assert s.expanded == ((),)
+        assert s.max_levels == 0
+        assert s.str == ''
+
+        s = Selector('')+Selector('/foo[0:0]')
+        assert len(s) == 0
+        assert s.expanded == ((),)
+        assert s.max_levels == 0
+        assert s.str == '/foo[0:0]'
+
+    def test_selector_add_nonempty(self):
+        s = Selector('/foo[0]')+Selector('/bar[0]')
+        assert len(s) == 2
+        assert s.expanded == (('foo', 0), ('bar', 0))
+        assert s.max_levels == 2
+        assert s.str == '/foo[0],/bar[0]'
 
 class test_path_like_selector(TestCase):
     def setUp(self):

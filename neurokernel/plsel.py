@@ -96,8 +96,18 @@ class Selector(object):
     def __add__(self, y):
         assert isinstance(y, self.__class__)
         out = self.__class__('')
-        out._str = self.str+','+y.str
-        out._expanded = self.expanded + y.expanded
+        if self.str != '' and y.str != '':
+            out._str = self.str+','+y.str
+        elif self.str != '':
+            out._str = self.str
+        else:
+            out._str = y.str
+        if self.expanded != ((),) and y.expanded != ((),):
+            out._expanded = self.expanded+y.expanded
+        elif self.expanded != ((),):
+            out._expanded = self.expanded
+        else:
+            out._expanded = y.expanded
         out._max_levels = max(self.max_levels, y.max_levels)
         return out
 
