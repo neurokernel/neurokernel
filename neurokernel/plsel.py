@@ -110,7 +110,8 @@ class Selector(object):
         out = cls('')
         out._str = ','.join([s.str for s in sels if s.nonempty])
         out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
-        out._expanded = tuple(i for s in sels for i in s._expanded if s.nonempty)
+        out._expanded = tuple(i for s in sels \
+                for i in s._expanded if s.nonempty) or ((),)
         return out
 
     @classmethod
@@ -135,6 +136,16 @@ class Selector(object):
         out._expanded = tuple(tuple(e) for e in e_list)
         out._str = '.+'.join([s.str for s in sels if s.nonempty])
         out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        return out
+
+    @classmethod
+    def prod(cls, *sels):
+
+        out = cls('')
+        out._str = '+'.join([s.str for s in sels if s.nonempty])
+        out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        out._expanded = tuple(tuple(j for j in itertools.chain(*i)) \
+                for i in itertools.product(*[s.expanded for s in sels]))
         return out
 
     def __add__(self, y):
