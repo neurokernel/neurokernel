@@ -727,6 +727,7 @@ class SelectorMethods(SelectorParser):
             return result
         else:
             return [()]
+
     @classmethod
     def is_expandable(cls, selector):
         """
@@ -941,7 +942,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : Selector, str, unicode, or sequence
-            Selector class instance, string (e.g., '/foo[0:2]'), 
+            Selector class instance, string (e.g., '/foo[0:2]'),
             or sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
@@ -949,9 +950,9 @@ class SelectorMethods(SelectorParser):
         count : int
             Number of identifiers comprised by selector.
         """
-        
+
         e = cls.expand(selector)
-        if e == [()]:
+        if e == [()] or e == ((),):
             return 0
         else:
             return len(e)
