@@ -70,6 +70,14 @@ class Selector(object):
             self._max_levels = max(map(len, self._expanded))
 
     @property
+    def nonempty(self):
+        """
+        True if the selector contains identifiers.
+        """
+
+        return bool(self._max_levels)
+
+    @property
     def str(self):
         """
         String representation of selector.
@@ -93,23 +101,44 @@ class Selector(object):
 
         return self._max_levels
 
-    def __add__(self, y):
-        assert isinstance(y, self.__class__)
-        out = self.__class__('')
-        if self.str != '' and y.str != '':
-            out._str = self.str+','+y.str
-        elif self.str != '':
-            out._str = self.str
-        else:
-            out._str = y.str
-        if self.expanded != ((),) and y.expanded != ((),):
-            out._expanded = self.expanded+y.expanded
-        elif self.expanded != ((),):
-            out._expanded = self.expanded
-        else:
-            out._expanded = y.expanded
-        out._max_levels = max(self.max_levels, y.max_levels)
+    @classmethod
+    def add(cls, *sels):
+        """
+        Combine the identifiers in multiple selectors into a single selector
+        """
+
+        out = cls('')
+        out._str = ','.join([s.str for s in sels if s.nonempty])
+        out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        out._expanded = tuple(i for s in sels for i in s._expanded if s.nonempty)
         return out
+
+    @classmethod
+    def concat(cls, *sels):
+        """
+        Concatenate the identifiers in multiple selectors elementwise.
+        """
+
+        out = cls('')
+        s_len = None
+        e_list = []
+        for s in sels:
+            if s_len is None:
+                s_len = len(s)
+            else:
+                assert len(s) == s_len
+            if not e_list:
+                e_list = list(list(t) for t in s._expanded)
+            else:
+                for e, t in zip(e_list, s._expanded):
+                    e.extend(t)
+        out._expanded = tuple(tuple(e) for e in e_list)
+        out._str = '.+'.join([s.str for s in sels if s.nonempty])
+        out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        return out
+
+    def __add__(self, y):
+        return self.add(self, y)
 
     def __len__(self):
         if len(self._expanded) == 1 and not self._expanded[0]:
@@ -893,9 +922,10 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        s0, s1, ... : str, unicode, or sequence
-            Selectors to check. Each selector is either a string (e.g., 
-            '/foo[0:2]') or sequence of token sequences
+        s0, s1, ... : Selector, str, unicode, or sequence
+            Selectors to check. Each selector is either a
+            Selector class instance, a string (e.g.,
+            '/foo[0:2]'), or a sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
 
         Returns
@@ -913,7 +943,7 @@ class SelectorMethods(SelectorParser):
 
         assert len(selectors) >= 1
         assert all(map(cls.is_selector, selectors))
-        if len(selectors) == 1: return True            
+        if len(selectors) == 1: return True
         assert all(map(lambda s: not cls.is_ambiguous(s), selectors))
 
         # Expand selectors into sets of identifiers:
