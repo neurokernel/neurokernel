@@ -1487,8 +1487,8 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]).            
+            Selector string (e.g., '/foo[0:2]') or sequence of token
+            sequences (e.g., [['foo', (0, 2)]]).
         names : list
             Names of levels to use in generated MultiIndex. If no names are
             specified, the levels are assigned increasing integers starting with
@@ -1509,7 +1509,9 @@ class SelectorMethods(SelectorParser):
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
-        selectors = cls.expand(selector)
+        # XXX It might be preferable to make expand() 
+        # convert all output to a tuple rather than just doing so here: 
+        selectors = tuple(cls.expand(selector))
 
         N_sel = len(selectors)
         sel_lens =  map(len, selectors)
@@ -1521,7 +1523,7 @@ class SelectorMethods(SelectorParser):
             if not names:
                 names = range(max_levels)
 
-            if selectors == [()]:
+            if selectors == ((),):
                 return pd.MultiIndex(levels=[[]], labels=[[]], names=names)
             else:
                 return pd.MultiIndex.from_tuples(selectors, names=names)

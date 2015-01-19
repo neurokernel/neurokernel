@@ -426,6 +426,9 @@ class test_path_like_selector(TestCase):
         idx = self.sel.make_index('')
         assert_index_equal(idx, pd.Index([], dtype='object'))
 
+        idx = self.sel.make_index(Selector(''))
+        assert_index_equal(idx, pd.Index([], dtype='object'))
+
     def test_make_index_str_single_level(self):
         idx = self.sel.make_index('/foo')
         assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
