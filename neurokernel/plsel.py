@@ -997,9 +997,9 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or
+            sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -1008,6 +1008,10 @@ class SelectorMethods(SelectorParser):
         """
 
         assert cls.is_selector(selector)
+
+        # Selector class instances already contain max_levels precomputed:
+        if isinstance(selector, Selector):
+            return selector.max_levels
 
         # Handle unhashable selectors:
         try:
