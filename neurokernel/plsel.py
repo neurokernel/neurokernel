@@ -1564,7 +1564,8 @@ class SelectorMethods(SelectorParser):
         if isinstance(selector, Selector) and selector.nonempty:
             if not names:
                 names = range(selector.max_levels)
-            return pd.MultiIndex.from_tuples(selector, names=names)
+            return pd.MultiIndex.from_tuples(selector.expanded,
+                                             names=names)
 
         # XXX It might be preferable to make expand() 
         # convert all output to a tuple rather than just doing so here: 
