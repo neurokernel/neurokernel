@@ -163,6 +163,16 @@ class test_interface(TestCase):
         assert_index_equal(i.data.index, idx)
         assert_frame_equal(i.data, df)
 
+    def test_from_df_multiindex_empty(self):
+        idx = pd.MultiIndex(levels=[['a', 'b'], [0, 1]],
+                            labels=[[],[]])
+        data = None
+        columns = ['interface', 'io', 'type']
+        df = pd.DataFrame(data, index=idx, columns=columns)
+        i = Interface.from_df(df)
+        assert_index_equal(i.data.index, idx)
+        assert_frame_equal(i.data, df)
+
     def test_from_df_dup(self):
         idx = pd.MultiIndex.from_tuples([('foo', 0),
                                          ('foo', 0),

@@ -268,7 +268,10 @@ class Interface(object):
 
         assert set(df.columns).issuperset(['interface', 'io', 'type'])
         if isinstance(df.index, pd.MultiIndex):
-            i = cls(df.index.tolist(), df.columns)
+            if len(df.index):
+                i = cls(df.index.tolist(), df.columns)
+            else:
+                i = cls([()], df.columns)
         elif isinstance(df.index, pd.Index):
             if len(df.index):
                 i = cls([(s,) for s in df.index.tolist()], df.columns)
