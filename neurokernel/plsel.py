@@ -516,7 +516,7 @@ class SelectorMethods(SelectorParser):
                 return True
             else:
                 return False
-        elif type(selector) in [list, slice]:
+        elif type(selector) in [list, tuple]:
             for tokens in selector:
                 for token in tokens:
                     if token == '*' or \
@@ -1528,7 +1528,7 @@ class SelectorMethods(SelectorParser):
 
         # Accumulate unique values for each level of the MultiIndex:
         levels = [set() for i in xrange(max_levels)]
-        for i in xrange(N_sel):            
+        for i in xrange(N_sel):
             for j in xrange(sel_lens[i]):
                 levels[j].add(selectors[i][j])
             for j in xrange(sel_lens[i], max_levels):
