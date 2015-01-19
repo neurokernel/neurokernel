@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import BasePortMapper, SelectorMethods
+from plsel import Selector, BasePortMapper, SelectorMethods
 
 class Interface(object):
     """
@@ -911,7 +911,9 @@ class Pattern(object):
         # Collect all of the selectors:
         selector = []
         for s in selectors:
-            if type(s) in [str, unicode]:
+            if isinstance(s, Selector) and len(s) != 0:
+                selector.extend(s.expanded)
+            elif type(s) in [str, unicode]:
                 selector.extend(self.sel.parse(s))
             elif np.iterable(s):
                 selector.extend(s)
@@ -936,7 +938,7 @@ class Pattern(object):
         levels = [[] for i in xrange(len(names))]
         labels = [[] for i in xrange(len(names))]
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
-                            
+
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
         
     @property
@@ -997,7 +999,7 @@ class Pattern(object):
         comp_op : str
             Operator to use to combine selectors into single selector that
             comprises both the source and destination ports in a pattern.
-        
+
         Returns
         -------
         result : Pattern
@@ -1019,6 +1021,13 @@ class Pattern(object):
             levels = [[] for i in xrange(len(names))]
             labels = [[] for i in xrange(len(names))]
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        elif isinstance(from_sel, Selector) and isinstance(to_sel, Selector):
+            if comb_op == '.+':
+                idx = p.sel.make_index(Selector.concat(from_sel, to_sel), names)
+            elif comb_op == '+':
+                idx = p.sel.make_index(Selector.prod(from_sel, to_sel), names)
+            else:
+                raise ValueError('incompatible selectors specified')
         else:
             idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
         p.__validate_index__(idx)
@@ -1203,10 +1212,10 @@ class Pattern(object):
         # Prohibit duplicate connections:
         if idx.duplicated().any():
             raise ValueError('Duplicate pattern entries detected.')
-            
+
         # Prohibit fan-in connections (i.e., patterns whose index has duplicate
         # 'from' port identifiers):
-        from_idx, to_idx = self.split_multiindex(idx, 
+        from_idx, to_idx = self.split_multiindex(idx,
                                                  self.from_slice, self.to_slice)
         if to_idx.duplicated().any():
             raise ValueError('Fan-in pattern entries detected.')
