@@ -105,7 +105,7 @@ class Selector(object):
         if len(self._expanded) == 1 and not self._expanded[0]:
             return 0
         else:
-            return 1
+            return len(self._expanded)
 
     def __repr__(self):
         return 'Selector(\'%s\')' % self._str
