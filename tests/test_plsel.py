@@ -64,7 +64,7 @@ class test_selector_class(TestCase):
         assert len(s) == 2
         assert s.nonempty
         assert s.expanded == (('foo', 0), ('bar', 0))
-        assert s.max_levels == 4
+        assert s.max_levels == 2
         assert s.str == '/foo[0],/bar[0]'
 
         s = Selector('')+Selector('/foo[0:0]')

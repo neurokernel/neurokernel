@@ -109,7 +109,11 @@ class Selector(object):
 
         out = cls('')
         out._str = ','.join([s.str for s in sels if s.nonempty])
-        out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        try:
+            out._max_levels = max([s.max_levels for s in sels if s.nonempty])
+        except ValueError:
+            out._max_levels = 0
+
         out._expanded = tuple(i for s in sels \
                 for i in s._expanded if s.nonempty) or ((),)
         return out
