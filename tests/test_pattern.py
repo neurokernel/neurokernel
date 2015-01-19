@@ -141,6 +141,15 @@ class test_interface(TestCase):
         assert_index_equal(i.data.index, idx)
         assert_frame_equal(i.data, df)
 
+    def test_from_df_index_empty(self):
+        idx = pd.Index([])
+        data = None
+        columns = ['interface', 'io', 'type']
+        df = pd.DataFrame(data, index=idx, columns=columns)
+        i = Interface.from_df(df)
+        assert_index_equal(i.data.index, idx)
+        assert_frame_equal(i.data, df)
+
     def test_from_df_multiindex(self):
         idx = pd.MultiIndex.from_tuples([('foo', 0),
                                          ('foo', 1),

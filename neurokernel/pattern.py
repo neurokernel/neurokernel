@@ -252,7 +252,7 @@ class Interface(object):
         Parameters
         ----------
         df : pandas.DataFrame
-            DataFrame with a MultiIndex and data columns 'interface', 
+            DataFrame with a MultiIndex and data columns 'interface',
             'io', and 'type' (additional columns may also be present).
 
         Returns
@@ -265,12 +265,15 @@ class Interface(object):
         The contents of the specified DataFrame instance are copied into the
         new Interface instance.
         """
-        
+
         assert set(df.columns).issuperset(['interface', 'io', 'type'])
         if isinstance(df.index, pd.MultiIndex):
             i = cls(df.index.tolist(), df.columns)
         elif isinstance(df.index, pd.Index):
-            i = cls([(s,) for s in df.index.tolist()], df.columns)
+            if len(df.index):
+                i = cls([(s,) for s in df.index.tolist()], df.columns)
+            else:
+                i = cls([()], df.columns)
         else:
             raise ValueError('invalid index type')
         i.data = df.copy()
