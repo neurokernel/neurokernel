@@ -716,8 +716,8 @@ class SelectorMethods(SelectorParser):
         -------
         result : list
             List of identifiers. If the number of levels in the selector is 1,
-            each is a string or integer token; otherwise, each identifier is a tuple
-            of identifier is a tuple of tokens.
+            each is a string or integer token; otherwise, each identifier is 
+            a tuple of identifier is a tuple of tokens.
 
         Examples
         --------
@@ -733,7 +733,14 @@ class SelectorMethods(SelectorParser):
         """
 
         if isinstance(selector, Selector):
-            return selector.expanded
+            if pad_len == 0:
+                return selector.expanded
+            elif pad_len == float('inf'):
+                return [tuple(x)+('',)*(selector.max_levels-len(x)) \
+                        for x in selector.expanded]
+            else:
+                return [tuple(x)+('',)*(pad_len-len(x)) \
+                        for x in selector.expanded]
 
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
@@ -1025,7 +1032,7 @@ class SelectorMethods(SelectorParser):
         ----------
         selector : Selector, str, unicode, or sequence
             Selector class instance, string (e.g., '/foo[0:2]'), or
-            sequence of token sequences (e.g., [['foo', (0, 2)]]).
+            sequence of token sequences (e.g., [['foo', slice(0, 2)]]).
 
         Returns
         -------
@@ -1335,7 +1342,7 @@ class SelectorMethods(SelectorParser):
             return [(i,) for i in idx.tolist()]
 
     @classmethod
-    def pad_selector(cls, selector, max_len=None):
+    def pad_selector(cls, selector, pad_len=float('inf')):
         """
         Expand and pad a selector with blank tokens.
 
@@ -1344,13 +1351,13 @@ class SelectorMethods(SelectorParser):
 
         Parameters
         ----------
-        selector : str or sequence
-            Selector strings (e.g., '/foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]).
-        max_len : int
-            Maximum token sequence length to obtain with padding.
-            If None, each sequence is padded to the maximum number of tokens
-            per port identifier.
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            of token sequences (e.g., [['foo', slice(0, 2)]]).
+        pad_len : int
+            Length to which expanded token sequences should be padded with blanks.
+            If infinite, the sequences are padded to the length of the longest
+            sequence.
 
         Returns
         -------
@@ -1358,17 +1365,17 @@ class SelectorMethods(SelectorParser):
             Sequence of token sequences padded with blank strings.
         """
 
-        selector_expanded = cls.expand(selector)
-        N = len(selector_expanded)        
-        if max_len is None:
-            max_len = max(map(len, selector_expanded)) if N else 0
+        if isinstance(selector, Selector):
+            expanded = selector.expanded
+            max_levels = selector.max_levels
+        else:
+            expanded = cls.expand(selector)
+            max_levels = max(map(len, expanded))
 
-        for i in xrange(N):
-            n = len(selector_expanded[i])
-            selector_expanded[i] = list(selector_expanded[i])
-            if n < max_len:
-                selector_expanded[i].extend(['' for k in xrange(max_len-n)])
-        return selector_expanded
+        if pad_len == float('inf'):
+            return [tuple(x)+('',)*(max_levels-len(x)) for x in expanded]
+        else:
+            return [tuple(x)+('',)*(pad_len-len(x)) for x in expanded]
 
     @classmethod
     def make_index_two_concat(cls, sel_0, sel_1, names=[]):

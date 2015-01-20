@@ -309,7 +309,18 @@ class test_path_like_selector(TestCase):
                                  [('foo', 'bar', 0, ''),
                                   ('foo', 'bar', 1, ''),
                                   ('moo', '', '', '')])
-        
+
+        result = self.sel.expand(Selector('/foo/bar[0:2],/moo'), float('inf'))
+        self.assertSequenceEqual(result,
+                                 [('foo', 'bar', 0),
+                                  ('foo', 'bar', 1),
+                                  ('moo', '', '')])
+        result = self.sel.expand(Selector('/foo/bar[0:2],/moo'), 4)
+        self.assertSequenceEqual(result,
+                                 [('foo', 'bar', 0, ''),
+                                  ('foo', 'bar', 1, ''),
+                                  ('moo', '', '', '')])
+
     def test_get_index_str(self):
         idx = self.sel.get_index(self.df, '/foo/mof/*')
         assert_index_equal(idx, pd.MultiIndex(levels=[['foo'], ['mof'],
