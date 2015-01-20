@@ -92,29 +92,21 @@ class Interface(object):
         else:
             return self.sel.select(self.data, key)
 
-    def __setitem__(self, key, value):
+    def __setitem__ambiguous__(self, key, value):
         if type(key) == tuple:
             selector = key[0]
         else:
             selector = key
-        # Try using the selector to select data from the internal DataFrame:
+
+        # Ensure that the specified selector can actually be used against the
+        # Interface's internal DataFrame:
         try:
             idx = self.sel.get_index(self.data, selector,
                                      names=self.data.index.names)
-
-        # If the select fails, try to create new rows with the index specified
-        # by the selector and load them with the specified data:
         except ValueError:
-            try:
-                idx = self.sel.make_index(selector, self.data.index.names)
-            except:
-                raise ValueError('cannot create index with '
-                                 'selector %s and column names %s' \
-                                 % (selector, str(self.data.index.names)))
-            else:
-                found = False
-        else:
-            found = True
+            raise ValueError('cannot create index with '
+                             'selector %s and column names %s' \
+                             % (selector, str(self.data.index.names)))
 
         # If the data specified is not a dict, convert it to a dict:
         if type(key) == tuple and len(key) > 1:
@@ -136,19 +128,58 @@ class Interface(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        if found:
-            for k, v in data.iteritems():
-                self.data[k].ix[idx] = v
+        for k, v in data.iteritems():
+            self.data[k].ix[idx] = v
+
+    def __setitem__(self, key, value):
+        if type(key) == tuple:
+            selector = key[0]
         else:
-            new_data = self.data.append(pd.DataFrame(data=data, index=idx, 
-                                                     dtype=object))
+            selector = key
 
-            # Validate updated DataFrame's index before updating the instance's
-            # data attribute:
-            self.__validate_index__(new_data.index)
-            self.data = new_data
-            self.data.sort(inplace=True)
+        # Fall back to slower method if the selector is ambiguous:
+        if self.sel.is_ambiguous(selector):
+            self.__setitem__ambiguous__(key, value)
+            return
+        else:
+            selector = Selector(selector)
+        
+        # Don't waste time trying to do anything if the selector is empty:
+        if not selector.nonempty:
+            return
 
+        # If the number of specified identifiers doesn't exceed the size of the
+        # data array, enlargement by specifying identifiers that are not in
+        # the index will not occur:
+        assert len(selector) <= len(self.data)
+
+        # If the data specified is not a dict, convert it to a dict:
+        if type(key) == tuple and len(key) > 1:
+            if np.isscalar(value):
+                data = {k:value for k in key[1:]}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(key[1:]):
+                data={k:v for k, v in zip(key[1:], value)}
+            else:
+                raise ValueError('cannot assign specified value')
+        else:
+            if np.isscalar(value):
+                data = {self.data.columns[0]: value}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(self.data.columns):
+                data={k:v for k, v in zip(self.data.columns, value)}
+            else:
+                raise ValueError('cannot assign specified value')
+
+        if selector.max_levels == 1:
+            s = [i for i in itertools.chain(*selector.expanded)]
+        else:
+            s = self.sel.pad_selector(selector.expanded)
+        for k, v in data.iteritems():
+            self.data[k].ix[s] = v
+        
     @property
     def index(self):
         """
