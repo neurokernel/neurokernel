@@ -709,6 +709,8 @@ class SelectorMethods(SelectorParser):
             of token sequences (e.g., [['foo', (0, 2)]]).
         pad_len : int
             Length to which expanded token sequences should be padded with blanks.
+            If infinite, the sequences are padded to the length of the longest
+            sequence.
 
         Returns
         -------
@@ -722,6 +724,8 @@ class SelectorMethods(SelectorParser):
         >>> from neurokernel.plsel import SelectorMethods
         >>> SelectorMethods.expand('/foo[0:2]')
         [('foo', 0), ('foo', 1)]
+        >>> SelectorMethods.expand('/foo,/bar[0:2]', float('inf'))
+        [('foo', ''), ('bar', 0), ('bar', 1)]
         >>> SelectorMethods.expand('/foo[0:2]', 3)
         [('foo', 0, ''), ('foo', 1, '')]
         >>> SelectorMethods.expand('/bar,/foo[0:2]', 3)
@@ -746,13 +750,15 @@ class SelectorMethods(SelectorParser):
         else:
             raise ValueError('invalid selector type')
 
+        max_levels = 0
         for i in xrange(len(p)):
 
             # p[i] needs to be mutable in order to perform
             # the manipulations below:
             p[i] = list(p[i])
-
-            for j in xrange(len(p[i])):
+            len_p = len(p[i])
+            max_levels = max(max_levels, len_p)
+            for j in xrange(len_p):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
@@ -762,8 +768,13 @@ class SelectorMethods(SelectorParser):
                 # Expand slices into ranges:
                 elif type(p[i][j]) == slice:
                     p[i][j] = range(p[i][j].start, p[i][j].stop)
-        result = [tuple(x)+('',)*(pad_len-len(x)) \
-                  for y in p for x in itertools.product(*y)]
+
+        if pad_len == float('inf'):
+            result = [tuple(x)+('',)*(max_levels-len(x)) \
+                      for y in p for x in itertools.product(*y)]
+        else:
+            result = [tuple(x)+('',)*(pad_len-len(x)) \
+                      for y in p for x in itertools.product(*y)]
 
         # If the selector doesn't expand to anything, return a list containing
         # an empty tuple:
