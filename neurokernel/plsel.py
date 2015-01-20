@@ -758,30 +758,29 @@ class SelectorMethods(SelectorParser):
             raise ValueError('invalid selector type')
 
         max_levels = 0
+        temp = []
         for i in xrange(len(p)):
-
-            # p[i] needs to be mutable in order to perform
-            # the manipulations below:
-            p[i] = list(p[i])
+            t = list(p[i])
             len_p = len(p[i])
             max_levels = max(max_levels, len_p)
             for j in xrange(len_p):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
-                if type(p[i][j]) in [int, str, unicode]:
-                    p[i][j] = [p[i][j]]
+                if type(t[j]) in [int, str, unicode]:
+                    t[j] = [t[j]]
 
                 # Expand slices into ranges:
-                elif type(p[i][j]) == slice:
-                    p[i][j] = range(p[i][j].start, p[i][j].stop)
+                elif type(t[j]) == slice:
+                    t[j] = range(t[j].start, t[j].stop)
+            temp.append(t)
 
         if pad_len == float('inf'):
             result = [tuple(x)+('',)*(max_levels-len(x)) \
-                      for y in p for x in itertools.product(*y)]
+                      for y in temp for x in itertools.product(*y)]
         else:
             result = [tuple(x)+('',)*(pad_len-len(x)) \
-                      for y in p for x in itertools.product(*y)]
+                      for y in temp for x in itertools.product(*y)]
 
         # If the selector doesn't expand to anything, return a list containing
         # an empty tuple:
@@ -1374,6 +1373,8 @@ class SelectorMethods(SelectorParser):
 
         if pad_len == float('inf'):
             return [tuple(x)+('',)*(max_levels-len(x)) for x in expanded]
+        elif pad_len == 0:
+            return expanded
         else:
             return [tuple(x)+('',)*(pad_len-len(x)) for x in expanded]
 
