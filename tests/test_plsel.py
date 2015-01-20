@@ -276,6 +276,10 @@ class test_path_like_selector(TestCase):
         result = self.sel.count_ports('')
         assert result == 0
 
+        # XXX Should this be allowed? [] isn't a valid selector:
+        result = self.sel.count_ports([])
+        assert result == 0
+
     def test_expand_str(self):
         result = self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]')
         self.assertSequenceEqual(result,

@@ -749,8 +749,9 @@ class SelectorMethods(SelectorParser):
             p = cls.parse(selector)
         elif np.iterable(selector):
 
-            # An empty iterable is not a valid selector:
-            assert len(selector)
+            # Assume empty iterables are empty selectors:
+            if not selector:
+                selector = [()]
 
             # Copy the selector to avoid modifying it:
             p = copy.copy(selector)
