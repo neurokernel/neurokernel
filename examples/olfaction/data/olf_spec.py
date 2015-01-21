@@ -93,6 +93,42 @@ class Receptor:
             etree.SubElement( attr, "attvalue", attrib={"for":str(7+i), "value":"false" })
         etree.SubElement(attr, "attvalue", attrib={"for":"10", "value":self.selector})
 
+class DummySynapse:
+    """
+    Dummy-Synapse
+    """
+    def __init__(self, name=None, id=None, pre_neu=None, post_neu=None):
+        self.id = id
+        self.name = name
+        self.pre_neu = pre_neu
+        self.post_neu = post_neu
+
+    def prepare(self,dt=0.):
+        pass
+
+    def update(self,dt):
+        pass
+
+    def show(self):
+        pass
+
+    def setattr(self,**kwargs):
+        """
+        A wrapper of python built-in setattr(). self is returned.
+        """
+        for kw, val in kwargs.items():
+            setattr( self, kw, val )
+        return self
+
+    def toGEXF(self,etree_element):
+        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
+            source=str(self.pre_neu.id), target=str(self.post_neu.id))
+        attr = etree.SubElement( edge, "attvalues" )
+        etree.SubElement(attr, "attvalue",attrib={"for":"0","value":"DummySynapse"})
+        etree.SubElement(attr, "attvalue", attrib={"for":"1", "value":self.name})
+        etree.SubElement(attr, "attvalue",attrib={"for":"6","value":"2"})
+        etree.SubElement(attr, "attvalue",attrib={"for":"7","value":"false"})
+
 class AlphaSynapse:
     """
     Alpha-Synapse
@@ -352,10 +388,10 @@ class Glomerulus:
             self.rece_list.append(Receptor(
                 name=str('rece_%s_%d' % (self.osn_type,i)),
                 selector=str('/%s/%d/rece_%d' % (al_name, self.idx, i))))
-	    #self.syn_list.append(AlphaSynapse(
-	    #    name=str('%s-osn' % (self.rece_list[i].name,)),
-	    #    pre_neu=self.rece_list[i],
-	    #    post_neu=self.osn_list[i]))
+            self.syn_list.append(DummySynapse(
+                 name=str('%s-osn' % (self.rece_list[i].name,)),
+                 pre_neu=self.rece_list[i],
+                 post_neu=self.osn_list[i]))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
