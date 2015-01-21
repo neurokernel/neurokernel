@@ -147,7 +147,7 @@ class AlphaSynapse:
             type="boolean", title="conductance")
 
 class LeakyIAF:
-    """
+    """f
     Leaky Integrated-and-Fire Neuron
     """
 
@@ -239,9 +239,9 @@ class LeakyIAF:
         etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
         etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
         etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.extern else "false" })
-        if self.model is not None:
-            etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.model })
-        etree.SubElement( attr, "attvalue", attrib={"for":"11", "value":self.selector })
+	#if self.model is not None:
+	#    etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.model })
+        etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.selector })
 
     @staticmethod
     def getGEXFattr(etree_element):
@@ -260,7 +260,7 @@ class LeakyIAF:
         for (i,attr) in enumerate( ("spiking","public","extern") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+7), type="boolean", title=attr )
-        for (i,attr) in enumerate( ("model","selector") ):
+        for (i,attr) in enumerate(("selector",)): # enumerate( ("model","selector") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+10), type="string", title=attr )
 
@@ -321,10 +321,10 @@ class Glomerulus:
                 Vt=database['osn_para']['Vt'],
                 R=database['osn_para']['R'],
                 C=C,
-                public=True,
+                public=False,
                 extern=True,
                 rand=self.rand,
-                model='port_in_spk',
+		#model='port_in_spk',
                 selector=str('/%s/%d/osn_%d' % (al_name, self.idx, i))))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
