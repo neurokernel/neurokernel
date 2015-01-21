@@ -67,6 +67,32 @@ Hallem06 = {
     'type':'osn_spike_rate'
     }
 
+class Receptor:
+    """
+    Dummy receptor for setting up ports; no computation invloved in this class
+    """
+    def __init__(self, id=None, name=None, selector=None):
+        self.id = id
+        self.name = name
+        self.selector = selector or ''
+
+    def setattr(self,**kwargs):
+        """
+        A wrapper of python built-in setattr(). self is returned.
+        """
+        for kw, val in kwargs.items():
+            setattr( self, kw, val )
+        return self
+
+    def toGEXF(self,etree_element):
+        node = etree.SubElement(etree_element, "node", id=str(self.id))
+        attr = etree.SubElement(node, "attvalues")
+        etree.SubElement(attr, "attvalue", attrib={"for":"0", "value":"port_in_gpot"})
+        etree.SubElement(attr, "attvalue", attrib={"for":"1", "value":self.name})
+        for i, _ in enumerate(('spiking','public','extern')):
+            etree.SubElement( attr, "attvalue", attrib={"for":str(7+i), "value":"false" })
+        etree.SubElement(attr, "attvalue", attrib={"for":"10", "value":self.selector})
+
 class AlphaSynapse:
     """
     Alpha-Synapse
@@ -147,7 +173,7 @@ class AlphaSynapse:
             type="boolean", title="conductance")
 
 class LeakyIAF:
-    """f
+    """
     Leaky Integrated-and-Fire Neuron
     """
 
@@ -239,8 +265,6 @@ class LeakyIAF:
         etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
         etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
         etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.extern else "false" })
-	#if self.model is not None:
-	#    etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.model })
         etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.selector })
 
     @staticmethod
@@ -260,7 +284,7 @@ class LeakyIAF:
         for (i,attr) in enumerate( ("spiking","public","extern") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+7), type="boolean", title=attr )
-        for (i,attr) in enumerate(("selector",)): # enumerate( ("model","selector") ):
+        for (i,attr) in enumerate(("selector",)):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+10), type="string", title=attr )
 
@@ -313,6 +337,7 @@ class Glomerulus:
 
         self.osn_list = [] # initialize the osn list
         self.syn_list = []
+        self.rece_list = []
         for i in xrange(self.osn_num):
             self.osn_list.append(LeakyIAF(
                 name=str('osn_%s_%d' % (self.osn_type,i)),
@@ -323,9 +348,14 @@ class Glomerulus:
                 C=C,
                 public=False,
                 extern=True,
-                rand=self.rand,
-		#model='port_in_spk',
-                selector=str('/%s/%d/osn_%d' % (al_name, self.idx, i))))
+                rand=self.rand))
+            self.rece_list.append(Receptor(
+                name=str('rece_%s_%d' % (self.osn_type,i)),
+                selector=str('/%s/%d/rece_%d' % (al_name, self.idx, i))))
+	    #self.syn_list.append(AlphaSynapse(
+	    #    name=str('%s-osn' % (self.rece_list[i].name,)),
+	    #    pre_neu=self.rece_list[i],
+	    #    post_neu=self.osn_list[i]))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
@@ -421,6 +451,10 @@ class AntennalLobe():
         for gl in self.gl_list:
             for neu in gl.pn_list:
                 self.neu_list.append( neu.setattr( id=len(self.neu_list)))
+        # stack receptors of each glomeruli onto the receptor list
+        for gl in self.gl_list:
+            for rece in gl.rece_list:
+                self.neu_list.append( rece.setattr(id=len(self.neu_list)))
 
     def _getAllSynList(self):
         self.syn_list = []
