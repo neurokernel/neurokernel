@@ -281,8 +281,16 @@ class Module(BaseModule):
             for out_id in self._out_ids:
                 # Select port data using list of graded potential ports that can
                 # transmit output:
-                gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
-                spike_data = self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+                if len(self._out_port_dict_ids['gpot'][out_id]):
+                    gpot_data = \
+                        self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                else:
+                    gpot_data = np.array([], self.pm['gpot'].dtype)
+                if len(self._out_port_dict_ids['spike'][out_id]):
+                    spike_data = \
+                        self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+                else:
+                    spike_data = np.array([], self.pm['spike'].dtype)
 
                 # Attempt to stage the emitted port data for transmission:            
                 try:
