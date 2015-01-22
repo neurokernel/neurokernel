@@ -70,6 +70,7 @@ if __name__ == "__main__":
             'bottleneck >= 0.7.0',
             'futures >= 2.1.5',
             'h5py >= 2.2.1',
+            'lxml >= 3.3.0',
             'matplotlib >= 1.3.0',
             'msgpack-numpy >= 0.3.1.1',
             'networkx >= 1.9',
