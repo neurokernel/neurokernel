@@ -856,6 +856,9 @@ class TimeListener(ControlledProcess):
 
         self.timing_data = {}
 
+        # Queue for returning timing results to parent process:
+        self.queue = mp.Queue()
+
     def add(self, id):
         """
         Add a module ID from which to collect timing data.
@@ -904,6 +907,14 @@ class TimeListener(ControlledProcess):
         else:
             self.throughput = 0.0
         self.log_info('average received throughput: %s bytes/s' % self.throughput)
+        self.queue.put(self.throughput)
+
+    def get_throughput(self):
+        """
+        Retrieve average received data throughput.
+        """
+
+        return self.queue.get()
 
 class BaseManager(LoggerMixin):
     """
@@ -1204,6 +1215,13 @@ class BaseManager(LoggerMixin):
         self.join_modules(send_quit)
         self.stop_brokers()
         self.stop_listener()
+
+    def get_throughput(self):
+        """
+        Retrieve average received data throughput.
+        """
+
+        return self.time_listener.get_throughput()
 
 if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix
