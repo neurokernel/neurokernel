@@ -1221,9 +1221,9 @@ if __name__ == '__main__':
             super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
                                            port_time, id, True, True)
 
-            assert PathLikeSelector.is_in(sel_in, sel)
-            assert PathLikeSelector.is_in(sel_out, sel)
-            assert PathLikeSelector.are_disjoint(sel_in, sel_out)
+            assert SelectorMethods.is_in(sel_in, sel)
+            assert SelectorMethods.is_in(sel_out, sel)
+            assert SelectorMethods.are_disjoint(sel_in, sel_out)
 
             self.interface[sel_in, 'io', 'type'] = ['in', 'x']
             self.interface[sel_out, 'io', 'type'] = ['out', 'x']
