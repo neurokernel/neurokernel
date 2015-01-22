@@ -389,10 +389,10 @@ class Glomerulus:
                 name=str('rece_%s_%d' % (self.osn_type,i)),
                 selector=str('/%s/%d/rece_%d' % (al_name, self.idx, i))))
             self.syn_list.append(DummySynapse(
-                 name=str('%s-osn' % (self.rece_list[i].name,)),
-                 pre_neu=self.rece_list[i],
-                 post_neu=self.osn_list[i]))
-            # setup synpases from the current OSN to each of PNs
+                name=str('rece-%s' % (self.osn_list[i].name,)),
+                pre_neu=self.rece_list[i],
+                post_neu=self.osn_list[i]))
+           # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
                     name=str('%s-%s'% (self.osn_list[i].name,\
