@@ -316,7 +316,7 @@ class LeakyIAF(BaseNeuron):
 
                for(int i = tidx; i < n_den; i += N)
                {
-                   input[tidy][tidx] += synapse[pre[start] + i];
+                   input[tidy][tidx] += synapse[pre[start + i]];
                }
             }
 
