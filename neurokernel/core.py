@@ -23,7 +23,7 @@ from tools.comm import get_random_port
 from tools.misc import catch_exception
 from uid import uid
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, BasePortMapper, PortMapper
+from plsel import SelectorMethods, BasePortMapper, PortMapper
 
 class Module(BaseModule):
     """
@@ -121,9 +121,9 @@ class Module(BaseModule):
         self.interface[selector, 'interface'] = 0
 
         # Set port types:
-        assert PathLikeSelector.is_in(sel_gpot, selector)
-        assert PathLikeSelector.is_in(sel_spike, selector)
-        assert PathLikeSelector.are_disjoint(sel_gpot, sel_spike)
+        assert SelectorMethods.is_in(sel_gpot, selector)
+        assert SelectorMethods.is_in(sel_spike, selector)
+        assert SelectorMethods.are_disjoint(sel_gpot, sel_spike)
         self.interface[sel_gpot, 'type'] = 'gpot'
         self.interface[sel_spike, 'type'] = 'spike'
 
@@ -281,8 +281,16 @@ class Module(BaseModule):
             for out_id in self._out_ids:
                 # Select port data using list of graded potential ports that can
                 # transmit output:
-                gpot_data = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
-                spike_data = self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+                if len(self._out_port_dict_ids['gpot'][out_id]):
+                    gpot_data = \
+                        self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                else:
+                    gpot_data = np.array([], self.pm['gpot'].dtype)
+                if len(self._out_port_dict_ids['spike'][out_id]):
+                    spike_data = \
+                        self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+                else:
+                    spike_data = np.array([], self.pm['spike'].dtype)
 
                 # Attempt to stage the emitted port data for transmission:            
                 try:
@@ -579,12 +587,12 @@ if __name__ == '__main__':
                                            columns, port_data, port_ctrl, port_time,
                                            id, None, True, True)
 
-            assert PathLikeSelector.is_in(sel_in_gpot, sel)
-            assert PathLikeSelector.is_in(sel_out_gpot, sel)
-            assert PathLikeSelector.are_disjoint(sel_in_gpot, sel_out_gpot)
-            assert PathLikeSelector.is_in(sel_in_spike, sel)
-            assert PathLikeSelector.is_in(sel_out_spike, sel)
-            assert PathLikeSelector.are_disjoint(sel_in_spike, sel_out_spike)
+            assert SelectorMethods.is_in(sel_in_gpot, sel)
+            assert SelectorMethods.is_in(sel_out_gpot, sel)
+            assert SelectorMethods.are_disjoint(sel_in_gpot, sel_out_gpot)
+            assert SelectorMethods.is_in(sel_in_spike, sel)
+            assert SelectorMethods.is_in(sel_out_spike, sel)
+            assert SelectorMethods.are_disjoint(sel_in_spike, sel_out_spike)
 
             self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
             self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
@@ -626,9 +634,9 @@ if __name__ == '__main__':
         m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
         m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                                m1_int_sel_in_spike, m1_int_sel_out_spike])
-        N1_gpot = PathLikeSelector.count_ports(','.join([m1_int_sel_in_gpot,
+        N1_gpot = SelectorMethods.count_ports(','.join([m1_int_sel_in_gpot,
                                                          m1_int_sel_out_gpot]))
-        N1_spike = PathLikeSelector.count_ports(','.join([m1_int_sel_in_spike,
+        N1_spike = SelectorMethods.count_ports(','.join([m1_int_sel_in_spike,
                                                           m1_int_sel_out_spike]))
         m1 = MyModule(m1_int_sel,
                       m1_int_sel_in_gpot, m1_int_sel_in_spike,
@@ -644,9 +652,9 @@ if __name__ == '__main__':
         m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
         m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                                m2_int_sel_in_spike, m2_int_sel_out_spike])
-        N2_gpot = PathLikeSelector.count_ports(','.join([m2_int_sel_in_gpot,
+        N2_gpot = SelectorMethods.count_ports(','.join([m2_int_sel_in_gpot,
                                                          m2_int_sel_out_gpot]))
-        N2_spike = PathLikeSelector.count_ports(','.join([m2_int_sel_in_spike,
+        N2_spike = SelectorMethods.count_ports(','.join([m2_int_sel_in_spike,
                                                           m2_int_sel_out_spike]))
         m2 = MyModule(m2_int_sel,
                       m2_int_sel_in_gpot, m2_int_sel_in_spike,

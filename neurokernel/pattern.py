@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import BasePortMapper, PathLikeSelector
+from plsel import Selector, BasePortMapper, SelectorMethods
 
 class Interface(object):
     """
@@ -59,7 +59,7 @@ class Interface(object):
 
     See Also
     --------
-    plsel.PathLikeSelector
+    plsel.SelectorMethods
     """
 
     def __init__(self, selector='', columns=['interface', 'io', 'type']):
@@ -67,7 +67,7 @@ class Interface(object):
         # All ports in an interface must contain at least the following
         # attributes:
         assert set(columns).issuperset(['interface', 'io', 'type'])
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
         assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
         names = [str(i) for i in xrange(self.num_levels)]
@@ -92,29 +92,21 @@ class Interface(object):
         else:
             return self.sel.select(self.data, key)
 
-    def __setitem__(self, key, value):
+    def __setitem__ambiguous__(self, key, value):
         if type(key) == tuple:
             selector = key[0]
         else:
             selector = key
-        # Try using the selector to select data from the internal DataFrame:
+
+        # Ensure that the specified selector can actually be used against the
+        # Interface's internal DataFrame:
         try:
             idx = self.sel.get_index(self.data, selector,
                                      names=self.data.index.names)
-
-        # If the select fails, try to create new rows with the index specified
-        # by the selector and load them with the specified data:
         except ValueError:
-            try:
-                idx = self.sel.make_index(selector, self.data.index.names)
-            except:
-                raise ValueError('cannot create index with '
-                                 'selector %s and column names %s' \
-                                 % (selector, str(self.data.index.names)))
-            else:
-                found = False
-        else:
-            found = True
+            raise ValueError('cannot create index with '
+                             'selector %s and column names %s' \
+                             % (selector, str(self.data.index.names)))
 
         # If the data specified is not a dict, convert it to a dict:
         if type(key) == tuple and len(key) > 1:
@@ -136,19 +128,58 @@ class Interface(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        if found:
-            for k, v in data.iteritems():
-                self.data[k].ix[idx] = v
+        for k, v in data.iteritems():
+            self.data[k].ix[idx] = v
+
+    def __setitem__(self, key, value):
+        if type(key) == tuple:
+            selector = key[0]
         else:
-            new_data = self.data.append(pd.DataFrame(data=data, index=idx, 
-                                                     dtype=object))
+            selector = key
 
-            # Validate updated DataFrame's index before updating the instance's
-            # data attribute:
-            self.__validate_index__(new_data.index)
-            self.data = new_data
-            self.data.sort(inplace=True)
+        # Fall back to slower method if the selector is ambiguous:
+        if self.sel.is_ambiguous(selector):
+            self.__setitem__ambiguous__(key, value)
+            return
+        else:
+            selector = Selector(selector)
+        
+        # Don't waste time trying to do anything if the selector is empty:
+        if not selector.nonempty:
+            return
 
+        # If the number of specified identifiers doesn't exceed the size of the
+        # data array, enlargement by specifying identifiers that are not in
+        # the index will not occur:
+        assert len(selector) <= len(self.data)
+
+        # If the data specified is not a dict, convert it to a dict:
+        if type(key) == tuple and len(key) > 1:
+            if np.isscalar(value):
+                data = {k:value for k in key[1:]}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(key[1:]):
+                data={k:v for k, v in zip(key[1:], value)}
+            else:
+                raise ValueError('cannot assign specified value')
+        else:
+            if np.isscalar(value):
+                data = {self.data.columns[0]: value}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(self.data.columns):
+                data={k:v for k, v in zip(self.data.columns, value)}
+            else:
+                raise ValueError('cannot assign specified value')
+
+        if selector.max_levels == 1:
+            s = [i for i in itertools.chain(*selector.expanded)]
+        else:
+            s = self.sel.pad_selector(selector.expanded)
+        for k, v in data.iteritems():
+            self.data[k].ix[s] = v
+        
     @property
     def index(self):
         """
@@ -244,7 +275,7 @@ class Interface(object):
         --------
         >>> import plsel
         >>> import pandas
-        >>> idx = plsel.PathLikeSelector.make_index('/foo[0:2]')
+        >>> idx = plsel.SelectorMethods.make_index('/foo[0:2]')
         >>> data = [[0, 'in', 'spike'], [1, 'out', 'gpot']]
         >>> columns = ['interface', 'io', 'type']
         >>> df = pandas.DataFrame(data, index=idx, columns=columns)
@@ -252,7 +283,7 @@ class Interface(object):
         Parameters
         ----------
         df : pandas.DataFrame
-            DataFrame with a MultiIndex and data columns 'interface', 
+            DataFrame with a MultiIndex and data columns 'interface',
             'io', and 'type' (additional columns may also be present).
 
         Returns
@@ -265,12 +296,18 @@ class Interface(object):
         The contents of the specified DataFrame instance are copied into the
         new Interface instance.
         """
-        
+
         assert set(df.columns).issuperset(['interface', 'io', 'type'])
         if isinstance(df.index, pd.MultiIndex):
-            i = cls(df.index.tolist(), df.columns)
+            if len(df.index):
+                i = cls(df.index.tolist(), df.columns)
+            else:
+                i = cls([()], df.columns)
         elif isinstance(df.index, pd.Index):
-            i = cls([(s,) for s in df.index.tolist()], df.columns)
+            if len(df.index):
+                i = cls([(s,) for s in df.index.tolist()], df.columns)
+            else:
+                i = cls([()], df.columns)
         else:
             raise ValueError('invalid index type')
         i.data = df.copy()
@@ -897,12 +934,12 @@ class Pattern(object):
 
     See Also
     --------
-    plsel.PathLikeSelector
+    plsel.SelectorMethods
     """
 
     def __init__(self, *selectors, **kwargs):
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
 
         # Force sets of identifiers to be disjoint so that no identifier can
         # denote a port in more than one set:
@@ -911,7 +948,9 @@ class Pattern(object):
         # Collect all of the selectors:
         selector = []
         for s in selectors:
-            if type(s) in [str, unicode]:
+            if isinstance(s, Selector) and len(s) != 0:
+                selector.extend(s.expanded)
+            elif type(s) in [str, unicode]:
                 selector.extend(self.sel.parse(s))
             elif np.iterable(s):
                 selector.extend(s)
@@ -936,7 +975,7 @@ class Pattern(object):
         levels = [[] for i in xrange(len(names))]
         labels = [[] for i in xrange(len(names))]
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
-                            
+
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
         
     @property
@@ -997,7 +1036,7 @@ class Pattern(object):
         comp_op : str
             Operator to use to combine selectors into single selector that
             comprises both the source and destination ports in a pattern.
-        
+
         Returns
         -------
         result : Pattern
@@ -1019,6 +1058,13 @@ class Pattern(object):
             levels = [[] for i in xrange(len(names))]
             labels = [[] for i in xrange(len(names))]
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        elif isinstance(from_sel, Selector) and isinstance(to_sel, Selector):
+            if comb_op == '.+':
+                idx = p.sel.make_index(Selector.concat(from_sel, to_sel), names)
+            elif comb_op == '+':
+                idx = p.sel.make_index(Selector.prod(from_sel, to_sel), names)
+            else:
+                raise ValueError('incompatible selectors specified')
         else:
             idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
         p.__validate_index__(idx)
@@ -1203,10 +1249,10 @@ class Pattern(object):
         # Prohibit duplicate connections:
         if idx.duplicated().any():
             raise ValueError('Duplicate pattern entries detected.')
-            
+
         # Prohibit fan-in connections (i.e., patterns whose index has duplicate
         # 'from' port identifiers):
-        from_idx, to_idx = self.split_multiindex(idx, 
+        from_idx, to_idx = self.split_multiindex(idx,
                                                  self.from_slice, self.to_slice)
         if to_idx.duplicated().any():
             raise ValueError('Fan-in pattern entries detected.')
@@ -1586,7 +1632,7 @@ class Pattern(object):
         # Group ports by interface number:
         ports_by_int = {}
         for n, data in g.nodes(data=True):
-            assert PathLikeSelector.is_identifier(n)
+            assert SelectorMethods.is_identifier(n)
             assert data.has_key('interface')
             if not ports_by_int.has_key(data['interface']):
                 ports_by_int[data['interface']] = {}

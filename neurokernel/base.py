@@ -32,7 +32,7 @@ from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, PortMapper
+from plsel import SelectorMethods, PortMapper
 
 PORT_DATA = 5000
 PORT_CTRL = 5001
@@ -856,6 +856,9 @@ class TimeListener(ControlledProcess):
 
         self.timing_data = {}
 
+        # Queue for returning timing results to parent process:
+        self.queue = mp.Queue()
+
     def add(self, id):
         """
         Add a module ID from which to collect timing data.
@@ -904,6 +907,14 @@ class TimeListener(ControlledProcess):
         else:
             self.throughput = 0.0
         self.log_info('average received throughput: %s bytes/s' % self.throughput)
+        self.queue.put(self.throughput)
+
+    def get_throughput(self):
+        """
+        Retrieve average received data throughput.
+        """
+
+        return self.queue.get()
 
 class BaseManager(LoggerMixin):
     """
@@ -1205,6 +1216,13 @@ class BaseManager(LoggerMixin):
         self.stop_brokers()
         self.stop_listener()
 
+    def get_throughput(self):
+        """
+        Retrieve average received data throughput.
+        """
+
+        return self.time_listener.get_throughput()
+
 if __name__ == '__main__':
     from neurokernel.tools.misc import rand_bin_matrix
 
@@ -1221,9 +1239,9 @@ if __name__ == '__main__':
             super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
                                            port_time, id, True, True)
 
-            assert PathLikeSelector.is_in(sel_in, sel)
-            assert PathLikeSelector.is_in(sel_out, sel)
-            assert PathLikeSelector.are_disjoint(sel_in, sel_out)
+            assert SelectorMethods.is_in(sel_in, sel)
+            assert SelectorMethods.is_in(sel_out, sel)
+            assert SelectorMethods.are_disjoint(sel_in, sel_out)
 
             self.interface[sel_in, 'io', 'type'] = ['in', 'x']
             self.interface[sel_out, 'io', 'type'] = ['out', 'x']
