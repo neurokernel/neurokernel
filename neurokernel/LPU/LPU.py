@@ -459,6 +459,7 @@ class LPU(Module):
 
     def pre_run(self):
         super(LPU, self).pre_run()
+        self._init_gpu()
         self._initialize_gpu_ds()
         self._init_objects()
         self.first_step = True

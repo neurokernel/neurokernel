@@ -5,9 +5,6 @@ import atexit
 import numpy as np
 import time
 
-import pycuda.driver as drv
-import pycuda.gpuarray as gpuarray
-import twiggy
 import bidict
 from mpi4py import MPI
 
@@ -22,7 +19,7 @@ from tools.logging import setup_logger
 from tools.misc import catch_exception
 from uid import uid
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, BasePortMapper, PortMapper
+from plsel import SelectorMethods, BasePortMapper, PortMapper
 
 # MPI tags for distinguishing messages associated with different port types:
 GPOT_TAG = CTRL_TAG+1
@@ -55,16 +52,16 @@ class Module(BaseModule):
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        assert PathLikeSelector.is_in(sel_in, sel)
-        assert PathLikeSelector.is_in(sel_out, sel)
-        assert PathLikeSelector.are_disjoint(sel_in, sel_out)
+        assert SelectorMethods.is_in(sel_in, sel)
+        assert SelectorMethods.is_in(sel_out, sel)
+        assert SelectorMethods.are_disjoint(sel_in, sel_out)
 
         # Ensure that the graded potential and spiking port selectors
         # respectively select mutually exclusive subsets of the set of all ports
         # exposed by the module:
-        assert PathLikeSelector.is_in(sel_gpot, sel)
-        assert PathLikeSelector.is_in(sel_spike, sel)
-        assert PathLikeSelector.are_disjoint(sel_gpot, sel_spike)
+        assert SelectorMethods.is_in(sel_gpot, sel)
+        assert SelectorMethods.is_in(sel_spike, sel)
+        assert SelectorMethods.are_disjoint(sel_gpot, sel_spike)
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -132,6 +129,10 @@ class Module(BaseModule):
         if self.device == None:
             self.log_info('no GPU specified - not initializing ')
         else:
+
+            # Import pycuda.driver here so as to facilitate the
+            # subclassing of Module to create pure Python LPUs that don't use GPUs:
+            import pycuda.driver as drv
             drv.init()
             try:
                 self.gpu_ctx = drv.Device(self.device).make_context()
@@ -147,7 +148,8 @@ class Module(BaseModule):
 
         Code in this method will be executed after a module's process has been
         launched and all connectivity objects made available, but before the
-        main run loop begins.
+        main run loop begins. Initialization routines (such as GPU
+        initialization) should be performed in this method.
         """
 
         super(Module, self).pre_run(*args, **kwargs)
@@ -364,8 +366,8 @@ if __name__ == '__main__':
     m1_int_sel_out = ','.join((m1_int_sel_out_gpot, m1_int_sel_out_spike))
     m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                            m1_int_sel_in_spike, m1_int_sel_out_spike])
-    N1_gpot = PathLikeSelector.count_ports(m1_int_sel_gpot)
-    N1_spike = PathLikeSelector.count_ports(m1_int_sel_spike)
+    N1_gpot = SelectorMethods.count_ports(m1_int_sel_gpot)
+    N1_spike = SelectorMethods.count_ports(m1_int_sel_spike)
 
     m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
     m2_int_sel_out_gpot = '/b/out/gpot0,/b/out/gpot1'
@@ -377,8 +379,8 @@ if __name__ == '__main__':
     m2_int_sel_out = ','.join((m2_int_sel_out_gpot, m2_int_sel_out_spike))
     m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                            m2_int_sel_in_spike, m2_int_sel_out_spike])
-    N2_gpot = PathLikeSelector.count_ports(m2_int_sel_gpot)
-    N2_spike = PathLikeSelector.count_ports(m2_int_sel_spike)
+    N2_gpot = SelectorMethods.count_ports(m2_int_sel_gpot)
+    N2_spike = SelectorMethods.count_ports(m2_int_sel_spike)
 
     # Note that the module ID doesn't need to be listed in the specified
     # constructor arguments:

@@ -14,19 +14,169 @@ import pandas as pd
 import ply.lex as lex
 import ply.yacc as yacc
 
-class PathLikeSelector(object):
-    """Class for selecting rows of a pandas DataFrame using path-like selectors.
+# Work around lack of support for serializing slices in msgpack 0.4.4:
+def _encode(obj):
+    if isinstance(obj, slice):
+        return {'type': 'slice',
+                'data': (obj.start, obj.stop, obj.step)}
+    else:
+        return obj
 
-    Select rows from a pandas DataFrame using path-like selectors.
-    Assumes that the DataFrame instance has a MultiIndex where each level
-    corresponds to a level of the selector. An index level may either be a
+def _decode(obj):
+    try:
+        if obj['type'] == 'slice':
+            return slice(*obj['data'])
+        else:
+            return obj
+    except:
+        return obj
+
+_packb = lambda x: msgpack.packb(x, default=_encode)
+_unpackb = lambda x: msgpack.unpackb(x, object_hook=_decode)
+
+class Selector(object):
+    """
+    Validated and expanded port selector.
+
+    Parameters
+    ----------
+    s : Selector, str, or unicode
+        Existing Selector class instance or string representation.
+        The selector may not be ambiguous. If an existing Selector instance
+        is specified, the new instance is a copy of the existing instance.
+
+    Attributes
+    ----------
+    str : str
+        String representation of selector.
+    expanded : tuple of tuples
+        Expanded selector.
+    max_levels : int
+        Maximum number of levels in selector.
+    """
+
+    def __init__(self, s):
+        if isinstance(s, Selector):
+            self._str = copy.copy(s._str)
+            self._expanded = copy.copy(s._expanded)
+            self._max_levels = copy.copy(s._max_levels)
+        else:
+            assert isinstance(s, basestring) # python2 dependency
+            self._str = copy.copy(s)
+
+            # Save expanded selector as tuple because it shouldn't need to be
+            # modified after expansion:
+            self._expanded = tuple(SelectorMethods.expand(s))
+            self._max_levels = max(map(len, self._expanded))
+
+    @property
+    def nonempty(self):
+        """
+        True if the selector contains identifiers.
+        """
+
+        return bool(self._max_levels)
+
+    @property
+    def str(self):
+        """
+        String representation of selector.
+        """
+
+        return self._str
+
+    @property
+    def expanded(self):
+        """
+        Expanded selector.
+        """
+
+        return self._expanded
+
+    @property
+    def max_levels(self):
+        """
+        Maximum number of levels in selector.
+        """
+
+        return self._max_levels
+
+    @classmethod
+    def add(cls, *sels):
+        """
+        Combine the identifiers in multiple selectors into a single selector
+        """
+
+        out = cls('')
+        out._str = ','.join([s.str for s in sels if s.nonempty])
+        try:
+            out._max_levels = max([s.max_levels for s in sels if s.nonempty])
+        except ValueError:
+            out._max_levels = 0
+
+        out._expanded = tuple(i for s in sels \
+                for i in s._expanded if s.nonempty) or ((),)
+        return out
+
+    @classmethod
+    def concat(cls, *sels):
+        """
+        Concatenate the identifiers in multiple selectors elementwise.
+        """
+
+        out = cls('')
+        s_len = None
+        e_list = []
+        for s in sels:
+            if s_len is None:
+                s_len = len(s)
+            else:
+                assert len(s) == s_len
+            if not e_list:
+                e_list = list(list(t) for t in s._expanded)
+            else:
+                for e, t in zip(e_list, s._expanded):
+                    e.extend(t)
+        out._expanded = tuple(tuple(e) for e in e_list)
+        out._str = '.+'.join([s.str for s in sels if s.nonempty])
+        out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        return out
+
+    @classmethod
+    def prod(cls, *sels):
+
+        out = cls('')
+        out._str = '+'.join([s.str for s in sels if s.nonempty])
+        out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
+        out._expanded = tuple(tuple(j for j in itertools.chain(*i)) \
+                for i in itertools.product(*[s.expanded for s in sels]))
+        return out
+
+    def __add__(self, y):
+        return self.add(self, y)
+
+    def __len__(self):
+        if len(self._expanded) == 1 and not self._expanded[0]:
+            return 0
+        else:
+            return len(self._expanded)
+
+    def __repr__(self):
+        return 'Selector(\'%s\')' % self._str
+
+class SelectorParser(object):
+    """
+    This class implements a parser for path-like selectors that can
+    be associated with elements in a sequential data structure such as a 
+    Pandas DataFrame; in the latter case, each level of the selector corresponds
+    to a level of a Pandas MultiIndex. An index level may either be a
     denoted by a string label (e.g., 'foo') or a numerical index (e.g., 0, 1,
     2); a selector level may additionally be a list of strings (e.g.,
     '[foo,bar]') or integers (e.g., '[0,2,4]') or continuous intervals 
     (e.g., '[0:5]'). The '*' symbol matches any value in a level, while a 
     range with an open upper bound (e.g., '[5:]') will match all integers
     greater than or equal to the lower bound.
-        
+
     Examples of valid selectors include
 
     ==================  =================================
@@ -47,22 +197,18 @@ class PathLikeSelector(object):
     /[foo,bar].+/[0:2]  equivalent to /foo[0],/bar[1]
     ==================  =================================
 
-    An empty string is deemed to be a valid selector.
-
-    The class can also be used to create new MultiIndex instances from selectors
-    that can be fully expanded into an explicit set of identifiers (and
-    therefore contain no ambiguous symbols such as '*' or '[:]').
-
     Notes
     -----
+    An empty string is deemed to be a valid selector.
+
     Since there is no need to maintain multiple instances of the lexer/parser
     used to process path-like selectors, they are associated with the class
     rather than class instances; likewise, all of the class' methods are
     classmethods.
 
-    Numerical indices in path-like selectors are assumed to be
+    Numerical indices in selectors are assumed to be
     zero-based. Intervals do not include the end element (i.e., like numpy, not
-    like pandas).
+    like Pandas).
     """
 
     tokens = ('ASTERISK', 'COMMA', 'DOTPLUS', 'INTEGER', 'INTEGER_SET',
@@ -71,8 +217,7 @@ class PathLikeSelector(object):
     @classmethod
     def _parse_interval_str(cls, s):
         """
-        Convert string representation of interval to tuple containing numerical
-        start and stop values.
+        Convert string representation of interval to slice.
         """
 
         start, stop = s.split(':')
@@ -81,10 +226,10 @@ class PathLikeSelector(object):
         else:
             start = int(start)
         if stop == '':
-            stop = np.inf
+            stop = None
         else:
             stop = int(stop)
-        return (start, stop)
+        return slice(start, stop)
 
     @classmethod
     def t_PLUS(cls, t):
@@ -175,14 +320,14 @@ class PathLikeSelector(object):
             for j in xrange(len(p[1][i])): 
                 if type(p[1][i][j]) in [int, str, unicode]:
                     p[1][i][j] = [p[1][i][j]]
-                elif type(p[1][i][j]) == tuple:
-                    p[1][i][j] = range(p[1][i][j][0], p[1][i][j][1])
+                elif type(p[1][i][j]) == slice:
+                    p[1][i][j] = range(p[1][i][j].start, p[1][i][j].stop)
         for i in xrange(len(p[3])):
             for j in xrange(len(p[3][i])):
                 if type(p[3][i][j]) in [int, str, unicode]:
                     p[3][i][j] = [p[3][i][j]]
-                if type(p[3][i][j]) == tuple:
-                    p[3][i][j] = range(p[3][i][j][0], p[3][i][j][1])
+                elif type(p[3][i][j]) == slice:
+                    p[3][i][j] = range(p[3][i][j].start, p[3][i][j].stop)
                     
         # Fully expand both selectors into individual identifiers
         ids_1 = [list(x) for y in p[1] for x in itertools.product(*y)]
@@ -268,13 +413,25 @@ class PathLikeSelector(object):
 
         See Also
         --------
-        PathLikeSelector.expand
+        SelectorMethods.expand
         """
 
         if re.search('^\s*$', selector):
             return [[]]
         else:
             return cls.parser.parse(selector, lexer=cls.lexer)
+
+class SelectorMethods(SelectorParser):
+    """
+    Class for manipulating and using path-like selectors.
+
+    Contains class methods for expanding selectors, selecting rows from a 
+    Pandas DataFrame using a selector, etc.
+
+    The class can also be used to create new MultiIndex instances from selectors
+    that can be fully expanded into an explicit set of identifiers (and
+    therefore contain no ambiguous symbols such as '*' or '[:]').
+    """
 
     @classmethod
     def is_identifier(cls, s):
@@ -283,9 +440,10 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        s : sequence, str, or unicode
-            Selector string (e.g., '/foo[0:2]'), sequence of token sequences
-            (e.g., [['foo', (0, 2)]]), or sequence of tokens (e.g., ['foo', 0]).
+        s : Selector, str, unicode, or sequence
+            Selector class instance, raw selector string (e.g., '/foo[0:2]'), 
+            sequence of token sequences (e.g., [['foo', (0, 2)]]), or sequence
+            of tokens (e.g., ['foo', 0]).
         
         Returns
         -------
@@ -299,7 +457,10 @@ class PathLikeSelector(object):
         Can check sequences of tokens (even though a sequence of tokens is not a
         valid selector).
         """
-        
+
+        if isinstance(s, Selector):
+            return len(s) == 1
+
         if np.iterable(s):
             
             # Try to expand string:
@@ -315,7 +476,7 @@ class PathLikeSelector(object):
                         return False
 
             # If all entries are lists or tuples, try to expand:
-            elif all([(type(x) in [list, tuple]) for x in s]):
+            elif all([(type(x) in [list, slice]) for x in s]):
                 if len(cls.expand(s)) == 1:
                     return True
                 else:
@@ -334,7 +495,7 @@ class PathLikeSelector(object):
     @classmethod
     def to_identifier(cls, s):
         """
-        Convert an expanded selector or token sequence into a single port identifier string.
+        Convert an expanded selector/token sequence into a single port identifier string.
 
         Parameters
         ----------
@@ -375,20 +536,24 @@ class PathLikeSelector(object):
         """
         Check whether a selector cannot be expanded into an explicit list of identifiers.
 
-        A selector is ambiguous if it contains the symbols '*' or '[0:]' (i.e., a
+        A selector is ambiguous if it contains the symbols '*' or ':]' (i.e., a
         range with no upper bound).
 
         Parameters
         ----------
-        selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode or sequence
+            Selector class instance, selector string (e.g., '/foo[0:2]'), 
+            or sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
         result : bool
             True if the selector is ambiguous, False otherwise.
         """
+
+        # The Selector class can only encapsulate an unambiguous selector:
+        if isinstance(selector, Selector):
+            return False
 
         if type(selector) in [str, unicode]:
             if re.search(r'(?:\*)|(?:\:\])', selector):
@@ -399,7 +564,7 @@ class PathLikeSelector(object):
             for tokens in selector:
                 for token in tokens:
                     if token == '*' or \
-                       (type(token) == tuple and token[1] == np.inf):
+                       (type(token) == slice and token.stop is None):
                         return True
             return False
         else:
@@ -425,7 +590,10 @@ class PathLikeSelector(object):
         -----
         Ambiguous selectors are not deemed to be empty.
         """
-        
+
+        if isinstance(selector, Selector): 
+            return len(selector) == 0
+
         if type(selector) in [str, unicode] and \
            re.search('^\s*$', selector):
             return True
@@ -463,18 +631,15 @@ class PathLikeSelector(object):
             if not np.iterable(tokens):
                 return False
 
-            # Each token must either be a string, integer, 2-element tuple,
+            # Each token must either be a string, integer, slice,
             # list of strings, or list of integers:
             for token in tokens:
-                if type(token) == tuple:
-                    if len(token) != 2:
-                        return False
-                elif type(token) == list:
+                if type(token) == list:
                     token_types = set(map(type, token))
                     if not (token_types.issubset([str, unicode]) or \
                             token_types == set([int])):
                         return False
-                elif type(token) not in [str, unicode, int]:
+                elif type(token) not in [slice, str, unicode, int]:
                     return False
 
         # All tokens are valid:
@@ -512,8 +677,8 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        s : str, unicode, or sequence
-            String or sequence to test.
+        s : Selector, str, unicode, or sequence
+            Selector instance, string, or sequence to test.
 
         Returns
         -------
@@ -523,7 +688,9 @@ class PathLikeSelector(object):
             (e.g., [['foo', (0, 2)]], [['bar', 'baz'], ['qux', 0]]).
         """
 
-        if type(s) in [str, unicode]:
+        if isinstance(s, Selector):
+            return True
+        elif type(s) in [str, unicode]:
             return cls.is_selector_str(s)
         elif np.iterable(s):
             return cls.is_selector_seq(s)
@@ -537,60 +704,92 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence
+            of token sequences (e.g., [['foo', (0, 2)]]).
         pad_len : int
             Length to which expanded token sequences should be padded with blanks.
+            If infinite, the sequences are padded to the length of the longest
+            sequence.
 
         Returns
         -------
         result : list
             List of identifiers. If the number of levels in the selector is 1,
-            each is a string or integer token; otherwise, each identifier is a tuple
-            of identifier is a tuple of tokens.
-        
+            each is a string or integer token; otherwise, each identifier is 
+            a tuple of identifier is a tuple of tokens.
+
         Examples
         --------
-        >>> from neurokernel.plsel import PathLikeSelector
-        >>> PathLikeSelector.expand('/foo[0:2]')
+        >>> from neurokernel.plsel import SelectorMethods
+        >>> SelectorMethods.expand('/foo[0:2]')
         [('foo', 0), ('foo', 1)]
-        >>> PathLikeSelector.expand('/foo[0:2]', 3)
+        >>> SelectorMethods.expand('/foo,/bar[0:2]', float('inf'))
+        [('foo', ''), ('bar', 0), ('bar', 1)]
+        >>> SelectorMethods.expand('/foo[0:2]', 3)
         [('foo', 0, ''), ('foo', 1, '')]
-        >>> PathLikeSelector.expand('/bar,/foo[0:2]', 3)
+        >>> SelectorMethods.expand('/bar,/foo[0:2]', 3)
         [('bar', '', ''), ('foo', 0, ''), ('foo', 1, '')]
         """
-        
+
+        if isinstance(selector, Selector):
+            if pad_len == 0:
+                return selector.expanded
+            elif pad_len == float('inf'):
+                return [tuple(x)+('',)*(selector.max_levels-len(x)) \
+                        for x in selector.expanded]
+            else:
+                return [tuple(x)+('',)*(pad_len-len(x)) \
+                        for x in selector.expanded]
+
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
         elif np.iterable(selector):
-            
+
+            # Assume empty iterables are empty selectors:
+            if not selector:
+                selector = [()]
+
             # Copy the selector to avoid modifying it:
-            p = copy.copy(selector) 
+            p = copy.copy(selector)
         else:
             raise ValueError('invalid selector type')
-        
-        for i in xrange(len(p)):
-            
-            # p[i] needs to be mutable in order to perform
-            # the manipulations below:
-            p[i] = list(p[i])
 
-            for j in xrange(len(p[i])):
+        max_levels = 0
+        temp = []
+        for i in xrange(len(p)):
+            t = list(p[i])
+            len_p = len(p[i])
+            max_levels = max(max_levels, len_p)
+            for j in xrange(len_p):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
-                if type(p[i][j]) in [int, str, unicode]:
-                    p[i][j] = [p[i][j]]
+                if type(t[j]) in [int, str, unicode]:
+                    t[j] = [t[j]]
 
-                # Expand tuples into ranges:
-                elif type(p[i][j]) == tuple:
-                    p[i][j] = range(p[i][j][0], p[i][j][1])
-        return [tuple(x)+('',)*(pad_len-len(x)) for y in p for x in itertools.product(*y)]
-    
+                # Expand slices into ranges:
+                elif type(t[j]) == slice:
+                    t[j] = range(t[j].start, t[j].stop)
+            temp.append(t)
+
+        if pad_len == float('inf'):
+            result = [tuple(x)+('',)*(max_levels-len(x)) \
+                      for y in temp for x in itertools.product(*y)]
+        else:
+            result = [tuple(x)+('',)*(pad_len-len(x)) \
+                      for y in temp for x in itertools.product(*y)]
+
+        # If the selector doesn't expand to anything, return a list containing
+        # an empty tuple:
+        if result:
+            return result
+        else:
+            return [()]
+
     @classmethod
     def is_expandable(cls, selector):
         """
@@ -598,21 +797,22 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or 
+            sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
         result : bool
             True if the selector contains any intervals or sets of
             strings/integers, False otherwise. Ambiguous selectors are
-            not deemed to be expandable, nor are fully expanded selectors.
+            not deemed to be expandable, nor are fully expanded selectors or
+            Selector instances.
         """
 
         assert cls.is_selector(selector)
 
-        if cls.is_ambiguous(selector):
+        if isinstance(selector, Selector) or cls.is_ambiguous(selector):
             return False
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
@@ -625,9 +825,8 @@ class PathLikeSelector(object):
                 if type(p[i][j]) in [int, str, unicode]:
                     p[i][j] = [p[i][j]]
 
-                # Tuples must only contain 2 elements:
-                elif type(p[i][j]) == tuple and len(p[i][j]) == 2:
-                    p[i][j] = range(p[i][j][0], p[i][j][1])
+                elif type(p[i][j]) == slice:
+                    p[i][j] = range(p[i][j].start, p[i][j].stop)
 
                     # The presence of a range containing more than 1 element
                     # implies expandability:
@@ -756,9 +955,10 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        s0, s1, ... : str, unicode, or sequence
-            Selectors to check. Each selector is either a string (e.g., 
-            '/foo[0:2]') or sequence of token sequences
+        s0, s1, ... : Selector, str, unicode, or sequence
+            Selectors to check. Each selector is either a
+            Selector class instance, a string (e.g.,
+            '/foo[0:2]'), or a sequence of token sequences
             (e.g., [['foo', (0, 2)]]).
 
         Returns
@@ -776,7 +976,7 @@ class PathLikeSelector(object):
 
         assert len(selectors) >= 1
         assert all(map(cls.is_selector, selectors))
-        if len(selectors) == 1: return True            
+        if len(selectors) == 1: return True
         assert all(map(lambda s: not cls.is_ambiguous(s), selectors))
 
         # Expand selectors into sets of identifiers:
@@ -804,18 +1004,18 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'),
+            or sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
         count : int
             Number of identifiers comprised by selector.
         """
-        
+
         e = cls.expand(selector)
-        if e == [()]:
+        if e == [()] or e == ((),):
             return 0
         else:
             return len(e)
@@ -830,9 +1030,9 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or
+            sequence of token sequences (e.g., [['foo', slice(0, 2)]]).
 
         Returns
         -------
@@ -842,11 +1042,15 @@ class PathLikeSelector(object):
 
         assert cls.is_selector(selector)
 
+        # Selector class instances already contain max_levels precomputed:
+        if isinstance(selector, Selector):
+            return selector.max_levels
+
         # Handle unhashable selectors:
         try:
             hash(selector)
         except:
-            h = msgpack.dumps(selector)
+            h = _packb(selector)
         else:
             h = selector
 
@@ -854,7 +1058,9 @@ class PathLikeSelector(object):
         try:
             return cls.__max_levels_cache[h]
         except:
-            if type(selector) in [str, unicode]:
+            if isinstance(selector, Selector):
+                return selector.max_levels
+            elif type(selector) in [str, unicode]:
                 try:
                     count = max(map(len, cls.parse(selector)))
                 except:
@@ -908,17 +1114,29 @@ class PathLikeSelector(object):
             # not return True; this forces checking of the subsequent token
             # lists:
             for i, token in enumerate(tokens):
+
+                # '*' matches everything:
                 if token == '*':
                     continue
+
+                # Integers and strings must match exactly:
                 elif type(token) in [int, str, unicode]:
                     if row_sub[i] != token:
                         break
+
+                # Tokens must be in a set of values:
                 elif type(token) == list:
                     if row_sub[i] not in token:
                         break
-                elif type(token) == tuple:
-                    i_start, i_stop = token
-                    if not(row_sub[i] >= i_start and row_sub[i] < i_stop):
+
+                # Token must be within range of an interval:
+                elif type(token) == slice:
+                    i_start = token.start
+                    i_stop = token.stop
+
+                    # Handle intervals with ambiguous start or stop values:
+                    if (i_start is not None and row_sub[i] < i_start) or \
+                       (i_stop is not None and row_sub[i] >= i_stop):
                         break
                 else:
                     continue
@@ -965,9 +1183,11 @@ class PathLikeSelector(object):
             elif type(tokens[0]) == list:
                 if row in tokens[0]:
                     return True
-            elif type(tokens[0]) == tuple:
-                i_start, i_stop = tokens[0]
-                if row >= i_start and row < i_stop:
+            elif type(tokens[0]) == slice:
+                i_start = tokens[0].start
+                i_stop = tokens[0].stop
+                if (i_start is None or row >= i_start) and \
+                   (i_stop is None or row < i_stop):
                     return True
             else:
                 continue
@@ -980,10 +1200,10 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        s, t : str, unicode, or sequence
+        s, t : Selector, str, unicode, or sequence
             Check whether selector `s` is in `t`. Each selector is either a
-            string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+            Selector class instance, a string (e.g., '/foo[0:2]'), or a sequence 
+            of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
         -------
@@ -1013,9 +1233,9 @@ class PathLikeSelector(object):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            of token sequences (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
             If the index of `df` is an Index, these are ignored.
@@ -1029,7 +1249,9 @@ class PathLikeSelector(object):
 
         assert cls.is_selector(selector)
         max_levels = cls.max_levels(selector)
-        if type(selector) in [str, unicode]:
+        if isinstance(selector, Selector):
+            parse_list = selector.expanded
+        elif type(selector) in [str, unicode]:
             try:
                 parse_list = cls.expand(selector, max_levels)
             except:
@@ -1120,7 +1342,7 @@ class PathLikeSelector(object):
             return [(i,) for i in idx.tolist()]
 
     @classmethod
-    def pad_selector(cls, selector, max_len=None):
+    def pad_selector(cls, selector, pad_len=float('inf')):
         """
         Expand and pad a selector with blank tokens.
 
@@ -1129,13 +1351,13 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str or sequence
-            Selector strings (e.g., '/foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]).
-        max_len : int
-            Maximum token sequence length to obtain with padding.
-            If None, each sequence is padded to the maximum number of tokens
-            per port identifier.
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            of token sequences (e.g., [['foo', slice(0, 2)]]).
+        pad_len : int
+            Length to which expanded token sequences should be padded with blanks.
+            If infinite, the sequences are padded to the length of the longest
+            sequence.
 
         Returns
         -------
@@ -1143,17 +1365,19 @@ class PathLikeSelector(object):
             Sequence of token sequences padded with blank strings.
         """
 
-        selector_expanded = cls.expand(selector)
-        N = len(selector_expanded)        
-        if max_len is None:
-            max_len = max(map(len, selector_expanded)) if N else 0
+        if isinstance(selector, Selector):
+            expanded = selector.expanded
+            max_levels = selector.max_levels
+        else:
+            expanded = cls.expand(selector)
+            max_levels = max(map(len, expanded))
 
-        for i in xrange(N):
-            n = len(selector_expanded[i])
-            selector_expanded[i] = list(selector_expanded[i])
-            if n < max_len:
-                selector_expanded[i].extend(['' for k in xrange(max_len-n)])
-        return selector_expanded
+        if pad_len == float('inf'):
+            return [tuple(x)+('',)*(max_levels-len(x)) for x in expanded]
+        elif pad_len == 0:
+            return expanded
+        else:
+            return [tuple(x)+('',)*(pad_len-len(x)) for x in expanded]
 
     @classmethod
     def make_index_two_concat(cls, sel_0, sel_1, names=[]):
@@ -1320,7 +1544,7 @@ class PathLikeSelector(object):
                 if len(labels) < j+1:
                     labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
-                    
+
         if not names:
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
@@ -1332,9 +1556,9 @@ class PathLikeSelector(object):
 
         Parameters
         ----------
-        selector : str or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token 
-            sequences (e.g., [['foo', (0, 2)]]).            
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]'), or 
+            sequence of token sequences (e.g., [['foo', (0, 2)]]).
         names : list
             Names of levels to use in generated MultiIndex. If no names are
             specified, the levels are assigned increasing integers starting with
@@ -1355,57 +1579,52 @@ class PathLikeSelector(object):
         assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
-        selectors = cls.expand(selector)
+        # Since nonempty Selectors are already expanded into lists of tuples,
+        # MultiIndex.from_tuples() can be used directly:
+        if isinstance(selector, Selector) and selector.nonempty:
+            if not names:
+                names = range(selector.max_levels)
+            return pd.MultiIndex.from_tuples(selector.expanded,
+                                             names=names)
+
+        # XXX It might be preferable to make expand() 
+        # convert all output to a tuple rather than just doing so here: 
+        selectors = tuple(cls.expand(selector))
 
         N_sel = len(selectors)
-        lens =  map(len, selectors)
-        max_levels = max(lens) if N_sel else 0
-        
+        sel_lens =  map(len, selectors)
+        max_levels = max(sel_lens) if N_sel else 0
 
         # NaNs in index are not supported by MultiIndex. Create from tuples
         # only if all selectors have same levels.
-        if len(set(lens)) == 1:
+        if len(set(sel_lens)) == 1:
             if not names:
                 names = range(max_levels)
-                
-            if selectors == [()]:
+
+            if selectors == ((),):
                 return pd.MultiIndex(levels=[[]], labels=[[]], names=names)
             else:
                 return pd.MultiIndex.from_tuples(selectors, names=names)
-        
-
-        
-        # Start with at least one level so that a valid Index will be returned
-        # if the selector is empty:
-        levels = [[]]
 
         # Accumulate unique values for each level of the MultiIndex:
+        levels = [set() for i in xrange(max_levels)]
         for i in xrange(N_sel):
+            for j in xrange(sel_lens[i]):
+                levels[j].add(selectors[i][j])
+            for j in xrange(sel_lens[i], max_levels):
+                levels[j].add('')
 
-            # Pad expanded selectors:
-            selectors[i] = list(selectors[i])
-            n = len(selectors[i])
-            if n < max_levels:
-                selectors[i].extend(['' for k in xrange(max_levels-n)])
-            for j in xrange(max_levels):
-                if len(levels) < j+1:
-                    levels.append([])
-                levels[j].append(selectors[i][j])
-
-        # Discard duplicates:
-        levels = [sorted(set(level)) for level in levels]
-            
-        # Start with at least one label so that a valid Index will be returned
-        # if the selector is empty:        
-        labels = [[]]
+        # Sort levels:
+        levels = [sorted(level) for level in levels]
 
         # Construct label indices:
+        labels = [[] for i in xrange(max_levels)]
         for i in xrange(N_sel):
-            for j in xrange(max_levels):
-                if len(labels) < j+1:
-                    labels.append([])
+            for j in xrange(sel_lens[i]):
                 labels[j].append(levels[j].index(selectors[i][j]))
-                    
+            for j in xrange(sel_lens[i], max_levels):
+                labels[j].append(levels[j].index(''))
+
         if not names:
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
@@ -1466,9 +1685,9 @@ class PathLikeSelector(object):
 # Set the option optimize=1 in the production version; need to perform these
 # assignments after definition of the rest of the class because the class'
 # internal namespace can't be accessed within its body definition:
-PathLikeSelector.lexer = lex.lex(module=PathLikeSelector)
-PathLikeSelector.parser = yacc.yacc(module=PathLikeSelector, 
-                                    debug=0, write_tables=0)
+SelectorParser.lexer = lex.lex(module=SelectorParser)
+SelectorParser.parser = yacc.yacc(module=SelectorParser, 
+                                  debug=0, write_tables=0)
 
 class BasePortMapper(object):
     """
@@ -1507,7 +1726,7 @@ class BasePortMapper(object):
     """
 
     def __init__(self, selector, portmap=None):
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
         N = self.sel.count_ports(selector)
         if portmap is None:
             self.portmap = pd.Series(data=np.arange(N))
@@ -1845,6 +2064,23 @@ class PortMapper(BasePortMapper):
 
         return self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)]
 
+    def get_by_inds(self, inds):
+        """
+        Retrieve mapped data specified by integer index.
+        
+        Parameters
+        ----------
+        inds : sequence of int
+            Integer indices of data elements to return.
+        
+        Returns
+        -------
+        result : numpy.ndarray
+            Selected data.
+        """
+
+        return self.data[inds]
+
     def get_ports(self, f):
         """
         Select ports using a data selection function.
@@ -1940,6 +2176,20 @@ class PortMapper(BasePortMapper):
         # sel.select will return a Series with nan for selector [()], hence dropna
         # is necessary here
         self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
+
+    def set_by_ind(self, inds, data):
+        """
+        Set mapped data by integer indices.
+
+        Parameters
+        ----------
+        inds : sequence of int
+            Integer indices of data elements to update.
+        data : numpy.ndarray
+            Data to assign.
+        """
+
+        self.data[inds] = data
 
     __getitem__ = get
     __setitem__ = set

@@ -67,6 +67,68 @@ Hallem06 = {
     'type':'osn_spike_rate'
     }
 
+class Receptor:
+    """
+    Dummy receptor for setting up ports; no computation invloved in this class
+    """
+    def __init__(self, id=None, name=None, selector=None):
+        self.id = id
+        self.name = name
+        self.selector = selector or ''
+
+    def setattr(self,**kwargs):
+        """
+        A wrapper of python built-in setattr(). self is returned.
+        """
+        for kw, val in kwargs.items():
+            setattr( self, kw, val )
+        return self
+
+    def toGEXF(self,etree_element):
+        node = etree.SubElement(etree_element, "node", id=str(self.id))
+        attr = etree.SubElement(node, "attvalues")
+        etree.SubElement(attr, "attvalue", attrib={"for":"0", "value":"port_in_gpot"})
+        etree.SubElement(attr, "attvalue", attrib={"for":"1", "value":self.name})
+        for i, _ in enumerate(('spiking','public','extern')):
+            etree.SubElement( attr, "attvalue", attrib={"for":str(7+i), "value":"false" })
+        etree.SubElement(attr, "attvalue", attrib={"for":"10", "value":self.selector})
+
+class DummySynapse:
+    """
+    Dummy-Synapse
+    """
+    def __init__(self, name=None, id=None, pre_neu=None, post_neu=None):
+        self.id = id
+        self.name = name
+        self.pre_neu = pre_neu
+        self.post_neu = post_neu
+
+    def prepare(self,dt=0.):
+        pass
+
+    def update(self,dt):
+        pass
+
+    def show(self):
+        pass
+
+    def setattr(self,**kwargs):
+        """
+        A wrapper of python built-in setattr(). self is returned.
+        """
+        for kw, val in kwargs.items():
+            setattr( self, kw, val )
+        return self
+
+    def toGEXF(self,etree_element):
+        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
+            source=str(self.pre_neu.id), target=str(self.post_neu.id))
+        attr = etree.SubElement( edge, "attvalues" )
+        etree.SubElement(attr, "attvalue",attrib={"for":"0","value":"DummySynapse"})
+        etree.SubElement(attr, "attvalue", attrib={"for":"1", "value":self.name})
+        etree.SubElement(attr, "attvalue",attrib={"for":"6","value":"2"})
+        etree.SubElement(attr, "attvalue",attrib={"for":"7","value":"false"})
+
 class AlphaSynapse:
     """
     Alpha-Synapse
@@ -239,9 +301,7 @@ class LeakyIAF:
         etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
         etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
         etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.extern else "false" })
-        if self.model is not None:
-            etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.model })
-        etree.SubElement( attr, "attvalue", attrib={"for":"11", "value":self.selector })
+        etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.selector })
 
     @staticmethod
     def getGEXFattr(etree_element):
@@ -260,7 +320,7 @@ class LeakyIAF:
         for (i,attr) in enumerate( ("spiking","public","extern") ):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+7), type="boolean", title=attr )
-        for (i,attr) in enumerate( ("model","selector") ):
+        for (i,attr) in enumerate(("selector",)):
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+10), type="string", title=attr )
 
@@ -313,6 +373,7 @@ class Glomerulus:
 
         self.osn_list = [] # initialize the osn list
         self.syn_list = []
+        self.rece_list = []
         for i in xrange(self.osn_num):
             self.osn_list.append(LeakyIAF(
                 name=str('osn_%s_%d' % (self.osn_type,i)),
@@ -321,12 +382,17 @@ class Glomerulus:
                 Vt=database['osn_para']['Vt'],
                 R=database['osn_para']['R'],
                 C=C,
-                public=True,
+                public=False,
                 extern=True,
-                rand=self.rand,
-                model='port_in_spk',
-                selector=str('/%s/%d/osn_%d' % (al_name, self.idx, i))))
-            # setup synpases from the current OSN to each of PNs
+                rand=self.rand))
+            self.rece_list.append(Receptor(
+                name=str('rece_%s_%d' % (self.osn_type,i)),
+                selector=str('/%s/%d/rece_%d' % (al_name, self.idx, i))))
+            self.syn_list.append(DummySynapse(
+                name=str('rece-%s' % (self.osn_list[i].name,)),
+                pre_neu=self.rece_list[i],
+                post_neu=self.osn_list[i]))
+           # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
                     name=str('%s-%s'% (self.osn_list[i].name,\
@@ -421,6 +487,10 @@ class AntennalLobe():
         for gl in self.gl_list:
             for neu in gl.pn_list:
                 self.neu_list.append( neu.setattr( id=len(self.neu_list)))
+        # stack receptors of each glomeruli onto the receptor list
+        for gl in self.gl_list:
+            for rece in gl.rece_list:
+                self.neu_list.append( rece.setattr(id=len(self.neu_list)))
 
     def _getAllSynList(self):
         self.syn_list = []

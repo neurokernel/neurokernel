@@ -26,7 +26,7 @@ from routing_table import RoutingTable
 from uid import uid
 from tools.misc import catch_exception
 from pattern import Interface, Pattern
-from plsel import PathLikeSelector, PortMapper
+from plsel import SelectorMethods, PortMapper
 
 CTRL_TAG = 1
 
@@ -90,9 +90,9 @@ class BaseModule(mpi.Worker):
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        assert PathLikeSelector.is_in(sel_in, sel)
-        assert PathLikeSelector.is_in(sel_out, sel)
-        assert PathLikeSelector.are_disjoint(sel_in, sel_out)
+        assert SelectorMethods.is_in(sel_in, sel)
+        assert SelectorMethods.is_in(sel_out, sel)
+        assert SelectorMethods.are_disjoint(sel_in, sel_out)
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -495,6 +495,13 @@ class Manager(mpi.Manager):
                                  (total_bytes/total_time))
             else:
                 self.log_info('not computing throughput')
+
+    def get_throughput(self):
+        """
+        Retrieve average received data throughput.
+        """
+
+        return self.time_listener.get_throughput()
 
 if __name__ == '__main__':
     class MyModule(BaseModule):

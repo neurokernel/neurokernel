@@ -8,7 +8,7 @@ from numpy.testing import assert_array_equal
 from pandas.util.testing import assert_frame_equal, assert_index_equal, \
     assert_series_equal
 
-from neurokernel.plsel import PathLikeSelector, BasePortMapper, PortMapper
+from neurokernel.plsel import Selector, SelectorMethods, BasePortMapper, PortMapper
 
 df = pd.DataFrame(data={'data': np.random.rand(10),
                   0: ['foo', 'foo', 'foo', 'foo', 'foo',
@@ -40,7 +40,7 @@ df2 = pd.DataFrame(data={'data': np.random.rand(10),
                       'bar', 'bar', 'bar', 'baz', 'baz'],
                   1: ['qux', 'qux', 'mof', 'mof', 'mof',
                       'qux', 'qux', 'qux', 'qux', 'mof'],
-                  2: [0, 1, 0, 1, 2, 
+                  2: [0, 1, 0, 1, 2,
                       0, 1, 2, 0, 0]})
 df2.set_index(0, append=False, inplace=True)
 df2.set_index(1, append=True, inplace=True)
@@ -50,10 +50,76 @@ df_single = pd.DataFrame(data={'data': np.random.rand(5),
     0: ['foo', 'foo', 'bar', 'bar', 'baz']})
 df_single.set_index(0, append=False, inplace=True)
 
+class test_selector_class(TestCase):
+    def test_selector_add_empty(self):
+        s = Selector('')+Selector('')
+        assert len(s) == 0
+        assert not s.nonempty
+        assert s.expanded == ((),)
+        assert s.max_levels == 0
+        assert s.str == ''
+
+    def test_selector_add_nonempty(self):
+        s = Selector('/foo[0]')+Selector('/bar[0]')
+        assert len(s) == 2
+        assert s.nonempty
+        assert s.expanded == (('foo', 0), ('bar', 0))
+        assert s.max_levels == 2
+        assert s.str == '/foo[0],/bar[0]'
+
+        s = Selector('')+Selector('/foo[0:0]')
+        assert len(s) == 0
+        assert not s.nonempty
+        assert s.expanded == ((),)
+        assert s.max_levels == 0
+        assert s.str == ''
+
+    def test_selector_concat_empty(self):
+        s = Selector.concat(Selector(''), Selector(''))
+        assert len(s) == 0
+        assert not s.nonempty
+        assert s.expanded == ((),)
+        assert s.max_levels == 0
+        assert s.str == ''
+
+    def test_selector_concat_nonempty(self):
+        s = Selector.concat(Selector('[x,y]'), Selector('[0,1]'))
+        assert len(s) == 2
+        assert s.nonempty
+        assert s.expanded == (('x', 0), ('y', 1))
+        assert s.max_levels == 2
+        assert s.str == '[x,y].+[0,1]'
+
+        self.assertRaises(Exception, Selector.concat, Selector('[x,y]'),
+                          Selector('[0:3]'))
+
+    def test_selector_prod_empty(self):
+        s = Selector.prod(Selector(''), Selector(''))
+        assert len(s) == 0
+        assert not s.nonempty
+        assert s.expanded == ((),)
+        assert s.max_levels == 0
+        assert s.str == ''
+
+    def test_selector_prod_nonempty(self):
+        s = Selector.prod(Selector('/x'), Selector('[0,1]'))
+        assert len(s) == 2
+        assert s.nonempty
+        assert s.expanded == (('x', 0), ('x', 1))
+        assert s.max_levels == 2
+        assert s.str == '/x+[0,1]'
+
+        s = Selector.prod(Selector('/x[0:2]'), Selector('[a,b,c]'))
+        assert len(s) == 6
+        assert s.nonempty
+        assert s.expanded == (('x', 0, 'a'), ('x', 0, 'b'), ('x', 0, 'c'),
+                              ('x', 1, 'a'), ('x', 1, 'b'), ('x', 1, 'c'))
+        assert s.str == '/x[0:2]+[a,b,c]'
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()
-        self.sel = PathLikeSelector()
+        self.sel = SelectorMethods()
 
     def test_select_empty(self):
         result = self.sel.select(self.df, [[]])
@@ -197,11 +263,11 @@ class test_path_like_selector(TestCase):
         assert self.sel.are_disjoint('', '') == True
         assert self.sel.are_disjoint('/foo', '/foo', '') == False
 
-        result = self.sel.are_disjoint([['foo', (0, 10), 'baz']], 
-                                       [['bar', (10, 20), 'qux']])
+        result = self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
+                                       [['bar', slice(10, 20), 'qux']])
         assert result == True
-        result = self.sel.are_disjoint([['foo', (0, 10), 'baz']], 
-                                       [['foo', (5, 15), ['baz','qux']]])
+        result = self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
+                                       [['foo', slice(5, 15), ['baz','qux']]])
         assert result == False
 
     def test_count_ports(self):
@@ -210,22 +276,54 @@ class test_path_like_selector(TestCase):
         result = self.sel.count_ports('')
         assert result == 0
 
+        # XXX Should this be allowed? [] isn't a valid selector:
+        result = self.sel.count_ports([])
+        assert result == 0
+
     def test_expand_str(self):
         result = self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]')
         self.assertSequenceEqual(result,
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
-                                  ('moo', 'qux'), 
+                                  ('moo', 'qux'),
                                   ('moo', 'baz')])
 
     def test_expand_list(self):
-        result = self.sel.expand([['foo', 'bar', (0, 2)],
+        result = self.sel.expand([['foo', 'bar', slice(0, 2)],
                                   ['moo', ['qux', 'baz']]])
         self.assertSequenceEqual(result,
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
-                                  ('moo', 'qux'), 
+                                  ('moo', 'qux'),
                                   ('moo', 'baz')])
+
+    def test_expand_empty(self):
+        self.assertSequenceEqual(self.sel.expand([()]), [()])
+        self.assertSequenceEqual(self.sel.expand(''), [()])
+        self.assertSequenceEqual(self.sel.expand('/foo[0:0]'), [()])
+
+    def test_expand_pad(self):
+        result = self.sel.expand('/foo/bar[0:2],/moo', float('inf'))
+        self.assertSequenceEqual(result,
+                                 [('foo', 'bar', 0),
+                                  ('foo', 'bar', 1),
+                                  ('moo', '', '')])
+        result = self.sel.expand('/foo/bar[0:2],/moo', 4)
+        self.assertSequenceEqual(result,
+                                 [('foo', 'bar', 0, ''),
+                                  ('foo', 'bar', 1, ''),
+                                  ('moo', '', '', '')])
+
+        result = self.sel.expand(Selector('/foo/bar[0:2],/moo'), float('inf'))
+        self.assertSequenceEqual(result,
+                                 [('foo', 'bar', 0),
+                                  ('foo', 'bar', 1),
+                                  ('moo', '', '')])
+        result = self.sel.expand(Selector('/foo/bar[0:2],/moo'), 4)
+        self.assertSequenceEqual(result,
+                                 [('foo', 'bar', 0, ''),
+                                  ('foo', 'bar', 1, ''),
+                                  ('moo', '', '', '')])
 
     def test_get_index_str(self):
         idx = self.sel.get_index(self.df, '/foo/mof/*')
@@ -282,9 +380,9 @@ class test_path_like_selector(TestCase):
 
     def test_is_ambiguous_list(self):
         assert self.sel.is_ambiguous([['foo', '*']]) == True
-        assert self.sel.is_ambiguous([['foo', (5, np.inf)]]) == True
-        assert self.sel.is_ambiguous([['foo', (0, 10)]]) == False
-        assert self.sel.is_ambiguous([['foo', (5, 10)]]) == False
+        assert self.sel.is_ambiguous([['foo', slice(5, None)]]) == True
+        assert self.sel.is_ambiguous([['foo', slice(0, 10)]]) == False
+        assert self.sel.is_ambiguous([['foo', slice(5, 10)]]) == False
 
     def test_is_identifier(self):
         assert self.sel.is_identifier('/foo/bar') == True
@@ -326,6 +424,7 @@ class test_path_like_selector(TestCase):
         assert self.sel.is_expandable([['foo', 'bar']]) == False
 
         assert self.sel.is_expandable('/foo[0:2]') == True
+        assert self.sel.is_expandable('/foo[0,1,2]') == True
         assert self.sel.is_expandable('[0:2]') == True
 
         assert self.sel.is_expandable([['foo', [0, 1]]]) == True
@@ -341,9 +440,9 @@ class test_path_like_selector(TestCase):
     def test_is_in_list(self):
         assert self.sel.is_in([()], [('foo', 0), ('foo', 1)])
         assert self.sel.is_in([['foo', 'bar', [5]]],
-                               [[['foo', 'baz'], 'bar', (0, 10)]]) == True
+                               [[['foo', 'baz'], 'bar', slice(0, 10)]]) == True
         assert self.sel.is_in([['qux', 'bar', [5]]],
-                               [[['foo', 'baz'], 'bar', (0, 10)]]) == False
+                               [[['foo', 'baz'], 'bar', slice(0, 10)]]) == False
 
     def test_is_selector_empty(self):
         assert self.sel.is_selector_empty('') == True            
@@ -384,11 +483,12 @@ class test_path_like_selector(TestCase):
         assert self.sel.is_selector([('foo', '*')]) == True
         assert self.sel.is_selector([('foo', 'bar'), ('bar', 'qux')]) == True
         assert self.sel.is_selector([('foo', 0)]) == True
-        assert self.sel.is_selector([('foo', (0, 2))]) == True
-        assert self.sel.is_selector([('foo', (0, np.inf))]) == True
+        assert self.sel.is_selector([('foo', slice(0, 2))]) == True
+        assert self.sel.is_selector([('foo', slice(0, None))]) == True
         assert self.sel.is_selector([('foo', [0, 1])]) == True
         assert self.sel.is_selector([('foo', ['a', 'b'])]) == True
 
+        # XXX These are not correct:
         assert self.sel.is_selector([('foo', (0, 1, 2))]) == False
         assert self.sel.is_selector([('foo', 'bar'),
                                      ((0, 1, 2), 0)]) == False
@@ -396,6 +496,9 @@ class test_path_like_selector(TestCase):
 
     def test_make_index_empty(self):
         idx = self.sel.make_index('')
+        assert_index_equal(idx, pd.Index([], dtype='object'))
+
+        idx = self.sel.make_index(Selector(''))
         assert_index_equal(idx, pd.Index([], dtype='object'))
 
     def test_make_index_str_single_level(self):
@@ -411,6 +514,13 @@ class test_path_like_selector(TestCase):
                                               labels=[[1, 1, 1, 0, 0, 0],
                                                       [0, 1, 2, 0, 1, 2]]))
 
+    def test_make_index_str_multiple_different_levels(self):
+        idx = self.sel.make_index('/foo[0:3],/bar')
+        assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
+                                                      [0, 1, 2, '']],
+                                              labels=[[1, 1, 1, 0],
+                                                      [0, 1, 2, 3]]))
+
     def test_make_index_list_single_level(self):
         idx = self.sel.make_index([['foo']])
         assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
@@ -418,11 +528,18 @@ class test_path_like_selector(TestCase):
         assert_index_equal(idx, pd.Index(['foo', 'bar'], dtype='object'))
 
     def test_make_index_list_multiple_levels(self):
-        idx = self.sel.make_index([[['foo', 'bar'], (0, 3)]])
+        idx = self.sel.make_index([[['foo', 'bar'], slice(0, 3)]])
         assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                       [0, 1, 2]],
                                               labels=[[1, 1, 1, 0, 0, 0],
                                                       [0, 1, 2, 0, 1, 2]]))
+
+    def test_make_index_list_multiple_different_levels(self):
+        idx = self.sel.make_index([['foo', [0, 1, 2]], ['bar']])
+        assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
+                                                      [0, 1, 2, '']],
+                                              labels=[[1, 1, 1, 0],
+                                                      [0, 1, 2, 3]]))
 
     def test_make_index_invalid(self):
         self.assertRaises(Exception, self.sel.make_index, 'foo/bar[')
@@ -432,8 +549,8 @@ class test_path_like_selector(TestCase):
         assert self.sel.max_levels('/foo/bar[0:10],/baz/qux') == 3
 
     def test_max_levels_list(self):
-        assert self.sel.max_levels([['foo', 'bar', (0, 10)]]) == 3
-        assert self.sel.max_levels([['foo', 'bar', (0, 10)],
+        assert self.sel.max_levels([['foo', 'bar', slice(0, 10)]]) == 3
+        assert self.sel.max_levels([['foo', 'bar', slice(0, 10)],
                                     ['baz', 'qux']]) == 3
 
 class test_base_port_mapper(TestCase):
