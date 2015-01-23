@@ -10,15 +10,9 @@ def create_lpu(file_name, lpu_name, N_neu):
     """
     Create a LPU for sensory integration.
 
-    Creates a GEXF file containing the neuron and synapse parameters for an LPU
-    containing the specified number of local and projection neurons. The GEXF
-    file also contains the parameters for a set of sensory neurons that accept
-    external input. All neurons are either spiking or graded potential neurons;
-    the Leaky Integrate-and-Fire model is used for the former, while the
-    Morris-Lecar model is used for the latter (i.e., the neuron's membrane
-    potential is deemed to be its output rather than the time when it emits an
-    action potential). Synapses use either the alpha function model or a
-    conductance-based model.
+    Creates a GEXF file containing the neuron, synapse and port parameters for
+    an LPU containing the specified number of neurons. The LPU receives input
+    from two LPUs, the antennal lobe and the medulla.
 
     Parameters
     ----------
@@ -46,6 +40,51 @@ def create_lpu(file_name, lpu_name, N_neu):
             'Vt': 0.02,
             'R': 2.0,
             'C': 0.01}
+
+    # setup gpot ports
+    for i in xrange(N_neu):
+        idx = i + N_neu
+        G.add_node(idx, {
+            'model': 'port_in_gpot',
+            'name': 'port_in_gpot_%d' % i,
+            'selector': '/%s/in/gpot/%d' % (lpu_name, i),
+            'public': False,
+            'extern': False,
+            'spiking': False })
+        # connect gpot ports to neurons via power_gpot_gpot_synapse
+        G.add_edge(idx, i, type='directed', attr_dict={
+            'name': G.node[idx]['name']+'-'+G.node[i]['name'],
+            'model': 'power_gpot_gpot',
+            'class': 2,
+            'conductance': True,
+            'slope': 4e9,
+            'reverse': -0.015,
+            'saturation': 30,
+            'power': 4.0,
+            'delay': 1.0,
+            'threshold': -0.061})
+
+    # setup spiking ports
+    for i in xrange(4):
+        idx = i + 2*N_neu
+        G.add_node(idx, {
+            'model': 'port_in_spk',
+            'name': 'port_in_spk_%d' % i,
+            'selector': '/%s/in/spk/%d' % (lpu_name, i),
+            'public': False,
+            'extern': False,
+            'spiking': True })
+        # connect spiking ports to neurons
+        for j in xrange(N_neu):
+            G.add_edge(idx, j, type='directed', attr_dict={
+                'name': G.node[idx]['name']+'-'+G.node[j]['name'],
+                'model': 'AlphaSynapse',
+                'class': 0,
+                'conductance': True,
+                'ad': 0.19*1000,
+                'ar': 1.1*100,
+                'gmax': 0.003,
+                'reverse': 0.065})
 
     nx.write_gexf(G, file_name)
 
