@@ -2004,7 +2004,7 @@ class PortMapper(BasePortMapper):
             Copy of port mapper instance.
         """
 
-        c = PortMapper('')
+        c = self.__class__('')
         c.portmap = self.portmap.copy()
         c.data = self.data.copy()
         return c
@@ -2215,7 +2215,7 @@ class PortMapper(BasePortMapper):
         regarded as equivalent.
         """
 
-        assert isinstance(other, PortMapper)
+        assert isinstance(other, self.__class__)
         return self.portmap.equals(other.portmap) and (self.data == other.data).all()
 
     def __repr__(self):
