@@ -155,6 +155,73 @@ class Module(BaseModule):
         super(Module, self).pre_run(*args, **kwargs)
         self._init_gpu()
 
+    def _init_port_dicts(self):
+        """
+        Initial dictionaries of source/destination ports in current module.
+        """
+
+        # Extract identifiers of source ports in the current module's interface
+        # for all modules receiving output from the current module:
+        self._out_port_dict = {}
+        self._out_port_dict['gpot'] = {}
+        self._out_port_dict['spike'] = {}
+        self._out_port_dict_ids = {}
+        self._out_port_dict_ids['gpot'] = {}
+        self._out_port_dict_ids['spike'] = {}
+
+        self._out_ids = self.routing_table.dest_ids(self.id)
+        for out_id in self._out_ids:
+            self.log_info('extracting output ports for %s' % out_id)
+
+            # Get interfaces of pattern connecting the current module to
+            # destination module `out_id`; `int_0` is connected to the
+            # current module, `int_1` is connected to the other module:
+            pat = self.routing_table[self.id, out_id]['pattern']
+            int_0 = self.routing_table[self.id, out_id]['int_0']
+            int_1 = self.routing_table[self.id, out_id]['int_1']
+
+            # Get ports in interface (`int_0`) connected to the current
+            # module that are connected to the other module via the pattern:
+            self._out_port_dict['gpot'][out_id] = \
+                    pat.src_idx(int_0, int_1, 'gpot', 'gpot')
+            self._out_port_dict_ids['gpot'][out_id] = \
+                    self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id])
+            self._out_port_dict['spike'][out_id] = \
+                    pat.src_idx(int_0, int_1, 'spike', 'spike')
+            self._out_port_dict_ids['spike'][out_id] = \
+                    self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id])
+           
+        # Extract identifiers of destination ports in the current module's
+        # interface for all modules sending input to the current module:
+        self._in_port_dict = {}
+        self._in_port_dict['gpot'] = {}
+        self._in_port_dict['spike'] = {}
+        self._in_port_dict_ids = {}
+        self._in_port_dict_ids['gpot'] = {}
+        self._in_port_dict_ids['spike'] = {}
+
+        self._in_ids = self.routing_table.src_ids(self.id)
+        for in_id in self._in_ids:
+            self.log_info('extracting input ports for %s' % in_id)
+
+            # Get interfaces of pattern connecting the current module to
+            # source module `in_id`; `int_1` is connected to the current
+            # module, `int_0` is connected to the other module:
+            pat = self.routing_table[in_id, self.id]['pattern']
+            int_0 = self.routing_table[in_id, self.id]['int_0']
+            int_1 = self.routing_table[in_id, self.id]['int_1']
+
+            # Get ports in interface (`int_1`) connected to the current
+            # module that are connected to the other module via the pattern:
+            self._in_port_dict['gpot'][in_id] = \
+                    pat.dest_idx(int_0, int_1, 'gpot', 'gpot')
+            self._in_port_dict_ids['gpot'][in_id] = \
+                    self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id])
+            self._in_port_dict['spike'][in_id] = \
+                    pat.dest_idx(int_0, int_1, 'spike', 'spike')
+            self._in_port_dict_ids['spike'][in_id] = \
+                    self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
+            
     def _sync(self):
         """
         Send output data and receive input data.
@@ -162,10 +229,6 @@ class Module(BaseModule):
 
         req = MPI.Request()
         requests = []
-        received_gpot = []
-        received_spike = []
-        idx_in_gpot_list = []
-        idx_in_spike_list = []
 
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
@@ -174,16 +237,10 @@ class Module(BaseModule):
         for dest_id in dest_ids:            
             dest_rank = self.rank_to_id[:dest_id]
 
-            pat = self.routing_table[self.id, dest_id]['pattern']
-            int_0 = self.routing_table[self.id, dest_id]['int_0']
-            int_1 = self.routing_table[self.id, dest_id]['int_1']
-
             # Get source ports in current module that are connected to the
             # destination module:
-            idx_out_gpot = pat.src_idx(int_0, int_1, 'gpot', 'gpot')
-            data_gpot = self.pm['gpot'][idx_out_gpot]
-            idx_out_spike = pat.src_idx(int_0, int_1, 'spike', 'spike')
-            data_spike = self.pm['spike'][idx_out_spike]
+            data_gpot = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][dest_id]]
+            data_spike = self.pm['spike'].data[self._out_port_dict_ids['spike'][dest_id]]
 
             if not self.time_sync:
                 self.log_info('gpot data being sent to %s: %s' % \
@@ -206,22 +263,22 @@ class Module(BaseModule):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
+        received_gpot = []
+        received_spike = []
+        ind_in_gpot_list = []
+        ind_in_spike_list = []
         if self.time_sync:
             start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
 
-            pat = self.routing_table[src_id, self.id]['pattern']
-            int_0 = self.routing_table[src_id, self.id]['int_0']
-            int_1 = self.routing_table[src_id, self.id]['int_1']
-
             # Get destination ports in current module that are connected to the
             # source module:
-            idx_in_gpot = pat.dest_idx(int_0, int_1, 'gpot', 'gpot')
-            data_gpot = np.empty(np.shape(idx_in_gpot), self.pm['gpot'].dtype)
-            idx_in_spike = pat.dest_idx(int_0, int_1, 'spike', 'spike')
-            data_spike = np.empty(np.shape(idx_in_spike), self.pm['spike'].dtype)
+            ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
+            data_gpot = np.empty(np.shape(ind_in_gpot), self.pm['gpot'].dtype)
+            ind_in_spike = self._in_port_dict_ids['spike'][src_id]
+            data_spike = np.empty(np.shape(ind_in_spike), self.pm['spike'].dtype)
 
             r = MPI.COMM_WORLD.Irecv([data_gpot,
                                       MPI._typedict[data_gpot.dtype.char]],
@@ -232,9 +289,9 @@ class Module(BaseModule):
                                      source=src_rank, tag=SPIKE_TAG)
             requests.append(r)
             received_gpot.append(data_gpot)
-            idx_in_gpot_list.append(idx_in_gpot)
+            ind_in_gpot_list.append(ind_in_gpot)
             received_spike.append(data_spike)
-            idx_in_spike_list.append(idx_in_spike)
+            ind_in_spike_list.append(ind_in_spike)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
@@ -245,12 +302,12 @@ class Module(BaseModule):
 
         # Copy received elements into the current module's data array:
         n_gpot = 0
-        for data_gpot, idx_in_gpot in zip(received_gpot, idx_in_gpot_list):
-            self.pm['gpot'][idx_in_gpot] = data_gpot
+        for data_gpot, ind_in_gpot in zip(received_gpot, ind_in_gpot_list):
+            self.pm['gpot'].data[ind_in_gpot] = data_gpot
             n_gpot += len(data_gpot)
         n_spike = 0
-        for data_spike, idx_in_spike in zip(received_spike, idx_in_spike_list):
-            self.pm['spike'][idx_in_spike] = data_spike
+        for data_spike, ind_in_spike in zip(received_spike, ind_in_spike_list):
+            self.pm['spike'].data[ind_in_spike] = data_spike
             n_spike += len(data_spike)
 
         # Save timing data:
@@ -390,14 +447,14 @@ if __name__ == '__main__':
             np.zeros(N1_gpot, dtype=np.double),
             np.zeros(N1_spike, dtype=int),
             ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG)
+            CTRL_TAG, GPOT_TAG, SPIKE_TAG, time_sync=True)
     m2_id = 'm2   '
     man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
             m2_int_sel_gpot, m2_int_sel_spike,
             np.zeros(N2_gpot, dtype=np.double),
             np.zeros(N2_spike, dtype=int),
             ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG)
+            CTRL_TAG, GPOT_TAG, SPIKE_TAG, time_sync=True)
 
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:

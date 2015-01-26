@@ -185,7 +185,6 @@ class BaseModule(mpi.Worker):
 
         req = MPI.Request()
         requests = []
-        received = []
 
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
@@ -209,6 +208,7 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
+        received = []
         ind_in_list = []
         if self.time_sync:
             start = time.time()
