@@ -180,7 +180,7 @@ class BaseModule(mpi.Worker):
         req = MPI.Request()
         requests = []
         received = []
-        idx_in_list = []
+        sel_in_list = []
 
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
@@ -211,14 +211,14 @@ class BaseModule(mpi.Worker):
 
             # Get destination ports in current module that are connected to the
             # source module:
-            idx_in = self._in_port_dict[src_id]
-            data = np.empty(np.shape(idx_in), self.pm.dtype)
+            sel_in = self._in_port_dict[src_id]
+            data = np.empty(np.shape(sel_in), self.pm.dtype)
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
                                      source=src_rank)
             requests.append(r)
             received.append(data)
-            idx_in_list.append(idx_in)
+            sel_in_list.append(sel_in)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
@@ -229,8 +229,8 @@ class BaseModule(mpi.Worker):
 
         # Copy received elements into the current module's data array:
         n = 0
-        for data, idx_in in zip(received, idx_in_list):
-            self.pm[idx_in] = data
+        for data, sel_in in zip(received, sel_in_list):
+            self.pm[sel_in] = data
             n += len(data)
 
         # Save timing data:
