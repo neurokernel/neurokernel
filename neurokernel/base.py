@@ -874,15 +874,14 @@ class TimeListener(ControlledProcess):
         self.log_info('time port initialized')
         self.running = True
         counter = 0
+        total_time = 0.0
+        total_nbytes = 0.0
         while True:
             if sock_time.poll(10):
                 id, data = sock_time.recv_multipart()
                 id, steps, start, stop, nbytes = msgpack.unpackb(data)
-                if not self.timing_data.has_key(steps):
-                    self.timing_data[steps] = {}
-                self.timing_data[steps][id] = {'start': start,
-                                               'stop': stop,
-                                               'bytes': nbytes}
+                total_time += stop-start
+                total_nbytes += nbytes
 
                 self.log_info('time data: %s' % \
                                  str(msgpack.unpackb(data)))
@@ -892,18 +891,8 @@ class TimeListener(ControlledProcess):
                 break
         self.log_info('done')
 
-        # Compute throughput using accumulated timing data:
-        total_time = 0.0
-        total_bytes = 0.0
-        for step, data in self.timing_data.iteritems():
-            start = min([d['start'] for d in data.values()])
-            stop = max([d['stop'] for d in data.values()])
-            nbytes = sum([d['bytes'] for d in data.values()])
-
-            total_time += stop-start
-            total_bytes += nbytes
-        if total_time > 0:
-            self.throughput = total_bytes/total_time
+        if total_time > 0.0:
+            self.throughput = total_nbytes/total_time
         else:
             self.throughput = 0.0
         self.log_info('average received throughput: %s bytes/s' % self.throughput)
