@@ -363,7 +363,9 @@ class Manager(mpi.Manager):
         # Number of emulation steps to run:
         self.steps = np.inf
 
-        self.timing_data = {}
+        # Variables for computing throughput:
+        self.total_time = 0.0
+        self.total_nbytes = 0.0
 
         self.log_info('manager instantiated')
 
@@ -474,11 +476,8 @@ class Manager(mpi.Manager):
         # memory intensive:
         if msg[0] == 'time':
             rank, steps, start, stop, nbytes = msg[1]
-            if not self.timing_data.has_key(steps):
-                self.timing_data[steps] = {}
-            self.timing_data[steps][rank] = {'start': start,
-                                             'stop': stop,
-                                             'bytes': nbytes}
+            self.total_time += stop-start
+            self.total_nbytes += nbytes
 
             self.log_info('time data: %s' % str(msg[1]))
 
@@ -487,27 +486,19 @@ class Manager(mpi.Manager):
 
         # Compute throughput using accumulated timing data:
         if self._is_master():
-            total_time = 0.0
-            total_bytes = 0.0
-            for step, data in self.timing_data.iteritems():
-                start = min([d['start'] for d in data.values()])
-                stop = max([d['stop'] for d in data.values()])
-                nbytes = sum([d['bytes'] for d in data.values()])
-
-                total_time += stop-start
-                total_bytes += nbytes
-            if total_time > 0:
-                self.log_info('average received throughput: %s bytes/s' % \
-                                 (total_bytes/total_time))
+            if self.total_time > 0:
+                self.throughput = self.total_nbytes/self.total_time
             else:
-                self.log_info('not computing throughput')
+                self.throughput = 0.0
+            self.log_info('average received throughput: %s bytes/s' % \
+                          self.throughput)
 
     def get_throughput(self):
         """
         Retrieve average received data throughput.
         """
 
-        return self.time_listener.get_throughput()
+        return self.throughput
 
 if __name__ == '__main__':
     class MyModule(BaseModule):
