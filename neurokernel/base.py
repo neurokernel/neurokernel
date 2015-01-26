@@ -139,6 +139,7 @@ class BaseModule(mpi.Worker):
         # Extract identifiers of source ports in the current module's interface
         # for all modules receiving output from the current module:
         self._out_port_dict = {}
+        self._out_port_dict_ids = {}
         self._out_ids = self.routing_table.dest_ids(self.id)
         for out_id in self._out_ids:
             self.log_info('extracting output ports for %s' % out_id)
@@ -153,10 +154,13 @@ class BaseModule(mpi.Worker):
             # Get ports in interface (`int_0`) connected to the current
             # module that are connected to the other module via the pattern:
             self._out_port_dict[out_id] = pat.src_idx(int_0, int_1)
+            self._out_port_dict_ids[out_id] = \
+                self.pm.ports_to_inds(self._out_port_dict[out_id])
 
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
         self._in_port_dict = {}
+        self._in_port_dict_ids = {}
         self._in_ids = self.routing_table.src_ids(self.id)
         for in_id in self._in_ids:
             self.log_info('extracting input ports for %s' % in_id)
@@ -171,6 +175,8 @@ class BaseModule(mpi.Worker):
             # Get ports in interface (`int_1`) connected to the current
             # module that are connected to the other module via the pattern:
             self._in_port_dict[in_id] = pat.dest_idx(int_0, int_1)
+            self._in_port_dict_ids[in_id] = \
+                self.pm.ports_to_inds(self._in_port_dict[in_id])
 
     def _sync(self):
         """
@@ -180,7 +186,6 @@ class BaseModule(mpi.Worker):
         req = MPI.Request()
         requests = []
         received = []
-        sel_in_list = []
 
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
@@ -188,9 +193,9 @@ class BaseModule(mpi.Worker):
         dest_ids = self.routing_table.dest_ids(self.id)
         for dest_id in dest_ids:
 
-            # Get source ports in current module that are connected to the
-            # destination module:
-            data = self.pm[self._out_port_dict[dest_id]]
+            # Get data associated with source ports in current module that are
+            # connected to the destination module:
+            data = self.pm.data[self._out_port_dict_ids[dest_id]]
             dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % (dest_id, str(data)))
@@ -204,21 +209,22 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
+        ind_in_list = []
         if self.time_sync:
             start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
 
-            # Get destination ports in current module that are connected to the
-            # source module:
-            sel_in = self._in_port_dict[src_id]
-            data = np.empty(np.shape(sel_in), self.pm.dtype)
+            # Allocate arrays to receive data associated with destination ports
+            # in current module that are connected to the source module:
+            ind_in = self._in_port_dict_ids[src_id]
+            data = np.empty(np.shape(ind_in), self.pm.dtype)
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
                                      source=src_rank)
             requests.append(r)
             received.append(data)
-            sel_in_list.append(sel_in)
+            ind_in_list.append(ind_in)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
@@ -229,8 +235,8 @@ class BaseModule(mpi.Worker):
 
         # Copy received elements into the current module's data array:
         n = 0
-        for data, sel_in in zip(received, sel_in_list):
-            self.pm[sel_in] = data
+        for data, ind_in in zip(received, ind_in_list):
+            self.pm.data[ind_in] = data
             n += len(data)
 
         # Save timing data:
