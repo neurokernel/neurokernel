@@ -396,7 +396,8 @@ class BaseModule(ControlledProcess):
                 # Check for exceptions so as to not fail on the first emulation
                 # step when there is no input data to retrieve:
                 try:
-                    self.pm[self._in_port_dict[in_id]] = self._in_data[in_id].popleft()
+                    self.pm.data[self._in_port_dict_ids[in_id]] = \
+                        self._in_data[in_id].popleft()
                 except:
                     self.log_info('no input data from [%s] retrieved' % in_id)
                 else:
@@ -422,7 +423,8 @@ class BaseModule(ControlledProcess):
             # it to the outgoing queue:
             for out_id in self._out_ids:
                 try:
-                    self._out_data.append((out_id, self.pm[self._out_port_dict[out_id]]))
+                    data = self.pm.data[self._out_port_dict_ids[out_id]]
+                    self._out_data.append((out_id, data))
                 except:
                     self.log_info('no output data to [%s] sent' % out_id)
                 else:
@@ -550,6 +552,7 @@ class BaseModule(ControlledProcess):
         # Extract identifiers of source ports in the current module's interface
         # for all modules receiving output from the current module:
         self._out_port_dict = {}
+        self._out_port_dict_ids = {}
         self._out_ids = self.out_ids
         for out_id in self._out_ids:
             self.log_info('extracting output ports for %s' % out_id)
@@ -563,10 +566,13 @@ class BaseModule(ControlledProcess):
             # module that are connected to the other module via the pattern:
             self._out_port_dict[out_id] = \
                 self.patterns[out_id].src_idx(from_int, to_int)
+            self._out_port_dict_ids[out_id] = \
+                self.pm.ports_to_inds(self._out_port_dict[out_id])
 
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
         self._in_port_dict = {}
+        self._in_port_dict_ids = {}
         self._in_ids = self.in_ids
         for in_id in self._in_ids:
             self.log_info('extracting input ports for %s' % in_id)
@@ -580,6 +586,8 @@ class BaseModule(ControlledProcess):
             # module that are connected to the other module via the pattern:
             self._in_port_dict[in_id] = \
                 self.patterns[in_id].dest_idx(from_int, to_int)
+            self._in_port_dict_ids[in_id] = \
+                self.pm.ports_to_inds(self._in_port_dict[in_id])
 
     def run(self):
         """
