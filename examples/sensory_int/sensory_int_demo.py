@@ -114,14 +114,14 @@ pat_lam_med = vc.create_pattern(lpu_lam, lpu_med)
 man.connect(lpu_lam, lpu_med, pat_lam_med, 0, 1)
 
 # Initialize connectivity patterns among LPU's
-pat_al_int = pattern.Pattern(','.join(intf_al.interface.to_selectors()),
-                             ','.join(intf_int.interface.to_selectors()))
-pat_med_int = pattern.Pattern(','.join(intf_med.interface.to_selectors()),
-                              ','.join(intf_int.interface.to_selectors()))
+pat_al_int = pattern.Pattern(','.join(lpu_al.interface.to_selectors()),
+                             ','.join(lpu_int.interface.to_selectors()))
+pat_med_int = pattern.Pattern(','.join(lpu_med.interface.to_selectors()),
+                              ','.join(lpu_int.interface.to_selectors()))
 
 # Create connections from antennal lobe to integration LPU
-for src, dest in zip(intf_al['/al/0/pn[0:4]'],
-                     intf_int.spike_ports().to_selectors()):
+for src, dest in zip(lpu_al['/al/0/pn[0:4]'],
+                     lpu_int.interface.spike_ports().to_selectors()):
     pat_med_int[src, dest] = 1
 
 # Create connections from medulla to integration LPU
