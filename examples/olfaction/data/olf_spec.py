@@ -369,7 +369,7 @@ class Glomerulus:
                 public=True,
                 extern=False,
                 rand=self.rand,
-                selector=str('/%s/%d/pn_%d' % (al_name, self.idx, i))))
+                selector=str('/%s/%d/pn/%d' % (al_name, self.idx, i))))
 
         self.osn_list = [] # initialize the osn list
         self.syn_list = []
@@ -387,7 +387,7 @@ class Glomerulus:
                 rand=self.rand))
             self.rece_list.append(Receptor(
                 name=str('rece_%s_%d' % (self.osn_type,i)),
-                selector=str('/%s/%d/rece_%d' % (al_name, self.idx, i))))
+                selector=str('/%s/%d/rece/%d' % (al_name, self.idx, i))))
             self.syn_list.append(DummySynapse(
                 name=str('rece-%s' % (self.osn_list[i].name,)),
                 pre_neu=self.rece_list[i],
