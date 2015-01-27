@@ -32,7 +32,8 @@ def create_lpu(file_name, lpu_name, N_neu):
         G.node[i] = {
             'model': 'LeakyIAF',
             'name': 'int_%d' % i,
-            'extern': True,
+            'selector': '/%s/out/spk/%d' % (lpu_name, i),
+            'extern': False,
             'public': True,
             'spiking': True,
             'V': 0.0,
