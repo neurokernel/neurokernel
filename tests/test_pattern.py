@@ -25,6 +25,12 @@ class test_interface(TestCase):
         i = Interface('')
         assert len(i) == 0
 
+    def test_assign_unequal_levels(self):
+        i = Interface('/a/b/c,/x/y')
+
+        # This should succeed without exception:
+        i['/x/y', 'interface'] = 0
+        
     def test_create_dup_identifiers(self):
         self.assertRaises(Exception, Interface, '/foo[0],/foo[0]')
 
@@ -129,6 +135,13 @@ class test_interface(TestCase):
         j = i.data_select(lambda x: x['io'] != 'in')
         assert_index_equal(j.data.index,
                            pd.Index(['baz']))
+
+        # Selectors with different numbers of levels:
+        i = Interface('/a/b/c,/x/y')
+        i['/a/b/c', 'interface', 'io'] = [0, 'in']
+        j = i.data_select(lambda x: x['io'] != 'in')
+        assert_index_equal(j.data.index,
+                           pd.MultiIndex.from_tuples([('x', 'y', '')]))
 
     def test_from_df_index(self):
         idx = pd.Index(['foo', 'bar', 'baz'])
