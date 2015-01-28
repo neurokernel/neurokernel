@@ -176,7 +176,8 @@ class Interface(object):
         if selector.max_levels == 1:
             s = [i for i in itertools.chain(*selector.expanded)]
         else:
-            s = self.sel.pad_selector(selector.expanded)
+            s = self.sel.pad_selector(selector.expanded,
+                                      len(self.index.levshape))
         for k, v in data.iteritems():
             self.data[k].ix[s] = v
         
