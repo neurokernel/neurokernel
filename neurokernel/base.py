@@ -369,6 +369,30 @@ class Manager(mpi.Manager):
 
         self.log_info('manager instantiated')
 
+    @classmethod
+    def validate_args(cls, target, args=['sel', 'sel_in', 'sel_out']):
+        """
+        Check whether a class' constructor has specific arguments.
+
+        Parameters
+        ----------
+        target : Module
+            Module class to instantiate and run.
+        args : sequence
+            Names of arguments the class constructor must have.
+        
+        Returns
+        -------
+        result : bool
+            True if all of the specified arguments are present, False otherwise.
+        """
+
+        arg_names = set(mpi.getargnames(target.__init__))
+        for required_arg in args:
+            if required_arg not in arg_names:
+                return False
+        return True
+
     def add(self, target, id, *args, **kwargs):
         """
         Add a module class to the emulation.
@@ -393,9 +417,8 @@ class Manager(mpi.Manager):
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
-        assert 'sel' in argnames
-        assert 'sel_in' in argnames
-        assert 'sel_out' in argnames
+        if not self.validate_args(target):
+            raise ValueError('class constructor missing required args')
 
         # Need to associate an ID and the routing table with each module class
         # to instantiate:

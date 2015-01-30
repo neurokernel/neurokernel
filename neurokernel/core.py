@@ -321,16 +321,29 @@ class Module(BaseModule):
             self.log_info('saved all data received by %s' % self.id)
 
 class Manager(base.Manager):
+    @classmethod
+    def validate_args(cls, target, args=['sel', 'sel_in', 'sel_out', 
+                                         'sel_gpot', 'sel_spike']):
+        """
+        Check whether a class' constructor has specific arguments.
+
+        Parameters
+        ----------
+        target : Module
+            Module class to instantiate and run.
+        args : sequence
+            Names of arguments the class constructor must have.
+        
+        Returns
+        -------
+        result : bool
+            True if all of the specified arguments are present, False otherwise.
+        """
+
+        super(Module, cls).validate_args(target, args)
+ 
     def add(self, target, id, *args, **kwargs):
         assert issubclass(target, Module)
-        argnames = mpi.getargnames(target.__init__)
-        
-        # Selectors must be passed to the module upon instantiation (in addition
-        # to those required by BaseModule); the module manager must know about
-        # them to assess compatibility:
-        assert 'sel_gpot' in argnames
-        assert 'sel_spike' in argnames
-
         super(Manager, self).add(target, id, *args, **kwargs)
 
     def connect(self, id_0, id_1, pat, int_0=0, int_1=1):
