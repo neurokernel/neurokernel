@@ -113,23 +113,35 @@ pat_lam_med = vc.create_pattern(lpu_lam, lpu_med)
 
 man.connect(lpu_lam, lpu_med, pat_lam_med, 0, 1)
 
+
+intf_al = lpu_al.interface
+intf_lam = lpu_lam.interface
+intf_med = lpu_med.interface
+intf_int = lpu_int.interface
+
 # Initialize connectivity patterns among LPU's
-pat_al_int = pattern.Pattern(','.join(lpu_al.interface.to_selectors()),
-                             ','.join(lpu_int.interface.to_selectors()))
-pat_med_int = pattern.Pattern(','.join(lpu_med.interface.to_selectors()),
-                              ','.join(lpu_int.interface.to_selectors()))
+pat_al_int = pattern.Pattern(','.join(intf_al.to_selectors()),
+                             ','.join(intf_int.to_selectors()))
+pat_med_int = pattern.Pattern(','.join(intf_med.to_selectors()),
+                              ','.join(intf_int.to_selectors()))
 
 # Create connections from antennal lobe to integration LPU
-for src, dest in zip(lpu_al['/al/0/pn[0:4]'],
-                     lpu_int.interface.spike_ports().to_selectors()):
-    pat_med_int[src, dest] = 1
+if None is True:
+	for src, dest in zip(['/al[0]/pn[%d]' % i for i in xrange(3)],
+		intf_int.in_ports().spike_ports().to_selectors()):
+		pat_al_int[src, dest] = 1
+		pat_al_int.interface[src, 'type'] = 'spike'
+		pat_al_int.interface[dest, 'type'] = 'spike'
 
 # Create connections from medulla to integration LPU
-#for src, dest in zip():
-#    pat_med_int[src, dest] = 1
+for src, dest in zip(['/medulla/Mt3%c[%d]' % (c, i) for c in ('h','v') for i in xrange(4)],
+                     intf_int.in_ports().gpot_ports().to_selectors()):
+    pat_med_int[src, dest] = 1
+    pat_med_int.interface[src, 'type'] = 'gpot'
+    pat_med_int.interface[dest, 'type'] = 'gpot'
 
 man.connect(lpu_al, lpu_int, pat_al_int, 0, 1)
-#man.connect(lpu_med, lpu_int, pat_med_int, 0, 1)
+man.connect(lpu_med, lpu_int, pat_med_int, 0, 1)
 
 man.start(steps=args.steps)
 man.stop()
