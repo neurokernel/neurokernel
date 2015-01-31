@@ -266,7 +266,7 @@ class BaseModule(ControlledProcess):
             curr_in_ports = reduce(set.union,
                 [set(self.patterns[i].in_ports(self.pat_ints[i][0]).to_tuples()) \
                  for i in self.patterns.keys()])
-            assert curr_in_ports.intersection(pat.in_ports(int_0).to_tuples())
+            assert not curr_in_ports.intersection(pat.in_ports(int_0).to_tuples())
 
         # The pattern instances associated with the current
         # module are keyed on the IDs of the modules to which they connect:
