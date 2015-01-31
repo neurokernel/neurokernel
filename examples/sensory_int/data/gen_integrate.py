@@ -32,7 +32,7 @@ def create_lpu(file_name, lpu_name, N_neu):
         G.node[i] = {
             'model': 'LeakyIAF',
             'name': 'int_%d' % i,
-            'selector': '/%s/out/spk/%d' % (lpu_name, i),
+            'selector': '/%s/out/spk%d' % (lpu_name, i),
             'extern': False,
             'public': True,
             'spiking': True,
@@ -48,7 +48,7 @@ def create_lpu(file_name, lpu_name, N_neu):
         G.add_node(idx, {
             'model': 'port_in_gpot',
             'name': 'port_in_gpot_%d' % i,
-            'selector': '/%s/in/gpot/%d' % (lpu_name, i),
+            'selector': '/%s/in/gpot%d' % (lpu_name, i),
             'public': False,
             'extern': False,
             'spiking': False })
@@ -71,7 +71,7 @@ def create_lpu(file_name, lpu_name, N_neu):
         G.add_node(idx, {
             'model': 'port_in_spk',
             'name': 'port_in_spk_%d' % i,
-            'selector': '/%s/in/spk/%d' % (lpu_name, i),
+            'selector': '/%s/in/spk%d' % (lpu_name, i),
             'public': False,
             'extern': False,
             'spiking': True })
