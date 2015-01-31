@@ -126,12 +126,11 @@ pat_med_int = pattern.Pattern(','.join(intf_med.to_selectors()),
                               ','.join(intf_int.to_selectors()))
 
 # Create connections from antennal lobe to integration LPU
-if None is True:
-	for src, dest in zip(['/al[0]/pn[%d]' % i for i in xrange(3)],
-		intf_int.in_ports().spike_ports().to_selectors()):
-		pat_al_int[src, dest] = 1
-		pat_al_int.interface[src, 'type'] = 'spike'
-		pat_al_int.interface[dest, 'type'] = 'spike'
+for src, dest in zip(['/al[0]/pn%d' % i for i in xrange(3)],
+        intf_int.in_ports().spike_ports().to_selectors()):
+        pat_al_int[src, dest] = 1
+        pat_al_int.interface[src, 'type'] = 'spike'
+        pat_al_int.interface[dest, 'type'] = 'spike'
 
 # Create connections from medulla to integration LPU
 for src, dest in zip(['/medulla/Mt3%c[%d]' % (c, i) for c in ('h','v') for i in xrange(4)],
@@ -143,5 +142,5 @@ for src, dest in zip(['/medulla/Mt3%c[%d]' % (c, i) for c in ('h','v') for i in 
 man.connect(lpu_al, lpu_int, pat_al_int, 0, 1)
 man.connect(lpu_med, lpu_int, pat_med_int, 0, 1)
 
-man.start(steps=args.steps)
+man.start(steps=Nt)
 man.stop()
