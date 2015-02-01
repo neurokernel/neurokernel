@@ -553,6 +553,28 @@ class test_path_like_selector(TestCase):
         assert self.sel.max_levels([['foo', 'bar', slice(0, 10)],
                                     ['baz', 'qux']]) == 3
 
+    def test_pad_parsed(self):
+        sel = [['x', 'y'], ['a', 'b', 'c']]
+        sel_id = id(sel)
+        sel_padded = self.sel.pad_parsed(sel, float('inf'))
+        self.assertSequenceEqual(sel_padded,
+                                 [['x', 'y', ''], ['a', 'b', 'c']])
+        assert sel_id == id(sel_padded)
+
+        sel = [['x', 'y'], ['a', 'b', 'c']]
+        sel_id = id(sel)
+        sel_padded = self.sel.pad_parsed(sel, 4)
+        self.assertSequenceEqual(sel_padded,
+                                 [['x', 'y', '', ''], ['a', 'b', 'c', '']])
+        assert sel_id == id(sel_padded)
+        
+        sel = [['x', 'y'], ['a', 'b', 'c']]
+        sel_id = id(sel)
+        sel_padded = self.sel.pad_parsed(sel, float('inf'), False)
+        self.assertSequenceEqual(sel_padded,
+                                 [['x', 'y', ''], ['a', 'b', 'c']])
+        assert sel_id != id(sel_padded)
+
 class test_base_port_mapper(TestCase):
     def test_create(self):
         portmap = np.arange(5)

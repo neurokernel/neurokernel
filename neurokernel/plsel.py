@@ -391,6 +391,37 @@ class SelectorParser(object):
         return token_list
 
     @classmethod
+    def pad_parsed(cls, selector, pad_len=float('inf'), inplace=True):
+        """
+        Pad token lists in a parsed selector to some maximum length.
+
+        Parameters
+        ----------
+        selector : list of lists
+            Parsed selector.
+        pad_len : int
+            Final length of each token list. If set to Inf, all tokens are
+            padded to the maximum token length.
+        inplace : bool
+            If True, modify the selector in place; otherwise, return a modified
+            copy.
+
+        Returns
+        -------
+        result : list of lists
+            Padded selector.
+        """
+
+        assert isinstance(selector, list)
+        if pad_len == float('inf'):
+            pad_len = max(map(len, selector))
+        if not inplace:
+            selector = copy.deepcopy(selector)
+        for x in selector:
+            x += ['']*(pad_len-len(x))
+        return selector
+
+    @classmethod
     def parse(cls, selector):
         """
         Parse a selector string into tokens.
@@ -1640,7 +1671,7 @@ class SelectorMethods(SelectorParser):
             DataFrame instance on which to apply the selector.
         selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).            
+            (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
 
