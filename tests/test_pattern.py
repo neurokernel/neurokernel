@@ -539,6 +539,9 @@ class test_pattern(TestCase):
         p = Pattern('/x[0:3]/y', '/z[0:3]')
         p['/x[0]/y', '/z[0]'] = 1
 
+        q = Pattern('/x[0:3]', '/z[0:3]/a')
+        q['/x[0]', '/z[0]/a'] = 1
+
     def test_src_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
