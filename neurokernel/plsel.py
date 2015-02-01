@@ -422,7 +422,7 @@ class SelectorParser(object):
         return selector
 
     @classmethod
-    def parse(cls, selector):
+    def parse(cls, selector, pad_len=0):
         """
         Parse a selector string into tokens.
 
@@ -430,10 +430,14 @@ class SelectorParser(object):
         ----------
         selector : str
             Selector string.
+        pad_len : int
+            Length to which expanded token sequences should be padded with blanks.
+            If infinite, the sequences are padded to the length of the longest
+            sequence.
 
         Returns
         -------
-        parse_list : list
+        result : list of list
             List of lists containing the tokens corresponding to each individual
             selector in the string.
 
@@ -448,9 +452,10 @@ class SelectorParser(object):
         """
 
         if re.search('^\s*$', selector):
-            return [[]]
+            result = [[]]
         else:
-            return cls.parser.parse(selector, lexer=cls.lexer)
+            result = cls.parser.parse(selector, lexer=cls.lexer)
+        return cls.pad_parsed(result, pad_len)
 
 class SelectorMethods(SelectorParser):
     """
@@ -1708,7 +1713,7 @@ class SelectorMethods(SelectorParser):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
         if type(df.index) == pd.MultiIndex:
-            return df.select(lambda row: cls._multiindex_row_in(row, parse_list, 
+            return df.select(lambda row: cls._multiindex_row_in(row, parse_list,
                                                                 start, stop))
         else:
             return df.select(lambda row: cls._index_row_in(row, parse_list))
