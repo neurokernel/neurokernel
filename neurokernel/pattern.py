@@ -1303,16 +1303,23 @@ class Pattern(object):
         # pattern's interfaces:
         assert self.is_in_interfaces(key[0])
         assert self.is_in_interfaces(key[1])
-        
+
         # Ensure that the ports are in different interfaces:
         assert self.which_int(key[0]) != self.which_int(key[1])
 
+        # Expand and pad the specified 'from' and 'to' selectors:
+        key_0_exp = self.sel.expand(key[0], self.num_levels['from'])
+        key_1_exp = self.sel.expand(key[1], self.num_levels['to'])
+
+        # Concatenate the selectors:
+        selector = tuple(tuple(j for j in itertools.chain(*i)) \
+                for i in itertools.product(key_0_exp, key_1_exp))
+
         # Try using the selector to select data from the internal DataFrame:
-        selector = '+'.join(key[0:2])
         try:
             idx = self.sel.get_index(self.data, selector,
                                      names=self.data.index.names)
-        
+
         # If the select fails, try to create new rows with the index specified
         # by the selector and load them with the specified data:
         except:

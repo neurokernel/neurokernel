@@ -253,8 +253,10 @@ class Module(BaseModule):
                     self.log_info('input data from [%s] retrieved' % in_id)
 
                     # Assign transmitted values directly to port data array:
-                    self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
-                    self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[0]
+                    if len(self._in_port_dict_ids['gpot'][in_id]):
+                        self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
+                    if len(self._in_port_dict_ids['spike'][in_id]):
+                        self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[1]
 
     def _put_out_data(self):
         """
