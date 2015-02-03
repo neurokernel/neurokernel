@@ -736,21 +736,21 @@ class Broker(ControlledProcess):
             self.log_info('skipping malformed message: %s' % str(msg))
         else:
 
-            # When a message arrives, increase the corresponding received_count
+            # Queue arriving messages:
             in_id = msg[0]
             out_id, data = msgpack.unpackb(msg[1])
             self.log_info('recv from %s: %s' % (in_id, data))
+            self._recv_queues[(in_id, out_id)].appendleft(data)
 
-            # Increase the appropriate count in recv_counts by 1
-            self._recv_counts[(in_id, out_id)] += 1
-            self._data_to_route.append((in_id, out_id, data))
-            
             # When data with source/destination IDs corresponding to
             # every entry in the routing table has been received up to
-            # the current time step, deliver the data in the buffer:
-            if all(self._recv_counts.values()):
+            # the current time step (i.e., all queues for each 
+            # source/destination pair contain something), deliver the data:
+            if all(self._recv_queues.values()):
                 self.log_info('recv from all modules')
-                for in_id, out_id, data in self._data_to_route:
+                for t in self._recv_queues:
+                    in_id, out_id = t
+                    data = self._recv_queues[t].pop()
                     self.log_info('sent to   %s: %s' % (out_id, data))
 
                     # Route to the destination ID and send the source ID
@@ -758,13 +758,6 @@ class Broker(ControlledProcess):
                     self.sock_data.send_multipart([out_id,
                                                    msgpack.packb((in_id, data))])
 
-                # Reset the incoming data buffer
-                self._data_to_route = []
-
-                # Decrease all values in recv_counts to indicate that an
-                # execution time_step has been succesfully completed
-                for k in self._recv_counts.iterkeys(): 
-                    self._recv_counts[k]-=1
                 self.log_info('----------------------')
 
     def _init_ctrl_handler(self):
@@ -819,9 +812,9 @@ class Broker(ControlledProcess):
         # Don't allow keyboard interruption of process:
         self.log_info('starting')
         with IgnoreKeyboardInterrupt():
-            conn = self.routing_table.connections
-            self._recv_counts = dict(zip(conn,
-                np.zeros(len(conn), dtype=np.int32))) 
+            self._recv_queues = \
+                {c:collections.deque() for c in \
+                 self.routing_table.connections}
             self._init_net()
         self.log_info('exiting')
 
