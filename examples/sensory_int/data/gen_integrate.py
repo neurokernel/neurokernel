@@ -66,7 +66,7 @@ def create_lpu(file_name, lpu_name, N_neu):
             'threshold': -0.061})
 
     # setup spiking ports
-    for i in xrange(4):
+    for i in xrange(3):
         idx = i + 2*N_neu
         G.add_node(idx, {
             'model': 'port_in_spk',
