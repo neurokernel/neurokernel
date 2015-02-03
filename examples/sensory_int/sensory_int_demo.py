@@ -24,6 +24,13 @@ from neurokernel.tools.comm import get_random_port
 import neurokernel.pattern as pattern
 from neurokernel.LPU.LPU import LPU
 import data.vision_configuration as vc
+from time import time
+
+
+def print_time(tic = 0., s = None):
+    if s is not None:
+        print "%s: %f" % (s, time()-tic)
+    return time()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--debug', default=False,
@@ -49,7 +56,8 @@ parser.add_argument('-a', '--al_dev', default=2, type=int,
                     help='GPU for antennal lobe [default:2]')
 parser.add_argument('-i', '--int_dev', default=3, type=int,
                     help='GPU for integration [default:3]')
-
+parser.add_argument('-e', '--timeit', default=False, type=bool,
+                    help='Time the script [default:False]')
 args = parser.parse_args()
 
 dt = 1e-4
@@ -73,8 +81,15 @@ if args.port_time is None:
 else:
     port_time = args.port_time
 
+if args.timeit:
+    ptime = lambda t, s: print_time(t, s)
+else:
+    ptime = lambda t, s: print_time(t)
+
 man = core.Manager(port_data, port_ctrl, port_time)
 man.add_brok()
+
+tic = time()
 
 # Load configurations for lamina, medulla and antennal lobe models:
 (n_dict_al, s_dict_al) = LPU.lpu_parser( './data/antennallobe.gexf.gz')
@@ -84,6 +99,7 @@ lpu_al = LPU(dt, n_dict_al, s_dict_al,
              port_ctrl=port_ctrl, port_data=port_data, port_time=port_time,
              device=args.al_dev, id='antennallobe', time_sync=args.time_sync)
 man.add_mod(lpu_al)
+tic = ptime(tic, 'Load AL LPU time')
 
 (n_dict_lam, s_dict_lam) = LPU.lpu_parser('./data/lamina.gexf.gz')
 lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
@@ -92,6 +108,7 @@ lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
               port_ctrl=port_ctrl, port_data=port_data, port_time=port_time,
               device=args.al_dev, id='lamina', time_sync=args.time_sync)
 man.add_mod(lpu_lam)
+tic = ptime(tic, 'Load LAM LPU time')
 
 (n_dict_med, s_dict_med) = LPU.lpu_parser('./data/medulla.gexf.gz')
 lpu_med = LPU(dt, n_dict_med, s_dict_med,
@@ -99,6 +116,7 @@ lpu_med = LPU(dt, n_dict_med, s_dict_med,
               port_ctrl=port_ctrl, port_data=port_data, port_time=port_time,
               device=args.al_dev, id='medulla', time_sync=args.time_sync)
 man.add_mod(lpu_med)
+tic = ptime(tic, 'Load MED LPU time')
 
 (n_dict_int, s_dict_int) = LPU.lpu_parser('./data/integrate.gexf.gz')
 lpu_int = LPU(dt, n_dict_int, s_dict_int,
@@ -106,13 +124,13 @@ lpu_int = LPU(dt, n_dict_int, s_dict_int,
               port_ctrl=port_ctrl, port_data=port_data, port_time=port_time,
               device=args.al_dev, id='integrate', time_sync=args.time_sync)
 man.add_mod(lpu_int)
+tic = ptime(tic, 'Load INT LPU time')
 
-
-#
+# connect lam to med
 pat_lam_med = vc.create_pattern(lpu_lam, lpu_med)
 
 man.connect(lpu_lam, lpu_med, pat_lam_med, 0, 1)
-
+tic = ptime(tic, 'Connect LAM and MED time')
 
 intf_al = lpu_al.interface
 intf_lam = lpu_lam.interface
@@ -141,6 +159,8 @@ for src, dest in zip(['/medulla/Mt3%c[%d]' % (c, i) for c in ('h','v') for i in 
 
 man.connect(lpu_al, lpu_int, pat_al_int, 0, 1)
 man.connect(lpu_med, lpu_int, pat_med_int, 0, 1)
+tic = ptime(tic, 'Connect MED and AL to INT time')
 
 man.start(steps=Nt)
 man.stop()
+tic = ptime(tic, 'Run Simulation time')
