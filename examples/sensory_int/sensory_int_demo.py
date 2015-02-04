@@ -144,7 +144,7 @@ pat_med_int = pattern.Pattern(','.join(intf_med.to_selectors()),
                               ','.join(intf_int.to_selectors()))
 
 # Create connections from antennal lobe to integration LPU
-for src, dest in zip(['/al[0]/pn%d' % i for i in xrange(3)],
+for src, dest in zip(['/al[0]/pn[%d]' % i for i in xrange(3)],
         intf_int.in_ports().spike_ports().to_selectors()):
         pat_al_int[src, dest] = 1
         pat_al_int.interface[src, 'type'] = 'spike'
