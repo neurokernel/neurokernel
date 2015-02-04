@@ -391,7 +391,38 @@ class SelectorParser(object):
         return token_list
 
     @classmethod
-    def parse(cls, selector):
+    def pad_parsed(cls, selector, pad_len=float('inf'), inplace=True):
+        """
+        Pad token lists in a parsed selector to some maximum length.
+
+        Parameters
+        ----------
+        selector : list of lists
+            Parsed selector.
+        pad_len : int
+            Final length of each token list. If set to Inf, all tokens are
+            padded to the maximum token length.
+        inplace : bool
+            If True, modify the selector in place; otherwise, return a modified
+            copy.
+
+        Returns
+        -------
+        result : list of lists
+            Padded selector.
+        """
+
+        assert isinstance(selector, list)
+        if pad_len == float('inf'):
+            pad_len = max(map(len, selector))
+        if not inplace:
+            selector = copy.deepcopy(selector)
+        for x in selector:
+            x += ['']*(pad_len-len(x))
+        return selector
+
+    @classmethod
+    def parse(cls, selector, pad_len=0):
         """
         Parse a selector string into tokens.
 
@@ -399,10 +430,14 @@ class SelectorParser(object):
         ----------
         selector : str
             Selector string.
+        pad_len : int
+            Length to which expanded token sequences should be padded with blanks.
+            If infinite, the sequences are padded to the length of the longest
+            sequence.
 
         Returns
         -------
-        parse_list : list
+        result : list of list
             List of lists containing the tokens corresponding to each individual
             selector in the string.
 
@@ -417,9 +452,10 @@ class SelectorParser(object):
         """
 
         if re.search('^\s*$', selector):
-            return [[]]
+            result = [[]]
         else:
-            return cls.parser.parse(selector, lexer=cls.lexer)
+            result = cls.parser.parse(selector, lexer=cls.lexer)
+        return cls.pad_parsed(result, pad_len)
 
 class SelectorMethods(SelectorParser):
     """
@@ -1640,7 +1676,7 @@ class SelectorMethods(SelectorParser):
             DataFrame instance on which to apply the selector.
         selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).            
+            (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
 
@@ -1677,7 +1713,7 @@ class SelectorMethods(SelectorParser):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
         if type(df.index) == pd.MultiIndex:
-            return df.select(lambda row: cls._multiindex_row_in(row, parse_list, 
+            return df.select(lambda row: cls._multiindex_row_in(row, parse_list,
                                                                 start, stop))
         else:
             return df.select(lambda row: cls._index_row_in(row, parse_list))
@@ -2004,7 +2040,7 @@ class PortMapper(BasePortMapper):
             Copy of port mapper instance.
         """
 
-        c = PortMapper('')
+        c = self.__class__('')
         c.portmap = self.portmap.copy()
         c.data = self.data.copy()
         return c
@@ -2215,7 +2251,7 @@ class PortMapper(BasePortMapper):
         regarded as equivalent.
         """
 
-        assert isinstance(other, PortMapper)
+        assert isinstance(other, self.__class__)
         return self.portmap.equals(other.portmap) and (self.data == other.data).all()
 
     def __repr__(self):

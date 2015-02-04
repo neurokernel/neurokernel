@@ -465,8 +465,7 @@ class visualizer(object):
                                                 [self._dome_arr_shape[0],self._dome_arr_shape[1],1])
                                      ,[1,1,4])
                     colors[:,:,3] = 1.0
-                    C = [colors[i,j] for (i,j) in itertools.product(range(colors.shape[0]),
-                                                                    range(colors.shape[1]))]
+
                     config['handle'].clear()
                     config['handle'].xaxis.set_ticks([])
                     config['handle'].yaxis.set_ticks([])
