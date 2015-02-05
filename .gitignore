@@ -1,0 +1,18 @@
+# ignore compiled python
+*.pyc
+
+#
+*.mat
+*.mp4
+*.avi
+*.prof
+*.png
+*.h5
+*.log
+*.file
+*qsub.py
+*gexf.gz
+*temp*
+neurokernel.egg-info
+neurokernel/neurokernel.log
+!neurokernel/examples/retina_lamina/image1.mat

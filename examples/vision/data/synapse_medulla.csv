@@ -1,0 +1,4 @@
+prename,postname,model,cart,reverse,delay,threshold,slope,power,saturation,scale,mode
+Dm3,Tm9,power_gpot_gpot,0,0,0.1,-0.052,20,1,0.3,1,0Tm1,T5a,power_gpot_gpot,0,0,0.1,-0.054,20,1,0.4,1,0Tm1,T5b,power_gpot_gpot,0,0,0.1,-0.054,20,1,0.4,1,0Tm9,T5a,power_gpot_gpot,0,-0.11,0.1,-0.054,100,2,0.3,1,0Tm9,T5b,power_gpot_gpot,0,-0.11,0.1,-0.054,100,2,0.3,1,0T5a,T5b,power_gpot_gpot,0,-0.11,0.1,-0.05,1000,3,1,1,0T5b,T5a,power_gpot_gpot,0,-0.11,0.1,-0.05,1000,3,1,1,0Tm9,T5a,power_gpot_gpot,3,-0.11,0.1,-0.054,10000,4,2,1,0Tm9,T5b,power_gpot_gpot,5,-0.11,0.1,-0.054,10000,4,2,1,0Tm1,T5a,power_gpot_gpot,5,0,0.1,-0.054,10,1,2,1,0Tm1,T5b,power_gpot_gpot,3,0,0.1,-0.054,10,1,2,1,0
+L1,C3,power_gpot_gpot,0,0,1,-0.0505,5,1,0.015,3,0L1,C2,power_gpot_gpot,0,0,1,-0.0505,5,1,0.015,5,0
+L2,Tm1,power_gpot_gpot,0,-0.11,0.2,-0.0505,200,2,0.3,1,0

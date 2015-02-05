@@ -48,7 +48,7 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name, screen)
+logger = base.setup_logger(file_name=file_name, screen=screen)
 
 if args.port_data is None and args.port_ctrl is None:
     port_data = get_random_port()
@@ -57,7 +57,8 @@ else:
     port_data = args.port_data
     port_ctrl = args.port_ctrl
 
-man = core.Manager(port_data, port_ctrl)
+port_time = get_random_port()
+man = core.Manager(port_data, port_ctrl, port_time)
 man.add_brok()
 
 (n_dict, s_dict) = LPU.lpu_parser('./data/generic_lpu.gexf.gz')

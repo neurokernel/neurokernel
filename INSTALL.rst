@@ -40,8 +40,8 @@ the copy of `pip` in your `virtualenv`)::
 
 If installation of PyCUDA fails because some of the CUDA development files or 
 libraries are not found, you may need to specify where they are explicitly. For 
-example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA as 
-follows::
+example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA
+as follows::
 
   CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
   LDFLAGS=-L${CUDA_ROOT}/lib64 pip install pycuda

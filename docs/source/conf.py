@@ -37,12 +37,14 @@ class Mock(object):
     def __getitem__(self, v):
         return Mock()
 
-MOCK_MODULES = ['bidict', 'matplotlib', 'matplotlib.pyplot',
+MOCK_MODULES = ['bidict', 'chash', 'lxml', 'matplotlib', 'matplotlib.pyplot',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
+                'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
                 'pycuda.elementwise', 'pycuda.gpuarray',
                 'pycuda.reduction', 'pycuda.scan', 'pycuda.tools', 'pytools',
-                'scipy', 'scipy.sparse', 'twiggy', 'zmq', 'zmq.eventloop',
+                'scipy', 'scipy.sparse', 'twiggy', 'xxh',
+                'zmq', 'zmq.eventloop',
                 'zmq.eventloop.ioloop', 'zmq.eventloop.zmqstream']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = Mock()
@@ -57,6 +59,7 @@ pkg_resources.require = Mock()
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.append(os.path.abspath('../sphinxext'))
 sys.path.append(os.path.abspath('../../neurokernel'))
+sys.path.append(os.path.abspath('../../neurokernel/neuroml'))
 sys.path.append(os.path.abspath('../../'))
 
 # -- General configuration -----------------------------------------------------
@@ -307,6 +310,5 @@ intersphinx_mapping = {
     'http://documen.tician.de/pycuda/': None,
 }
 
-# Prevent methods/class attributes from automatically being added twice:                       
+# Prevent methods/class attributes from automatically being added twice:
 numpydoc_show_class_members = False
-

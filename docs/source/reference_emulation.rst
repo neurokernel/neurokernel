@@ -9,8 +9,9 @@ Construction and Execution
    :toctree: generated/
    :nosignatures:
 
-   neurokernel.base.Broker
-   neurokernel.core.Manager
+    neurokernel.base.BaseManager
+    neurokernel.base.Broker
+    neurokernel.core.Manager
 
 Support Classes
 ---------------
@@ -18,5 +19,5 @@ Support Classes
    :toctree: generated/
    :nosignatures:
 
-   neurokernel.ctrl_proc.ControlledProcess
-   neurokernel.routing_table.RoutingTable
+    neurokernel.ctrl_proc.ControlledProcess
+    neurokernel.routing_table.RoutingTable

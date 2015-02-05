@@ -5,7 +5,7 @@ Routing table class.
 """
 
 import numpy as np
-
+import networkx as nx
 import pandas as pd
 
 class RoutingTable(object):
@@ -15,161 +15,137 @@ class RoutingTable(object):
     Simple class that stores pairs of strings that can signify
     one-hop routes between entities in a graph. Assigning a value to a
     pair that isn't in the class instance will result in the pair and value
-    being appended to the class instance.
+    being added to the class instance.
 
     Parameters
     ----------
-    df : pandas.DataFrame
-        Initial table of routing data. The dataframe must have a MultiIndex
-        containing two levels `i` and `j`.
+    g : networkx.DiGraph
+        Directed graph that describes the routes between entities.
 
-    Notes
-    -----
-    Assigning to a new pair will result in reallocation of the internal
-    dataframe. This shouldn't be a big concern given that expected maximum
-    number of distinct entities in the table shouldn't be more than 50.
+    Attributes
+    ----------
+    connections : list
+        List of directed connections between identifiers.
+    ids : list
+        Identifiers currently in routing table.
+
+    Methods
+    -------
+    copy()
+        Return a copy of the routing table.
+    dest_ids(src_id)
+        Destination identifiers connected to the specified source identifier.
+    ids()
+        IDs currently in routing
+    src_ids(dest_id)
+        Source identifiers connected to the specified destination identifier.
+    to_df()
+        Return a pandas DataFrame listing all of the connections.
     """
-    
-    def __init__(self, df=None):
-        if df is None:            
-            self.data = pd.DataFrame(columns=['data'],
-                                      index=pd.MultiIndex(levels=[[], []],
-                                                          labels=[[], []],
-                                                          names=['i', 'j']))
+
+    def __init__(self, g=None):
+        if g is None:
+            self.data = nx.DiGraph()
         else:
-            try:
-                type(df) == pd.DataFrame
-                len(df.index.levels) == 2
-                len(df.index.labels) == 2
-            except:
-                raise ValueError('invalid initial array')
-            else:
-                self.data = df.copy()
+            assert type(g) == nx.DiGraph
+            self.data = g
 
     def __setitem__(self, key, value):
-        if type(key) == slice:
-            raise ValueError('assignment by slice not supported')
-        if len(key) != 2:
-            raise KeyError('invalid key')
-        try:
-            self.data.ix[key]
-        except:
-            self.data = self.data.append(pd.DataFrame({'data': value},
-                                                        index=pd.MultiIndex.from_tuples([key])))
-            self.data.sort(inplace=True)
+        assert type(key) == tuple
+        assert len(key) >= 2
+
+        if not self.data.has_node(key[0]):
+            self.data.add_node(key[0])
+        if not self.data.has_node(key[1]):
+            self.data.add_node(key[1])
+        if len(key) > 2:
+            if np.isscalar(value):
+                data = {k: value for k in key[2:]}
+            elif type(value) == dict:
+                data = value
+            elif np.iterable(value) and len(value) <= len(key[2:]):
+                data = {k: v for k, v in zip(key[2:], value)}
+            else:
+                raise ValueError('cannot assign specified value')
         else:
-            self.data.ix[key] = value
+            if np.isscalar(value):
+                data = {'conn': value}
+            elif type(value) == dict:
+                data = value
+            else:
+                raise ValueError('cannot assign specified value')
+        self.data.add_edge(key[0], key[1], data)
 
     def __getitem__(self, key):
-        raise NotImplementedError
+        assert type(key) == tuple
+        assert len(key) >= 2
+        if len(key) > 2:
+            result = [self.data.edge[key[0]][key[1]][k] for k in key[2:]]
+        else:
+            result = [self.data.edge[key[0]][key[1]][k] for k in \
+                      self.data.edge[key[0]][key[1]].keys()]
+        if len(result) == 1:
+            return result[0]
+        else:
+            return result
+            return self.data.edge[key[0]][key[1]]
 
     def __copy__(self):
-        return self.__class__(self.data)
+        r = self.__class__()
+        r.data = self.data.copy()
 
     copy = __copy__
 
     @property
-    def shape(self):
-        """
-        Shape of table.
-        """
-
-        return len(self.data.index.levels[0]), len(self.data.index.levels[1])
-
-    @property
     def ids(self):
         """
-        IDs currently in routing table.
+        Identifiers currently in routing table.
         """
 
-        return list(self.data.index.levels[0]+self.data.index.levels[1])
-
-    @property
-    def coords(self):
-        """
-        List of coordinate tuples of all nonzero table entries.
-        """
-
-        return list(self.data[self.data['data'] != 0].index)
+        return self.data.nodes()
 
     @property
-    def nnz(self):
+    def connections(self):
         """
-        Number of nonzero entries in the table.
-        """
-
-        return len(self.data[self.data['data'] != 0])
-    
-    def row_ids(self, col_id):
-        """
-        Row IDs connected to a column ID.
+        List of directed connections between identifiers.
         """
 
-        try:
-            return list(self.data[self.data['data'] != 0].xs(col_id, level='j').index)
-        except:
-            return []
+        return self.data.edges()
 
-    def all_row_ids(self):
+    def src_ids(self, dest_id):
         """
-        All row IDs connected to column IDs.
-        """
-        
-        d = self.data[self.data['data'] != 0]
-        return list(set(d.index.levels[0][d.index.labels[0]]))
-
-    def col_ids(self, col_id):
-        """
-        Column IDs connected to a row ID.
+        Source identifiers connected to the specified destination identifier.
         """
 
-        try:
-            return list(self.data[self.data['data'] != 0].ix[col_id].index)
-        except:
-            return []
+        return self.data.predecessors(dest_id)
 
-    def all_col_ids(self):
+    def dest_ids(self, src_id):
         """
-        All column IDs connected to row IDs.
+        Destination identifiers connected to the specified source identifier.
         """
-        
-        d = self.data[self.data['data'] != 0]
-        return list(set(d.index.levels[1][d.index.labels[1]]))
+
+        return self.data.successors(src_id)
+
+    def to_df(self):
+        """
+        Return a pandas DataFrame listing all of the connections.
+        """
+
+        tuples = []
+        data = []
+        for t in self.data.edges_iter(data=True):
+            tuples.append(t[0:2])
+            data.append(t[2])
+        if tuples:
+            idx = pd.MultiIndex.from_tuples(tuples)
+            idx.names = ['from', 'to']
+        else:
+            idx = pd.MultiIndex(levels=[[], []],
+                                labels=[[], []],
+                                names=['from', 'to'])
+        df = pd.DataFrame.from_dict(data)
+        df.index = idx
+        return df
 
     def __repr__(self):
-        return self.data.__repr__()
-
-if __name__ == '__main__':
-    from unittest import main, TestCase
-
-    class test_routingtable(TestCase):
-        def setUp(self):
-            self.coords_orig = [('a', 'b'), ('b', 'c')]
-            self.ids_orig = set([i[0] for i in self.coords_orig]+\
-                                [i[1] for i in self.coords_orig])            
-            self.t = RoutingTable()
-            for c in self.coords_orig:
-                self.t[c[0], c[1]] = 1
-            self.shape = (2, 2)
-        def test_shape(self):
-            assert self.t.shape == self.shape
-        def test_ids(self):
-            assert set(self.t.ids) == self.ids_orig
-        def test_coords(self):
-            assert set(self.t.coords) == set(self.coords_orig)
-        def test_nnz(self):
-            assert self.t.nnz == len(self.coords_orig)
-        def test_all_row_ids(self):
-            assert set(self.t.all_row_ids()) == \
-                set([i[0] for i in self.coords_orig])
-        def test_all_col_ids(self):
-            assert set(self.t.all_col_ids()) == \
-                set([i[1] for i in self.coords_orig])
-        def test_row_ids(self):
-            for i in self.coords_orig:
-                assert i[0] in self.t.row_ids(i[1])
-        def test_col_ids(self):
-            for i in self.coords_orig:
-                assert i[1] in self.t.col_ids(i[0])
-    main()
-
+        return self.to_df().__repr__()

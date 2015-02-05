@@ -18,20 +18,21 @@ import neurokernel.LPU.utils.visualizer as vis
 import networkx as nx
 
 nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
-                                        'true':True, 'True':True}
+                                       'true':True, 'True':True}
 
+# Select IDs of projection neurons:
 G = nx.read_gexf('./data/generic_lpu.gexf.gz')
-neu_out = [k for k,n in G.node.items() if n['name'][:3] == 'out']
+neu_proj = sorted([int(k) for k, n in G.node.items() if n['name'][:4] == 'proj'])
 
 V = vis.visualizer()
-
 V.add_LPU('./data/generic_input.h5', LPU='Sensory')
 V.add_plot({'type':'waveform', 'ids': [[0]]}, 'input_Sensory')
 
 V.add_LPU('generic_output_spike.h5',
           './data/generic_lpu.gexf.gz', 'Generic LPU')
-V.add_plot({'type':'raster', 'ids': {0:range(48,83)},
-            'yticks': range(1, 1+len(neu_out)), 'yticklabels': range(len(neu_out))},
+V.add_plot({'type':'raster', 'ids': {0: neu_proj},
+            'yticks': range(1, 1 + len(neu_proj)),
+            'yticklabels': range(len(neu_proj))},
             'Generic LPU','Output')
 
 V._update_interval = 50
@@ -41,6 +42,5 @@ V.fontsize = 18
 V.out_filename = 'generic_output.avi'
 V.codec = 'libtheora'
 V.dt = 0.0001
-V.xlim = [0,1.0]
+V.xlim = [0, 1.0]
 V.run()
-
