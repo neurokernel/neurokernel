@@ -10,7 +10,6 @@ from code that is controlled by a signal handler may cause problems
 [1].
 
 .. [1] http://stackoverflow.com/questions/4601674/signal-handlers-and-logging-in-python
-
 """
 
 import signal, sys, time
