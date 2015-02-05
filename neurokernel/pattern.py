@@ -495,11 +495,37 @@ class Interface(object):
     def _merge_on_interfaces(self, a, i, b):
         """
         Merge contents of this and another Interface instance.
+
+        Notes
+        -----
+        If the number of levels in one Interface instance's DataFrame index is
+        greater than that of the other, the number of levels in the index of the
+        merged DataFrames instances is set to the former and the index with the
+        smaller number is padded with blank entries to enable Panda's merge
+        mechanism to function properly.
         """
 
         assert isinstance(i, Interface)
-        return pd.merge(self.data[self.data['interface'] == a],
-                        i.data[i.data['interface'] == b],
+        df_left = self.data[self.data['interface'] == a]
+        df_right = i.data[i.data['interface'] == b]
+        n_left_names = len(self.data.index.names)
+        n_right_names = len(i.data.index.names)
+
+        # Pandas' merge mechanism fails if the number of levels in each of the 
+        # merged MultiIndex indices differs and there is overlap of more than
+        # one level; we therefore pad the index with the smaller number of
+        # levels before attempting the merge:
+        if n_left_names > n_right_names:
+            for n in xrange(i.num_levels, i.num_levels+(n_left_names-n_right_names)):
+                new_col = str(n)
+                df_right[new_col] = ''
+                df_right.set_index(new_col, append=True, inplace=True)
+        elif n_left_names < n_right_names:
+            for n in xrange(self.num_levels, self.num_levels+(n_right_names-n_left_names)):
+                new_col = str(n)
+                df_left[new_col] = ''
+                df_left.set_index(new_col, append=True, inplace=True)
+        return pd.merge(df_left, df_right,                            
                         left_index=True,
                         right_index=True)
 
@@ -524,9 +550,23 @@ class Interface(object):
         result : list of tuple
             Expanded port identifiers shared by the two specified Interface 
             instances.
+
+        Notes
+        -----
+        The number of levels of the returned port identifiers is equal to the
+        maximum number of levels of this Interface instance.
         """
 
+        # If the number of levels in the indexes of his interface and i differ,
+        # the index will be padded with an extra level (see
+        # _merge_on_interfaces() method); we therefore need to discard any pad
+        # levels here:
         data_merged = self._merge_on_interfaces(a, i, b)
+        for n in xrange(max(self.num_levels, i.num_levels)-1,
+                        min(self.num_levels, i.num_levels)-1, -1):
+            data_merged.reset_index(str(n), inplace=True)
+            data_merged.drop(str(n), axis=1, inplace=True)
+
         if t is None:
             return data_merged.index.tolist()
         else:
