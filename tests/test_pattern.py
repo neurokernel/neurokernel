@@ -66,19 +66,38 @@ class test_interface(TestCase):
         i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
         j = Interface('/foo[3:9]')
         j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
-        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'), 
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'),
                               [('foo', 3), ('foo', 4)])
-                                  
+
+
+    def test_get_common_ports_unequal_num_levels(self):
+        # Without type:
+        i = Interface('/foo[0:6],/bar[0:2]/baz')
+        i['/*', 'interface'] = 0
+        j = Interface('/foo[3:9]')
+        j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
+        self.assertItemsEqual(i.get_common_ports(0, j, 0),
+                              [('foo', 3), ('foo', 4), ('foo', 5)])
+
+        # With type:
+        i = Interface('/foo[0:6],/bar[0:2]/baz')
+        i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/foo[3:9]')
+        j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'),
+                              [('foo', 3), ('foo', 4)])
+
     def test_to_selectors(self):
         # Selector with multiple levels:
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
         self.assertSequenceEqual(i.to_selectors(0),
-                                 ['/foo[0]', 
+                                 ['/foo[0]',
                                   '/foo[1]'])
-        self.assertSequenceEqual(i.to_selectors(), 
-                                 ['/foo[0]', 
+        self.assertSequenceEqual(i.to_selectors(),
+                                 ['/foo[0]',
                                   '/foo[1]',
                                   '/foo[2]',
                                   '/foo[3]'])
