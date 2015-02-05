@@ -2,27 +2,6 @@
 
 Installation
 ============
-Prerequisites
--------------
-Neurokernel requires Python 2.7, at least one NVIDIA GPU, NVIDIA's `GPU drivers 
-<http://www.nvidia.com/content/drivers/>`_, and `CUDA 
-<http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.  To check what 
-GPUs are in your system, you can use the `inxi 
-<https://code.google.com/p/inxi/>`_ command available on most Linux 
-distributions::
-
-  inxi -G
-
-You can verify that the drivers are loaded as follows::
-
-  lsmod | grep nvidia
-
-If no drivers are present, you may have to manually load them by running 
-something like::
-
-  modprobe nvidia
-
-as root.
 
 Prerequisites
 -------------
