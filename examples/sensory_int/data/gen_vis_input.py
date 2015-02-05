@@ -50,7 +50,7 @@ for i in xrange(14000):
         b = I*a[i]
         S[:, :, i] = b
 
-A = S.reshape((n_row*n_col, 14000), order='F')
+A = S.reshape((n_row*n_col, 14000))
 A = np.tile(A, [6, 1]).T
 with h5py.File('vision_input.h5', 'w') as f:
     f.create_dataset('array', A.shape, dtype=A.dtype, data=A)
