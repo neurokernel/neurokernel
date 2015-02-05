@@ -2,6 +2,27 @@
 
 Installation
 ============
+Prerequisites
+-------------
+Neurokernel requires Python 2.7, at least one NVIDIA GPU, NVIDIA's `GPU drivers 
+<http://www.nvidia.com/content/drivers/>`_, and `CUDA 
+<http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.  To check what 
+GPUs are in your system, you can use the `inxi 
+<https://code.google.com/p/inxi/>`_ command available on most Linux 
+distributions::
+
+  inxi -G
+
+You can verify that the drivers are loaded as follows::
+
+  lsmod | grep nvidia
+
+If no drivers are present, you may have to manually load them by running 
+something like::
+
+  modprobe nvidia
+
+as root.
 
 Prerequisites
 -------------
@@ -39,8 +60,8 @@ following dependencies as follows::
 
 If installation of PyCUDA fails because some of the CUDA development files or 
 libraries are not found, you may need to specify where they are explicitly. For 
-example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA as 
-follows::
+example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA
+as follows::
 
   CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
   LDFLAGS=-L${CUDA_ROOT}/lib64 pip install pycuda
@@ -52,9 +73,9 @@ Linux. If you continue to encounter installation problems, see the `PyCUDA Wiki
 
 You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
 <http://libav.org>`_ installed to generate some of the demo visualizations.
-
-Run the following to install the remaining dependencies and the latest 
-Neurokernel code::
+  
+Run the following to install the remaining dependencies and the 
+latest Neurokernel code::
 
   git clone https://github.com/neurokernel/neurokernel.git
   pip install -e git+./neurokernel#egg=neurokernel
@@ -76,10 +97,11 @@ Neurokernel currently requires the following Python packages:
 * `lxml <http://lxml.de/>`_ 3.3.0 or later.
 * `matplotlib <http://matplotlib.org/>`_ 1.3.0 or later.
 * `msgpack-numpy <http://pypi.python.org/pypi/msgpack-numpy>`_ 0.3.1.1 or later.
-* `networkx <https://networkx.github.io>`_ 1.9 or later
+* `networkx <https://networkx.github.io>`_ 1.9 or later.
 * `numexpr <https://github.com/pydata/numexpr>`_ 2.3 or later.
 * `numpy <http://numpy.scipy.org>`_ 1.2.0 or later.
 * `pandas <http://pandas.pydata.org>`_ 0.14.1 or later.
+* `ply <http://www.dabeaz.com/ply/>`_ 3.4 or later.
 * `pycuda <http://mathema.tician.de/software/pycuda>`_ 2014.1 or later.
 * `pyzmq <http://zeromq.github.io/pyzmq/>`_ 13.0 or later.
 * `scipy <http://www.scipy.org>`_ 0.11.0 or later.

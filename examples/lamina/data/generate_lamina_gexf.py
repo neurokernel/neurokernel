@@ -8,5 +8,5 @@ lamina.connect_cartridges()
 lamina.create_non_columnar_neurons()
 lamina.connect_composition_II()
 lamina.connect_composition_I()
+lamina.add_selectors()
 lamina.export_to_gexf('lamina.gexf.gz')
-

@@ -25,15 +25,17 @@ nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
 def run(out_name):
     V = vis.visualizer()
 
-    V.add_LPU('./data/generic_input_0.h5', LPU='Sensory')
-    V.add_plot({'type':'waveform', 'ids': [[0]]}, 'input_Sensory')
+    # Assumes that generic_lpu_0_input.h5 and generic_lpu_1_input.h5
+    # contain the same data:
+    V.add_LPU('./data/generic_lpu_0_input.h5', LPU='Sensory')
+    V.add_plot({'type': 'waveform', 'ids': [[0]]}, 'input_Sensory')
 
     for i in [0, 1]:
         G = nx.read_gexf('./data/generic_lpu_%s.gexf.gz' % i)
         neu_pub = sorted([int(n) for n, d in G.nodes_iter(True) \
                           if d['public'] == True])
 
-        V.add_LPU('generic_output_%s_%s_spike.h5' % (i, out_name),
+        V.add_LPU('generic_lpu_%s_%s_output_spike.h5' % (i, out_name),
                   './data/generic_lpu_%s.gexf.gz' % i,
                   'Generic LPU %s' % i)
         V.add_plot({'type': 'raster',
@@ -47,7 +49,7 @@ def run(out_name):
     V.rows = 3
     V.cols = 1
     V.fontsize = 18
-    V.out_filename = 'generic_output_%s.avi' % out_name
+    V.out_filename = '%s.avi' % out_name
     V.codec = 'libtheora'
     V.dt = 0.0001
     V.xlim = [0, 1.0]

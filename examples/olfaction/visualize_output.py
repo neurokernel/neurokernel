@@ -8,6 +8,7 @@ import re
 
 import numpy as np
 import matplotlib as mpl
+mpl.use('agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import h5py
