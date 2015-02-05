@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-..  image:: https://raw.githubusercontent.com/neurokernel/neurokernel/master/doc/source/_static/logo.png
+..  image:: https://raw.githubusercontent.com/neurokernel/neurokernel/master/docs/source/_static/logo.png
     :alt: Neurokernel
 
 Package Description
