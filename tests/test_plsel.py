@@ -116,6 +116,16 @@ class test_selector_class(TestCase):
                               ('x', 1, 'a'), ('x', 1, 'b'), ('x', 1, 'c'))
         assert s.str == '/x[0:2]+[a,b,c]'
 
+    def test_selector_iter(self):
+        sel = Selector('/x[0:3]')
+        self.assertSequenceEqual([s for s in sel],
+                                 [(('x', 0),),
+                                  (('x', 1),),
+                                  (('x', 2),)])
+        sel = Selector('')
+        self.assertSequenceEqual([s for s in sel],
+                                 [((),)])
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()

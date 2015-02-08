@@ -161,6 +161,13 @@ class Selector(object):
         else:
             return len(self._expanded)
 
+    def __iter__(self):
+        if self.nonempty:
+            for t in self._expanded:
+                yield (t,)
+        else:
+            yield ((),)
+
     def __repr__(self):
         return 'Selector(\'%s\')' % self._str
 
