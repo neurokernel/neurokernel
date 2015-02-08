@@ -544,6 +544,16 @@ class BaseModule(ControlledProcess):
 
         self.log_info('running execution step')
 
+    def post_run_step(self):
+        """
+        Code to run after each execution step.
+
+        This method can be implemented to do something immediately after each
+        invocation of `self.run_step()`, e.g., save generated data to a file, etc.
+        """
+
+        pass
+
     def _init_port_dicts(self):
         """
         Initial dictionaries of source/destination ports in current module.
@@ -627,6 +637,9 @@ class BaseModule(ControlledProcess):
                     # Run the processing step:
                     self.run_step()
 
+                    # Do post-processing:
+                    self.post_run_step()
+
                     # Prepare the generated data for output:
                     self._put_out_data()
 
@@ -638,6 +651,9 @@ class BaseModule(ControlledProcess):
 
                     # Run the processing step:
                     catch_exception(self.run_step, self.log_info)
+
+                    # Do post processing:
+                    catch_exception(self.post_run_step, self.log_info)
 
                     # Prepare the generated data for output:
                     catch_exception(self._put_out_data, self.log_info)

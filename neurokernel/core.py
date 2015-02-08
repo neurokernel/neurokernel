@@ -427,6 +427,9 @@ class Module(BaseModule):
                     # Run the processing step:
                     self.run_step()
 
+                    # Do post-processing:
+                    self.post_run_step()
+
                     # Stage generated output data for transmission to other
                     # modules:
                     self._put_out_data()
@@ -441,6 +444,9 @@ class Module(BaseModule):
 
                     # Run the processing step:
                     catch_exception(self.run_step, self.log_info)
+
+                    # Do post processing:
+                    catch_exception(self.post_run_step, self.log_info)
 
                     # Stage generated output data for transmission to other
                     # modules:
