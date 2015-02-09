@@ -108,6 +108,17 @@ class Selector(object):
     def add(cls, *sels):
         """
         Combine the identifiers in multiple selectors into a single selector
+
+        Parameters
+        ----------
+        sels : Selector
+            Selector instances.
+
+        Returns
+        -------
+        result : Selector
+            Selector containing all of the port identifiers comprised by the 
+            arguments.
         """
 
         out = cls('')
@@ -147,6 +158,9 @@ class Selector(object):
 
     @classmethod
     def prod(cls, *sels):
+        """
+        Compute the product of identifiers in multiple selectors.
+        """
 
         out = cls('')
         out._str = '+'.join([s.str for s in sels if s.nonempty])
