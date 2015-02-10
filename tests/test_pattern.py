@@ -966,6 +966,22 @@ class test_pattern(TestCase):
                                ('bar', 1),
                                ('bar', 2)])
 
+    def test_connected_ports(self):
+        p = Pattern('/foo[0:3]', '/bar[0:3]')
+        p['/foo[0]', '/bar[0]'] = 1
+        p['/foo[1]', '/bar[1]'] = 1
+        self.assertItemsEqual(p.connected_ports().to_tuples(),
+                              [('bar', 0),
+                               ('bar', 1),
+                               ('foo', 0),
+                               ('foo', 1)])
+        self.assertItemsEqual(p.connected_ports(0).to_tuples(),
+                              [('foo', 0),
+                               ('foo', 1)])
+        self.assertItemsEqual(p.connected_ports(1).to_tuples(),
+                              [('bar', 0),
+                               ('bar', 1)])
+
     def test_out_ports(self): ###
         p = Pattern('/foo[0:3]', '/bar[0:3]')
         p.interface['/foo[0]', 'io', 'type'] = ['in', 'spike']

@@ -423,8 +423,8 @@ class Interface(object):
         Returns
         -------
         interface : Interface
-            Interface instance containing all graded potential ports and their attributes
-            in the specified interface.
+            Interface instance containing all graded potential ports and 
+            their attributes in the specified interface.
         """
 
         if i is None:
@@ -1243,6 +1243,41 @@ class Pattern(object):
     def spike_ports(self, i=None):
         return self.interface.spike_ports(i)
     spike_ports.__doc__ = Interface.spike_ports.__doc__
+
+    def connected_ports(self, i=None):
+        """
+        Return ports that are connected by the pattern.
+        
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        interface : Interface
+            Interface instance containing all connected ports
+            their attributes in the specified interface.
+        """
+
+        # Use sets to accumulate the expanded ports to avoid passing duplicates
+        # to DataFrame.ix.__getitem__():
+        from_tuples = set()
+        to_tuples = set()
+        for t in self.data.index:
+            from_tuples.add(t[0:self.num_levels['from']])
+            to_tuples.add(t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']])
+
+        # Sort the expanded ports so that the results are returned in
+        # lexicographic order:        
+        if i is None:
+            return Interface.from_df(self.interface.data.ix[sorted(set.union(from_tuples, to_tuples))])
+        elif i == 0:
+            return Interface.from_df(self.interface.data.ix[sorted(from_tuples)])
+        elif i == 1:
+            return Interface.from_df(self.interface.data.ix[sorted(to_tuples)])
+        else:
+            raise ValueError('not supported for more than 2 interfaces')
 
     @classmethod
     def from_concat(cls, *selectors, **kwargs):
