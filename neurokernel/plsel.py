@@ -2058,6 +2058,9 @@ class PortMapper(BasePortMapper):
         Integer indices to map to port identifiers. If no map is specified,
         it is assumed to be an array of consecutive integers from 0
         through one less than the number of ports.
+    make_copy : bool
+        If True, map a copy of the specified data array to the specified 
+        port identifiers.
 
     Attributes
     ----------
@@ -2075,7 +2078,7 @@ class PortMapper(BasePortMapper):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, selector, data=None, portmap=None):
+    def __init__(self, selector, data=None, portmap=None, make_copy=True):
         super(PortMapper, self).__init__(selector, portmap)
         N = len(self)
 
@@ -2092,7 +2095,10 @@ class PortMapper(BasePortMapper):
 
             # The port mapper may map identifiers to some portion of the data array:
             assert N <= len(data)
-            self.data = data.copy()
+            if make_copy:
+                self.data = data.copy()
+            else:
+                self.data = data
 
     def copy(self):
         """

@@ -10,7 +10,7 @@ import pycuda.gpuarray as gpuarray
 from plsel import BasePortMapper
 
 class GPUPortMapper(PortMapper):
-    def __init__(self, selector, data=None, portmap=None):
+    def __init__(self, selector, data=None, portmap=None, make_copy=True):
         super(PortMapper, self).__init__(selector, portmap)
         N = len(self)
 
@@ -26,7 +26,10 @@ class GPUPortMapper(PortMapper):
 
             # The port mapper may map identifiers to some portion of the data array:
             assert N <= len(data)
-            self.data = data.copy()
+            if make_copy:
+                self.data = data.copy()
+            else:
+                self.data = data
 
     def get_inds_nonzero(self):
         raise NotImplementedError

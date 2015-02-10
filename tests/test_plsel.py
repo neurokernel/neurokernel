@@ -752,6 +752,12 @@ class test_port_mapper(TestCase):
         assert_array_equal(pm2.data, pm1.data)
         assert_series_equal(pm2.portmap, pm1.portmap)
 
+        data = np.random.rand(5)
+        pm0 = PortMapper('/foo[0:5]', data, portmap, False)
+        pm1 = pm0.copy()
+        data[0] = 1.0
+        assert pm0.data[0] == 1.0
+
     def test_dtype(self):
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
         assert pm.dtype == np.float64
