@@ -243,9 +243,8 @@ class Module(BaseModule):
                 try:
 
                     # The first entry of `data` contains graded potential values,
-                    # while the second contains integer indices of the current
-                    # module's ports that should receive transmitted spikes:
-
+                    # while the second contains spiking port values (i.e., 0 or
+                    # 1):
                     data = self._in_data[in_id].popleft()
                 except:
                     self.log_info('no input data from [%s] retrieved' % in_id)
