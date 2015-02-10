@@ -2277,7 +2277,7 @@ class PortMapper(BasePortMapper):
         # is necessary here
         self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
 
-    def set_by_ind(self, inds, data):
+    def set_by_inds(self, inds, data):
         """
         Set mapped data by integer indices.
 
