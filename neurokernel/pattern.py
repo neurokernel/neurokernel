@@ -621,10 +621,12 @@ class Interface(object):
             if not len(data_merged):
                 return False
 
-            # Compatible identifiers must have the same 'type' attribute
-            # and their 'io' attributes must be the inverse of each other;:
+            # Compatible identifiers must have the same non-null 'type'
+            # attribute and their 'io' attributes must be the inverse of each
+            # other:
             if not data_merged.apply(lambda row: \
-                    (row['type_x'] == row['type_y']) and \
+                    ((row['type_x'] == row['type_y']) or \
+                     (pd.isnull(row['type_x']) and pd.isnull(row['type_y']))) and \
                     ((row['io_x'] == 'out' and row['io_y'] == 'in') or \
                      (row['io_x'] == 'in' and row['io_y'] == 'out')),
                                      axis=1).any():
@@ -640,7 +642,7 @@ class Interface(object):
                 return False
 
             # If the 'type' attributes of the same identifiers in each
-            # interfaces are not equivalent, they are incompatible:
+            # interfaces are not equivalent or both null, they are incompatible:
             if not data_merged.apply(lambda row: \
                     (row['type_x'] == row['type_y']) or \
                     (pd.isnull(row['type_x']) and pd.isnull(row['type_y'])),

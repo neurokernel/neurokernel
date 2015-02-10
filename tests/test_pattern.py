@@ -469,7 +469,8 @@ class test_interface(TestCase):
     def test_is_compatible_subsets(self):
         """
         Interfaces that both share a subset of compatible ports can be deemed
-        compatible by setting the `allow_subsets` option of the compatibility test.
+        compatible by setting the `allow_subsets` option of the compatibility
+        test.
         """
 
         i = Interface('/foo[0:6]')
@@ -478,6 +479,23 @@ class test_interface(TestCase):
         j = Interface('/foo[0:6]')
         j['/foo[0:2]'] = [1, 'in', 'gpot']
         j['/foo[3:5]'] = [1, 'in', 'spike']
+        k = Interface('/foo[0:6]')
+        assert i.is_compatible(0, j, 1, True)
+        assert i.is_compatible(0, k, 1, True) == False
+
+    def test_is_compatible_subsets_with_null_types(self):
+        """
+        Interfaces that both share a subset of compatible ports can be deemed
+        compatible by setting the `allow_subsets` option of the compatibility
+        test even when the types are null.
+        """
+
+        i = Interface('/foo[0:6]')
+        i['/foo[0:3]'] = [0, 'out']
+        i['/foo[3:6]'] = [0, 'out']
+        j = Interface('/foo[0:6]')
+        j['/foo[0:2]'] = [1, 'in']
+        j['/foo[3:5]'] = [1, 'in']
         k = Interface('/foo[0:6]')
         assert i.is_compatible(0, j, 1, True)
         assert i.is_compatible(0, k, 1, True) == False
