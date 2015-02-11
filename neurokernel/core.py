@@ -321,26 +321,10 @@ class Module(BaseModule):
             self.log_info('saved all data received by %s' % self.id)
 
 class Manager(base.Manager):
-    @classmethod
-    def validate_args(cls, target, args=['sel', 'sel_in', 'sel_out', 
-                                         'sel_gpot', 'sel_spike']):
-        """
-        Check whether a class' constructor has specific arguments.
-
-        Parameters
-        ----------
-        target : Module
-            Module class to instantiate and run.
-        args : sequence
-            Names of arguments the class constructor must have.
-        
-        Returns
-        -------
-        result : bool
-            True if all of the specified arguments are present, False otherwise.
-        """
-
-        super(Module, cls).validate_args(target, args)
+    def __init__(self, required_args=['sel', 'sel_in', 'sel_out',
+                                      'sel_gpot', 'sel_spike'],
+                 mpiexec='mpiexec', mpiargs=(), ctrl_tag=CTRL_TAG):
+        super(Manager, self).__init__(required_args, mpiexec, mpiargs, ctrl_tag)
  
     def add(self, target, id, *args, **kwargs):
         assert issubclass(target, Module)

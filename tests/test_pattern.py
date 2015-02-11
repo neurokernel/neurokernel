@@ -66,19 +66,38 @@ class test_interface(TestCase):
         i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
         j = Interface('/foo[3:9]')
         j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
-        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'), 
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'),
                               [('foo', 3), ('foo', 4)])
-                                  
+
+
+    def test_get_common_ports_unequal_num_levels(self):
+        # Without type:
+        i = Interface('/foo[0:6],/bar[0:2]/baz')
+        i['/*', 'interface'] = 0
+        j = Interface('/foo[3:9]')
+        j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
+        self.assertItemsEqual(i.get_common_ports(0, j, 0),
+                              [('foo', 3), ('foo', 4), ('foo', 5)])
+
+        # With type:
+        i = Interface('/foo[0:6],/bar[0:2]/baz')
+        i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/foo[3:9]')
+        j['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'),
+                              [('foo', 3), ('foo', 4)])
+
     def test_to_selectors(self):
         # Selector with multiple levels:
         i = Interface('/foo[0:4]')
         i['/foo[0:2]', 'interface'] = 0
         i['/foo[2:4]', 'interface'] = 1
         self.assertSequenceEqual(i.to_selectors(0),
-                                 ['/foo[0]', 
+                                 ['/foo[0]',
                                   '/foo[1]'])
-        self.assertSequenceEqual(i.to_selectors(), 
-                                 ['/foo[0]', 
+        self.assertSequenceEqual(i.to_selectors(),
+                                 ['/foo[0]',
                                   '/foo[1]',
                                   '/foo[2]',
                                   '/foo[3]'])
@@ -251,7 +270,12 @@ class test_interface(TestCase):
                                                     names=['0', '1']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.in_ports(0).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.in_ports(0, True), df.index.tolist())
 
         # Selector with single level:
         i = Interface('/[foo,bar]')
@@ -262,7 +286,12 @@ class test_interface(TestCase):
                                                     names=['0']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.in_ports(0).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.in_ports(0, True), df.index.tolist())
 
     def test_interface_ports(self):
         # Selector with multiple levels:
@@ -271,7 +300,12 @@ class test_interface(TestCase):
         i['/foo[2:4]', 'interface'] = 1
         j = Interface('/foo[2:4]')
         j['/foo[2:4]', 'interface'] = 1
+
+        # Test returning result as Interface:
         assert_frame_equal(i.interface_ports(1).data, j.data)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.interface_ports(1, True), j.data.index.tolist())
 
         # Selector with single level:
         i = Interface('/[foo,bar,baz]')
@@ -279,7 +313,12 @@ class test_interface(TestCase):
         i['/baz', 'interface'] = 1
         j = Interface('/baz')
         j['/baz', 'interface'] = 1
+
+        # Test returning result as Interface:
         assert_frame_equal(i.interface_ports(1).data, j.data)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.interface_ports(1, True), j.data.index.tolist())
 
     def test_out_ports(self):
         # Selector with multiple levels:
@@ -291,7 +330,12 @@ class test_interface(TestCase):
                                                     names=['0', '1']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.out_ports(1).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.out_ports(1, True), df.index.tolist())
 
         # Selector with single level:
         i = Interface('/[foo,bar]')
@@ -302,7 +346,12 @@ class test_interface(TestCase):
                                                     names=['0']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.out_ports(1).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.out_ports(1, True), df.index.tolist())
 
     def test_gpot_ports(self):
         i = Interface('/foo[0:6]')
@@ -313,7 +362,13 @@ class test_interface(TestCase):
         j = Interface('/foo[3:6]')
         j['/foo[3]'] = [0, 'in', 'gpot']
         j['/foo[4:6]'] = [0, 'out', 'gpot']
+
+        # Test returning result as Interface:
         assert_frame_equal(i.gpot_ports(0).data, j.data)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.gpot_ports(0, True),
+                              j.data.index.tolist())
 
     def test_spike_ports(self):
         i = Interface('/foo[0:6]')
@@ -324,8 +379,14 @@ class test_interface(TestCase):
         j = Interface('/foo[0:3]')
         j['/foo[0]'] = [0, 'in', 'spike']
         j['/foo[1:3]'] = [0, 'out', 'spike']
+
+        # Return result as Interface:
         assert_frame_equal(i.spike_ports(0).data, j.data)
 
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.spike_ports(0, True),
+                              j.data.index.tolist())
+        
     def test_port_select(self):
         i = self.interface.port_select(lambda x: x[1] >= 1)
         assert_index_equal(i.data.index,
@@ -450,7 +511,8 @@ class test_interface(TestCase):
     def test_is_compatible_subsets(self):
         """
         Interfaces that both share a subset of compatible ports can be deemed
-        compatible by setting the `allow_subsets` option of the compatibility test.
+        compatible by setting the `allow_subsets` option of the compatibility
+        test.
         """
 
         i = Interface('/foo[0:6]')
@@ -459,6 +521,23 @@ class test_interface(TestCase):
         j = Interface('/foo[0:6]')
         j['/foo[0:2]'] = [1, 'in', 'gpot']
         j['/foo[3:5]'] = [1, 'in', 'spike']
+        k = Interface('/foo[0:6]')
+        assert i.is_compatible(0, j, 1, True)
+        assert i.is_compatible(0, k, 1, True) == False
+
+    def test_is_compatible_subsets_with_null_types(self):
+        """
+        Interfaces that both share a subset of compatible ports can be deemed
+        compatible by setting the `allow_subsets` option of the compatibility
+        test even when the types are null.
+        """
+
+        i = Interface('/foo[0:6]')
+        i['/foo[0:3]'] = [0, 'out']
+        i['/foo[3:6]'] = [0, 'out']
+        j = Interface('/foo[0:6]')
+        j['/foo[0:2]'] = [1, 'in']
+        j['/foo[3:5]'] = [1, 'in']
         k = Interface('/foo[0:6]')
         assert i.is_compatible(0, j, 1, True)
         assert i.is_compatible(0, k, 1, True) == False
@@ -928,6 +1007,22 @@ class test_pattern(TestCase):
                               [('bar', 0),
                                ('bar', 1),
                                ('bar', 2)])
+
+    def test_connected_ports(self):
+        p = Pattern('/foo[0:3]', '/bar[0:3]')
+        p['/foo[0]', '/bar[0]'] = 1
+        p['/foo[1]', '/bar[1]'] = 1
+        self.assertItemsEqual(p.connected_ports().to_tuples(),
+                              [('bar', 0),
+                               ('bar', 1),
+                               ('foo', 0),
+                               ('foo', 1)])
+        self.assertItemsEqual(p.connected_ports(0).to_tuples(),
+                              [('foo', 0),
+                               ('foo', 1)])
+        self.assertItemsEqual(p.connected_ports(1).to_tuples(),
+                              [('bar', 0),
+                               ('bar', 1)])
 
     def test_out_ports(self): ###
         p = Pattern('/foo[0:3]', '/bar[0:3]')

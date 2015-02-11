@@ -33,28 +33,19 @@ class MyModule(Module):
                  columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                  id=None, device=None, debug=False):
+        sel_in = Selector(sel_in_gpot)+Selector(sel_in_spike)
+        sel_out = Selector(sel_out_gpot)+Selector(sel_out_spike)
         sel_gpot = Selector(sel_in_gpot)+Selector(sel_out_gpot)
         sel_spike = Selector(sel_in_spike)+Selector(sel_out_spike)
         if data_gpot is None:
             data_gpot = np.zeros(SelectorMethods.count_ports(sel_gpot), float)
         if data_spike is None:
             data_spike = np.zeros(SelectorMethods.count_ports(sel_spike), int)
-        super(MyModule, self).__init__(sel, sel_gpot, sel_spike,
+        super(MyModule, self).__init__(sel, sel_in, sel_out,
+                                       sel_gpot, sel_spike,
                                        data_gpot, data_spike,
                                        columns, port_data, port_ctrl, port_time,
                                        id, device, debug, True)
-
-        assert SelectorMethods.is_in(sel_in_gpot, sel)
-        assert SelectorMethods.is_in(sel_out_gpot, sel)
-        assert SelectorMethods.are_disjoint(sel_in_gpot, sel_out_gpot)
-        assert SelectorMethods.is_in(sel_in_spike, sel)
-        assert SelectorMethods.is_in(sel_out_spike, sel)
-        assert SelectorMethods.are_disjoint(sel_in_spike, sel_out_spike)
-
-        self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
-        self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
-        self.interface[sel_in_spike, 'io', 'type'] = ['in', 'spike']
-        self.interface[sel_out_spike, 'io', 'type'] = ['out', 'spike']
 
         self.pm['gpot'][self.interface.out_ports().gpot_ports().to_tuples()] = 1.0
         self.pm['spike'][self.interface.out_ports().spike_ports().to_tuples()] = 1

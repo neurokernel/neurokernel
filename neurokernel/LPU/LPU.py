@@ -444,14 +444,11 @@ class LPU(Module):
                              np.double)
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
-        super(LPU, self).__init__(sel, sel_gpot, sel_spk, data_gpot, data_spike,
+        super(LPU, self).__init__(sel, sel_in, sel_out,
+                                  sel_gpot, sel_spk, data_gpot, data_spike,
                                   columns, port_data, port_ctrl, port_time,
                                   self.LPU_id, device, debug, time_sync)
 
-        self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
-        self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
-        self.interface[sel_in_spk, 'io', 'type'] = ['in', 'spike']
-        self.interface[sel_out_spk, 'io', 'type'] = ['out', 'spike']
         self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
         self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
         self.sel_in_spk_ids = self.pm['spike'].ports_to_inds(self.sel_in_spk)

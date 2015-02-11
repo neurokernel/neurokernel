@@ -39,9 +39,13 @@ class BaseModule(mpi.Worker):
 
     Parameters
     ----------
-    sel, sel_in, sel_out : str, unicode, or sequence
-        Path-like selectors respectively describing the module's 
-        interface of exposed ports and all input and output ports.
+    sel : str, unicode, or sequence
+        Path-like selector describing the module's interface of 
+        exposed ports.
+    sel_in : str, unicode, or sequence
+        Selector describing all input ports in the module's interface.
+    sel_out : str, unicode, or sequence
+        Selector describing all input ports in the module's interface.
     data : numpy.ndarray
         Data array to associate with ports. Array length must equal the number
         of ports in a module's interface.
@@ -348,8 +352,12 @@ class Manager(mpi.Manager):
         Mapping between MPI ranks and module object IDs.
     """
 
-    def __init__(self, mpiexec='mpiexec', mpiargs=(), ctrl_tag=CTRL_TAG):
+    def __init__(self, required_args=['sel', 'sel_in', 'sel_out'],
+                 mpiexec='mpiexec', mpiargs=(), ctrl_tag=CTRL_TAG):
         super(Manager, self).__init__(mpiexec, mpiargs, ctrl_tag)
+
+        # Required constructor args:
+        self.required_args = required_args
 
         # One-to-one mapping between MPI rank and module ID:
         self.rank_to_id = bidict.bidict()
@@ -369,8 +377,7 @@ class Manager(mpi.Manager):
 
         self.log_info('manager instantiated')
 
-    @classmethod
-    def validate_args(cls, target, args=['sel', 'sel_in', 'sel_out']):
+    def validate_args(self, target):
         """
         Check whether a class' constructor has specific arguments.
 
@@ -378,17 +385,15 @@ class Manager(mpi.Manager):
         ----------
         target : Module
             Module class to instantiate and run.
-        args : sequence
-            Names of arguments the class constructor must have.
         
         Returns
         -------
         result : bool
-            True if all of the specified arguments are present, False otherwise.
+            True if all of the required arguments are present, False otherwise.
         """
 
         arg_names = set(mpi.getargnames(target.__init__))
-        for required_arg in args:
+        for required_arg in self.required_args:
             if required_arg not in arg_names:
                 return False
         return True

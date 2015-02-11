@@ -410,96 +410,165 @@ class Interface(object):
             i[sel_int, 'interface'] = n
         return i
 
-    def gpot_ports(self, i=None):
+    def gpot_ports(self, i=None, tuples=False):
         """
         Restrict Interface ports to graded potential ports.
 
         Parameters
         ----------
         i : int
-            Interface identifier. If None, return Interface instance containing
-            all graded potential ports.
+            Interface identifier. If None, return all graded potential ports.
+        tuples : bool
+            If True, return a list of tuples; if False, return an
+            Interface instance.
 
         Returns
         -------
-        interface : Interface
-            Interface instance containing all graded potential ports and their attributes
-            in the specified interface.
+        interface : Interface or list of tuples
+            Either an Interface instance containing all graded potential ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
         """
 
         if i is None:
             try:
-                return self.from_df(self.data[self.data['type'] == 'gpot'])
+                df = self.data[self.data['type'] == 'gpot']
             except:
-                return Interface()
+                df = None
         else:
             try:
-                return self.from_df(self.data[(self.data['type'] == 'gpot') & \
-                                              (self.data['interface'] == i)])
+                df = self.data[(self.data['type'] == 'gpot') & \
+                               (self.data['interface'] == i)]
             except:
+                df = None
+        if tuples:
+            if df is None:
+                return []
+            else:
+                return df.index.tolist()
+        else:
+            if df is None:
                 return Interface()
+            else:
+                return self.from_df(df)
 
-    def in_ports(self, i=None):
+    def in_ports(self, i=None, tuples=False):
         """
         Restrict Interface ports to input ports.
 
         Parameters
         ----------
         i : int
-            Interface identifier.
+            Interface identifier. If None, return all input ports.
+        tuples : bool
+            If True, return a list of tuples; if False, return an
+            Interface instance.
 
         Returns
         -------
-        interface : Interface
-            Interface instance containing all input ports and their attributes
-            in the specified interface.
+        interface : Interface or list of tuples
+            Either an Interface instance containing all input ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
         """
 
         if i is None:
             try:
-                return self.from_df(self.data[self.data['io'] == 'in'])
+                df = self.data[self.data['io'] == 'in']
             except:
-                return Interface()
+                df = None
         else:
             try:
-                return self.from_df(self.data[(self.data['io'] == 'in') & \
-                                              (self.data['interface'] == i)])
+                df = self.data[(self.data['io'] == 'in') & \
+                               (self.data['interface'] == i)]
             except:
+                df = None
+        if tuples:
+            if df is None:
+                return []
+            else:
+                return df.index.tolist()
+        else:
+            if df is None:
                 return Interface()
+            else:
+                return self.from_df(df)
 
-    def interface_ports(self, i=None):
+    def interface_ports(self, i=None, tuples=False):
         """
         Restrict Interface ports to specific interface.
 
         Parameters
         ----------
         i : int
-            Interface identifier. If None, return Interface instance containing
-            all ports.
+            Interface identifier. If None, return all ports.
+        tuples : bool
+            If True, return a list of tuples; if False, return an
+            Interface instance.
 
         Returns
         -------
         interface : Interface
-            Interface instance containing all ports and attributes in the
-            specified interface.
+            Either an Interface instance containing all ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
         """
 
         if i is None:
-            return self.copy()
+            if tuples:
+                return self.index.tolist()
+            else:
+                return self.copy()
         else:
             try:
-                return self.from_df(self.data[self.data['interface'] == i])
+                df = self.data[self.data['interface'] == i]
             except:
-                return Interface()
+                df = None
+            if tuples:
+                if df is None:
+                    return []
+                else:
+                    return df.index.tolist()
+            else:
+                if df is None:
+                    return Interface()
+                else:
+                    return self.from_df(df)
 
     def _merge_on_interfaces(self, a, i, b):
         """
         Merge contents of this and another Interface instance.
+
+        Notes
+        -----
+        If the number of levels in one Interface instance's DataFrame index is
+        greater than that of the other, the number of levels in the index of the
+        merged DataFrames instances is set to the former and the index with the
+        smaller number is padded with blank entries to enable Panda's merge
+        mechanism to function properly.
         """
 
         assert isinstance(i, Interface)
-        return pd.merge(self.data[self.data['interface'] == a],
-                        i.data[i.data['interface'] == b],
+        df_left = self.data[self.data['interface'] == a]
+        df_right = i.data[i.data['interface'] == b]
+        n_left_names = len(self.data.index.names)
+        n_right_names = len(i.data.index.names)
+
+        # Pandas' merge mechanism fails if the number of levels in each of the 
+        # merged MultiIndex indices differs and there is overlap of more than
+        # one level; we therefore pad the index with the smaller number of
+        # levels before attempting the merge:
+        if n_left_names > n_right_names:
+            for n in xrange(i.num_levels, i.num_levels+(n_left_names-n_right_names)):
+                new_col = str(n)
+                df_right[new_col] = ''
+                df_right.set_index(new_col, append=True, inplace=True)
+        elif n_left_names < n_right_names:
+            for n in xrange(self.num_levels, self.num_levels+(n_right_names-n_left_names)):
+                new_col = str(n)
+                df_left[new_col] = ''
+                df_left.set_index(new_col, append=True, inplace=True)
+        return pd.merge(df_left, df_right,                            
                         left_index=True,
                         right_index=True)
 
@@ -524,9 +593,23 @@ class Interface(object):
         result : list of tuple
             Expanded port identifiers shared by the two specified Interface 
             instances.
+
+        Notes
+        -----
+        The number of levels of the returned port identifiers is equal to the
+        maximum number of levels of this Interface instance.
         """
 
+        # If the number of levels in the indexes of his interface and i differ,
+        # the index will be padded with an extra level (see
+        # _merge_on_interfaces() method); we therefore need to discard any pad
+        # levels here:
         data_merged = self._merge_on_interfaces(a, i, b)
+        for n in xrange(max(self.num_levels, i.num_levels)-1,
+                        min(self.num_levels, i.num_levels)-1, -1):
+            data_merged.reset_index(str(n), inplace=True)
+            data_merged.drop(str(n), axis=1, inplace=True)
+
         if t is None:
             return data_merged.index.tolist()
         else:
@@ -581,10 +664,12 @@ class Interface(object):
             if not len(data_merged):
                 return False
 
-            # Compatible identifiers must have the same 'type' attribute
-            # and their 'io' attributes must be the inverse of each other;:
+            # Compatible identifiers must have the same non-null 'type'
+            # attribute and their 'io' attributes must be the inverse of each
+            # other:
             if not data_merged.apply(lambda row: \
-                    (row['type_x'] == row['type_y']) and \
+                    ((row['type_x'] == row['type_y']) or \
+                     (pd.isnull(row['type_x']) and pd.isnull(row['type_y']))) and \
                     ((row['io_x'] == 'out' and row['io_y'] == 'in') or \
                      (row['io_x'] == 'in' and row['io_y'] == 'out')),
                                      axis=1).any():
@@ -600,7 +685,7 @@ class Interface(object):
                 return False
 
             # If the 'type' attributes of the same identifiers in each
-            # interfaces are not equivalent, they are incompatible:
+            # interfaces are not equivalent or both null, they are incompatible:
             if not data_merged.apply(lambda row: \
                     (row['type_x'] == row['type_y']) or \
                     (pd.isnull(row['type_x']) and pd.isnull(row['type_y'])),
@@ -652,34 +737,47 @@ class Interface(object):
         except:
             return self.sel.is_in(s, self.index.tolist())
 
-    def out_ports(self, i=None):
+    def out_ports(self, i=None, tuples=False):
         """
         Restrict Interface ports to output ports.
 
         Parameters
         ----------
         i : int
-            Interface identifier. If None, return Interface instance containing
-            all output ports.
+            Interface identifier. If None, return all output ports.
+        tuples : bool
+            If True, return a list of tuples; if False, return an
+            Interface instance.
 
         Returns
         -------
-        interface : Interface
-            Interface instance containing all output ports and their attributes
-            in the specified interface.
+        interface : Interface or list of tuples
+            Either an Interface instance containing all output ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
         """
 
         if i is None:
             try:
-                return self.from_df(self.data[self.data['io'] == 'out'])
+                df = self.data[self.data['io'] == 'out']
             except:
-                return Interface()
+                df = None
         else:
             try:
-                return self.from_df(self.data[(self.data['io'] == 'out') & \
-                                              (self.data['interface'] == i)])
+                df = self.data[(self.data['io'] == 'out') & \
+                               (self.data['interface'] == i)]
             except:
+                df = None
+        if tuples:
+            if df is None:
+                return []
+            else:
+                return df.index.tolist()
+        else:
+            if df is None:
                 return Interface()
+            else:
+                return self.from_df(df)
 
     def port_select(self, f, inplace=False):
         """
@@ -710,34 +808,47 @@ class Interface(object):
         else:
             return Interface.from_df(self.data.select(f))
 
-    def spike_ports(self, i=None):
+    def spike_ports(self, i=None, tuples=False):
         """
         Restrict Interface ports to spiking ports.
 
         Parameters
         ----------
         i : int
-            Interface identifier. If None, return Interface instance containing
-            all spiking ports.
+            Interface identifier. If None, return all spiking ports.
+        tuples : bool
+            If True, return a list of tuples; if False, return an 
+            Interface instance.
 
         Returns
         -------
-        interface : Interface
-            Interface instance containing all spiking ports and their attributes
-            in the specified interface.
+        interface : Interface or list of tuples
+            Either an Interface instance containing all spiking ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
         """
 
         if i is None:
             try:
-                return self.from_df(self.data[self.data['type'] == 'spike'])
+                df = self.data[self.data['type'] == 'spike']
             except:
-                return Interface()
+                df = None
         else:
             try:
-                return self.from_df(self.data[(self.data['type'] == 'spike') & \
-                                              (self.data['interface'] == i)])
+                df = self.data[(self.data['type'] == 'spike') & \
+                               (self.data['interface'] == i)]
             except:
+                df = None
+        if tuples:
+            if df is None:
+                return []
+            else:
+                return df.index.tolist()
+        else:
+            if df is None:
                 return Interface()
+            else:
+                return self.from_df(df)
 
     def to_selectors(self, i=None):
         """
@@ -1201,6 +1312,41 @@ class Pattern(object):
     def spike_ports(self, i=None):
         return self.interface.spike_ports(i)
     spike_ports.__doc__ = Interface.spike_ports.__doc__
+
+    def connected_ports(self, i=None):
+        """
+        Return ports that are connected by the pattern.
+        
+        Parameters
+        ----------
+        i : int
+            Interface identifier.
+
+        Returns
+        -------
+        interface : Interface
+            Interface instance containing all connected ports
+            their attributes in the specified interface.
+        """
+
+        # Use sets to accumulate the expanded ports to avoid passing duplicates
+        # to DataFrame.ix.__getitem__():
+        from_tuples = set()
+        to_tuples = set()
+        for t in self.data.index:
+            from_tuples.add(t[0:self.num_levels['from']])
+            to_tuples.add(t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']])
+
+        # Sort the expanded ports so that the results are returned in
+        # lexicographic order:        
+        if i is None:
+            return Interface.from_df(self.interface.data.ix[sorted(set.union(from_tuples, to_tuples))])
+        elif i == 0:
+            return Interface.from_df(self.interface.data.ix[sorted(from_tuples)])
+        elif i == 1:
+            return Interface.from_df(self.interface.data.ix[sorted(to_tuples)])
+        else:
+            raise ValueError('not supported for more than 2 interfaces')
 
     @classmethod
     def from_concat(cls, *selectors, **kwargs):

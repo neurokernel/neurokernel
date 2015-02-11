@@ -60,14 +60,17 @@ class Selector(object):
             self._str = copy.copy(s._str)
             self._expanded = copy.copy(s._expanded)
             self._max_levels = copy.copy(s._max_levels)
-        else:
-            assert isinstance(s, basestring) # python2 dependency
+        elif isinstance(s, basestring): # python2 dependency
             self._str = copy.copy(s)
 
             # Save expanded selector as tuple because it shouldn't need to be
             # modified after expansion:
             self._expanded = tuple(SelectorMethods.expand(s))
             self._max_levels = max(map(len, self._expanded))
+        else:
+            self._expanded = tuple(SelectorMethods.expand(s))
+            self._max_levels = max(map(len, self._expanded))
+            #XXX
 
     @property
     def nonempty(self):
@@ -105,6 +108,17 @@ class Selector(object):
     def add(cls, *sels):
         """
         Combine the identifiers in multiple selectors into a single selector
+
+        Parameters
+        ----------
+        sels : Selector
+            Selector instances.
+
+        Returns
+        -------
+        result : Selector
+            Selector containing all of the port identifiers comprised by the 
+            arguments.
         """
 
         out = cls('')
@@ -144,6 +158,9 @@ class Selector(object):
 
     @classmethod
     def prod(cls, *sels):
+        """
+        Compute the product of identifiers in multiple selectors.
+        """
 
         out = cls('')
         out._str = '+'.join([s.str for s in sels if s.nonempty])
@@ -160,6 +177,13 @@ class Selector(object):
             return 0
         else:
             return len(self._expanded)
+
+    def __iter__(self):
+        if self.nonempty:
+            for t in self._expanded:
+                yield (t,)
+        else:
+            yield ((),)
 
     def __repr__(self):
         return 'Selector(\'%s\')' % self._str
@@ -906,7 +930,45 @@ class SelectorMethods(SelectorParser):
             return False
 
     @classmethod
-    def collapse(cls, id_list):
+    def collapse(cls, selector):
+        """
+        Collapse a selector into a single string.
+
+        Parameters
+        ----------
+        selector : iterable
+            Expanded selector. If the selector is a string, it is returned
+            unchanged.
+        
+        Returns
+        -------
+        s : str
+            String that comprises all identifiers in the specified expanded
+            selector.
+        """
+
+        if isinstance(selector, basestring):
+            return selector
+        
+        result_list = []
+        for t in selector:
+            s = ''
+            for x in t:
+                if type(x) in [str, unicode, int]:
+                    s += '/'+str(x)
+                elif type(x) == slice:
+                    start = str(x.start) if x.start is not None else ''
+                    stop = str(x.stop) if x.stop is not None else ''
+                    s += '[%s:%s]' % (start, stop)
+                elif type(x) in [tuple, list]:
+                    s += '['+','.join(x)+']'
+                else:
+                    raise ValueError('invalid selector')
+            result_list.append(s)
+        return ','.join(result_list)
+
+    @classmethod
+    def _collapse(cls, id_list):
         """
         Collapse a list of identifiers into a selector string.
 
@@ -926,7 +988,9 @@ class SelectorMethods(SelectorParser):
         number of levels.
         """
 
-        # XXX doesn't collapse expanded selectors such as /foo/xxx,/bar/yyy properly
+        # XXX doesn't collapse expanded selectors such as /foo/xxx,/bar/yyy
+        # properly
+        raise NotImplemented('unfinished method - should eventually replace collapse()')
 
         # Can only collapse list identifiers that all have the same number of
         # levels:
@@ -1994,6 +2058,9 @@ class PortMapper(BasePortMapper):
         Integer indices to map to port identifiers. If no map is specified,
         it is assumed to be an array of consecutive integers from 0
         through one less than the number of ports.
+    make_copy : bool
+        If True, map a copy of the specified data array to the specified 
+        port identifiers.
 
     Attributes
     ----------
@@ -2011,7 +2078,7 @@ class PortMapper(BasePortMapper):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, selector, data=None, portmap=None):
+    def __init__(self, selector, data=None, portmap=None, make_copy=True):
         super(PortMapper, self).__init__(selector, portmap)
         N = len(self)
 
@@ -2028,7 +2095,10 @@ class PortMapper(BasePortMapper):
 
             # The port mapper may map identifiers to some portion of the data array:
             assert N <= len(data)
-            self.data = data.copy()
+            if make_copy:
+                self.data = data.copy()
+            else:
+                self.data = data
 
     def copy(self):
         """
@@ -2213,7 +2283,7 @@ class PortMapper(BasePortMapper):
         # is necessary here
         self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
 
-    def set_by_ind(self, inds, data):
+    def set_by_inds(self, inds, data):
         """
         Set mapped data by integer indices.
 
