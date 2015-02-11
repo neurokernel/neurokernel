@@ -47,9 +47,13 @@ class BaseModule(ControlledProcess):
 
     Parameters
     ----------
-    selector : str, unicode, or sequence
+    sel : str, unicode, or sequence
         Path-like selector describing the module's interface of 
         exposed ports.
+    sel_in : str, unicode, or sequence
+        Selector describing all input ports in the module's interface.
+    sel_out : str, unicode, or sequence
+        Selector describing all input ports in the module's interface.
     data : numpy.ndarray
         Data array to associate with ports. Array length must equal the number
         of ports in a module's interface.    
@@ -125,11 +129,17 @@ class BaseModule(ControlledProcess):
                         (self._max_steps, value))
         self._max_steps = value
 
-    def __init__(self, selector, data, columns=['interface', 'io', 'type'],
+    def __init__(self, sel, sel_in, sel_out,
+                 data, columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                  id=None, debug=False, time_sync=False):
         self.debug = debug
         self.time_sync = time_sync
+
+        # Require several necessary attribute columns:
+        assert 'interface' in columns
+        assert 'io' in columns
+        assert 'type' in columns
 
         # Generate a unique ID if none is specified:
         if id is None:
@@ -152,15 +162,23 @@ class BaseModule(ControlledProcess):
         self.net = 'none'
 
         # Create module interface given the specified ports:
-        self.interface = Interface(selector, columns)
+        self.interface = Interface(sel, columns)
 
-        # Set the interface ID to 0; we assume that a module only has one interface:
-        self.interface[selector, 'interface'] = 0
+        # Set the interface ID to 0; we assume that a module only has one
+        # interface:
+        self.interface[sel, 'interface'] = 0
+
+        # Set port I/O status:
+        assert SelectorMethods.is_in(sel_in, sel)
+        assert SelectorMethods.is_in(sel_out, sel)
+        assert SelectorMethods.are_disjoint(sel_in, sel_out)
+        self.interface[sel_in, 'io'] = 'in'
+        self.interface[sel_out, 'io'] = 'out'
 
         # Set up mapper between port identifiers and their associated data:
         assert len(data) == len(self.interface)
         self.data = data
-        self.pm = PortMapper(selector, self.data)
+        self.pm = PortMapper(sel, self.data)
 
         # Patterns connecting this module instance with other modules instances.
         # Keyed on the IDs of those modules:
@@ -259,14 +277,15 @@ class BaseModule(ControlledProcess):
         assert m.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Check that no fan-in from different source modules occurs as a result
-        # of the new connection by getting the union of all input ports for the
-        # interfaces of all existing patterns connected to the current module
-        # and ensuring that the input ports from the new pattern don't overlap:
+        # of the new connection by getting the union of all connected input
+        # ports for the interfaces of all existing patterns connected to the
+        # current module and ensuring that the input ports from the new pattern
+        # don't overlap:
         if self.patterns:
             curr_in_ports = reduce(set.union,
-                [set(self.patterns[i].in_ports(self.pat_ints[i][0]).to_tuples()) \
-                 for i in self.patterns.keys()])
-            assert not curr_in_ports.intersection(pat.in_ports(int_0).to_tuples())
+                [set(self.patterns[i].connected_ports(self.pat_ints[i][0]).in_ports(tuples=True)) \
+                     for i in self.patterns.keys()])
+            assert not curr_in_ports.intersection(pat.connected_ports(int_0).in_ports(tuples=True))
 
         # The pattern instances associated with the current
         # module are keyed on the IDs of the modules to which they connect:
@@ -1237,21 +1256,6 @@ if __name__ == '__main__':
         Example of derived module class.
         """
 
-        def __init__(self, sel, sel_in, sel_out, data,
-                     columns=['interface', 'io', 'type'],
-                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, 
-                     port_time=PORT_TIME,
-                     id=None):
-            super(MyModule, self).__init__(sel, data, columns, port_data, port_ctrl,
-                                           port_time, id, True, True)
-
-            assert SelectorMethods.is_in(sel_in, sel)
-            assert SelectorMethods.is_in(sel_out, sel)
-            assert SelectorMethods.are_disjoint(sel_in, sel_out)
-
-            self.interface[sel_in, 'io', 'type'] = ['in', 'x']
-            self.interface[sel_out, 'io', 'type'] = ['out', 'x']
-
         def run_step(self):
             super(MyModule, self).run_step()
 
@@ -1294,29 +1298,29 @@ if __name__ == '__main__':
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:
     pat12 = Pattern(m1_int_sel, m2_int_sel)
-    pat12.interface[m1_int_sel_out] = [0, 'in', 'x']
-    pat12.interface[m1_int_sel_in] = [0, 'out', 'x']
-    pat12.interface[m2_int_sel_in] = [1, 'out', 'x']
-    pat12.interface[m2_int_sel_out] = [1, 'in', 'x']
+    pat12.interface[m1_int_sel_out] = [0, 'in']
+    pat12.interface[m1_int_sel_in] = [0, 'out']
+    pat12.interface[m2_int_sel_in] = [1, 'out']
+    pat12.interface[m2_int_sel_out] = [1, 'in']
     pat12['/a[2]', '/b[0]'] = 1
     pat12['/a[3]', '/b[1]'] = 1
     pat12['/b[3]', '/a[0]'] = 1
     man.connect(m1, m2, pat12, 0, 1)
 
     pat23 = Pattern(m2_int_sel, m3_int_sel)
-    pat23.interface[m2_int_sel_out] = [0, 'in', 'x']
-    pat23.interface[m2_int_sel_in] = [0, 'out', 'x']
-    pat23.interface[m3_int_sel_in] = [1, 'out', 'x']
-    pat23.interface[m3_int_sel_out] = [1, 'in', 'x']
+    pat23.interface[m2_int_sel_out] = [0, 'in']
+    pat23.interface[m2_int_sel_in] = [0, 'out']
+    pat23.interface[m3_int_sel_in] = [1, 'out']
+    pat23.interface[m3_int_sel_out] = [1, 'in']
     pat23['/b[4]', '/c[0]'] = 1
     pat23['/c[2]', '/b[2]'] = 1
     man.connect(m2, m3, pat23, 0, 1)
 
     pat31 = Pattern(m3_int_sel, m1_int_sel)
-    pat31.interface[m3_int_sel_out] = [0, 'in', 'x']
-    pat31.interface[m1_int_sel_in] = [1, 'out', 'x']
-    pat31.interface[m3_int_sel_in] = [0, 'out', 'x']
-    pat31.interface[m1_int_sel_out] = [1, 'in', 'x']
+    pat31.interface[m3_int_sel_out] = [0, 'in']
+    pat31.interface[m1_int_sel_in] = [1, 'out']
+    pat31.interface[m3_int_sel_in] = [0, 'out']
+    pat31.interface[m1_int_sel_out] = [1, 'in']
     pat31['/c[3]', '/a[1]'] = 1
     pat31['/a[4]', '/c[1]'] = 1
     man.connect(m3, m1, pat31, 0, 1)

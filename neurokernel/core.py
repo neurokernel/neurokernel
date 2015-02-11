@@ -34,15 +34,18 @@ class Module(BaseModule):
 
     Parameters
     ----------
-    selector : str, unicode, or sequence
+    sel : str, unicode, or sequence
         Path-like selector describing the module's interface of
         exposed ports.
+    sel_in : str, unicode, or sequence
+        Selector describing all input ports in the module's interface.
+    sel_out : str, unicode, or sequence
+        Selector describing all input ports in the module's interface.
     sel_gpot : str, unicode, or sequence
-        Path-like selector describing the graded potential ports in the module's
+        Selector describing all graded potential ports in the module's
         interface.
     sel_spike : str, unicode, or sequence
-        Path-like selector describing the spiking ports in the module's
-        interface.
+        Selector describing all spiking ports in the module's interface.
     data_gpot : numpy.ndarray
         Data array to associate with graded potential ports. Array length
         must equal the number of graded potential ports in the module's interface.
@@ -76,7 +79,9 @@ class Module(BaseModule):
     destination modules.
     """
 
-    def __init__(self, selector, sel_gpot, sel_spike, data_gpot, data_spike,
+    def __init__(self, sel, sel_in, sel_out, 
+                 sel_gpot, sel_spike,
+                 data_gpot, data_spike,
                  columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                  id=None, device=None, debug=False, time_sync=False):
@@ -101,7 +106,6 @@ class Module(BaseModule):
         # Reformat logger name:
         LoggerMixin.__init__(self, 'mod %s' % self.id)
 
-
         # Data port:
         if port_data == port_ctrl:
             raise ValueError('data and control ports must differ')
@@ -114,15 +118,20 @@ class Module(BaseModule):
         self.net = 'none'
 
         # Create module interface given the specified ports:
-        self.interface = Interface(selector, columns)
+        self.interface = Interface(sel, columns)
 
         # Set the interface ID to 0
         # we assume that a module only has one interface:
-        self.interface[selector, 'interface'] = 0
+        self.interface[sel, 'interface'] = 0
 
         # Set port types:
-        assert SelectorMethods.is_in(sel_gpot, selector)
-        assert SelectorMethods.is_in(sel_spike, selector)
+        assert SelectorMethods.is_in(sel_in, sel)
+        assert SelectorMethods.is_in(sel_out, sel)
+        assert SelectorMethods.are_disjoint(sel_in, sel_out)
+        self.interface[sel_in, 'io'] = 'in'
+        self.interface[sel_out, 'io'] = 'out'
+        assert SelectorMethods.is_in(sel_gpot, sel)
+        assert SelectorMethods.is_in(sel_spike, sel)
         assert SelectorMethods.are_disjoint(sel_gpot, sel_spike)
         self.interface[sel_gpot, 'type'] = 'gpot'
         self.interface[sel_spike, 'type'] = 'spike'
@@ -586,25 +595,14 @@ if __name__ == '__main__':
                      columns=['interface', 'io', 'type'],
                      port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                      id=None, device=None):                     
-            super(MyModule, self).__init__(sel, ','.join([sel_in_gpot, 
-                                                          sel_out_gpot]),
-                                           ','.join([sel_in_spike,
-                                                     sel_out_spike]),
+            super(MyModule, self).__init__(sel, 
+                                           ','.join([sel_in_gpot, sel_in_spike]),
+                                           ','.join([sel_out_gpot, sel_out_spike]),
+                                           ','.join([sel_in_gpot, sel_out_gpot]),
+                                           ','.join([sel_in_spike, sel_out_spike]),
                                            data_gpot, data_spike,
                                            columns, port_data, port_ctrl, port_time,
                                            id, None, True, True)
-
-            assert SelectorMethods.is_in(sel_in_gpot, sel)
-            assert SelectorMethods.is_in(sel_out_gpot, sel)
-            assert SelectorMethods.are_disjoint(sel_in_gpot, sel_out_gpot)
-            assert SelectorMethods.is_in(sel_in_spike, sel)
-            assert SelectorMethods.is_in(sel_out_spike, sel)
-            assert SelectorMethods.are_disjoint(sel_in_spike, sel_out_spike)
-
-            self.interface[sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
-            self.interface[sel_out_gpot, 'io', 'type'] = ['out', 'gpot']
-            self.interface[sel_in_spike, 'io', 'type'] = ['in', 'spike']
-            self.interface[sel_out_spike, 'io', 'type'] = ['out', 'spike']
 
         def run_step(self):
             super(MyModule, self).run_step()
