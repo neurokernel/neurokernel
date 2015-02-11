@@ -332,7 +332,13 @@ class test_interface(TestCase):
         j = Interface('/foo[3:6]')
         j['/foo[3]'] = [0, 'in', 'gpot']
         j['/foo[4:6]'] = [0, 'out', 'gpot']
+
+        # Return result as Interface:
         assert_frame_equal(i.gpot_ports(0).data, j.data)
+
+        # Return result as list of tuples:
+        self.assertItemsEqual(i.gpot_ports(0, True),
+                              j.data.index.tolist())
 
     def test_spike_ports(self):
         i = Interface('/foo[0:6]')

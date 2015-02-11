@@ -410,7 +410,7 @@ class Interface(object):
             i[sel_int, 'interface'] = n
         return i
 
-    def gpot_ports(self, i=None):
+    def gpot_ports(self, i=None, tuples=False):
         """
         Restrict Interface ports to graded potential ports.
 
@@ -419,25 +419,39 @@ class Interface(object):
         i : int
             Interface identifier. If None, return Interface instance containing
             all graded potential ports.
+        tuples : bool
+            If True, return a list of tuples; if False, return an 
+            Interface instance.
 
         Returns
         -------
-        interface : Interface
-            Interface instance containing all graded potential ports and 
-            their attributes in the specified interface.
+        interface : Interface or list of tuples
+            Either an Interface instance containing all graded potential ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
         """
 
         if i is None:
             try:
-                return self.from_df(self.data[self.data['type'] == 'gpot'])
+                df = self.data[self.data['type'] == 'gpot']
             except:
-                return Interface()
+                df = None
         else:
             try:
-                return self.from_df(self.data[(self.data['type'] == 'gpot') & \
-                                              (self.data['interface'] == i)])
+                df = self.data[(self.data['type'] == 'gpot') & \
+                               (self.data['interface'] == i)]
             except:
+                df = None
+        if tuples:
+            if df is None:
+                return []
+            else:
+                return df.index.tolist()
+        else:
+            if df is None:
                 return Interface()
+            else:
+                return self.from_df(df)
 
     def in_ports(self, i=None):
         """
