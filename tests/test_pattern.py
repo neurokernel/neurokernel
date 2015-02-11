@@ -270,7 +270,12 @@ class test_interface(TestCase):
                                                     names=['0', '1']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.in_ports(0).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.in_ports(0, True), df.index.tolist())
 
         # Selector with single level:
         i = Interface('/[foo,bar]')
@@ -281,7 +286,12 @@ class test_interface(TestCase):
                                                     names=['0']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.in_ports(0).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.in_ports(0, True), df.index.tolist())
 
     def test_interface_ports(self):
         # Selector with multiple levels:
@@ -290,7 +300,12 @@ class test_interface(TestCase):
         i['/foo[2:4]', 'interface'] = 1
         j = Interface('/foo[2:4]')
         j['/foo[2:4]', 'interface'] = 1
+
+        # Test returning result as Interface:
         assert_frame_equal(i.interface_ports(1).data, j.data)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.interface_ports(1, True), j.data.index.tolist())
 
         # Selector with single level:
         i = Interface('/[foo,bar,baz]')
@@ -298,7 +313,12 @@ class test_interface(TestCase):
         i['/baz', 'interface'] = 1
         j = Interface('/baz')
         j['/baz', 'interface'] = 1
+
+        # Test returning result as Interface:
         assert_frame_equal(i.interface_ports(1).data, j.data)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.interface_ports(1, True), j.data.index.tolist())
 
     def test_out_ports(self):
         # Selector with multiple levels:
@@ -310,7 +330,12 @@ class test_interface(TestCase):
                                                     names=['0', '1']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.out_ports(1).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.out_ports(1, True), df.index.tolist())
 
         # Selector with single level:
         i = Interface('/[foo,bar]')
@@ -321,7 +346,12 @@ class test_interface(TestCase):
                                                     names=['0']),
                           ['interface', 'io', 'type'],
                           dtype=object)
+
+        # Test returning result as Interface:
         assert_frame_equal(i.out_ports(1).data, df)
+
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.out_ports(1, True), df.index.tolist())
 
     def test_gpot_ports(self):
         i = Interface('/foo[0:6]')
@@ -333,10 +363,10 @@ class test_interface(TestCase):
         j['/foo[3]'] = [0, 'in', 'gpot']
         j['/foo[4:6]'] = [0, 'out', 'gpot']
 
-        # Return result as Interface:
+        # Test returning result as Interface:
         assert_frame_equal(i.gpot_ports(0).data, j.data)
 
-        # Return result as list of tuples:
+        # Test returning result as list of tuples:
         self.assertItemsEqual(i.gpot_ports(0, True),
                               j.data.index.tolist())
 
@@ -349,8 +379,14 @@ class test_interface(TestCase):
         j = Interface('/foo[0:3]')
         j['/foo[0]'] = [0, 'in', 'spike']
         j['/foo[1:3]'] = [0, 'out', 'spike']
+
+        # Return result as Interface:
         assert_frame_equal(i.spike_ports(0).data, j.data)
 
+        # Test returning result as list of tuples:
+        self.assertItemsEqual(i.spike_ports(0, True),
+                              j.data.index.tolist())
+        
     def test_port_select(self):
         i = self.interface.port_select(lambda x: x[1] >= 1)
         assert_index_equal(i.data.index,
