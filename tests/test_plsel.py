@@ -144,6 +144,15 @@ class test_selector_class(TestCase):
         assert c.max_levels == 2
         assert c.str == '/x/0,/x/1,/x/2,/x/3,/x/4'
 
+    def test_selector_union_empty_nonempty(self):
+        a = Selector('')
+        b = Selector('/x[0:3]')
+        c = Selector.union(a, b)
+        assert len(c) == 3
+        assert c.expanded == (('x', 0), ('x', 1), ('x', 2))
+        assert c.max_levels == 2
+        assert c.str == '/x/0,/x/1,/x/2'
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()

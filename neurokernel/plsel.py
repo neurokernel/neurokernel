@@ -190,8 +190,12 @@ class Selector(object):
         out = cls('')
         tmp = set()
         for s in sels:
-            tmp = tmp.union(s.expanded)
-        out._expanded = tuple(sorted(tmp))
+            if s.nonempty:
+                tmp = tmp.union(s.expanded)
+        if tmp:
+            out._expanded = tuple(sorted(tmp))
+        else:
+            out._expanded = ((),)
         try:
             out._max_levels = max([s.max_levels for s in sels if s.nonempty])
         except ValueError:
