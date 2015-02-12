@@ -126,6 +126,24 @@ class test_selector_class(TestCase):
         self.assertSequenceEqual([s for s in sel],
                                  [((),)])
 
+    def test_selector_union_empty(self):
+        a = Selector('')
+        b = Selector('')
+        c = Selector.union(a, b)
+        assert len(c) == 0
+        assert c.expanded == ((),)
+        assert c.max_levels == 0
+        assert c.str == ''
+
+    def test_selector_union_nonempty(self):
+        a = Selector('/x[0:3]')
+        b = Selector('/x[2:5]')
+        c = Selector.union(a, b)
+        assert len(c) == 5
+        assert c.expanded == (('x', 0), ('x', 1), ('x', 2), ('x', 3), ('x', 4))
+        assert c.max_levels == 2
+        assert c.str == '/x/0,/x/1,/x/2,/x/3,/x/4'
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()

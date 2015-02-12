@@ -70,7 +70,7 @@ class Selector(object):
         else:
             self._expanded = tuple(SelectorMethods.expand(s))
             self._max_levels = max(map(len, self._expanded))
-            #XXX
+            self._str = SelectorMethods.collapse(self._expanded)
 
     @property
     def nonempty(self):
@@ -117,7 +117,7 @@ class Selector(object):
         Returns
         -------
         result : Selector
-            Selector containing all of the port identifiers comprised by the 
+            Selector containing all of the port identifiers comprised by all of the 
             arguments.
         """
 
@@ -136,6 +136,18 @@ class Selector(object):
     def concat(cls, *sels):
         """
         Concatenate the identifiers in multiple selectors elementwise.
+
+        Parameters
+        ----------
+        sels : Selector
+            Selector instances.
+
+        Returns
+        -------
+        result : Selector
+            Each port identifier in the returned Selector is equivalent to 
+            the elementwise concatenation of the identifiers in the listed
+            Selector instances.
         """
 
         out = cls('')
@@ -169,6 +181,22 @@ class Selector(object):
                 for i in itertools.product(*[s.expanded for s in sels]))
         return out
 
+    @classmethod
+    def union(cls, *sels):
+        """
+        Compute the union of the identifiers in multiple selectors.
+        """
+
+        out = cls('')
+        out._expanded = \
+            tuple(sorted(reduce(lambda a, b: set(a.expanded).union(b.expanded), sels)))
+        try:
+            out._max_levels = max([s.max_levels for s in sels if s.nonempty])
+        except ValueError:
+            out._max_levels = 0
+        out._str = SelectorMethods.collapse(out._expanded)
+        return out
+
     def __add__(self, y):
         return self.add(self, y)
 
@@ -186,7 +214,10 @@ class Selector(object):
             yield ((),)
 
     def __repr__(self):
-        return 'Selector(\'%s\')' % self._str
+        if len(self._str) <= 100:
+            return 'Selector(\'%s\')' % self._str
+        else:
+            return 'Selector(\'%s\')' % (self._str[0:25]+' ... '+self._str[-25:])
 
 class SelectorParser(object):
     """
