@@ -588,22 +588,6 @@ if __name__ == '__main__':
         Example of derived module class.
         """
 
-        def __init__(self, sel, 
-                     sel_in_gpot, sel_in_spike,
-                     sel_out_gpot, sel_out_spike,
-                     data_gpot, data_spike,
-                     columns=['interface', 'io', 'type'],
-                     port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
-                     id=None, device=None):                     
-            super(MyModule, self).__init__(sel, 
-                                           ','.join([sel_in_gpot, sel_in_spike]),
-                                           ','.join([sel_out_gpot, sel_out_spike]),
-                                           ','.join([sel_in_gpot, sel_out_gpot]),
-                                           ','.join([sel_in_spike, sel_out_spike]),
-                                           data_gpot, data_spike,
-                                           columns, port_data, port_ctrl, port_time,
-                                           id, None, True, True)
-
         def run_step(self):
             super(MyModule, self).run_step()
 
@@ -619,7 +603,7 @@ if __name__ == '__main__':
             out_gpot_ports = self.interface.out_ports().gpot_ports().to_tuples()
             self.pm['gpot'][out_gpot_ports] = \
                     np.random.rand(len(out_gpot_ports))
-            
+
             # Randomly select output ports to emit spikes:
             out_spike_ports = self.interface.out_ports().spike_ports().to_tuples()
             self.pm['spike'][out_spike_ports] = \
@@ -639,13 +623,15 @@ if __name__ == '__main__':
         m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
         m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                                m1_int_sel_in_spike, m1_int_sel_out_spike])
-        N1_gpot = SelectorMethods.count_ports(','.join([m1_int_sel_in_gpot,
-                                                         m1_int_sel_out_gpot]))
-        N1_spike = SelectorMethods.count_ports(','.join([m1_int_sel_in_spike,
-                                                          m1_int_sel_out_spike]))
+        m1_int_sel_in = ','.join([m1_int_sel_in_gpot, m1_int_sel_in_spike])
+        m1_int_sel_out = ','.join([m1_int_sel_out_gpot, m1_int_sel_out_spike])
+        m1_int_sel_gpot = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot])
+        m1_int_sel_spike = ','.join([m1_int_sel_in_spike, m1_int_sel_out_spike])
+        N1_gpot = SelectorMethods.count_ports(m1_int_sel_gpot)
+        N1_spike = SelectorMethods.count_ports(m1_int_sel_spike)
         m1 = MyModule(m1_int_sel,
-                      m1_int_sel_in_gpot, m1_int_sel_in_spike,
-                      m1_int_sel_out_gpot, m1_int_sel_out_spike,
+                      m1_int_sel_in, m1_int_sel_out,
+                      m1_int_sel_gpot, m1_int_sel_spike,
                       np.zeros(N1_gpot, np.float64),
                       np.zeros(N1_spike, int), ['interface', 'io', 'type'],
                       man.port_data, man.port_ctrl, man.port_time, 'm1')
@@ -657,13 +643,15 @@ if __name__ == '__main__':
         m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
         m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                                m2_int_sel_in_spike, m2_int_sel_out_spike])
-        N2_gpot = SelectorMethods.count_ports(','.join([m2_int_sel_in_gpot,
-                                                         m2_int_sel_out_gpot]))
-        N2_spike = SelectorMethods.count_ports(','.join([m2_int_sel_in_spike,
-                                                          m2_int_sel_out_spike]))
+        m2_int_sel_in = ','.join([m2_int_sel_in_gpot, m2_int_sel_in_spike])
+        m2_int_sel_out = ','.join([m2_int_sel_out_gpot, m2_int_sel_out_spike])
+        m2_int_sel_gpot = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot])
+        m2_int_sel_spike = ','.join([m2_int_sel_in_spike, m2_int_sel_out_spike])
+        N2_gpot = SelectorMethods.count_ports(m2_int_sel_gpot)
+        N2_spike = SelectorMethods.count_ports(m2_int_sel_spike),
         m2 = MyModule(m2_int_sel,
-                      m2_int_sel_in_gpot, m2_int_sel_in_spike,
-                      m2_int_sel_out_gpot, m2_int_sel_out_spike,
+                      m2_int_sel_in, m2_int_sel_out,
+                      m2_int_sel_gpot, m2_int_sel_spike,
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
                       man.port_data, man.port_ctrl, man.port_time, 'm2')
@@ -699,7 +687,7 @@ if __name__ == '__main__':
         return m1
 
     # Set up logging:
-    logger = setup_logger(screen=True)
+    logger = setup_logger(screen=True, multiline=True)
     steps = 100
 
     # Emulation 1
