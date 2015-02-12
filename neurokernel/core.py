@@ -414,12 +414,12 @@ if __name__ == '__main__':
     m1_int_sel_out_gpot = '/a/out/gpot0,/a/out/gpot1'
     m1_int_sel_in_spike = '/a/in/spike0,/a/in/spike1'
     m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
-    m1_int_sel_gpot = ','.join((m1_int_sel_in_gpot, m1_int_sel_out_gpot))
-    m1_int_sel_spike = ','.join((m1_int_sel_in_spike, m1_int_sel_out_spike))
-    m1_int_sel_in = ','.join((m1_int_sel_in_gpot, m1_int_sel_in_spike))
-    m1_int_sel_out = ','.join((m1_int_sel_out_gpot, m1_int_sel_out_spike))
     m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
                            m1_int_sel_in_spike, m1_int_sel_out_spike])
+    m1_int_sel_in = ','.join((m1_int_sel_in_gpot, m1_int_sel_in_spike))
+    m1_int_sel_out = ','.join((m1_int_sel_out_gpot, m1_int_sel_out_spike))
+    m1_int_sel_gpot = ','.join((m1_int_sel_in_gpot, m1_int_sel_out_gpot))
+    m1_int_sel_spike = ','.join((m1_int_sel_in_spike, m1_int_sel_out_spike))
     N1_gpot = SelectorMethods.count_ports(m1_int_sel_gpot)
     N1_spike = SelectorMethods.count_ports(m1_int_sel_spike)
 
@@ -427,12 +427,12 @@ if __name__ == '__main__':
     m2_int_sel_out_gpot = '/b/out/gpot0,/b/out/gpot1'
     m2_int_sel_in_spike = '/b/in/spike0,/b/in/spike1'
     m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
-    m2_int_sel_gpot = ','.join((m2_int_sel_in_gpot, m2_int_sel_out_gpot))
-    m2_int_sel_spike = ','.join((m2_int_sel_in_spike, m2_int_sel_out_spike))
-    m2_int_sel_in = ','.join((m2_int_sel_in_gpot, m2_int_sel_in_spike))
-    m2_int_sel_out = ','.join((m2_int_sel_out_gpot, m2_int_sel_out_spike))
     m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
                            m2_int_sel_in_spike, m2_int_sel_out_spike])
+    m2_int_sel_in = ','.join((m2_int_sel_in_gpot, m2_int_sel_in_spike))
+    m2_int_sel_out = ','.join((m2_int_sel_out_gpot, m2_int_sel_out_spike))
+    m2_int_sel_gpot = ','.join((m2_int_sel_in_gpot, m2_int_sel_out_gpot))
+    m2_int_sel_spike = ','.join((m2_int_sel_in_spike, m2_int_sel_out_spike))
     N2_gpot = SelectorMethods.count_ports(m2_int_sel_gpot)
     N2_spike = SelectorMethods.count_ports(m2_int_sel_spike)
 
