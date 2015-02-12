@@ -188,8 +188,10 @@ class Selector(object):
         """
 
         out = cls('')
-        out._expanded = \
-            tuple(sorted(reduce(lambda a, b: set(a.expanded).union(b.expanded), sels)))
+        tmp = set()
+        for s in sels:
+            tmp = tmp.union(s.expanded)
+        out._expanded = tuple(sorted(tmp))
         try:
             out._max_levels = max([s.max_levels for s in sels if s.nonempty])
         except ValueError:
