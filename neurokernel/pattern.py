@@ -1293,27 +1293,27 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='+')
 
-    def gpot_ports(self, i=None):
-        return self.interface.gpot_ports(i)
+    def gpot_ports(self, i=None, tuples=False):
+        return self.interface.gpot_ports(i, tuples)
     gpot_ports.__doc__ = Interface.gpot_ports.__doc__
 
-    def in_ports(self, i=None):
-        return self.interface.in_ports(i)
+    def in_ports(self, i=None, tuples=False):
+        return self.interface.in_ports(i, tuples)
     in_ports.__doc__ = Interface.in_ports.__doc__
 
-    def interface_ports(self, i=None):
-        return self.interface.interface_ports(i)
+    def interface_ports(self, i=None, tuples=False):
+        return self.interface.interface_ports(i, tuples)
     interface_ports.__doc__ = Interface.interface_ports.__doc__
 
-    def out_ports(self, i=None):
-        return self.interface.out_ports(i)
+    def out_ports(self, i=None, tuples=False):
+        return self.interface.out_ports(i, tuples)
     out_ports.__doc__ = Interface.out_ports.__doc__
 
-    def spike_ports(self, i=None):
-        return self.interface.spike_ports(i)
+    def spike_ports(self, i=None, tuples=False):
+        return self.interface.spike_ports(i, tuples)
     spike_ports.__doc__ = Interface.spike_ports.__doc__
 
-    def connected_ports(self, i=None):
+    def connected_ports(self, i=None, tuples=False):
         """
         Return ports that are connected by the pattern.
         
@@ -1321,12 +1321,16 @@ class Pattern(object):
         ----------
         i : int
             Interface identifier.
+        tuples : bool
+            If True, return a list of tuples; if False, return an
+            Interface instance.
 
         Returns
         -------
         interface : Interface
-            Interface instance containing all connected ports
-            their attributes in the specified interface.
+            Either an Interface instance containing all connected ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
 
         Notes
         -----
@@ -1344,9 +1348,15 @@ class Pattern(object):
         # lexicographic order:        
         df = self.interface.data.ix[sorted(ports)]
         if i is None:
-            return Interface.from_df(df)
+            if tuples:
+                return df.index.tolist()
+            else:
+                return Interface.from_df(df)
         else:
-            return Interface.from_df(df[df['interface'] == i])
+            if tuples:
+                return df[df['interface'] == i].index.tolist()
+            else:
+                return Interface.from_df(df[df['interface'] == i])
 
     @classmethod
     def from_concat(cls, *selectors, **kwargs):
@@ -1422,7 +1432,7 @@ class Pattern(object):
         else:
             return False
 
-    def get_conns(self, as_str=False):
+    def connected_port_pairs(self, as_str=False):
         """
         Return connections as pairs of port identifiers.
         

@@ -867,16 +867,16 @@ class test_pattern(TestCase):
         assert p.is_connected(0, 1) == True
         assert p.is_connected(1, 0) == True
 
-    def test_get_conns(self):
+    def test_connected_port_pairs(self):
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
         p['/aaa[0]', '/bbb[2]'] = 1
         p['/aaa[1]', '/bbb[0]'] = 1
         p['/aaa[2]', '/bbb[1]'] = 1
-        self.assertSequenceEqual(p.get_conns(),
+        self.assertSequenceEqual(p.connected_port_pairs(),
                                  [(('aaa', 0), ('bbb', 2)),
                                   (('aaa', 1), ('bbb', 0)),
                                   (('aaa', 2), ('bbb', 1))])
-        self.assertSequenceEqual(p.get_conns(True),
+        self.assertSequenceEqual(p.connected_port_pairs(True),
                                  [('/aaa/0', '/bbb/2'),
                                   ('/aaa/1', '/bbb/0'),
                                   ('/aaa/2', '/bbb/1')])
@@ -1040,15 +1040,15 @@ class test_pattern(TestCase):
         p = Pattern('/foo[0:3]', '/bar[0:3]')
         p['/foo[0]', '/bar[0]'] = 1
         p['/foo[1]', '/bar[1]'] = 1
-        self.assertItemsEqual(p.connected_ports().to_tuples(),
+        self.assertItemsEqual(p.connected_ports(tuples=True),
                               [('bar', 0),
                                ('bar', 1),
                                ('foo', 0),
                                ('foo', 1)])
-        self.assertItemsEqual(p.connected_ports(0).to_tuples(),
+        self.assertItemsEqual(p.connected_ports(0, True),
                               [('foo', 0),
                                ('foo', 1)])
-        self.assertItemsEqual(p.connected_ports(1).to_tuples(),
+        self.assertItemsEqual(p.connected_ports(1, True),
                               [('bar', 0),
                                ('bar', 1)])
 
