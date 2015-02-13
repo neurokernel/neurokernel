@@ -877,9 +877,9 @@ class test_pattern(TestCase):
                                   (('aaa', 1), ('bbb', 0)),
                                   (('aaa', 2), ('bbb', 1))])
         self.assertSequenceEqual(p.get_conns(True),
-                                 [('/aaa[0]', '/bbb[2]'),
-                                  ('/aaa[1]', '/bbb[0]'),
-                                  ('/aaa[2]', '/bbb[1]')])
+                                 [('/aaa/0', '/bbb/2'),
+                                  ('/aaa/1', '/bbb/0'),
+                                  ('/aaa/2', '/bbb/1')])
 
     def test_split_multiindex(self):
         idx = pd.MultiIndex(levels=[['a'], ['b', 'c'], ['d', 'e'], [0, 1, 2]],
@@ -956,20 +956,20 @@ class test_pattern(TestCase):
         g = p.to_graph()
 
         self.assertItemsEqual(g.nodes(data=True), 
-                              [('/bar[0]', {'interface': 1, 'io': 'out', 'type': ''}),
-                               ('/bar[1]', {'interface': 1, 'io': 'out', 'type': ''}),
-                               ('/bar[2]', {'interface': 1, 'io': 'out', 'type': ''}),
-                               ('/bar[3]', {'interface': 1, 'io': 'in', 'type': ''}),
-                               ('/foo[0]', {'interface': 0, 'io': 'in', 'type': ''}),
-                               ('/foo[1]', {'interface': 0, 'io': 'in', 'type': ''}),
-                               ('/foo[2]', {'interface': 0, 'io': 'out', 'type': ''}),
-                               ('/foo[3]', {'interface': 0, 'io': 'out', 'type': ''})])
+                              [('/bar/0', {'interface': 1, 'io': 'out', 'type': ''}),
+                               ('/bar/1', {'interface': 1, 'io': 'out', 'type': ''}),
+                               ('/bar/2', {'interface': 1, 'io': 'out', 'type': ''}),
+                               ('/bar/3', {'interface': 1, 'io': 'in', 'type': ''}),
+                               ('/foo/0', {'interface': 0, 'io': 'in', 'type': ''}),
+                               ('/foo/1', {'interface': 0, 'io': 'in', 'type': ''}),
+                               ('/foo/2', {'interface': 0, 'io': 'out', 'type': ''}),
+                               ('/foo/3', {'interface': 0, 'io': 'out', 'type': ''})])
         self.assertItemsEqual(g.edges(data=True),
-                              [('/foo[0]', '/bar[0]', {}),
-                               ('/foo[0]', '/bar[1]', {}),
-                               ('/foo[1]', '/bar[2]', {}),
-                               ('/bar[3]', '/foo[2]', {}),
-                               ('/bar[3]', '/foo[3]', {})])
+                              [('/foo/0', '/bar/0', {}),
+                               ('/foo/0', '/bar/1', {}),
+                               ('/foo/1', '/bar/2', {}),
+                               ('/bar/3', '/foo/2', {}),
+                               ('/bar/3', '/foo/3', {})])
 
     def test_from_graph(self):
         p = Pattern('/foo[0:4]', '/bar[0:4]')
