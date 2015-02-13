@@ -967,6 +967,39 @@ class SelectorMethods(SelectorParser):
             return False
 
     @classmethod
+    def tokens_to_str(cls, tokens):
+        """
+        Convert expanded/parsed token sequence into a single selector string.
+
+        Parameters
+        ----------
+        s : sequence
+            Sequence of expanded selector tokens.
+        
+        Returns
+        -------
+        result : str
+            String corresponding to selector tokens.
+        """
+
+        assert np.iterable(tokens)
+        result = []
+        for t in tokens:
+            if type(t) in [str, unicode, int]:
+                result.append('/'+str(t))
+            elif type(t) == slice:
+                start = str(t.start) if t.start is not None else ''
+                stop = str(t.stop) if t.stop is not None else ''
+                result.append('[%s:%s]' % (start, stop))
+            elif type(t) in [tuple, list]:
+                if not t:
+                    raise ValueError('invalid token')
+                result.append('['+','.join(t)+']')
+            else:
+                raise ValueError('invalid token')
+        return ''.join(result)
+
+    @classmethod
     def collapse(cls, selector):
         """
         Collapse a selector into a single string.
@@ -986,22 +1019,12 @@ class SelectorMethods(SelectorParser):
 
         if isinstance(selector, basestring):
             return selector
-        
+        if isinstance(selector, Selector):
+            return selector.str
+        assert np.iterable(selector)
         result_list = []
-        for t in selector:
-            s = ''
-            for x in t:
-                if type(x) in [str, unicode, int]:
-                    s += '/'+str(x)
-                elif type(x) == slice:
-                    start = str(x.start) if x.start is not None else ''
-                    stop = str(x.stop) if x.stop is not None else ''
-                    s += '[%s:%s]' % (start, stop)
-                elif type(x) in [tuple, list]:
-                    s += '['+','.join(x)+']'
-                else:
-                    raise ValueError('invalid selector')
-            result_list.append(s)
+        for tokens in selector:
+            result_list.append(cls.tokens_to_str(tokens))
         return ','.join(result_list)
 
     @classmethod

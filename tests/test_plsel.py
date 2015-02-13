@@ -612,6 +612,27 @@ class test_path_like_selector(TestCase):
                                  [['x', 'y', ''], ['a', 'b', 'c']])
         assert sel_id != id(sel_padded)
 
+    def test_tokens_to_str(self):
+        assert self.sel.tokens_to_str([]) == ''
+        assert self.sel.tokens_to_str(['a']) == '/a'
+        assert self.sel.tokens_to_str(['a', 0]) == '/a/0'
+        assert self.sel.tokens_to_str(('a', 0)) == '/a/0'
+        assert self.sel.tokens_to_str(['a', '*']) == '/a/*'
+        assert self.sel.tokens_to_str(['a', 'b', 0]) == '/a/b/0'
+        assert self.sel.tokens_to_str(['a', 'b', [0, 1]]) == '/a/b[0,1]'
+        assert self.sel.tokens_to_str(['a', 'b', (0, 1)]) == '/a/b[0,1]'
+        assert self.sel.tokens_to_str(['a', 'b', slice(0, 5)]) == '/a/b[0:5]'
+        assert self.sel.tokens_to_str(['a', 'b', slice(None, 5)]) == '/a/b[:5]'
+
+    def test_collapse(self):
+        assert self.sel.collapse([]) == ''
+        assert self.sel.tokens_to_str([['a']]) == '/a'
+        assert self.sel.collapse([['a', 0]]) == '/a/0'
+        assert self.sel.collapse([('a', 0)]) == '/a/0'
+        assert self.sel.collapse([['a', 'b', 0]]) == '/a/0'
+        assert self.sel.collapse([['a', 0], ['b', 0]]) == '/a/0,/b/0'
+        assert self.sel.collapse([['a', 'b', (0, 1)], ['c', 'd']]) == '/a/b[0,1],/c/d'
+        
 class test_base_port_mapper(TestCase):
     def test_create(self):
         portmap = np.arange(5)
