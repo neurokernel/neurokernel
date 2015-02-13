@@ -828,16 +828,44 @@ class test_pattern(TestCase):
         assert p.is_in_interfaces('/ddd[0]') == True
 
     def test_is_connected_single_level(self):
+
+        # No connections:
+        p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
+        assert p.is_connected(0, 1) == False
+        assert p.is_connected(1, 0) == False
+        
+        # Connected in one direction:
         p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
         p['/aaa', '/ccc'] = 1
         assert p.is_connected(0, 1) == True
         assert p.is_connected(1, 0) == False
 
+        # Connected in both directions:
+        p = Pattern('/[aaa,bbb,ccc]', '/[ddd,eee,fff]')
+        p['/aaa', '/ddd'] = 1
+        p['/eee', '/bbb'] = 1
+        assert p.is_connected(0, 1) == True
+        assert p.is_connected(1, 0) == True
+
     def test_is_connected_multi_level(self):
+        
+        # No connections:
+        p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+        assert p.is_connected(0, 1) == False
+        assert p.is_connected(1, 0) == False
+
+        # Connected in one direction:
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
         p['/aaa[0]', '/bbb[2]'] = 1
         assert p.is_connected(0, 1) == True
         assert p.is_connected(1, 0) == False
+
+        # Connected in both directions:
+        p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+        p['/aaa[0]', '/bbb[2]'] = 1
+        p['/bbb[0]', '/aaa[1]'] = 1
+        assert p.is_connected(0, 1) == True
+        assert p.is_connected(1, 0) == True
 
     def test_get_conns(self):
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
