@@ -994,7 +994,7 @@ class SelectorMethods(SelectorParser):
             elif type(t) in [tuple, list]:
                 if not t:
                     raise ValueError('invalid token')
-                result.append('['+','.join(t)+']')
+                result.append('['+','.join(map(str, t))+']')
             else:
                 raise ValueError('invalid token')
         return ''.join(result)
