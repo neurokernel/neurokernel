@@ -262,9 +262,10 @@ class Module(BaseModule):
 
                     # Assign transmitted values directly to port data array:
                     if len(self._in_port_dict_ids['gpot'][in_id]):
-                        self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
+                        self.pm['gpot'].set_by_inds(self._in_port_dict_ids['gpot'][in_id], data[0])
                     if len(self._in_port_dict_ids['spike'][in_id]):
-                        self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[1]
+                        self.pm['spike'].set_by_inds(self._in_port_dict_ids['spike'][in_id], data[1])
+                    
 
     def _put_out_data(self):
         """
@@ -293,12 +294,12 @@ class Module(BaseModule):
                 # transmit output:
                 if len(self._out_port_dict_ids['gpot'][out_id]):
                     gpot_data = \
-                        self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                        self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][out_id])
                 else:
                     gpot_data = np.array([], self.pm['gpot'].dtype)
                 if len(self._out_port_dict_ids['spike'][out_id]):
                     spike_data = \
-                        self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+                        self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][out_id])
                 else:
                     spike_data = np.array([], self.pm['spike'].dtype)
 

@@ -415,8 +415,8 @@ class BaseModule(ControlledProcess):
                 # Check for exceptions so as to not fail on the first emulation
                 # step when there is no input data to retrieve:
                 try:
-                    self.pm.data[self._in_port_dict_ids[in_id]] = \
-                        self._in_data[in_id].popleft()
+                    self.pm.set_by_inds(self._in_port_dict_ids[in_id],
+                                        self._in_data[in_id].popleft())
                 except:
                     self.log_info('no input data from [%s] retrieved' % in_id)
                 else:
@@ -442,7 +442,7 @@ class BaseModule(ControlledProcess):
             # it to the outgoing queue:
             for out_id in self._out_ids:
                 try:
-                    data = self.pm.data[self._out_port_dict_ids[out_id]]
+                    data = self.pm.get_by_inds(self._out_port_dict_ids[out_id])
                     self._out_data.append((out_id, data))
                 except:
                     self.log_info('no output data to [%s] sent' % out_id)
