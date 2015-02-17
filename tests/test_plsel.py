@@ -626,10 +626,10 @@ class test_path_like_selector(TestCase):
 
     def test_collapse(self):
         assert self.sel.collapse([]) == ''
-        assert self.sel.tokens_to_str([['a']]) == '/a'
+        assert self.sel.collapse([['a']]) == '/a'
         assert self.sel.collapse([['a', 0]]) == '/a/0'
         assert self.sel.collapse([('a', 0)]) == '/a/0'
-        assert self.sel.collapse([['a', 'b', 0]]) == '/a/0'
+        assert self.sel.collapse([['a', 'b', 0]]) == '/a/b/0'
         assert self.sel.collapse([['a', 0], ['b', 0]]) == '/a/0,/b/0'
         assert self.sel.collapse([['a', 'b', (0, 1)], ['c', 'd']]) == '/a/b[0,1],/c/d'
         
