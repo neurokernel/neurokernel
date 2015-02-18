@@ -44,11 +44,12 @@ class GPUPortMapper(PortMapper):
     def __init__(self, selector, data=None, portmap=None, make_copy=True):
         super(PortMapper, self).__init__(selector, portmap)
 
+        self._data = None
         if data is not None and make_copy:
             self.data = data.copy()
         else:
             self.data = data
-            
+    
     @property
     def data_ctype(self):
         """
@@ -77,6 +78,45 @@ class GPUPortMapper(PortMapper):
                 self._data = gpuarray.to_gpu(x)
         else:
             raise ValueError('incompatible or invalid data array specified')
+
+    def copy(self):
+        """
+        Return copy of this port mapper.
+
+        Returns
+        -------
+        result : neurokernel.plsel.GPUPortMapper
+            Copy of port mapper instance.
+        """
+
+        c = self.__class__('')
+        c.portmap = self.portmap.copy()
+        if self.data is not None:
+            c.data = self.data.copy()
+        return c
+
+    @classmethod
+    def from_pm(cls, pm):
+        """
+        Create a new port mapper instance given an existing instance.
+
+        Parameters
+        ----------
+        pm : neurokernel.plsel.GPUPortMapper
+            Existing port mapper instance.
+
+        Returns
+        -------
+        result : neurokernel.plsel.GPUPortMapper
+            New port mapper instance.
+        """
+
+        assert isinstance(pm, cls)
+        r = cls('')
+        r.portmap = pm.portmap.copy()
+        if pm.data is not None:
+            r.data = pm.data.copy()
+        return r
 
     def get_inds_nonzero(self):
         raise NotImplementedError
