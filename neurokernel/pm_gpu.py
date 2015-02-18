@@ -85,10 +85,11 @@ class GPUPortMapper(PortMapper):
         raise NotImplementedError
 
     def set(self, selector, data):
-        raise NotImplementedError
+        self.set_by_inds(np.asarray(self.sel.select(self.portmap,
+                        selector).dropna().values, dtype=np.int), data)
 
     def get(self, selector):
-        raise NotImplementedError
+        return self.get_by_inds(np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int))
 
     __getitem__ = get
     __setitem__ = set
