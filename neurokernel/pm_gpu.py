@@ -18,13 +18,15 @@ class GPUPortMapper(PortMapper):
     Maps a PyCUDA GPUArray to/from path-like port identifiers.
     """
 
-    def __init__(self, selector, data=None, portmap=None, make_copy=True):
-        super(PortMapper, self).__init__(selector, portmap)
-        N = len(self)
+    def _validate_data(self, data):
+        """
+        Check whether the mapper's ports are compatible with the specified port data array.
+        """
 
-        if data is None or len(data) == 0:
-            self.data = gpuarray.empty(0, np.double)
-        else:
+        # None is valid because it is used to signify the absence of a data array:
+        if data is None:
+            return True
+        try:
             # Can only handle 1D data arrays:
             assert np.ndim(data) == 1
 
@@ -33,20 +35,48 @@ class GPUPortMapper(PortMapper):
             assert max(self.portmap) < len(data)
 
             # The port mapper may map identifiers to some portion of the data array:
-            assert N <= len(data)
+            assert len(self) <= len(data)
+        except:
+            return False
+        else:
+            return True
 
-            if isinstance(data, gpuarray.GPUArray):
-                if make_copy:
-                    self.data = data.copy()
-                else:
-                    self.data = data
+    def __init__(self, selector, data=None, portmap=None, make_copy=True):
+        super(PortMapper, self).__init__(selector, portmap)
+
+        if data is not None and make_copy:
+            self.data = data.copy()
+        else:
+            self.data = data
+            
+    @property
+    def data_ctype(self):
+        """
+        C type corresponding to type of data array.
+        """
+        
+        if hasattr(self.data, 'dtype'):
+            return tools.dtype_to_ctype(self.data.dtype)
+        else:
+            return ''
+
+    @property
+    def data(self):
+        """
+        Data associated with ports.
+        """
+        
+        return self._data
+
+    @data.setter
+    def data(self, x):        
+        if self._validate_data(x):
+            if isinstance(x, gpuarray.GPUArray) or x is None:
+                self._data = x
             else:
-
-                # If the initial data array isn't already on the GPU, it must be
-                # copied:
-                self.data = gpuarray.to_gpu(data)
-
-        self.data_ctype = tools.dtype_to_ctype(self.data.dtype)
+                self._data = gpuarray.to_gpu(x)
+        else:
+            raise ValueError('incompatible or invalid data array specified')
 
     def get_inds_nonzero(self):
         raise NotImplementedError
