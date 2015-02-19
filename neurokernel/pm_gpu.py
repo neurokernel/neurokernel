@@ -154,15 +154,21 @@ class GPUPortMapper(PortMapper):
 
         N = len(inds)
         assert N <= len(self.data)
-        inds_ctype = tools.dtype_to_ctype(inds.dtype)
+
         if not isinstance(inds, gpuarray.GPUArray):
             inds = gpuarray.to_gpu(inds)
-        v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)
         result = gpuarray.empty(N, dtype=self.data.dtype)
 
-        func = elementwise.ElementwiseKernel(v, "dest[i] = src[inds[i]]")
+        try:
+            func = self.get_by_inds.cache[inds.dtype]
+        except KeyError:
+            inds_ctype = tools.dtype_to_ctype(inds.dtype)
+            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)
+            func = elementwise.ElementwiseKernel(v, "dest[i] = src[inds[i]]")
+            self.get_by_inds.cache[inds.dtype] = func
         func(result, inds, self.data, range=slice(0, N, 1))
         return result.get()
+    get_by_inds.cache = {}
 
     def set_by_inds(self, inds, data):
         """
@@ -182,13 +188,16 @@ class GPUPortMapper(PortMapper):
 
         N = len(inds)
         assert N == len(data)
-        inds_ctype = tools.dtype_to_ctype(inds.dtype)
         if not isinstance(inds, gpuarray.GPUArray):
             inds = gpuarray.to_gpu(inds)
         if not isinstance(data, gpuarray.GPUArray):
             data = gpuarray.to_gpu(data)
-        v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)
-        
-        func = elementwise.ElementwiseKernel(v, "dest[inds[i]] = src[i]")
+        try:
+            func = self.set_by_inds.cache[inds.dtype]
+        except KeyError:
+            inds_ctype = tools.dtype_to_ctype(inds.dtype)
+            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)        
+            func = elementwise.ElementwiseKernel(v, "dest[inds[i]] = src[i]")
+            self.set_by_inds.cache[inds.dtype] = func
         func(self.data, inds, data, range=slice(0, N, 1))
-
+    set_by_inds.cache = {}
