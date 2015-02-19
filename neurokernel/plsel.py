@@ -2138,27 +2138,55 @@ class PortMapper(BasePortMapper):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, selector, data=None, portmap=None, make_copy=True):
-        super(PortMapper, self).__init__(selector, portmap)
-        N = len(self)
+    def _validate_data(self, data):
+        """
+        Check whether the mapper's ports are compatible with the specified port data array.
+        """
 
-        # Can currently only handle unidimensional data structures:
-        if data is None or len(data) == 0:
-            self.data = np.array([])
-        else:
+        # None is valid because it is used to signify the absence of a data array:
+        if data is None:
+            return True
+        try:
+            # Can only handle 1D data arrays:
             assert np.ndim(data) == 1
-            assert type(data) == np.ndarray
 
             # The integers in the port map must be valid indices into the
             # data array:
             assert max(self.portmap) < len(data)
 
             # The port mapper may map identifiers to some portion of the data array:
-            assert N <= len(data)
-            if make_copy:
-                self.data = data.copy()
+            assert len(self) <= len(data)
+        except:
+            return False
+        else:
+            return True
+
+    def __init__(self, selector, data=None, portmap=None, make_copy=True):
+        super(PortMapper, self).__init__(selector, portmap)
+
+        self._data = None
+        if data is not None and make_copy:
+            self.data = data.copy()
+        else:
+            self.data = data
+
+    @property
+    def data(self):
+        """
+        Data associated with ports.
+        """
+        
+        return self._data
+
+    @data.setter
+    def data(self, x):        
+        if self._validate_data(x):
+            if isinstance(x, np.ndarray) or x is None:
+                self._data = x
             else:
-                self.data = data
+                self._data = np.asarray(x)
+        else:
+            raise ValueError('incompatible or invalid data array specified')
 
     def copy(self):
         """
