@@ -102,8 +102,8 @@ class GPUPortMapper(PortMapper):
 
         Parameters
         ----------
-        pm : neurokernel.plsel.GPUPortMapper
-            Existing port mapper instance.
+        pm : neurokernel.plsel.PortMapper
+            Existing port mapper instance. If `pm` is not a GPUPortMapper, 
 
         Returns
         -------
@@ -111,10 +111,10 @@ class GPUPortMapper(PortMapper):
             New port mapper instance.
         """
 
-        assert isinstance(pm, cls)
+        assert isinstance(pm, PortMapper)
         r = cls('')
         r.portmap = pm.portmap.copy()
-        if pm.data is not None:
+        if hasattr(pm, 'data') and pm.data is not None:
             r.data = pm.data.copy()
         return r
 
