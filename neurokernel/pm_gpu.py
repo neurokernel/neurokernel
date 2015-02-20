@@ -23,44 +23,24 @@ class GPUPortMapper(PortMapper):
         Check whether the mapper's ports are compatible with the specified port data array.
         """
 
-        # None is valid because it is used to signify the absence of a data array:
+        # A port mapper may contain or be assigned None as its data array:
         if data is None:
             return True
         try:
-            # Can only handle 1D data arrays:
-            assert np.ndim(data) == 1
+            # Cannot handle more than 1 dimension:
+            assert np.ndim(data) <= 1
 
             # The integers in the port map must be valid indices into the
             # data array:
-            assert max(self.portmap) < len(data)
+            # assert max(self.portmap) < len(data)
 
             # The port mapper may map identifiers to some portion of the data array:
-            assert len(self) <= len(data)
+            # assert len(self) <= len(data)
         except:
             return False
         else:
             return True
-
-    def __init__(self, selector, data=None, portmap=None, make_copy=True):
-        super(PortMapper, self).__init__(selector, portmap)
-
-        self._data = None
-        if data is not None and make_copy:
-            self.data = data.copy()
-        else:
-            self.data = data
     
-    @property
-    def data_ctype(self):
-        """
-        C type corresponding to type of data array.
-        """
-        
-        if hasattr(self.data, 'dtype'):
-            return tools.dtype_to_ctype(self.data.dtype)
-        else:
-            return ''
-
     @property
     def data(self):
         """
@@ -72,10 +52,14 @@ class GPUPortMapper(PortMapper):
     @data.setter
     def data(self, x):        
         if self._validate_data(x):
-            if isinstance(x, gpuarray.GPUArray) or x is None:
+            if x is None:
+                self._data = None
+
+            elif isinstance(x, gpuarray.GPUArray):
                 self._data = x
             else:
-                self._data = gpuarray.to_gpu(x)
+                # Use np.asarray() to deal with scalars:
+                self._data = gpuarray.to_gpu(np.asarray(x))
         else:
             raise ValueError('incompatible or invalid data array specified')
 
@@ -94,6 +78,17 @@ class GPUPortMapper(PortMapper):
         if self.data is not None:
             c.data = self.data.copy()
         return c
+
+    @property
+    def data_ctype(self):
+        """
+        C type corresponding to type of data array.
+        """
+        
+        if hasattr(self.data, 'dtype'):
+            return tools.dtype_to_ctype(self.data.dtype)
+        else:
+            return ''
 
     @classmethod
     def from_pm(cls, pm):
@@ -149,6 +144,8 @@ class GPUPortMapper(PortMapper):
             Selected data.
         """
 
+        if not self.data:
+            raise ValueError('port mapper contains no data')
         assert len(np.shape(inds)) == 1
         assert issubclass(inds.dtype.type, numbers.Integral)
 
@@ -183,15 +180,20 @@ class GPUPortMapper(PortMapper):
         """
 
         assert len(np.shape(inds)) == 1
-        assert self.data.dtype == data.dtype
         assert issubclass(inds.dtype.type, numbers.Integral)
-
         N = len(inds)
         assert N == len(data)
+
         if not isinstance(inds, gpuarray.GPUArray):
             inds = gpuarray.to_gpu(inds)
         if not isinstance(data, gpuarray.GPUArray):
             data = gpuarray.to_gpu(data)
+
+        # Allocate data array if it doesn't exist:
+        if not self.data:
+            self.data = gpuarray.empty(N, data.dtype)
+        else:
+            assert self.data.dtype == data.dtype
         try:
             func = self.set_by_inds.cache[inds.dtype]
         except KeyError:
