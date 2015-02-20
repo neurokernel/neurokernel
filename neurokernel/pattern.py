@@ -1293,27 +1293,27 @@ class Pattern(object):
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
                                 data=data, columns=columns, comb_op='+')
 
-    def gpot_ports(self, i=None):
-        return self.interface.gpot_ports(i)
+    def gpot_ports(self, i=None, tuples=False):
+        return self.interface.gpot_ports(i, tuples)
     gpot_ports.__doc__ = Interface.gpot_ports.__doc__
 
-    def in_ports(self, i=None):
-        return self.interface.in_ports(i)
+    def in_ports(self, i=None, tuples=False):
+        return self.interface.in_ports(i, tuples)
     in_ports.__doc__ = Interface.in_ports.__doc__
 
-    def interface_ports(self, i=None):
-        return self.interface.interface_ports(i)
+    def interface_ports(self, i=None, tuples=False):
+        return self.interface.interface_ports(i, tuples)
     interface_ports.__doc__ = Interface.interface_ports.__doc__
 
-    def out_ports(self, i=None):
-        return self.interface.out_ports(i)
+    def out_ports(self, i=None, tuples=False):
+        return self.interface.out_ports(i, tuples)
     out_ports.__doc__ = Interface.out_ports.__doc__
 
-    def spike_ports(self, i=None):
-        return self.interface.spike_ports(i)
+    def spike_ports(self, i=None, tuples=False):
+        return self.interface.spike_ports(i, tuples)
     spike_ports.__doc__ = Interface.spike_ports.__doc__
 
-    def connected_ports(self, i=None):
+    def connected_ports(self, i=None, tuples=False):
         """
         Return ports that are connected by the pattern.
         
@@ -1321,32 +1321,42 @@ class Pattern(object):
         ----------
         i : int
             Interface identifier.
+        tuples : bool
+            If True, return a list of tuples; if False, return an
+            Interface instance.
 
         Returns
         -------
         interface : Interface
-            Interface instance containing all connected ports
-            their attributes in the specified interface.
+            Either an Interface instance containing all connected ports and 
+            their attributes in the specified interface, or a list of tuples
+            corresponding to the expanded ports.
+
+        Notes
+        -----
+        Returned ports are listed in lexicographic order.
         """
 
         # Use sets to accumulate the expanded ports to avoid passing duplicates
         # to DataFrame.ix.__getitem__():
-        from_tuples = set()
-        to_tuples = set()
+        ports = set()
         for t in self.data.index:
-            from_tuples.add(t[0:self.num_levels['from']])
-            to_tuples.add(t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']])
+            ports.add(t[0:self.num_levels['from']])
+            ports.add(t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']])
 
         # Sort the expanded ports so that the results are returned in
         # lexicographic order:        
+        df = self.interface.data.ix[sorted(ports)]
         if i is None:
-            return Interface.from_df(self.interface.data.ix[sorted(set.union(from_tuples, to_tuples))])
-        elif i == 0:
-            return Interface.from_df(self.interface.data.ix[sorted(from_tuples)])
-        elif i == 1:
-            return Interface.from_df(self.interface.data.ix[sorted(to_tuples)])
+            if tuples:
+                return df.index.tolist()
+            else:
+                return Interface.from_df(df)
         else:
-            raise ValueError('not supported for more than 2 interfaces')
+            if tuples:
+                return df[df['interface'] == i].index.tolist()
+            else:
+                return Interface.from_df(df[df['interface'] == i])
 
     @classmethod
     def from_concat(cls, *selectors, **kwargs):
@@ -1422,7 +1432,7 @@ class Pattern(object):
         else:
             return False
 
-    def get_conns(self, as_str=False):
+    def connected_port_pairs(self, as_str=False):
         """
         Return connections as pairs of port identifiers.
         
@@ -1434,8 +1444,8 @@ class Pattern(object):
         """
 
         if as_str:
-            return [(self.sel.to_identifier(row[self.from_slice]),
-                     self.sel.to_identifier(row[self.to_slice])) \
+            return [(self.sel.tokens_to_str(row[self.from_slice]),
+                     self.sel.tokens_to_str(row[self.to_slice])) \
                     for row in self.data.index]
         else:
             return [(row[self.from_slice], row[self.to_slice]) \
@@ -1701,8 +1711,8 @@ class Pattern(object):
         Returns
         -------
         result : bool
-            True if at least one connection from `from_int` to `to_int`
-            exists.
+            True if at least one connection from a port identifier in interface 
+            `from_int` to a port identifier in interface `to_int` exists.
         """
 
         assert from_int != to_int
@@ -1711,12 +1721,12 @@ class Pattern(object):
 
         # Get indices of the 'from' and 'to' interfaces as lists to speed up the
         # check below [*]:
-        from_idx = self.interface.interface_ports(from_int).index.tolist()
-        to_idx = self.interface.interface_ports(to_int).index.tolist()
+        from_idx = self.interface.interface_ports(from_int, True)
+        to_idx = self.interface.interface_ports(to_int, True)
 
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
-        for t in idx.tolist():
+        for t in idx:
             
             # Split tuple into 'from' and 'to' identifiers; since the interface
             # index for a 'from' or 'to' identifier is an Index rather than a
@@ -1731,7 +1741,7 @@ class Pattern(object):
             else:
                 to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
 
-            # Check whether port identifiers are in the interface indices [*]:
+            # Check whether port identifiers are in the interface indices [*]:                
             if from_id in from_idx and to_id in to_idx:
                 return True
         return False
@@ -1853,7 +1863,7 @@ class Pattern(object):
 
         # Add all of the ports as nodes:
         for t in self.interface.data.index:    
-            id = self.sel.to_identifier(t)
+            id = self.sel.tokens_to_str(t)
 
             # Replace NaNs with empty strings:
             d = {k: (v if str(v) != 'nan' else '') \
@@ -1866,8 +1876,8 @@ class Pattern(object):
         for t in self.data.index:
             t_from = t[self.from_slice]
             t_to = t[self.to_slice]
-            id_from = self.sel.to_identifier(t_from)
-            id_to = self.sel.to_identifier(t_to)
+            id_from = self.sel.tokens_to_str(t_from)
+            id_to = self.sel.tokens_to_str(t_to)
             d = self.data.ix[t].to_dict()
 
             # Discard the 'conn' attribute because the existence of the edge

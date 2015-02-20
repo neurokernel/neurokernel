@@ -126,6 +126,33 @@ class test_selector_class(TestCase):
         self.assertSequenceEqual([s for s in sel],
                                  [((),)])
 
+    def test_selector_union_empty(self):
+        a = Selector('')
+        b = Selector('')
+        c = Selector.union(a, b)
+        assert len(c) == 0
+        assert c.expanded == ((),)
+        assert c.max_levels == 0
+        assert c.str == ''
+
+    def test_selector_union_nonempty(self):
+        a = Selector('/x[0:3]')
+        b = Selector('/x[2:5]')
+        c = Selector.union(a, b)
+        assert len(c) == 5
+        assert c.expanded == (('x', 0), ('x', 1), ('x', 2), ('x', 3), ('x', 4))
+        assert c.max_levels == 2
+        assert c.str == '/x/0,/x/1,/x/2,/x/3,/x/4'
+
+    def test_selector_union_empty_nonempty(self):
+        a = Selector('')
+        b = Selector('/x[0:3]')
+        c = Selector.union(a, b)
+        assert len(c) == 3
+        assert c.expanded == (('x', 0), ('x', 1), ('x', 2))
+        assert c.max_levels == 2
+        assert c.str == '/x/0,/x/1,/x/2'
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()
@@ -585,6 +612,27 @@ class test_path_like_selector(TestCase):
                                  [['x', 'y', ''], ['a', 'b', 'c']])
         assert sel_id != id(sel_padded)
 
+    def test_tokens_to_str(self):
+        assert self.sel.tokens_to_str([]) == ''
+        assert self.sel.tokens_to_str(['a']) == '/a'
+        assert self.sel.tokens_to_str(['a', 0]) == '/a/0'
+        assert self.sel.tokens_to_str(('a', 0)) == '/a/0'
+        assert self.sel.tokens_to_str(['a', '*']) == '/a/*'
+        assert self.sel.tokens_to_str(['a', 'b', 0]) == '/a/b/0'
+        assert self.sel.tokens_to_str(['a', 'b', [0, 1]]) == '/a/b[0,1]'
+        assert self.sel.tokens_to_str(['a', 'b', (0, 1)]) == '/a/b[0,1]'
+        assert self.sel.tokens_to_str(['a', 'b', slice(0, 5)]) == '/a/b[0:5]'
+        assert self.sel.tokens_to_str(['a', 'b', slice(None, 5)]) == '/a/b[:5]'
+
+    def test_collapse(self):
+        assert self.sel.collapse([]) == ''
+        assert self.sel.collapse([['a']]) == '/a'
+        assert self.sel.collapse([['a', 0]]) == '/a/0'
+        assert self.sel.collapse([('a', 0)]) == '/a/0'
+        assert self.sel.collapse([['a', 'b', 0]]) == '/a/b/0'
+        assert self.sel.collapse([['a', 0], ['b', 0]]) == '/a/0,/b/0'
+        assert self.sel.collapse([['a', 'b', (0, 1)], ['c', 'd']]) == '/a/b[0,1],/c/d'
+        
 class test_base_port_mapper(TestCase):
     def test_create(self):
         portmap = np.arange(5)

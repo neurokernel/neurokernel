@@ -828,30 +828,58 @@ class test_pattern(TestCase):
         assert p.is_in_interfaces('/ddd[0]') == True
 
     def test_is_connected_single_level(self):
+
+        # No connections:
+        p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
+        assert p.is_connected(0, 1) == False
+        assert p.is_connected(1, 0) == False
+        
+        # Connected in one direction:
         p = Pattern('/[aaa,bbb]', '/[ccc,ddd]')
         p['/aaa', '/ccc'] = 1
         assert p.is_connected(0, 1) == True
         assert p.is_connected(1, 0) == False
 
+        # Connected in both directions:
+        p = Pattern('/[aaa,bbb,ccc]', '/[ddd,eee,fff]')
+        p['/aaa', '/ddd'] = 1
+        p['/eee', '/bbb'] = 1
+        assert p.is_connected(0, 1) == True
+        assert p.is_connected(1, 0) == True
+
     def test_is_connected_multi_level(self):
+        
+        # No connections:
+        p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+        assert p.is_connected(0, 1) == False
+        assert p.is_connected(1, 0) == False
+
+        # Connected in one direction:
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
         p['/aaa[0]', '/bbb[2]'] = 1
         assert p.is_connected(0, 1) == True
         assert p.is_connected(1, 0) == False
 
-    def test_get_conns(self):
+        # Connected in both directions:
+        p = Pattern('/aaa[0:3]', '/bbb[0:3]')
+        p['/aaa[0]', '/bbb[2]'] = 1
+        p['/bbb[0]', '/aaa[1]'] = 1
+        assert p.is_connected(0, 1) == True
+        assert p.is_connected(1, 0) == True
+
+    def test_connected_port_pairs(self):
         p = Pattern('/aaa[0:3]', '/bbb[0:3]')
         p['/aaa[0]', '/bbb[2]'] = 1
         p['/aaa[1]', '/bbb[0]'] = 1
         p['/aaa[2]', '/bbb[1]'] = 1
-        self.assertSequenceEqual(p.get_conns(),
+        self.assertSequenceEqual(p.connected_port_pairs(),
                                  [(('aaa', 0), ('bbb', 2)),
                                   (('aaa', 1), ('bbb', 0)),
                                   (('aaa', 2), ('bbb', 1))])
-        self.assertSequenceEqual(p.get_conns(True),
-                                 [('/aaa[0]', '/bbb[2]'),
-                                  ('/aaa[1]', '/bbb[0]'),
-                                  ('/aaa[2]', '/bbb[1]')])
+        self.assertSequenceEqual(p.connected_port_pairs(True),
+                                 [('/aaa/0', '/bbb/2'),
+                                  ('/aaa/1', '/bbb/0'),
+                                  ('/aaa/2', '/bbb/1')])
 
     def test_split_multiindex(self):
         idx = pd.MultiIndex(levels=[['a'], ['b', 'c'], ['d', 'e'], [0, 1, 2]],
@@ -928,20 +956,20 @@ class test_pattern(TestCase):
         g = p.to_graph()
 
         self.assertItemsEqual(g.nodes(data=True), 
-                              [('/bar[0]', {'interface': 1, 'io': 'out', 'type': ''}),
-                               ('/bar[1]', {'interface': 1, 'io': 'out', 'type': ''}),
-                               ('/bar[2]', {'interface': 1, 'io': 'out', 'type': ''}),
-                               ('/bar[3]', {'interface': 1, 'io': 'in', 'type': ''}),
-                               ('/foo[0]', {'interface': 0, 'io': 'in', 'type': ''}),
-                               ('/foo[1]', {'interface': 0, 'io': 'in', 'type': ''}),
-                               ('/foo[2]', {'interface': 0, 'io': 'out', 'type': ''}),
-                               ('/foo[3]', {'interface': 0, 'io': 'out', 'type': ''})])
+                              [('/bar/0', {'interface': 1, 'io': 'out', 'type': ''}),
+                               ('/bar/1', {'interface': 1, 'io': 'out', 'type': ''}),
+                               ('/bar/2', {'interface': 1, 'io': 'out', 'type': ''}),
+                               ('/bar/3', {'interface': 1, 'io': 'in', 'type': ''}),
+                               ('/foo/0', {'interface': 0, 'io': 'in', 'type': ''}),
+                               ('/foo/1', {'interface': 0, 'io': 'in', 'type': ''}),
+                               ('/foo/2', {'interface': 0, 'io': 'out', 'type': ''}),
+                               ('/foo/3', {'interface': 0, 'io': 'out', 'type': ''})])
         self.assertItemsEqual(g.edges(data=True),
-                              [('/foo[0]', '/bar[0]', {}),
-                               ('/foo[0]', '/bar[1]', {}),
-                               ('/foo[1]', '/bar[2]', {}),
-                               ('/bar[3]', '/foo[2]', {}),
-                               ('/bar[3]', '/foo[3]', {})])
+                              [('/foo/0', '/bar/0', {}),
+                               ('/foo/0', '/bar/1', {}),
+                               ('/foo/1', '/bar/2', {}),
+                               ('/bar/3', '/foo/2', {}),
+                               ('/bar/3', '/foo/3', {})])
 
     def test_from_graph(self):
         p = Pattern('/foo[0:4]', '/bar[0:4]')
@@ -1012,15 +1040,15 @@ class test_pattern(TestCase):
         p = Pattern('/foo[0:3]', '/bar[0:3]')
         p['/foo[0]', '/bar[0]'] = 1
         p['/foo[1]', '/bar[1]'] = 1
-        self.assertItemsEqual(p.connected_ports().to_tuples(),
+        self.assertItemsEqual(p.connected_ports(tuples=True),
                               [('bar', 0),
                                ('bar', 1),
                                ('foo', 0),
                                ('foo', 1)])
-        self.assertItemsEqual(p.connected_ports(0).to_tuples(),
+        self.assertItemsEqual(p.connected_ports(0, True),
                               [('foo', 0),
                                ('foo', 1)])
-        self.assertItemsEqual(p.connected_ports(1).to_tuples(),
+        self.assertItemsEqual(p.connected_ports(1, True),
                               [('bar', 0),
                                ('bar', 1)])
 

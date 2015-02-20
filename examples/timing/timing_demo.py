@@ -27,16 +27,12 @@ class MyModule(Module):
     """
 
     def __init__(self, sel,
-                 sel_in_gpot, sel_in_spike,
-                 sel_out_gpot, sel_out_spike,
+                 sel_in, sel_out,
+                 sel_gpot, sel_spike,
                  data_gpot=None, data_spike=None,
                  columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
                  id=None, device=None, debug=False):
-        sel_in = Selector(sel_in_gpot)+Selector(sel_in_spike)
-        sel_out = Selector(sel_out_gpot)+Selector(sel_out_spike)
-        sel_gpot = Selector(sel_in_gpot)+Selector(sel_out_gpot)
-        sel_spike = Selector(sel_in_spike)+Selector(sel_out_spike)
         if data_gpot is None:
             data_gpot = np.zeros(SelectorMethods.count_ports(sel_gpot), float)
         if data_spike is None:
@@ -47,8 +43,8 @@ class MyModule(Module):
                                        columns, port_data, port_ctrl, port_time,
                                        id, device, debug, True)
 
-        self.pm['gpot'][self.interface.out_ports().gpot_ports().to_tuples()] = 1.0
-        self.pm['spike'][self.interface.out_ports().spike_ports().to_tuples()] = 1
+        self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = 1.0
+        self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = 1
 
 def gen_sels(n_lpu, n_spike, n_gpot):
     """
@@ -71,8 +67,8 @@ def gen_sels(n_lpu, n_spike, n_gpot):
     -------
     results : dict of tuples
         The keys of the result are the module IDs; the values are tuples
-        containing the respective selectors for input graded potential, 
-        input spike, output graded potential, and output spike ports.
+        containing the respective selectors for input, output, graded potential, 
+        and spiking ports.
     """
 
     assert n_lpu >= 2
@@ -87,20 +83,18 @@ def gen_sels(n_lpu, n_spike, n_gpot):
 
         # Structure ports as 
         # /lpu_id/in_or_out/spike_or_gpot/[other_lpu_ids,..]/[0:n_spike]
-        sel_in_gpot = '/%s/in/gpot/%s/[0:%i]' % (lpu_id,
-                                                 other_lpu_ids,
-                                                 n_gpot)
-        sel_in_spike = '/%s/in/spike/%s/[0:%i]' % (lpu_id,
-                                                   other_lpu_ids,
-                                                   n_spike)
-        sel_out_gpot = '/%s/out/gpot/%s/[0:%i]' % (lpu_id,
-                                                   other_lpu_ids,
-                                                   n_gpot)
-        sel_out_spike = '/%s/out/spike/%s/[0:%i]' % (lpu_id,
-                                                     other_lpu_ids,
-                                                     n_spike)
-        results[lpu_id] = (Selector(sel_in_gpot), Selector(sel_in_spike),
-                           Selector(sel_out_gpot), Selector(sel_out_spike))
+        sel_in_gpot = Selector('/%s/in/gpot/%s/[0:%i]' % \
+                    (lpu_id, other_lpu_ids, n_gpot))
+        sel_in_spike = Selector('/%s/in/spike/%s/[0:%i]' % \
+                    (lpu_id, other_lpu_ids, n_spike))
+        sel_out_gpot = Selector('/%s/out/gpot/%s/[0:%i]' % \
+                    (lpu_id, other_lpu_ids, n_gpot))
+        sel_out_spike = Selector('/%s/out/spike/%s/[0:%i]' % \
+                    (lpu_id, other_lpu_ids, n_spike))
+        results[lpu_id] = (Selector.union(sel_in_gpot, sel_in_spike),
+                           Selector.union(sel_out_gpot, sel_out_spike),
+                           Selector.union(sel_in_gpot, sel_out_gpot),
+                           Selector.union(sel_in_spike, sel_out_spike))
 
     return results
 
@@ -149,10 +143,10 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     sel_dict = gen_sels(n_lpu, n_spike, n_gpot)
     for i in xrange(n_lpu):
         lpu_i = 'lpu%s' % i
-        sel_in_gpot, sel_in_spike, sel_out_gpot, sel_out_spike = sel_dict[lpu_i]
-        sel = sel_in_gpot+sel_in_spike+sel_out_gpot+sel_out_spike
-        m = MyModule(sel,
-                sel_in_gpot, sel_in_spike, sel_out_gpot, sel_out_spike,
+        sel_in, sel_out, sel_gpot, sel_spike = sel_dict[lpu_i]
+        sel = Selector.union(sel_in, sel_out, sel_gpot, sel_spike)
+        m = MyModule(sel, sel_in, sel_out,
+                     sel_gpot, sel_spike,
                      port_data=man.port_data, port_ctrl=man.port_ctrl,
                      port_time=man.port_time,
                      id=lpu_i, device=i, debug=args.debug)
@@ -162,24 +156,27 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     for i, j in itertools.combinations(xrange(n_lpu), 2):
         lpu_i = 'lpu%s' % i
         lpu_j = 'lpu%s' % j
-        sel_in_gpot_i, sel_in_spike_i, sel_out_gpot_i, sel_out_spike_i = \
-            sel_dict[lpu_i]
-        sel_in_gpot_j, sel_in_spike_j, sel_out_gpot_j, sel_out_spike_j = \
-            sel_dict[lpu_j]
-        sel_from = sel_out_gpot_i+sel_out_spike_i+sel_out_gpot_j+sel_out_spike_j
-        sel_to = sel_in_gpot_j+sel_in_spike_j+sel_in_gpot_i+sel_in_spike_i
+        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]            
+        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]            
+
+        # The order of these two selectors is important; the individual 'from'
+        # and 'to' ports must line up properly for Pattern.from_concat to
+        # produce the right pattern:
+        sel_from = sel_out_i+sel_out_j
+        sel_to = sel_in_j+sel_in_i
         man.log_info('before from_concat')
         pat = Pattern.from_concat(sel_from, sel_to,
                                   from_sel=sel_from, to_sel=sel_to, data=1)
+
         man.log_info('before setting attribs')
-        pat.interface[sel_in_gpot_i] = [0, 'out', 'gpot']
-        pat.interface[sel_out_gpot_i] = [0, 'in', 'gpot']
-        pat.interface[sel_in_spike_i] = [0, 'out', 'spike']
-        pat.interface[sel_out_spike_i] = [0, 'in', 'spike']
-        pat.interface[sel_in_gpot_j] = [1, 'out', 'gpot']
-        pat.interface[sel_out_gpot_j] = [1, 'in', 'gpot']
-        pat.interface[sel_in_spike_j] = [1, 'out', 'spike']
-        pat.interface[sel_out_spike_j] = [1, 'in', 'spike']
+        pat.interface[sel_in_i, 'interface', 'io'] = [0, 'out']
+        pat.interface[sel_out_i, 'interface', 'io'] = [0, 'in']
+        pat.interface[sel_gpot_i, 'interface', 'type'] = [0, 'gpot']
+        pat.interface[sel_spike_i, 'interface', 'type'] = [0, 'spike']
+        pat.interface[sel_in_j, 'interface', 'io'] = [1, 'out']
+        pat.interface[sel_out_j, 'interface', 'io'] = [1, 'in']
+        pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
+        pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
         man.log_info('before connecting modules')
         man.connect(man.modules[lpu_i], man.modules[lpu_j], pat, 0, 1)
 

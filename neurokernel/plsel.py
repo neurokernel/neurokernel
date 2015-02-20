@@ -70,7 +70,7 @@ class Selector(object):
         else:
             self._expanded = tuple(SelectorMethods.expand(s))
             self._max_levels = max(map(len, self._expanded))
-            #XXX
+            self._str = SelectorMethods.collapse(self._expanded)
 
     @property
     def nonempty(self):
@@ -117,7 +117,7 @@ class Selector(object):
         Returns
         -------
         result : Selector
-            Selector containing all of the port identifiers comprised by the 
+            Selector containing all of the port identifiers comprised by all of the 
             arguments.
         """
 
@@ -136,6 +136,18 @@ class Selector(object):
     def concat(cls, *sels):
         """
         Concatenate the identifiers in multiple selectors elementwise.
+
+        Parameters
+        ----------
+        sels : Selector
+            Selector instances.
+
+        Returns
+        -------
+        result : Selector
+            Each port identifier in the returned Selector is equivalent to 
+            the elementwise concatenation of the identifiers in the listed
+            Selector instances.
         """
 
         out = cls('')
@@ -169,6 +181,28 @@ class Selector(object):
                 for i in itertools.product(*[s.expanded for s in sels]))
         return out
 
+    @classmethod
+    def union(cls, *sels):
+        """
+        Compute the union of the identifiers in multiple selectors.
+        """
+
+        out = cls('')
+        tmp = set()
+        for s in sels:
+            if s.nonempty:
+                tmp = tmp.union(s.expanded)
+        if tmp:
+            out._expanded = tuple(sorted(tmp))
+        else:
+            out._expanded = ((),)
+        try:
+            out._max_levels = max([s.max_levels for s in sels if s.nonempty])
+        except ValueError:
+            out._max_levels = 0
+        out._str = SelectorMethods.collapse(out._expanded)
+        return out
+
     def __add__(self, y):
         return self.add(self, y)
 
@@ -186,7 +220,10 @@ class Selector(object):
             yield ((),)
 
     def __repr__(self):
-        return 'Selector(\'%s\')' % self._str
+        if len(self._str) <= 100:
+            return 'Selector(\'%s\')' % self._str
+        else:
+            return 'Selector(\'%s\')' % (self._str[0:25]+' ... '+self._str[-25:])
 
 class SelectorParser(object):
     """
@@ -930,6 +967,39 @@ class SelectorMethods(SelectorParser):
             return False
 
     @classmethod
+    def tokens_to_str(cls, tokens):
+        """
+        Convert expanded/parsed token sequence into a single selector string.
+
+        Parameters
+        ----------
+        s : sequence
+            Sequence of expanded selector tokens.
+        
+        Returns
+        -------
+        result : str
+            String corresponding to selector tokens.
+        """
+
+        assert np.iterable(tokens)
+        result = []
+        for t in tokens:
+            if type(t) in [str, unicode, int]:
+                result.append('/'+str(t))
+            elif type(t) == slice:
+                start = str(t.start) if t.start is not None else ''
+                stop = str(t.stop) if t.stop is not None else ''
+                result.append('[%s:%s]' % (start, stop))
+            elif type(t) in [tuple, list]:
+                if not t:
+                    raise ValueError('invalid token')
+                result.append('['+','.join(map(str, t))+']')
+            else:
+                raise ValueError('invalid token')
+        return ''.join(result)
+
+    @classmethod
     def collapse(cls, selector):
         """
         Collapse a selector into a single string.
@@ -949,22 +1019,12 @@ class SelectorMethods(SelectorParser):
 
         if isinstance(selector, basestring):
             return selector
-        
+        if isinstance(selector, Selector):
+            return selector.str
+        assert np.iterable(selector)
         result_list = []
-        for t in selector:
-            s = ''
-            for x in t:
-                if type(x) in [str, unicode, int]:
-                    s += '/'+str(x)
-                elif type(x) == slice:
-                    start = str(x.start) if x.start is not None else ''
-                    stop = str(x.stop) if x.stop is not None else ''
-                    s += '[%s:%s]' % (start, stop)
-                elif type(x) in [tuple, list]:
-                    s += '['+','.join(x)+']'
-                else:
-                    raise ValueError('invalid selector')
-            result_list.append(s)
+        for tokens in selector:
+            result_list.append(cls.tokens_to_str(tokens))
         return ','.join(result_list)
 
     @classmethod
