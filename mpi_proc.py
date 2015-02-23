@@ -9,6 +9,8 @@ import sys
 
 import dill
 from mpi4py import MPI
+MPI.pickle.dumps = dill.dumps
+MPI.pickle.loads = dill.loads
 
 class MPIProcess(object):
     """
@@ -76,8 +78,7 @@ class MPIProcMan(object):
             # backend will wait to receive them and then start running the
             # targets on the appropriate nodes.
             for i in xrange(len(self)):
-                data = dill.dumps((self._targets[i].__name__,
-                                   self._args[i], self._kwargs[i]))
+                data = (self._targets[i].__name__, self._args[i], self._kwargs[i])
                 self.comm.send(data, i)
 
     def send(self, data, i):

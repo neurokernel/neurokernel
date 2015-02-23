@@ -11,6 +11,8 @@ import sys
 
 import dill
 from mpi4py import MPI
+MPI.pickle.dumps = dill.dumps
+MPI.pickle.loads = dill.loads
 
 import mpi_proc
 
@@ -23,8 +25,7 @@ mod_name = os.path.splitext(os.path.basename(sys.argv[1]))[0]
 m = importlib.import_module(mod_name)
 
 # Get the constructor/function arguments:
-data = parent.recv()
-name, args, kwargs = dill.loads(data)
+name, args, kwargs = parent.recv()
 
 # Target is a class:
 target = getattr(m, name)
