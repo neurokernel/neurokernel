@@ -1282,17 +1282,20 @@ if __name__ == '__main__':
     m1 = MyModule(m1_int_sel, m1_int_sel_in, m1_int_sel_out,
                   np.zeros(5, dtype=np.float),
                   ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, man.port_time, 'm1   ')
+                  man.port_data, man.port_ctrl, man.port_time, 'm1   ', False,
+                  True)
     man.add_mod(m1)
     m2 = MyModule(m2_int_sel, m2_int_sel_in, m2_int_sel_out,
                   np.zeros(5, dtype=np.float),
                   ['interface', 'io', 'type'],
-                  man.port_data, man.port_ctrl, man.port_time, 'm2   ')
+                  man.port_data, man.port_ctrl, man.port_time, 'm2   ', False,
+                  True)
     man.add_mod(m2)
     m3 = MyModule(m3_int_sel, m3_int_sel_in, m3_int_sel_out,
                   np.zeros(4, dtype=np.float),
                   ['interface', 'io', 'type'], 
-                  man.port_data, man.port_ctrl, man.port_time, 'm3   ')
+                  man.port_data, man.port_ctrl, man.port_time, 'm3   ', False,
+                  True)
     man.add_mod(m3)
 
     # Make sure that all ports in the patterns' interfaces are set so 

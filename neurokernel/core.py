@@ -635,7 +635,8 @@ if __name__ == '__main__':
                       m1_int_sel_gpot, m1_int_sel_spike,
                       np.zeros(N1_gpot, np.float64),
                       np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, man.port_time, 'm1')
+                      man.port_data, man.port_ctrl, man.port_time, 'm1', None,
+                      False, True)
         man.add_mod(m1)
 
         m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
@@ -655,7 +656,8 @@ if __name__ == '__main__':
                       m2_int_sel_gpot, m2_int_sel_spike,
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, man.port_time, 'm2')
+                      man.port_data, man.port_ctrl, man.port_time, 'm2', None,
+                      False, True)
         man.add_mod(m2)
 
         # Make sure that all ports in the patterns' interfaces are set so 
