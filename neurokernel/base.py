@@ -520,13 +520,17 @@ class Manager(mpi.Manager):
                 self.throughput = 0.0
             self.log_info('average received throughput: %s bytes/s' % \
                           self.throughput)
+            
+            # Send throughput to launcher:
+            self._sock.send(str(self.throughput))
 
     def get_throughput(self):
         """
         Retrieve average received data throughput.
         """
 
-        return self.throughput
+        if self._is_launcher():
+            return self._sock.recv_multipart()
 
 if __name__ == '__main__':
     class MyModule(BaseModule):
