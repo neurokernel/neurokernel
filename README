@@ -1,2 +1,10 @@
+Description
+-----------
 Demo of how to use MPI spawn to start up a sufficient number of processes to run
 a specified number of Process-like classes and their constructor arguments.
+
+Remarks
+-------
+In principle, the process classes to be executed on each node can also be
+serialized and transmitted rather than attempting to find the appropriate module
+for the spawned backend to import.

@@ -25,6 +25,18 @@ class MPIProcess(object):
     def run(self):
         pass
 
+    def send_parent(self, data):
+        self.parent.send(data)
+
+    def recv_parent(self):
+        return self.parent.recv()
+
+    def send_peer(self, data):
+        self.comm.send(data)
+
+    def recv_peer(self):
+        return self.comm.recv()
+
 class MPIProcMan(object):
     """
     Process manager class.
@@ -68,13 +80,8 @@ class MPIProcMan(object):
                                    self._args[i], self._kwargs[i]))
                 self.comm.send(data, i)
 
-    def send(self, data, dest):
-        if self._is_parent():
-            if dest >= len(self):
-                raise ValueError('nonexistent destination')
-            self.comm.send(data, dest)
+    def send(self, data, i):
+        self.comm.send(data, i)
 
     def recv(self):
-        if self._is_parent():
-            return self.comm.recv()
-
+        return self.comm.recv()
