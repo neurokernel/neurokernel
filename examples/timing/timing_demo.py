@@ -9,7 +9,6 @@ import itertools
 import time
 
 import numpy as np
-import pycuda.driver as drv
 
 from neurokernel.base import setup_logger
 from neurokernel.core import Manager, Module, PORT_DATA, PORT_CTRL, PORT_TIME
@@ -131,11 +130,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     # Time everything starting with manager initialization:
     start = time.time()
 
-    # Check whether a sufficient number of GPUs are available:
-    drv.init()
-    if n_lpu > drv.Device.count():
-        raise RuntimeError('insufficient number of available GPUs.')
-
+    # Set up manager and broker:
     man = Manager(get_random_port(), get_random_port(), get_random_port())
     man.add_brok()
 
@@ -149,7 +144,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
                      sel_gpot, sel_spike,
                      port_data=man.port_data, port_ctrl=man.port_ctrl,
                      port_time=man.port_time,
-                     id=lpu_i, device=i, debug=args.debug)
+                     id=lpu_i, device=None, debug=args.debug)
         man.add_mod(m)
 
     # Set up connections between module pairs:
