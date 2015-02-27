@@ -375,6 +375,8 @@ class Manager(mpi.Manager):
         self.total_time = 0.0
         self.total_nbytes = 0.0
 
+        # Computed throughput (only updated after an emulation run):
+        self.throughput = 0.0
         self.log_info('manager instantiated')
 
     def validate_args(self, target):
@@ -522,15 +524,21 @@ class Manager(mpi.Manager):
                           self.throughput)
             
             # Send throughput to launcher:
+            self.log_info('transmitting throughput to launcher')
             self._sock.send(str(self.throughput))
 
     def get_throughput(self):
         """
         Retrieve average received data throughput.
+
+        Notes
+        -----
+        This must be called by the launcher, or else the program might never
+        exit.
         """
 
         if self._is_launcher():
-            return self._sock.recv_multipart()
+            return self._sock.recv_multipart()[1]
 
 if __name__ == '__main__':
     class MyModule(BaseModule):
@@ -617,3 +625,5 @@ if __name__ == '__main__':
     man.start(steps=100)
     man.stop()
     man.quit()
+    if man._is_launcher():
+        print man.get_throughput()
