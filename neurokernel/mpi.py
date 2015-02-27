@@ -412,6 +412,15 @@ class Manager(LoggerMixin):
         self._sock.bind(env['MASTER_IPC_INT'])
         self._pc = PollerChecker(self._sock, zmq.POLLIN)
 
+        # Remove SLURM-related variables to enable invocation of mpiexec within
+        # a SLURM-launched job without interference of pmi:
+        for k in env.keys():
+            if k.startswith('SLURM'):
+                del env[k]
+
+        # XXX variables set by SLURM should be used to impose upper-limits on
+        # the resources used by the emulation XXX
+
         # Pass the IPC interface name to the launched process via an
         # environmental variable:
         python_path = sys.executable
@@ -606,7 +615,8 @@ class Manager(LoggerMixin):
 if __name__ == '__main__':
     import time
 
-    setup_logger(screen=True, file_name='neurokernel.log', mpi_comm=MPI.COMM_WORLD)
+    setup_logger(screen=True, file_name='neurokernel.log',
+            mpi_comm=MPI.COMM_WORLD, multiline=True)
 
     # Define a class whose constructor takes arguments so as to test
     # instantiation of the class by the manager:
