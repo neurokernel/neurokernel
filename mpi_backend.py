@@ -29,7 +29,7 @@ name, args, kwargs = parent.recv()
 
 # Target is a class:
 target = getattr(m, name)
-if inspect.isclass(target) and issubclass(target, mpi_proc.MPIProcess):
+if inspect.isclass(target) and issubclass(target, mpi_proc.Process):
     instance = target(*args, **kwargs)
     instance.run()
 

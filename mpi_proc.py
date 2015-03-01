@@ -12,7 +12,7 @@ from mpi4py import MPI
 MPI.pickle.dumps = dill.dumps
 MPI.pickle.loads = dill.loads
 
-class MPIProcess(object):
+class Process(object):
     """
     Process class.
     """
@@ -39,7 +39,7 @@ class MPIProcess(object):
     def recv_peer(self):
         return self.comm.recv()
 
-class MPIProcMan(object):
+class Manager(object):
     """
     Process manager class.
     """
