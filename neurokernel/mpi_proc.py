@@ -66,18 +66,18 @@ class Process(object):
         pass
 
     def send_parent(self, data):
-        self.intercomm.send(data)
+        self.intercomm.send(data, 0)
 
     def recv_parent(self):
         return self.intercomm.recv()
 
-    def send_peer(self, data):
-        self.intracomm.send(data)
+    def send_peer(self, data, rank):
+        self.intracomm.send(data, rank)
 
     def recv_peer(self):
         return self.intracomm.recv()
 
-class Manager(object):
+class ProcessManager(object):
     """
     Process manager class.
     """
