@@ -14,7 +14,9 @@ from mpi4py import MPI
 MPI.pickle.dumps = dill.dumps
 MPI.pickle.loads = dill.loads
 
-import mpi_proc
+# Process needs to be imported directly into the script's namespace in order to
+# ensure that the issubclass() check later in the script succeeds:
+from neurokernel.mpi_proc import Process
 
 size = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
@@ -31,7 +33,7 @@ name, args, kwargs = parent.recv()
 
 # Target is a class:
 target = getattr(m, name)
-if inspect.isclass(target) and issubclass(target, mpi_proc.Process):
+if inspect.isclass(target) and issubclass(target, Process):
     instance = target(*args, **kwargs)
     instance.run()
 
