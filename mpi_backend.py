@@ -24,7 +24,9 @@ parent = MPI.Comm.Get_parent()
 mod_name = os.path.splitext(os.path.basename(sys.argv[1]))[0]
 m = importlib.import_module(mod_name)
 
-# Get the constructor/function arguments:
+# Get the target class/function and its constructor arguments 
+# (in principle, the class could be serialized and transmitted rather than
+# imported):
 name, args, kwargs = parent.recv()
 
 # Target is a class:

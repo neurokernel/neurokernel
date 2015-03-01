@@ -7,6 +7,8 @@ Classes for managing MPI-based processes.
 import inspect
 import sys
 
+# Use dill for mpi4py object serialization to accomodate a wider range of argument
+# possibilities than possible with pickle:
 import dill
 from mpi4py import MPI
 MPI.pickle.dumps = dill.dumps
