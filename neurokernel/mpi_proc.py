@@ -65,17 +65,29 @@ class Process(object):
 
         pass
 
-    def send_parent(self, data):
-        self.intercomm.send(data, 0)
+    def send_parent(self, data, tag=0):
+        """
+        Send data to parent process.
+        """
 
-    def recv_parent(self):
-        return self.intercomm.recv()
+        self.intercomm.send(data, 0, tag=tag)
 
-    def send_peer(self, data, rank):
-        self.intracomm.send(data, rank)
+    def recv_parent(self, tag=MPI.ANY_TAG):
+        """
+        Receive data from parent process.
+        """
 
-    def recv_peer(self):
-        return self.intracomm.recv()
+        return self.intercomm.recv(tag=tag)
+
+    def send_peer(self, data, dest, tag=0):
+        """
+        Send data to peer process.
+        """
+
+        self.intracomm.send(data, dest, tag=tag)
+
+    def recv_peer(self, source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
+        return self.intracomm.recv(source=source, tag=tag)
 
 class ProcessManager(object):
     """
@@ -101,6 +113,21 @@ class ProcessManager(object):
         return self._intercomm
 
     def add(self, target, *args, **kwargs):
+        """
+        Add target class or function to manager.
+
+        Parameters
+        ----------
+        target : Process or function
+            Class or function to instantiate in MPI process. If a class is
+            specified, the `run()` method of the class will be executed in the
+            process.
+        args : sequence
+            Sequential arguments to pass to target class constructor.
+        kwargs : dict
+            Named arguments to pass to target class constructor.
+        """
+
         self._targets.append(target)
         self._args.append(args)
         self._kwargs.append(kwargs)
@@ -110,9 +137,17 @@ class ProcessManager(object):
 
     @memoized_property
     def _is_parent(self):
+        """
+        True if the current MPI process is the spawning parent.
+        """
+
         return MPI.Comm.Get_parent() == MPI.COMM_NULL
 
     def run(self):
+        """
+        Spawn MPI processes for and execute each of the managed targets.
+        """
+
         if self._is_parent:
             # Find the file name of the module in which the Process class
             # is instantiated:
@@ -135,8 +170,16 @@ class ProcessManager(object):
                 data = (self._targets[i].__name__, self._args[i], self._kwargs[i])
                 self._intercomm.send(data, i)
 
-    def send(self, data, i):
-        self.intercomm.send(data, i)
+    def send(self, data, dest, tag=0):
+        """
+        Send data to child process.
+        """
 
-    def recv(self):
-        return self.intercomm.recv()
+        self.intercomm.send(data, dest, tag=0)
+
+    def recv(self, tag=MPI.ANY_TAG):
+        """
+        Receive data from child process.
+        """
+
+        return self.intercomm.recv(tag=tag)
