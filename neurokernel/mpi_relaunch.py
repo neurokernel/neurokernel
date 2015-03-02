@@ -23,7 +23,7 @@ for k in env.keys():
         del env[k]
 
 # Get name of the file in which this module is imported:
-script_name = os.path.basename(inspect.stack()[1][1])
+script_name = inspect.stack()[1][1]
 parent_name = psutil.Process(os.getppid()).name()
 if not re.search('mpirun|mpiexec', parent_name):
     try:
