@@ -530,7 +530,7 @@ class Manager(mpi.WorkerManager):
 
 
 if __name__ == '__main__':
-    #import neurokernel.mpi_relaunch
+    import neurokernel.mpi_relaunch
 
     class MyModule(BaseModule):
         """
@@ -612,10 +612,6 @@ if __name__ == '__main__':
     # steps, start it as follows and remove the sleep statement:
     # man.start(steps=500)
 
-    # man.stop()
-    # man.quit()
     man.spawn()
     man.start(100)
     man.wait()
-    # if man._is_launcher():
-    #     print man.get_throughput()

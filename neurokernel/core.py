@@ -313,7 +313,7 @@ class Module(BaseModule):
         # Save timing data:
         if self.time_sync:
             self.log_info('sent timing data to master')
-            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps, start, stop,
+            self.intercomm.isend(['time', (self.rank, self.steps, start, stop,
                 n_gpot*self.pm['gpot'].dtype.itemsize+\
                 n_spike*self.pm['spike'].dtype.itemsize)],
                     dest=0, tag=self._ctrl_tag)
@@ -323,8 +323,8 @@ class Module(BaseModule):
 class Manager(base.Manager):
     def __init__(self, required_args=['sel', 'sel_in', 'sel_out',
                                       'sel_gpot', 'sel_spike'],
-                 mpiexec='mpiexec', mpiargs=(), ctrl_tag=CTRL_TAG):
-        super(Manager, self).__init__(required_args, mpiexec, mpiargs, ctrl_tag)
+                 ctrl_tag=CTRL_TAG):
+        super(Manager, self).__init__(required_args, ctrl_tag)
  
     def add(self, target, id, *args, **kwargs):
         assert issubclass(target, Module)
@@ -380,6 +380,8 @@ class Manager(base.Manager):
         self.log_info('connected modules {0} and {1}'.format(id_0, id_1))
         
 if __name__ == '__main__':
+    import neurokernel.mpi_relaunch
+
     class MyModule(Module):
         """
         Example of derived module class.
@@ -477,8 +479,7 @@ if __name__ == '__main__':
     # Start emulation and allow it to run for a little while before shutting
     # down.  To set the emulation to exit after executing a fixed number of
     # steps, start it as follows and remove the sleep statement:
-    # man.start(steps=500)
-    man.run()
-    man.start(steps=100)
-    man.stop()
-    man.quit()
+    # man.start(500)
+    man.spawn()
+    man.start(100)
+    man.wait()
