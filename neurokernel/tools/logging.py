@@ -75,8 +75,9 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
     file_name : str
         Create output handler to specified file.
     mpi_comm : mpi4py.MPI.Intracomm
-        If not None, use MPI I/O with the specified communicator for output file handler.
-        The `file_name` parameter must also be specified.
+        If not None, use MPI I/O with the specified communicator for 
+        output file handler. Ignored if the `file_name` parameter 
+        is not specified.
     zmq_addr : str
         ZeroMQ socket address.
     log_exceptions : bool
@@ -101,9 +102,6 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
     # Apply name format to the value (i.e., the name), not the key (i.e., the
     # field name "name"):
     fmt.conversion.add('name', str, lambda k, v: fmt_name(v))
-
-    if mpi_comm and not file_name:
-        raise ValueError('MPI I/O requires output file name')
 
     if file_name:
         if mpi_comm:
