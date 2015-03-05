@@ -72,6 +72,63 @@ def allglobalvars(x):
             results.update(allglobalvars(f[1]))
     return results
 
+def getargnames(f):
+    """
+    Get names of a callable's arguments.
+
+    Parameters
+    ----------
+    f : callable
+        Function to examine.
+
+    Results
+    -------
+    args : list of str
+        Argument names.
+
+    Notes
+    -----
+    For instance methods, the `self` argument is omitted.
+    """
+
+    spec = inspect.getargspec(f)
+    if inspect.ismethod(f):
+        return spec.args[1:]
+    else:
+        return spec.args
+
+def args_to_dict(f, *args, **kwargs):
+    """
+    Combine sequential and named arguments in single dictionary.
+
+    Parameters
+    ----------
+    f : callable
+        Function to which the arguments will be passed.
+    args : tuple
+        Sequential arguments.
+    kwargs : dict
+        Named arguments.
+
+    Returns
+    -------
+    d : dict
+        Maps argument names to values.
+    """
+
+    spec = inspect.getargspec(f)
+    d = {}
+
+    arg_names = getargnames(f)
+    assert len(arg_names) <= args
+    for arg, val in zip(arg_names, args):
+        d[arg] = val
+    for arg, val in kwargs.iteritems():
+        if arg in d:
+            raise ValueError('\'%s\' already specified in positional args' % arg)
+        d[arg] = val
+    return d
+
 class Process(LoggerMixin):
     """
     Process class.
@@ -156,10 +213,12 @@ class ProcessManager(LoggerMixin):
         LoggerMixin.__init__(self, 'man')
         set_excepthook(self.logger, True)
 
-        self._targets = []
-        self._args = []
-        self._kwargs = []
+        self._targets = {}
+        self._args = {}
+        self._kwargs = {}
         self._intercomm = MPI.COMM_NULL
+
+        self._rank = 0
 
     @property
     def intercomm(self):
@@ -185,12 +244,20 @@ class ProcessManager(LoggerMixin):
             Sequential arguments to pass to target class constructor.
         kwargs : dict
             Named arguments to pass to target class constructor.
+
+        Returns
+        -------
+        rank : int
+            MPI rank assigned to class. Targets are assigned ranks starting with
+            0 in the order that they are added.
         """
 
         assert issubclass(target, Process)
-        self._targets.append(target)
-        self._args.append(args)
-        self._kwargs.append(kwargs)
+        rank = self._rank
+        self._targets[rank] = target
+        self._kwargs[rank] = args_to_dict(target.__init__, *args, **kwargs)
+        self._rank += 1
+        return rank
 
     def __len__(self):
         return len(self._targets)
@@ -225,16 +292,15 @@ class ProcessManager(LoggerMixin):
 
             # First, transmit twiggy logging emitters to spawned processes so
             # that they can configure their logging facilities:
-            for i in xrange(len(self)):
+            for i in self._targets.keys():
                 self._intercomm.send(twiggy.emitters, i)
 
             # Transmit class to instantiate, globals required by the class, and
-            # the constructor args, and kwargs; the backend will wait to receive
+            # the constructor arguments; the backend will wait to receive
             # them and then start running the targets on the appropriate nodes.
-            for i in xrange(len(self)):
+            for i in self._targets.keys():
                 target_globals = allglobalvars(self._targets[i])
-                data = (self._targets[i], target_globals, 
-                        self._args[i], self._kwargs[i])      
+                data = (self._targets[i], target_globals, self._kwargs[i])
                 self._intercomm.send(data, i)
 
     def send(self, data, dest, tag=0):
@@ -252,6 +318,8 @@ class ProcessManager(LoggerMixin):
         return self.intercomm.recv(tag=tag)
 
 if __name__ == '__main__':
+    import mpi_relaunch
+
     class MyProcess(Process):
         def __init__(self, *args, **kwargs):
             super(MyProcess, self).__init__(*args, **kwargs)

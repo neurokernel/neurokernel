@@ -54,7 +54,7 @@ for k, v in emitters.iteritems():
         twiggy.emitters[k] = v
 
 # Get the target class/function and its constructor arguments:
-target, target_globals, args, kwargs = parent.recv()
+target, target_globals, kwargs = parent.recv()
 
 # Insert the transmitted globals into the current scope:
 globals()[target.__name__] = target
@@ -62,5 +62,5 @@ for k, n in target_globals.iteritems():
     globals()[k] = n
 
 # Instantiate and run the target class:
-instance = target(*args, **kwargs)
+instance = target(**kwargs)
 instance.run()

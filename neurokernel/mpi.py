@@ -4,8 +4,6 @@
 MPI support classes.
 """
 
-import neurokernel.mpi_relaunch
-
 import inspect
 import os
 import re
@@ -14,67 +12,10 @@ import sys
 
 from mpi4py import MPI
 
-from mpi_proc import Process, ProcessManager
+from mpi_proc import getargnames, Process, ProcessManager
 from mixins import LoggerMixin
 from tools.logging import setup_logger, set_excepthook
 from tools.misc import memoized_property
-
-def getargnames(f):
-    """
-    Get names of a callable's arguments.
-
-    Parameters
-    ----------
-    f : callable
-        Function to examine.
-
-    Results
-    -------
-    args : list of str
-        Argument names.
-
-    Notes
-    -----
-    For instance methods, the `self` argument is omitted.
-    """
-
-    spec = inspect.getargspec(f)
-    if inspect.ismethod(f):
-        return spec.args[1:]
-    else:
-        return spec.args
-
-def args_to_dict(f, *args, **kwargs):
-    """
-    Combine sequential and named arguments in single dictionary.
-
-    Parameters
-    ----------
-    f : callable
-        Function to which the arguments will be passed.
-    args : tuple
-        Sequential arguments.
-    kwargs : dict
-        Named arguments.
-
-    Returns
-    -------
-    d : dict
-        Maps argument names to values.
-    """
-
-    spec = inspect.getargspec(f)
-    d = {}
-
-    arg_names = getargnames(f)
-    assert len(arg_names) <= args
-    for arg, val in zip(arg_names, args):
-        d[arg] = val
-    for arg, val in kwargs.iteritems():
-        if arg in d:
-            raise ValueError('\'%s\' already specified in positional args' % arg)
-        d[arg] = val
-    return d
 
 class Worker(Process):
     """
@@ -195,9 +136,8 @@ class Worker(Process):
                 break
 
         # Send acknowledgment message:
-        self.log_info('sending done message to manager')
         self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
-        self.log_info('done')
+        self.log_info('done message send to manager')
 
 class WorkerManager(ProcessManager):
     """
@@ -251,7 +191,7 @@ class WorkerManager(ProcessManager):
 
         assert issubclass(target, Worker)
         self.log_info('adding class %s' % target.__name__)
-        ProcessManager.add(self, target, *args, **kwargs)
+        return ProcessManager.add(self, target, *args, **kwargs)
 
     def process_worker_msg(self, msg):
         """
@@ -325,6 +265,7 @@ class WorkerManager(ProcessManager):
             self.intercomm.isend(['quit'], dest, self._ctrl_tag)
 
 if __name__ == '__main__':
+    import neurokernel.mpi_relaunch
     import time
 
     setup_logger(screen=True, file_name='neurokernel.log',
