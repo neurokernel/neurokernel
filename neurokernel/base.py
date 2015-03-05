@@ -243,10 +243,10 @@ class BaseModule(mpi.Worker):
             self.pm.data[ind_in] = data
             n += len(data)
 
-        # Save timing data:
+        # Send timing data to manager:
         if self.time_sync:
-            self.log_info('sent timing data to master')
-            MPI.COMM_WORLD.isend(['time', (self.rank, self.steps,
+            self.log_info('sent timing data to manager')
+            self.intercomm.isend(['time', (self.rank, self.steps,
                                            start, stop,
                                            n*self.pm.dtype.itemsize)],
                                  dest=0, tag=self._ctrl_tag)
@@ -332,7 +332,7 @@ class BaseModule(mpi.Worker):
             # Synchronize:
             catch_exception(self._sync, self.log_info)
 
-class Manager(mpi.Manager):
+class Manager(mpi.WorkerManager):
     """
     Module manager.
 
@@ -353,8 +353,8 @@ class Manager(mpi.Manager):
     """
 
     def __init__(self, required_args=['sel', 'sel_in', 'sel_out'],
-                 mpiexec='mpiexec', mpiargs=(), ctrl_tag=CTRL_TAG):
-        super(Manager, self).__init__(mpiexec, mpiargs, ctrl_tag)
+                 ctrl_tag=CTRL_TAG):
+        super(Manager, self).__init__(ctrl_tag)
 
         # Required constructor args:
         self.required_args = required_args
@@ -376,8 +376,19 @@ class Manager(mpi.Manager):
         self.total_nbytes = 0.0
 
         # Computed throughput (only updated after an emulation run):
-        self.throughput = 0.0
+        self._throughput = 0.0
         self.log_info('manager instantiated')
+
+    @property
+    def throughput(self):
+        """
+        Average received data throughput.
+        """
+
+        return self._throughput
+    @throughput.setter
+    def throughput(self, t):
+        self._throughput = t
 
     def validate_args(self, target):
         """
@@ -502,8 +513,6 @@ class Manager(mpi.Manager):
     def process_worker_msg(self, msg):
 
         # Accumulate timing data sent by workers:
-        # XXX computing the throughput by updating the average would be less
-        # memory intensive:
         if msg[0] == 'time':
             rank, steps, start, stop, nbytes = msg[1]
             self.total_time += stop-start
@@ -511,36 +520,18 @@ class Manager(mpi.Manager):
 
             self.log_info('time data: %s' % str(msg[1]))
 
-    def _run_master(self):
-        super(Manager, self)._run_master()
-
-        # Compute throughput using accumulated timing data:
-        if self._is_master():
+            # Compute throughput using accumulated timing data:
             if self.total_time > 0:
                 self.throughput = self.total_nbytes/self.total_time
             else:
                 self.throughput = 0.0
             self.log_info('average received throughput: %s bytes/s' % \
                           self.throughput)
-            
-            # Send throughput to launcher:
-            self.log_info('transmitting throughput to launcher')
-            self._sock.send(str(self.throughput))
 
-    def get_throughput(self):
-        """
-        Retrieve average received data throughput.
-
-        Notes
-        -----
-        This must be called by the launcher, or else the program might never
-        exit.
-        """
-
-        if self._is_launcher():
-            return self._sock.recv_multipart()[1]
 
 if __name__ == '__main__':
+    #import neurokernel.mpi_relaunch
+
     class MyModule(BaseModule):
         """
         Example of derived module class.
@@ -621,9 +612,10 @@ if __name__ == '__main__':
     # steps, start it as follows and remove the sleep statement:
     # man.start(steps=500)
 
-    man.run()
-    man.start(steps=100)
-    man.stop()
-    man.quit()
-    if man._is_launcher():
-        print man.get_throughput()
+    # man.stop()
+    # man.quit()
+    man.spawn()
+    man.start(100)
+    man.wait()
+    # if man._is_launcher():
+    #     print man.get_throughput()
