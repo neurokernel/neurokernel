@@ -203,7 +203,7 @@ class ProcessManager(LoggerMixin):
 
         return MPI.Comm.Get_parent() == MPI.COMM_NULL
 
-    def run(self):
+    def spawn(self):
         """
         Spawn MPI processes for and execute each of the managed targets.
         """
@@ -267,4 +267,4 @@ if __name__ == '__main__':
     man = ProcessManager()
     man.add(MyProcess, 1, 2, a=3)
     man.add(MyProcess, 4, b=5, c=6)
-    man.run()
+    man.spawn()
