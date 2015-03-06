@@ -10,8 +10,11 @@ Path-Like Port Identifier Handling
    :toctree: generated/
    :nosignatures:
 
-   PathLikeSelector
+   BasePortMapper
    PortMapper
+   Selector
+   SelectorMethods
+   SelectorParser
 
 XML Tools
 ---------

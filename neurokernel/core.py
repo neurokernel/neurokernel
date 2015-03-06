@@ -239,8 +239,8 @@ class Module(BaseModule):
 
             # Get source ports in current module that are connected to the
             # destination module:
-            data_gpot = self.pm['gpot'].data[self._out_port_dict_ids['gpot'][dest_id]]
-            data_spike = self.pm['spike'].data[self._out_port_dict_ids['spike'][dest_id]]
+            data_gpot = self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][dest_id])
+            data_spike = self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][dest_id])
 
             if not self.time_sync:
                 self.log_info('gpot data being sent to %s: %s' % \
@@ -303,11 +303,11 @@ class Module(BaseModule):
         # Copy received elements into the current module's data array:
         n_gpot = 0
         for data_gpot, ind_in_gpot in zip(received_gpot, ind_in_gpot_list):
-            self.pm['gpot'].data[ind_in_gpot] = data_gpot
+            self.pm['gpot'].set_by_inds(ind_in_gpot, data_gpot)
             n_gpot += len(data_gpot)
         n_spike = 0
         for data_spike, ind_in_spike in zip(received_spike, ind_in_spike_list):
-            self.pm['spike'].data[ind_in_spike] = data_spike
+            self.pm['spike'].set_by_inds(ind_in_spike, data_spike)
             n_spike += len(data_spike)
 
         # Save timing data:

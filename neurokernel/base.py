@@ -198,7 +198,7 @@ class BaseModule(mpi.Worker):
 
             # Get data associated with source ports in current module that are
             # connected to the destination module:
-            data = self.pm.data[self._out_port_dict_ids[dest_id]]
+            data = self.pm.get_by_inds(self._out_port_dict_ids[dest_id])
             dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % (dest_id, str(data)))
@@ -240,7 +240,7 @@ class BaseModule(mpi.Worker):
         # Copy received elements into the current module's data array:
         n = 0
         for data, ind_in in zip(received, ind_in_list):
-            self.pm.data[ind_in] = data
+            self.pm.set_by_inds(ind_in, data)
             n += len(data)
 
         # Send timing data to manager:
