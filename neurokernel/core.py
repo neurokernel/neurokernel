@@ -221,6 +221,29 @@ class Module(BaseModule):
                     pat.dest_idx(int_0, int_1, 'spike', 'spike')
             self._in_port_dict_ids['spike'][in_id] = \
                     self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
+
+    def _init_data_in(self):
+        """
+        Buffers for receiving data from other modules.
+
+        Notes
+        -----
+        Must be executed after `_init_port_dicts()`.
+        """
+
+        # Allocate arrays for receiving data transmitted to the module so that
+        # they don't have to be reallocated during every execution step
+        # synchronization:
+        self.data_in = {}
+        self.data_in['gpot'] = {}
+        self.data_in['spike'] = {}
+        for in_id in self._in_ids:
+            self.data_in['gpot'][in_id] = \
+                np.empty(np.shape(self._in_port_dict['gpot'][in_id]), 
+                         self.pm['gpot'].dtype)
+            self.data_in['spike'][in_id] = \
+                np.empty(np.shape(self._in_port_dict['spike'][in_id]), 
+                         self.pm['spike'].dtype)
             
     def _sync(self):
         """
@@ -272,26 +295,14 @@ class Module(BaseModule):
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
-
-            # Get destination ports in current module that are connected to the
-            # source module:
-            ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
-            data_gpot = np.empty(np.shape(ind_in_gpot), self.pm['gpot'].dtype)
-            ind_in_spike = self._in_port_dict_ids['spike'][src_id]
-            data_spike = np.empty(np.shape(ind_in_spike), self.pm['spike'].dtype)
-
-            r = MPI.COMM_WORLD.Irecv([data_gpot,
+            r = MPI.COMM_WORLD.Irecv([self.data_in['gpot'][src_id],
                                       MPI._typedict[data_gpot.dtype.char]],
                                      source=src_rank, tag=GPOT_TAG)
             requests.append(r)
-            r = MPI.COMM_WORLD.Irecv([data_spike,
+            r = MPI.COMM_WORLD.Irecv([self.data_in['spike'][src_id],
                                       MPI._typedict[data_spike.dtype.char]],
                                      source=src_rank, tag=SPIKE_TAG)
             requests.append(r)
-            received_gpot.append(data_gpot)
-            ind_in_gpot_list.append(ind_in_gpot)
-            received_spike.append(data_spike)
-            ind_in_spike_list.append(ind_in_spike)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
@@ -302,13 +313,14 @@ class Module(BaseModule):
 
         # Copy received elements into the current module's data array:
         n_gpot = 0
-        for data_gpot, ind_in_gpot in zip(received_gpot, ind_in_gpot_list):
-            self.pm['gpot'].set_by_inds(ind_in_gpot, data_gpot)
-            n_gpot += len(data_gpot)
         n_spike = 0
-        for data_spike, ind_in_spike in zip(received_spike, ind_in_spike_list):
-            self.pm['spike'].set_by_inds(ind_in_spike, data_spike)
-            n_spike += len(data_spike)
+        for src_id in src_ids:
+            ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
+            self.pm['gpot'].set_by_inds(ind_in_gpot, self.data_in['gpot'][src_id])
+            n_gpot += len(self.data_in['gpot'][src_id])
+            ind_in_spike = self._in_port_dict_ids['spike'][src_id]
+            self.pm['spike'].set_by_inds(ind_in_spike, self.data_in['spike'][src_id]) 
+            n_spike += len(self.data_in['spike'][src_id])
 
         # Save timing data:
         if self.time_sync:

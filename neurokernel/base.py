@@ -182,6 +182,23 @@ class BaseModule(mpi.Worker):
             self._in_port_dict_ids[in_id] = \
                 self.pm.ports_to_inds(self._in_port_dict[in_id])
 
+    def _init_data_in(self):
+        """
+        Buffers for receiving data from other modules.
+
+        Notes
+        -----
+        Must be executed after `_init_port_dicts()`.
+        """
+
+        # Allocate arrays for receiving data transmitted to the module so that
+        # they don't have to be reallocated during every execution step
+        # synchronization:
+        self.data_in = {}
+        for in_id in self._in_ids:
+            self.data_in[in_id] = \
+                np.empty(np.shape(self._in_port_dict[in_id]), self.pm.dtype)
+
     def _sync(self):
         """
         Send output data and receive input data.
@@ -212,23 +229,14 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        received = []
-        ind_in_list = []
         if self.time_sync:
             start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
-
-            # Allocate arrays to receive data associated with destination ports
-            # in current module that are connected to the source module:
-            ind_in = self._in_port_dict_ids[src_id]
-            data = np.empty(np.shape(ind_in), self.pm.dtype)
             src_rank = self.rank_to_id[:src_id]
-            r = MPI.COMM_WORLD.Irecv([data, MPI._typedict[data.dtype.char]],
+            r = MPI.COMM_WORLD.Irecv([self.data_in[src_id], MPI._typedict[data.dtype.char]],
                                      source=src_rank)
             requests.append(r)
-            received.append(data)
-            ind_in_list.append(ind_in)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
@@ -239,9 +247,10 @@ class BaseModule(mpi.Worker):
 
         # Copy received elements into the current module's data array:
         n = 0
-        for data, ind_in in zip(received, ind_in_list):
-            self.pm.set_by_inds(ind_in, data)
-            n += len(data)
+        for src_id in src_ids:
+            ind_in = self._in_port_dict_ids[src_id]
+            self.pm.set_by_inds(ind_in, self.data_in[src_id])
+            n += len(self.data_in[src_id])
 
         # Send timing data to manager:
         if self.time_sync:
@@ -296,6 +305,9 @@ class BaseModule(mpi.Worker):
 
             # Initialize _out_port_dict and _in_port_dict attributes:
             self._init_port_dicts()
+
+            # Initialize data_in attribute:
+            self._init_data_in()
 
             # Perform any pre-emulation operations:
             self.pre_run()
