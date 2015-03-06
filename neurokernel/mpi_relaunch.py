@@ -28,7 +28,7 @@ parent_name = psutil.Process(os.getppid()).name()
 if not re.search('mpirun|mpiexec', parent_name):
     try:
         subprocess.call(['mpiexec', '-np', '1',
-                        sys.executable, script_name],
+                        sys.executable, script_name]+sys.argv[1:],
                         env=env,
                         stdout=sys.stdout,
                         stderr=sys.stderr,
