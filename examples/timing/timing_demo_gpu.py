@@ -9,12 +9,14 @@ import itertools
 import time
 
 import numpy as np
+import pycuda.driver as drv
 
 from neurokernel.base import setup_logger
 from neurokernel.core import Manager, Module, PORT_DATA, PORT_CTRL, PORT_TIME
 from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
 from neurokernel.tools.comm import get_random_port
+from neurokernel.pm_gpu import GPUPortMapper
 
 class MyModule(Module):
     """
@@ -42,8 +44,19 @@ class MyModule(Module):
                                        columns, port_data, port_ctrl, port_time,
                                        id, device, debug, True)
 
+        # Initialize GPU arrays associated with ports:
         self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = 1.0
         self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = 1
+
+    # Need to redefine run() method to perform GPU initialization:
+    def run(self):
+        self._init_gpu()
+
+        # Replace port mappers with GPUPortMapper instances:
+        self.pm['gpot'] = GPUPortMapper.from_pm(self.pm['gpot'])
+        self.pm['spike'] = GPUPortMapper.from_pm(self.pm['spike'])
+
+        super(MyModule, self).run()
 
 def gen_sels(n_lpu, n_spike, n_gpot):
     """
@@ -130,7 +143,11 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     # Time everything starting with manager initialization:
     start = time.time()
 
-    # Set up manager and broker:
+    # Check whether a sufficient number of GPUs are available:
+    drv.init()
+    if n_lpu > drv.Device.count():
+        raise RuntimeError('insufficient number of available GPUs.')
+
     man = Manager(get_random_port(), get_random_port(), get_random_port())
     man.add_brok()
 
@@ -144,7 +161,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
                      sel_gpot, sel_spike,
                      port_data=man.port_data, port_ctrl=man.port_ctrl,
                      port_time=man.port_time,
-                     id=lpu_i, device=None, debug=args.debug)
+                     id=lpu_i, device=i, debug=args.debug)
         man.add_mod(m)
 
     # Set up connections between module pairs:

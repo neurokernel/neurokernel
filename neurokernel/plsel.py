@@ -2138,27 +2138,68 @@ class PortMapper(BasePortMapper):
     The selectors may not contain any '*' or '[:]' characters.
     """
 
-    def __init__(self, selector, data=None, portmap=None, make_copy=True):
-        super(PortMapper, self).__init__(selector, portmap)
-        N = len(self)
+    def _validate_data(self, data):
+        """
+        Check whether the mapper's ports are compatible with the specified port data array.
+        """
 
-        # Can currently only handle unidimensional data structures:
-        if data is None or len(data) == 0:
-            self.data = np.array([])
-        else:
-            assert np.ndim(data) == 1
-            assert type(data) == np.ndarray
+        # A port mapper may contain or be assigned None as its data array:
+        if data is None:
+            return True
+        try:
+            # Cannot handle more than 1 dimension:
+            assert np.ndim(data) <= 1
 
             # The integers in the port map must be valid indices into the
             # data array:
-            assert max(self.portmap) < len(data)
+            # assert max(self.portmap) < len(data)
 
             # The port mapper may map identifiers to some portion of the data array:
-            assert N <= len(data)
-            if make_copy:
-                self.data = data.copy()
+            # assert len(self) <= len(data)
+        except:
+            return False
+        else:
+            return True
+
+    def __init__(self, selector, data=None, portmap=None, make_copy=True):
+        super(PortMapper, self).__init__(selector, portmap)
+
+        self._data = None
+        if data is None:
+            self.data = None
+        else:
+            if np.ndim(data) == 0:
+                self.data = np.full(len(self), data)
             else:
-                self.data = data
+                if make_copy:
+                    self.data = data.copy()
+                else:
+                    self.data = data
+
+    @property
+    def data(self):
+        """
+        Data associated with ports.
+        """
+        
+        return self._data
+
+    @data.setter
+    def data(self, x):        
+        if self._validate_data(x):
+            if x is None:
+                self._data = None
+
+            # Always store dimensionless values in a 1D array:
+            elif np.ndim(x) == 0:
+                self._data = np.array([x])
+            else:
+                if len(x):
+                    self._data = np.asarray(x)
+                else:
+                    self._data = None
+        else:
+            raise ValueError('incompatible or invalid data array specified')
 
     def copy(self):
         """
@@ -2228,6 +2269,8 @@ class PortMapper(BasePortMapper):
             Selected data.
         """
 
+        if self.data is None:
+            raise ValueError('port mapper contains no data')
         return self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)]
 
     def get_by_inds(self, inds):
@@ -2245,6 +2288,8 @@ class PortMapper(BasePortMapper):
             Selected data.
         """
 
+        if self.data is None:
+            raise ValueError('port mapper contains no data')
         return self.data[inds]
 
     def get_ports(self, f):
@@ -2341,7 +2386,10 @@ class PortMapper(BasePortMapper):
 
         # sel.select will return a Series with nan for selector [()], hence dropna
         # is necessary here
-        self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
+        if self.data is None:
+            self.data = data
+        else:
+            self.data[np.asarray(self.sel.select(self.portmap, selector).dropna().values, dtype=np.int)] = data
 
     def set_by_inds(self, inds, data):
         """

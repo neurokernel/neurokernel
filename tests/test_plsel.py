@@ -883,9 +883,21 @@ class test_port_mapper(TestCase):
         self.assertRaises(Exception, pm.__setitem__, '/foo/bar[0]', 0)
 
     def test_set_discontinuous(self):
-        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)                        
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)         
         pm['/foo/*[0:2]'] = 1.0
         np.allclose(np.ones(4), pm['/foo/*[0:2]'])
+
+    def test_get_by_inds(self):
+        data = np.random.rand(3)
+        pm = PortMapper('/foo[0:3]', data)
+        assert_array_equal(data[[0, 1]], pm.get_by_inds([0, 1]))
+
+    def test_set_by_inds(self):
+        data = np.random.rand(3)
+        pm = PortMapper('/foo[0:3]', data)
+        new_data = np.arange(2).astype(np.double)
+        pm.set_by_inds([0, 1], new_data)
+        assert_array_equal(new_data, pm.get_by_inds([0, 1]))
 
 if __name__ == '__main__':
     main()

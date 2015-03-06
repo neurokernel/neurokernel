@@ -262,9 +262,10 @@ class Module(BaseModule):
 
                     # Assign transmitted values directly to port data array:
                     if len(self._in_port_dict_ids['gpot'][in_id]):
-                        self.pm['gpot'].data[self._in_port_dict_ids['gpot'][in_id]] = data[0]
+                        self.pm['gpot'].set_by_inds(self._in_port_dict_ids['gpot'][in_id], data[0])
                     if len(self._in_port_dict_ids['spike'][in_id]):
-                        self.pm['spike'].data[self._in_port_dict_ids['spike'][in_id]] = data[1]
+                        self.pm['spike'].set_by_inds(self._in_port_dict_ids['spike'][in_id], data[1])
+                    
 
     def _put_out_data(self):
         """
@@ -293,12 +294,12 @@ class Module(BaseModule):
                 # transmit output:
                 if len(self._out_port_dict_ids['gpot'][out_id]):
                     gpot_data = \
-                        self.pm['gpot'].data[self._out_port_dict_ids['gpot'][out_id]]
+                        self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][out_id])
                 else:
                     gpot_data = np.array([], self.pm['gpot'].dtype)
                 if len(self._out_port_dict_ids['spike'][out_id]):
                     spike_data = \
-                        self.pm['spike'].data[self._out_port_dict_ids['spike'][out_id]]
+                        self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][out_id])
                 else:
                     spike_data = np.array([], self.pm['spike'].dtype)
 
@@ -634,7 +635,8 @@ if __name__ == '__main__':
                       m1_int_sel_gpot, m1_int_sel_spike,
                       np.zeros(N1_gpot, np.float64),
                       np.zeros(N1_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, man.port_time, 'm1')
+                      man.port_data, man.port_ctrl, man.port_time, 'm1', None,
+                      False, True)
         man.add_mod(m1)
 
         m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
@@ -654,7 +656,8 @@ if __name__ == '__main__':
                       m2_int_sel_gpot, m2_int_sel_spike,
                       np.zeros(N2_gpot, np.float64),
                       np.zeros(N2_spike, int), ['interface', 'io', 'type'],
-                      man.port_data, man.port_ctrl, man.port_time, 'm2')
+                      man.port_data, man.port_ctrl, man.port_time, 'm2', None,
+                      False, True)
         man.add_mod(m2)
 
         # Make sure that all ports in the patterns' interfaces are set so 
