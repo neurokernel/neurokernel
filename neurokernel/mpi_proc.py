@@ -25,52 +25,7 @@ MPI.pickle.loads = dill.loads
 from mixins import LoggerMixin
 from tools.logging import set_excepthook
 from tools.misc import memoized_property
-
-def funcvars(x):
-    """
-    Find objects accessed by a function or method.
-    """
-
-    # Find symbols accessed by specified function or method:
-    results = {}
-    if inspect.isfunction(x):
-        name_list = x.func_code.co_names
-        global_dict = x.func_globals
-    elif inspect.ismethod(x):
-        name_list = x.im_func.func_code.co_names
-        global_dict = x.im_func.func_globals
-    else:
-        raise ValueError('invalid input')
-    for name in name_list:
-
-        # Symbol is a name of a global:
-        if name in global_dict:
-            results[name] = global_dict[name]
-        else:
-
-            # Check if symbol is the name is an attribute of a module (i.e., can
-            # be imported):
-            for r in results.keys():
-                if hasattr(results[r], name) and \
-                   inspect.ismodule(getattr(results[r], name)):
-                    results[r+'.'+name] = getattr(results[r], name)
-    return results
-
-def allglobalvars(x):
-    """
-    Find all globals accessed by an object.
-    """
-
-    results = {}
-    if inspect.isroutine(x):
-        results = funcvars(x)
-    else:
-        if inspect.isclass(x):
-            for b in x.__bases__:
-                results.update(allglobalvars(b))
-        for f in inspect.getmembers(x, predicate=inspect.ismethod):
-            results.update(allglobalvars(f[1]))
-    return results
+from allglobalvars import allglobalvars
 
 def getargnames(f):
     """
