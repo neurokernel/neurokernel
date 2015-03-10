@@ -103,6 +103,25 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
         successive values in `dest_gpu` to the values in `src_gpu` with indices
         `ind`; the lengths of `ind` and `dest_gpu` must be equal.
 
+    Examples
+    --------
+    >>> import pycuda.gpuarray as gpuarray
+    >>> import pycuda.autoinit
+    >>> import numpy as np
+    >>> import misc
+    >>> dest_gpu = gpuarray.to_gpu(np.arange(5, dtype=np.float32))
+    >>> ind = gpuarray.to_gpu(np.array([0, 2, 4]))
+    >>> src_gpu = gpuarray.to_gpu(np.array([1, 1, 1], dtype=np.float32))
+    >>> misc.set_by_inds(dest_gpu, ind, src_gpu, 'dest')
+    >>> np.allclose(dest_gpu.get(), np.array([1, 1, 1, 3, 1], dtype=np.float32))
+    True
+    >>> dest_gpu = gpuarray.to_gpu(np.zeros(3, dtype=np.float32))
+    >>> ind = gpuarray.to_gpu(np.array([0, 2, 4]))
+    >>> src_gpu = gpuarray.to_gpu(np.arange(5, dtype=np.float32))
+    >>> misc.set_by_inds(dest_gpu, ind, src_gpu)
+    >>> np.allclose(dest_gpu.get(), np.array([0, 2, 4], dtype=np.float32))
+    True
+
     Notes
     -----
     Only supports 1D index arrays.
@@ -117,20 +136,24 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     assert issubclass(ind.dtype.type, numbers.Integral)
     N = len(ind)
     if ind_which == 'dest':
-        if N != len(src_gpu):
-            raise ValueError('len(ind) == %s != %s == len(src_gpu)' % (N, len(src_gpu)))
+        assert N == len(src_gpu)
     elif ind_which == 'src':
-        if N != len(dest_gpu):
-            raise ValueError('len(ind) == %s != %s == len(dest_gpu)' % (N, len(dest_gpu)))
+        assert N == len(dest_gpu)
     else:
         raise ValueError('invalid value for `ind_which`')
-    data_ctype = dtype_to_ctype(dest_gpu.dtype)
-    ind_ctype = dtype_to_ctype(ind.dtype)
     if not isinstance(ind, gpuarray.GPUArray):
         ind = gpuarray.to_gpu(ind)
-    v = "{data_ctype} *dest, {ind_ctype} *ind, {data_ctype} *src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
-    if ind_which == 'dest':
-        func = elementwise.ElementwiseKernel(v, "dest[ind[i]] = src[i]")
-    else:
-        func = elementwise.ElementwiseKernel(v, "dest[i] = src[ind[i]]")
+    try:
+        func = set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)]
+    except KeyError:
+        data_ctype = dtype_to_ctype(dest_gpu.dtype)
+        ind_ctype = dtype_to_ctype(ind.dtype)        
+        v = "{data_ctype} *dest, {ind_ctype} *ind, {data_ctype} *src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
+    
+        if ind_which == 'dest':
+            func = elementwise.ElementwiseKernel(v, "dest[ind[i]] = src[i]")
+        else:
+            func = elementwise.ElementwiseKernel(v, "dest[i] = src[ind[i]]")
+        set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)] = func
     func(dest_gpu, ind, src_gpu, range=slice(0, N, 1))
+set_by_inds.cache = {}
