@@ -2,6 +2,7 @@
 
 from functools import wraps
 
+from mpi4py import MPI
 import numpy as np
 import sys, traceback
 
@@ -88,3 +89,26 @@ def memoized_property(fget):
             setattr(self, attr_name, fget(self))
         return getattr(self, attr_name)
     return property(fget_memoized)
+
+def dtype_to_mpi(t):
+    """
+    Convert Numpy data type to MPI type.
+
+    Parameters
+    ----------
+    t : type
+        Numpy data type.
+
+    Returns
+    -------
+    m : mpi4py.MPI.Datatype
+        MPI data type corresponding to `t`.
+    """
+
+    if hasattr(MPI, '_typedict'):
+        m = MPI._typedict[np.dtype(t).char]
+    elif hasattr(MPI, '__TypeDict__'):
+        m = MPI.__TypeDict__[np.dtype(t).char]
+    else:
+        raise ValueError('cannot convert type')
+    return m

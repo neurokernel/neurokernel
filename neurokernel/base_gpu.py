@@ -17,8 +17,6 @@ import collections
 
 import bidict
 from mpi4py import MPI
-from pycuda.tools import dtype_to_ctype
-import pycuda.elementwise as elementwise
 import pycuda.gpuarray as gpuarray
 import numpy as np
 import twiggy
@@ -29,102 +27,11 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 from routing_table import RoutingTable
 from uid import uid
-from tools.misc import catch_exception
+from tools.gpu import bufint, set_by_inds
+from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
 from plsel import Selector, SelectorMethods, PortMapper
 from pm_gpu import GPUPortMapper
-
-def bufint(a):
-    """
-    Return buffer interface to GPU array.
-
-    Parameters
-    ----------
-    a : pycuda.gpuarray.GPUArray
-        GPU array.
-
-    Returns
-    -------
-    b : buffer
-        Buffer interface to array.
-    """
-
-    assert isinstance(a, gpuarray.GPUArray)
-    return a.gpudata.as_buffer(a.nbytes)
-
-def dtype_to_mpi(t):
-    """
-    Convert Numpy data type to MPI type.
-
-    Parameters
-    ----------
-    t : type
-        Numpy data type.
-
-    Returns
-    -------
-    m : mpi4py.MPI.Datatype
-        MPI data type corresponding to `t`.
-    """
-
-    if hasattr(MPI, '_typedict'):
-        m = MPI._typedict[np.dtype(t).char]
-    elif hasattr(MPI, '__TypeDict__'):
-        m = MPI.__TypeDict__[np.dtype(t).char]
-    else:
-        raise ValueError('cannot convert type')
-    return m
-
-def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
-    """
-    Set values in a GPUArray by index.
-
-    Parameters
-    ----------
-    dest_gpu : pycuda.gpuarray.GPUArray
-        GPUArray instance to modify.
-    ind : pycuda.gpuarray.GPUArray or numpy.ndarray
-        1D array of element indices to set. Must have an integer dtype.
-    src_gpu : pycuda.gpuarray.GPUArray
-        GPUArray instance from which to set values.
-    ind_which : str
-        If set to 'dest', set the elements in `dest_gpu` with indices `ind`
-        to the successive values in `src_gpu`; the lengths of `ind` and
-        `src_gpu` must be equal. If set to 'src', set the
-        successive values in `dest_gpu` to the values in `src_gpu` with indices
-        `ind`; the lengths of `ind` and `dest_gpu` must be equal.
-
-    Notes
-    -----
-    Only supports 1D index arrays.
-
-    May not be efficient for certain index patterns because of lack of inability
-    to coalesce memory operations.
-    """
-
-    # Only support 1D index arrays:
-    assert len(np.shape(ind)) == 1
-    assert dest_gpu.dtype == src_gpu.dtype
-    assert issubclass(ind.dtype.type, numbers.Integral)
-    N = len(ind)
-    if ind_which == 'dest':
-        if N != len(src_gpu):
-            raise ValueError('len(ind) == %s != %s == len(src_gpu)' % (N, len(src_gpu)))
-    elif ind_which == 'src':
-        if N != len(dest_gpu):
-            raise ValueError('len(ind) == %s != %s == len(dest_gpu)' % (N, len(dest_gpu)))
-    else:
-        raise ValueError('invalid value for `ind_which`')
-    data_ctype = dtype_to_ctype(dest_gpu.dtype)
-    ind_ctype = dtype_to_ctype(ind.dtype)
-    if not isinstance(ind, gpuarray.GPUArray):
-        ind = gpuarray.to_gpu(ind)
-    v = "{data_ctype} *dest, {ind_ctype} *ind, {data_ctype} *src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
-    if ind_which == 'dest':
-        func = elementwise.ElementwiseKernel(v, "dest[ind[i]] = src[i]")
-    else:
-        func = elementwise.ElementwiseKernel(v, "dest[i] = src[ind[i]]")
-    func(dest_gpu, ind, src_gpu, range=slice(0, N, 1))
 
 CTRL_TAG = 1
 

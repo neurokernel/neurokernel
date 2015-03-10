@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+import numbers
+
 import numpy as np
 import pycuda.driver as drv
-from pycuda.compiler import SourceModule
+import pycuda.elementwise as elementwise
 import pycuda.gpuarray as gpuarray
-import pytools
+from pycuda.tools import dtype_to_ctype
 
 # List of available numerical types provided by numpy: 
 num_types = [np.typeDict[t] for t in \
@@ -64,73 +66,71 @@ def set_realloc(x_gpu, data):
     # Update the GPU memory:
     x_gpu.set(data)
 
-@pytools.memoize
-def _get_extract_kernel():
-    return SourceModule("""
-    __global__ void func(double *x, double *y, unsigned int *idx, unsigned int M) {
-        unsigned int tid = threadIdx.x;
-        unsigned int total_threads = gridDim.x*blockDim.x;
-        unsigned int block_start = blockDim.x*blockIdx.x;
-        unsigned int i;
-
-        for (i = block_start+tid; i < M; i += total_threads)
-            y[i] = x[idx[i]];
-      }
-    """)
-
-@pytools.memoize
-def _get_unextract_kernel():
-    return SourceModule("""
-    __global__ void func(double *x, double *y, unsigned int *idx, unsigned int M) {
-        unsigned int tid = threadIdx.x;
-        unsigned int total_threads = gridDim.x*blockDim.x;
-        unsigned int block_start = blockDim.x*blockIdx.x;
-        unsigned int i;
-
-        for (i = block_start+tid; i < M; i += total_threads)
-            y[idx[i]] = x[i];
-       }
-    """)
-
-def extract_contiguous(from_gpu, to_gpu, idx_gpu, dev):
+def bufint(a):
     """
-    Copy select discontiguous elements to a contiguous array.
+    Return buffer interface to GPU array.
 
     Parameters
     ----------
-    from_gpu : pycuda.GPUArray
-        Source array.
-    to_gpu : pycuda.GPUArray
-        Destination array.
-    idx_gpu : pycuda.GPUArray
-        Indices of elements from `from_gpu` to copy to `to_gpu`.
-    dev : pycuda.driver.Device
-        GPU device hosting `from_gpu` and `to_gpu`.
+    a : pycuda.gpuarray.GPUArray
+        GPU array.
+
+    Returns
+    -------
+    b : buffer
+        Buffer interface to array.
     """
 
-    M = np.uint32(len(idx_gpu))
-    grid, block = gpuarray.splay(M, dev)
-    func = _get_extract_kernel().get_function('func')
-    func(from_gpu, to_gpu, idx_gpu, M, block=block, grid=grid)
+    assert isinstance(a, gpuarray.GPUArray)
+    return a.gpudata.as_buffer(a.nbytes)
 
-def unextract_contiguous(from_gpu, to_gpu, idx_gpu, dev):
+def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     """
-    Copy contiguous elements to a select elements in a discontiguous array.
+    Set values in a GPUArray by index.
 
     Parameters
     ----------
-    from_gpu : pycuda.GPUArray
-        Source array.
-    to_gpu : pycuda.GPUArray
-        Destination array.
-    idx_gpu : pycuda.GPUArray
-        Indices of elements in `to_gpu` to which the contents of 
-        `from_gpu` are to be copied.
-    dev : pycuda.driver.Device
-        GPU device hosting `from_gpu` and `to_gpu`.
+    dest_gpu : pycuda.gpuarray.GPUArray
+        GPUArray instance to modify.
+    ind : pycuda.gpuarray.GPUArray or numpy.ndarray
+        1D array of element indices to set. Must have an integer dtype.
+    src_gpu : pycuda.gpuarray.GPUArray
+        GPUArray instance from which to set values.
+    ind_which : str
+        If set to 'dest', set the elements in `dest_gpu` with indices `ind`
+        to the successive values in `src_gpu`; the lengths of `ind` and
+        `src_gpu` must be equal. If set to 'src', set the
+        successive values in `dest_gpu` to the values in `src_gpu` with indices
+        `ind`; the lengths of `ind` and `dest_gpu` must be equal.
+
+    Notes
+    -----
+    Only supports 1D index arrays.
+
+    May not be efficient for certain index patterns because of lack of inability
+    to coalesce memory operations.
     """
 
-    M = np.uint32(len(idx_gpu))
-    grid, block = gpuarray.splay(M, dev)
-    func = _get_unextract_kernel().get_function('func')
-    func(from_gpu, to_gpu, idx_gpu, M, block=block, grid=grid)
+    # Only support 1D index arrays:
+    assert len(np.shape(ind)) == 1
+    assert dest_gpu.dtype == src_gpu.dtype
+    assert issubclass(ind.dtype.type, numbers.Integral)
+    N = len(ind)
+    if ind_which == 'dest':
+        if N != len(src_gpu):
+            raise ValueError('len(ind) == %s != %s == len(src_gpu)' % (N, len(src_gpu)))
+    elif ind_which == 'src':
+        if N != len(dest_gpu):
+            raise ValueError('len(ind) == %s != %s == len(dest_gpu)' % (N, len(dest_gpu)))
+    else:
+        raise ValueError('invalid value for `ind_which`')
+    data_ctype = dtype_to_ctype(dest_gpu.dtype)
+    ind_ctype = dtype_to_ctype(ind.dtype)
+    if not isinstance(ind, gpuarray.GPUArray):
+        ind = gpuarray.to_gpu(ind)
+    v = "{data_ctype} *dest, {ind_ctype} *ind, {data_ctype} *src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
+    if ind_which == 'dest':
+        func = elementwise.ElementwiseKernel(v, "dest[ind[i]] = src[i]")
+    else:
+        func = elementwise.ElementwiseKernel(v, "dest[i] = src[ind[i]]")
+    func(dest_gpu, ind, src_gpu, range=slice(0, N, 1))
