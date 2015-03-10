@@ -133,7 +133,7 @@ class BaseModule(mpi.Worker):
         # Set up mapper between port identifiers and their associated data:
         assert len(data) == len(self.interface)
         self.data = data
-        self.pm = PortMapper(sel, self.data)
+        self.pm = PortMapper(sel, self.data, make_copy=False)
 
     def _init_port_dicts(self):
         """
