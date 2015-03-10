@@ -191,9 +191,13 @@ class BaseModule(mpi.Worker):
             self._in_port_dict_ids[in_id] = \
                 self.pm.ports_to_inds(self._in_port_dict[in_id])
 
-    def _init_gpu_bufs(self):
+    def _init_comm_bufs(self):
         """
-        Buffers for receiving data from other modules.
+        Buffers for sending/receiving data from other modules.
+
+        Notes
+        -----
+        Must be executed after `_init_port_dicts()`.
         """
 
         # Buffers for receiving data transmitted from source modules:
@@ -201,9 +205,9 @@ class BaseModule(mpi.Worker):
         for in_id in self._in_ids:
             self._in_bufs[in_id] = \
                 gpuarray.empty(len(self._in_port_dict_ids[in_id]), self.pm.dtype)
-        self._out_bufs = {}
 
         # Buffers for transmitting data to destination modules:
+        self._out_bufs = {}
         for out_id in self._out_ids:
             self._out_bufs[out_id] = \
                 gpuarray.empty(len(self._out_port_dict_ids[out_id]), self.pm.dtype)
@@ -341,7 +345,7 @@ class BaseModule(mpi.Worker):
             self._init_port_dicts()
 
             # Initialize GPU transmission buffers:
-            self._init_gpu_bufs()
+            self._init_comm_bufs()
 
             # Perform any pre-emulation operations:
             self.pre_run()
