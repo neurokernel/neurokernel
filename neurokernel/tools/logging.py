@@ -11,7 +11,7 @@ import traceback
 import mpi4py.MPI
 import twiggy
 
-from comm import MPIOutput, ZMQOutput
+import neurokernel.tools.comm
 
 def log_exception(type, value, tb, logger=twiggy.log, multiline=False):
     """
@@ -106,7 +106,8 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
     if file_name:
         if mpi_comm:
             assert isinstance(mpi_comm, mpi4py.MPI.Intracomm)
-            file_output = MPIOutput(file_name, fmt, mpi_comm)
+            file_output = \
+                neurokernel.tools.comm.MPIOutput(file_name, fmt, mpi_comm)
         else:
             file_output = \
                 twiggy.outputs.FileOutput(file_name, fmt, 'w')
@@ -118,7 +119,7 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         twiggy.addEmitters(('screen', level, None, screen_output))
 
     if zmq_addr:
-        zmq_output = ZMQOutput(zmq_addr, fmt)
+        zmq_output = neurokernel.tools.comm.ZMQOutput(zmq_addr, fmt)
         twiggy.addEmitters(('zmq', level, None, zmq_output))
 
     logger = twiggy.log.name(fmt_name(name))
