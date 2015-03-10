@@ -2020,7 +2020,8 @@ class BasePortMapper(object):
             Integer indices of ports comprised by selector. 
         """
 
-        return self.sel.select(self.portmap, selector).dropna().values
+        return self.sel.select(self.portmap,
+                    selector).dropna().astype(np.int64).values
 
     def get_map(self, selector):
         """
