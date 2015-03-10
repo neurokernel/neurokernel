@@ -7,6 +7,7 @@ import time
 
 import bidict
 from mpi4py import MPI
+import pycuda.gpuarray as gpuarray
 from pycuda.tools import dtype_to_ctype
 
 from mixins import LoggerMixin
