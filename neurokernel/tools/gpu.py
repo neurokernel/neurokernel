@@ -78,11 +78,14 @@ def bufint(a):
     Returns
     -------
     b : buffer
-        Buffer interface to array.
+        Buffer interface to array. Returns None if `a` has a length of 0.
     """
 
     assert isinstance(a, gpuarray.GPUArray)
-    return a.gpudata.as_buffer(a.nbytes)
+    if a.size:
+        return a.gpudata.as_buffer(a.nbytes)
+    else:
+        return None
 
 def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     """
