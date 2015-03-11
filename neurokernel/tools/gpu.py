@@ -135,6 +135,11 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     assert dest_gpu.dtype == src_gpu.dtype
     assert issubclass(ind.dtype.type, numbers.Integral)
     N = len(ind)
+
+    # Manually handle empty index array because it will cause the kernel to
+    # fail if processed:
+    if N == 0:
+        return
     if ind_which == 'dest':
         assert N == len(src_gpu)
     elif ind_which == 'src':
