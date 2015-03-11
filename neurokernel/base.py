@@ -909,9 +909,11 @@ class TimeListener(ControlledProcess):
         sync_router(sock_time, self.ids)
         self.log_info('time port initialized')
         self.running = True
+        counter = 0
         total_time = 0.0
         total_nbytes = 0.0
         received_data = {}
+        self.average_throughput = 0.0
         while True:
             if sock_time.poll(10):
 
@@ -929,7 +931,7 @@ class TimeListener(ControlledProcess):
                 # After adding the latest timing data for a specific step, check
                 # whether data from all modules has arrived for that step:
                 if set(received_data[steps].keys()) == self.ids:
-
+                    
                     # The duration an execution is assumed to be the longest of
                     # the received intervals:
                     step_time = max([(d[1]-d[0]) for d in received_data[steps].values()])
@@ -941,9 +943,14 @@ class TimeListener(ControlledProcess):
                     total_time += step_time
                     total_nbytes += step_nbytes
 
+                    self.average_throughput = (self.average_throughput*counter+\
+                                               step_nbytes/step_time)/(counter+1)
+
                     # Clear the data for the processed execution step so that
                     # that the received_data dict doesn't consume unnecessary memory:
                     del received_data[steps]
+
+                    counter += 1
 
             if not self.running:
                 self.log_info('stopping run loop')
@@ -951,15 +958,16 @@ class TimeListener(ControlledProcess):
         self.log_info('done')
 
         if total_time > 0.0:
-            self.throughput = total_nbytes/total_time
+            self.total_throughput = total_nbytes/total_time
         else:
-            self.throughput = 0.0
-        self.log_info('total received throughput: %s bytes/s' % self.throughput)
-        self.queue.put(self.throughput)
+            self.total_throughput = 0.0
+        self.log_info('average/total received throughputs: %s, %s bytes/s' % \
+                      (self.average_throughput, self.total_throughput))
+        self.queue.put((self.average_throughput, self.total_throughput))
 
     def get_throughput(self):
         """
-        Retrieve total received data throughput.
+        Retrieve average/total received data throughput.
         """
 
         return self.queue.get()
