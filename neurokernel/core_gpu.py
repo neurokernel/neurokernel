@@ -55,6 +55,11 @@ class Module(BaseModule):
 
         self._init_gpu()
 
+        # This is needed to ensure that MPI_Finalize is called before PyCUDA
+        # attempts to clean up; see
+        # https://groups.google.com/forum/#!topic/mpi4py/by0Rd5q0Ayw
+        atexit.register(MPI.Finalize)
+
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
