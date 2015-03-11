@@ -909,18 +909,41 @@ class TimeListener(ControlledProcess):
         sync_router(sock_time, self.ids)
         self.log_info('time port initialized')
         self.running = True
-        counter = 0
         total_time = 0.0
         total_nbytes = 0.0
+        received_data = {}
         while True:
             if sock_time.poll(10):
+
+                # Receive timing data:
                 id, data = sock_time.recv_multipart()
                 id, steps, start, stop, nbytes = msgpack.unpackb(data)
-                total_time += stop-start
-                total_nbytes += nbytes
-
                 self.log_info('time data: %s' % \
-                                 str(msgpack.unpackb(data)))
+                              str(msgpack.unpackb(data)))
+                
+                # Collect timing data for each execution step:
+                if steps not in received_data:
+                    received_data[steps] = {}                    
+                received_data[steps][id] = (start, stop, nbytes)
+
+                # After adding the latest timing data for a specific step, check
+                # whether data from all modules has arrived for that step:
+                if set(received_data[steps].keys()) == self.ids:
+
+                    # The duration an execution is assumed to be the longest of
+                    # the received intervals:
+                    step_time = max([(d[1]-d[0]) for d in received_data[steps].values()])
+
+                    # Obtain the total number of bytes received by all of the
+                    # modules during the execution step:
+                    step_nbytes = sum([d[2] for d in received_data[steps].values()])
+                    
+                    total_time += step_time
+                    total_nbytes += step_nbytes
+
+                    # Clear the data for the processed execution step so that
+                    # that the received_data dict doesn't consume unnecessary memory:
+                    del received_data[steps]
 
             if not self.running:
                 self.log_info('stopping run loop')
@@ -931,12 +954,12 @@ class TimeListener(ControlledProcess):
             self.throughput = total_nbytes/total_time
         else:
             self.throughput = 0.0
-        self.log_info('average received throughput: %s bytes/s' % self.throughput)
+        self.log_info('total received throughput: %s bytes/s' % self.throughput)
         self.queue.put(self.throughput)
 
     def get_throughput(self):
         """
-        Retrieve average received data throughput.
+        Retrieve total received data throughput.
         """
 
         return self.queue.get()
