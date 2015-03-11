@@ -121,8 +121,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     Returns
     -------
-    throughput : float
-        Received data throughput in bytes/seconds.
+    average_throughput, total_throughput : float
+        Average per-step and total received data throughput in bytes/seconds.
     exec_time : float
         Execution time in seconds.
     """
@@ -151,8 +151,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     for i, j in itertools.combinations(xrange(n_lpu), 2):
         lpu_i = 'lpu%s' % i
         lpu_j = 'lpu%s' % j
-        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]            
-        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]            
+        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]
+        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]
 
         # The order of these two selectors is important; the individual 'from'
         # and 'to' ports must line up properly for Pattern.from_concat to
@@ -177,7 +177,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     man.start(steps=steps)
     man.stop()
-    return man.get_throughput(), (time.time()-start)
+    t = man.get_throughput()
+    return t[0], t[1], (time.time()-start)
 
 if __name__ == '__main__':
     num_lpus = 2

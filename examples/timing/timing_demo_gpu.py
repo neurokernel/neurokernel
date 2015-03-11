@@ -134,8 +134,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     Returns
     -------
-    throughput : float
-        Received data throughput in bytes/seconds.
+    average_throughput, total_throughput : float
+        Average per-step and total received data throughput in bytes/seconds.
     exec_time : float
         Execution time in seconds.
     """
@@ -194,7 +194,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     man.start(steps=steps)
     man.stop()
-    return man.get_throughput(), (time.time()-start)
+    t = man.get_throughput()
+    return t[0], t[1], (time.time()-start)
 
 if __name__ == '__main__':
     num_lpus = 2
