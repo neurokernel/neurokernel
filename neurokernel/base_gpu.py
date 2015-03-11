@@ -429,6 +429,7 @@ class Manager(mpi.WorkerManager):
         # Variables for computing throughput:
         self.total_time = 0.0
         self.total_nbytes = 0.0
+        self.received_data = {}
 
         # Computed throughput (only updated after an emulation run):
         self._throughput = 0.0
@@ -437,7 +438,7 @@ class Manager(mpi.WorkerManager):
     @property
     def throughput(self):
         """
-        Average received data throughput.
+        Total received data throughput.
         """
 
         return self._throughput
@@ -567,22 +568,42 @@ class Manager(mpi.WorkerManager):
 
     def process_worker_msg(self, msg):
 
-        # Accumulate timing data sent by workers:
+        # Process timing data sent by workers:
         if msg[0] == 'time':
             rank, steps, start, stop, nbytes = msg[1]
-            self.total_time += stop-start
-            self.total_nbytes += nbytes
-
             self.log_info('time data: %s' % str(msg[1]))
+
+            # Collect timing data for each execution step:
+            if steps not in self.received_data:
+                self.received_data[steps] = {}                    
+            self.received_data[steps][rank] = (start, stop, nbytes)
+
+            # After adding the latest timing data for a specific step, check
+            # whether data from all modules has arrived for that step:
+            if set(self.received_data[steps].keys()) == set(self.rank_to_id.keys()):
+
+                # The duration an execution is assumed to be the longest of
+                # the received intervals:
+                step_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
+
+                # Obtain the total number of bytes received by all of the
+                # modules during the execution step:
+                step_nbytes = sum([d[2] for d in self.received_data[steps].values()])
+
+                self.total_time += step_time
+                self.total_nbytes += step_nbytes
+
+                # Clear the data for the processed execution step so that
+                # that the received_data dict doesn't consume unnecessary memory:
+                del self.received_data[steps]
 
             # Compute throughput using accumulated timing data:
             if self.total_time > 0:
                 self.throughput = self.total_nbytes/self.total_time
             else:
                 self.throughput = 0.0
-            self.log_info('average received throughput: %s bytes/s' % \
+            self.log_info('total received throughput: %s bytes/s' % \
                           self.throughput)
-
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
