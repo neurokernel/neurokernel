@@ -151,10 +151,12 @@ class GPUPortMapper(PortMapper):
 
         N = len(inds)
         assert N <= len(self.data)
+        if N == 0:
+            return np.empty(N, dtype=self.data.dtype)
 
+        result = gpuarray.empty(N, dtype=self.data.dtype)
         if not isinstance(inds, gpuarray.GPUArray):
             inds = gpuarray.to_gpu(inds)
-        result = gpuarray.empty(N, dtype=self.data.dtype)
 
         try:
             func = self.get_by_inds.cache[inds.dtype]
@@ -182,6 +184,8 @@ class GPUPortMapper(PortMapper):
         assert len(np.shape(inds)) == 1
         assert issubclass(inds.dtype.type, numbers.Integral)
         N = len(inds)
+        if N == 0:
+            return
         assert N == len(data)
 
         if not isinstance(inds, gpuarray.GPUArray):
