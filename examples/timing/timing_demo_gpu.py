@@ -50,8 +50,7 @@ class MyModule(Module):
         self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = \
             gpuarray.to_gpu(np.ones(len(self.interface.out_ports().gpot_ports()), np.double))
         self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = \
-            gpuarray.to_gpu(np.ones(len(self.interface.out_ports().spike_ports()),
-            int))
+            gpuarray.to_gpu(np.ones(len(self.interface.out_ports().spike_ports()), np.int64))
 
 def gen_sels(n_lpu, n_spike, n_gpot):
     """
