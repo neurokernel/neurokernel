@@ -375,8 +375,8 @@ class Manager(base.Manager):
         mod_int_1[self._kwargs[rank_1]['sel_gpot'], 'type'] = 'gpot'
         mod_int_1[self._kwargs[rank_1]['sel_spike'], 'type'] = 'spike'
 
-        assert mod_int_0.is_compatible(0, pat.interface, int_0)
-        assert mod_int_1.is_compatible(0, pat.interface, int_1)
+        assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
+        assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
 
         # XXX Need to check for fan-in XXX
 
