@@ -132,11 +132,6 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     # Time everything starting with manager initialization:
     start = time.time()
 
-    # Check whether a sufficient number of GPUs are available:
-    # drv.init()
-    # if n_lpu > drv.Device.count():
-    #     raise RuntimeError('insufficient number of available GPUs.')
-
     man = Manager()
 
     # Set up modules:
@@ -145,7 +140,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         lpu_i = 'lpu%s' % i
         sel_in, sel_out, sel_gpot, sel_spike = sel_dict[lpu_i]
         sel = Selector.union(sel_in, sel_out, sel_gpot, sel_spike)
-        man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,    
+        man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,
                 None, None, ['interface', 'io', 'type'],
                 CTRL_TAG, GPOT_TAG, SPIKE_TAG, time_sync=True)
 
@@ -153,8 +148,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     for i, j in itertools.combinations(xrange(n_lpu), 2):
         lpu_i = 'lpu%s' % i
         lpu_j = 'lpu%s' % j
-        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]            
-        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]            
+        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]
+        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]
 
         # The order of these two selectors is important; the individual 'from'
         # and 'to' ports must line up properly for Pattern.from_concat to
@@ -180,7 +175,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.spawn()
     man.start(steps)
     man.wait()
-    return man.throughput, (time.time()-start)
+    return man.average_throughput, man.total_throughput, (time.time()-start)
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

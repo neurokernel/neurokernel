@@ -61,11 +61,11 @@ def gen_sels(n_lpu, n_spike, n_gpot):
     n_lpu : int
         Number of LPUs. Must be at least 2.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
 
@@ -73,7 +73,7 @@ def gen_sels(n_lpu, n_spike, n_gpot):
     -------
     results : dict of tuples
         The keys of the result are the module IDs; the values are tuples
-        containing the respective selectors for input, output, graded potential, 
+        containing the respective selectors for input, output, graded potential,
         and spiking ports.
     """
 
@@ -116,11 +116,11 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         Number of LPUs. Must be at least 2 and no greater than the number of
         local GPUs.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
     steps : int
@@ -160,8 +160,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     for i, j in itertools.combinations(xrange(n_lpu), 2):
         lpu_i = 'lpu%s' % i
         lpu_j = 'lpu%s' % j
-        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]            
-        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]            
+        sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i = sel_dict[lpu_i]
+        sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = sel_dict[lpu_j]
 
         # The order of these two selectors is important; the individual 'from'
         # and 'to' ports must line up properly for Pattern.from_concat to
@@ -187,7 +187,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.spawn()
     man.start(steps)
     man.wait()
-    return man.throughput, (time.time()-start)
+    return man.average_throughput, man.total_throughput, (time.time()-start)
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

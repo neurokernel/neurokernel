@@ -427,24 +427,37 @@ class Manager(mpi.WorkerManager):
         self.steps = np.inf
 
         # Variables for computing throughput:
+        self.counter = 0
         self.total_time = 0.0
         self.total_nbytes = 0.0
         self.received_data = {}
 
         # Computed throughput (only updated after an emulation run):
-        self._throughput = 0.0
+        self._average_throughput = 0.0
+        self._total_throughput = 0.0
         self.log_info('manager instantiated')
 
     @property
-    def throughput(self):
+    def total_throughput(self):
         """
         Total received data throughput.
         """
 
-        return self._throughput
-    @throughput.setter
-    def throughput(self, t):
-        self._throughput = t
+        return self._total_throughput
+    @total_throughput.setter
+    def total_throughput(self, t):
+        self._total_throughput = t
+
+    @property
+    def average_throughput(self):
+        """
+        Average received data throughput per step.
+        """
+
+        return self._average_throughput
+    @average_throughput.setter
+    def average_throughput(self, t):
+        self._average_throughput = t
 
     def validate_args(self, target):
         """
@@ -593,17 +606,20 @@ class Manager(mpi.WorkerManager):
                 self.total_time += step_time
                 self.total_nbytes += step_nbytes
 
+                self.average_throughput = (self.average_throughput*self.counter+\
+                                          step_nbytes/step_time)/(self.counter+1)
+
                 # Clear the data for the processed execution step so that
                 # that the received_data dict doesn't consume unnecessary memory:
                 del self.received_data[steps]
 
             # Compute throughput using accumulated timing data:
             if self.total_time > 0:
-                self.throughput = self.total_nbytes/self.total_time
+                self.total_throughput = self.total_nbytes/self.total_time
             else:
-                self.throughput = 0.0
-            self.log_info('total received throughput: %s bytes/s' % \
-                          self.throughput)
+                self.total_throughput = 0.0
+            self.log_info('average/total received throughput: %s, %s bytes/s' % \
+                          (self.average_throughput, self.total_throughput))
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
