@@ -563,8 +563,8 @@ class Manager(mpi.WorkerManager):
         mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
         mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
 
-        assert mod_int_0.is_compatible(0, pat.interface, int_0)
-        assert mod_int_1.is_compatible(0, pat.interface, int_1)
+        assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
+        assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
 
         # XXX Need to check for fan-in XXX
 
