@@ -464,13 +464,14 @@ class BaseModule(ControlledProcess):
         Data is serialized before being sent and unserialized when
         received.
         """
-
+        
         if self.net in ['none', 'ctrl']:
             self.log_info('not synchronizing with network')
         else:
             self.log_info('synchronizing with network')
 
             # Send outbound data:
+            start = time.time()
             if self.net in ['out', 'full']:
 
                 # Send all data in outbound buffer:
@@ -478,16 +479,19 @@ class BaseModule(ControlledProcess):
                 for out_id, data in self._out_data:
                     self.sock_data.send(msgpack.packb((out_id, data)))
                     send_ids.remove(out_id)
-                    self.log_info('sent to   %s: %s' % (out_id, str(data)))
+                    if not self.time_sync:
+                        self.log_info('sent to   %s: %s' % (out_id, str(data)))
 
                 # Send data tuples containing None to those modules for which no
                 # actual data was generated to satisfy the barrier condition:
                 for out_id in send_ids:
                     self.sock_data.send(msgpack.packb((out_id, None)))
-                    self.log_info('sent to   %s: %s' % (out_id, None))
+                    if not self.time_sync:
+                        self.log_info('sent to   %s: %s' % (out_id, None))
 
                 # All output IDs should be sent data by this point:
-                self.log_info('sent data to all output IDs')
+                if not self.time_sync:
+                    self.log_info('sent data to all output IDs')
 
             # Receive inbound data:
             if self.net in ['in', 'full']:
@@ -521,14 +525,16 @@ class BaseModule(ControlledProcess):
                         if not self.time_sync:
                             self.log_info('run loop stopped - stopping sync')
                         break
-                stop = time.time()
-                self.log_info('recv data from all input IDs')
 
-                # Transmit time taken to receive data:
-                if self.time_sync:
-                    self.log_info('sent timing data to master')
-                    self.sock_time.send(msgpack.packb((self.id, self.steps,
-                                                       start, stop, nbytes)))
+                if not self.time_sync:
+                    self.log_info('recv data from all input IDs')
+
+            # Transmit synchronization time:
+            stop = time.time()
+            if self.time_sync:
+                self.log_info('sent timing data to master')
+                self.sock_time.send(msgpack.packb((self.id, self.steps,
+                                                   start, stop, nbytes)))
 
     def pre_run(self, *args, **kwargs):
         """
@@ -961,13 +967,13 @@ class TimeListener(ControlledProcess):
             self.total_throughput = total_nbytes/total_time
         else:
             self.total_throughput = 0.0
-        self.log_info('average/total received throughputs: %s, %s bytes/s' % \
+        self.log_info('average per-step/total transmission throughputs: %s, %s bytes/s' % \
                       (self.average_throughput, self.total_throughput))
         self.queue.put((self.average_throughput, self.total_throughput))
 
     def get_throughput(self):
         """
-        Retrieve average/total received data throughput.
+        Retrieve average per-step and total transmission throughputs.
         """
 
         return self.queue.get()
