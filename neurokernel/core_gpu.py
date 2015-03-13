@@ -239,6 +239,8 @@ class Module(BaseModule):
         Send output data and receive input data.
         """
 
+        if self.time_sync:
+            start = time.time()
         req = MPI.Request()
         requests = []
 
@@ -278,8 +280,6 @@ class Module(BaseModule):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        if self.time_sync:
-            start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
