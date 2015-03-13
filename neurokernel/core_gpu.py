@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 
 import atexit
-
-import numpy as np
 import time
 
 import bidict
 from mpi4py import MPI
+import numpy as np
 import pycuda.gpuarray as gpuarray
 from pycuda.tools import dtype_to_ctype
+import twiggy
 
-from mixins import LoggerMixin
 from base_gpu import BaseModule, CTRL_TAG
 import base_gpu
-import mpi
-
 # from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
 #                           ExceptionOnSignal, TryExceptionOnSignal)
+from mixins import LoggerMixin
+import mpi
+from tools.comm import MPIOutput
 from tools.gpu import bufint, set_by_inds
 from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
@@ -59,6 +59,13 @@ class Module(BaseModule):
         # attempts to clean up; see
         # https://groups.google.com/forum/#!topic/mpi4py/by0Rd5q0Ayw
         atexit.register(MPI.Finalize)
+
+        # Manually register the file close method associated with MPIOutput
+        # so that it is called by atexit before MPI.Finalize() (if the file is
+        # closed after MPI.Finalize() is called, an error will occur):
+        for k, v in twiggy.emitters.iteritems():
+             if isinstance(v._output, MPIOutput):       
+                 atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by

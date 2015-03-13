@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 
 import atexit
-
-import numpy as np
 import time
 
 import bidict
 from mpi4py import MPI
+import numpy as np
+import twiggy
 
-from mixins import LoggerMixin
 from base import BaseModule, CTRL_TAG
 import base
-import mpi
-
 # from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
 #                           ExceptionOnSignal, TryExceptionOnSignal)
+from mixins import LoggerMixin
+import mpi
+from tools.comm import MPIOutput
 from tools.logging import setup_logger
 from tools.misc import catch_exception
-from uid import uid
 from pattern import Interface, Pattern
-from plsel import SelectorMethods, BasePortMapper, PortMapper
+from plsel import BasePortMapper, PortMapper, SelectorMethods
+from uid import uid
 
 # MPI tags for distinguishing messages associated with different port types:
 GPOT_TAG = CTRL_TAG+1
@@ -48,6 +48,13 @@ class Module(BaseModule):
         assert 'interface' in columns
         assert 'io' in columns
         assert 'type' in columns
+
+        # Manually register the file close method associated with MPIOutput
+        # so that it is called by atexit before MPI.Finalize() (if the file is
+        # closed after MPI.Finalize() is called, an error will occur):
+        for k, v in twiggy.emitters.iteritems():
+             if isinstance(v._output, MPIOutput):       
+                 atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
@@ -250,6 +257,8 @@ class Module(BaseModule):
         Send output data and receive input data.
         """
 
+        if self.time_sync:
+            start = time.time()
         req = MPI.Request()
         requests = []
 
@@ -290,8 +299,6 @@ class Module(BaseModule):
         received_spike = []
         ind_in_gpot_list = []
         ind_in_spike_list = []
-        if self.time_sync:
-            start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]

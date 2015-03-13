@@ -5,6 +5,7 @@ Base Neurokernel classes.
 """
 
 import atexit
+import collections
 import copy
 import multiprocessing as mp
 import numbers
@@ -13,25 +14,25 @@ import re
 import string
 import sys
 import time
-import collections
 
 import bidict
 from mpi4py import MPI
-import pycuda.gpuarray as gpuarray
 import numpy as np
+import pycuda.gpuarray as gpuarray
 import twiggy
 
 from mixins import LoggerMixin
 import mpi
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
-     ExceptionOnSignal, TryExceptionOnSignal
-from routing_table import RoutingTable
-from uid import uid
+    ExceptionOnSignal, TryExceptionOnSignal
+from tools.comm import MPIOutput
 from tools.gpu import bufint, set_by_inds
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
 from plsel import Selector, SelectorMethods, PortMapper
 from pm_gpu import GPUPortMapper
+from routing_table import RoutingTable
+from uid import uid
 
 CTRL_TAG = 1
 
@@ -104,6 +105,13 @@ class BaseModule(mpi.Worker):
         # attempts to clean up; see
         # https://groups.google.com/forum/#!topic/mpi4py/by0Rd5q0Ayw
         atexit.register(MPI.Finalize)
+
+        # Manually register the file close method associated with MPIOutput
+        # so that it is called by atexit before MPI.Finalize() (if the file is
+        # closed after MPI.Finalize() is called, an error will occur):
+        for k, v in twiggy.emitters.iteritems():
+             if isinstance(v._output, MPIOutput):       
+                 atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
@@ -222,6 +230,8 @@ class BaseModule(mpi.Worker):
         Send output data and receive input data.
         """
 
+        if self.time_sync:
+            start = time.time()
         req = MPI.Request()
         requests = []
 
@@ -250,8 +260,6 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        if self.time_sync:
-            start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
@@ -262,10 +270,6 @@ class BaseModule(mpi.Worker):
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
-        if not self.time_sync:
-            self.log_info('received all data received by %s' % self.id)
-        else:
-            stop = time.time()
 
         # Copy received elements into the current module's data array:
         n = 0
@@ -273,6 +277,11 @@ class BaseModule(mpi.Worker):
             ind_in = self._in_port_dict_ids[src_id]
             self.pm.set_by_inds(ind_in, self._in_bufs[src_id])
             n += len(self._in_bufs[src_id])
+
+        if not self.time_sync:
+            self.log_info('received all data received by %s' % self.id)
+        else:
+            stop = time.time()
 
         # Send timing data to manager:
         if self.time_sync:

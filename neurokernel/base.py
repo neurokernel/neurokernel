@@ -24,6 +24,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 from routing_table import RoutingTable
 from uid import uid
+from tools.comm import MPIOutput
 from tools.misc import catch_exception
 from pattern import Interface, Pattern
 from plsel import SelectorMethods, PortMapper
@@ -90,6 +91,13 @@ class BaseModule(mpi.Worker):
         assert 'interface' in columns
         assert 'io' in columns
         assert 'type' in columns
+
+        # Manually register the file close method associated with MPIOutput
+        # so that it is called by atexit before MPI.Finalize() (if the file is
+        # closed after MPI.Finalize() is called, an error will occur):
+        for k, v in twiggy.emitters.iteritems():
+             if isinstance(v._output, MPIOutput):       
+                 atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
@@ -204,6 +212,8 @@ class BaseModule(mpi.Worker):
         Send output data and receive input data.
         """
 
+        if self.time_sync:
+            start = time.time()
         req = MPI.Request()
         requests = []
 
@@ -229,8 +239,6 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        if self.time_sync:
-            start = time.time()
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
@@ -240,10 +248,6 @@ class BaseModule(mpi.Worker):
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
-        if not self.time_sync:
-            self.log_info('received all data received by %s' % self.id)
-        else:
-            stop = time.time()
 
         # Copy received elements into the current module's data array:
         n = 0
@@ -251,6 +255,11 @@ class BaseModule(mpi.Worker):
             ind_in = self._in_port_dict_ids[src_id]
             self.pm.set_by_inds(ind_in, self.data_in[src_id])
             n += len(self.data_in[src_id])
+
+        if not self.time_sync:
+            self.log_info('received all data received by %s' % self.id)
+        else:
+            stop = time.time()
 
         # Send timing data to manager:
         if self.time_sync:
@@ -520,8 +529,8 @@ class Manager(mpi.WorkerManager):
         mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
         mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
 
-        assert mod_int_0.is_compatible(0, pat.interface, int_0)
-        assert mod_int_1.is_compatible(0, pat.interface, int_1)
+        assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
+        assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
 
         # XXX Need to check for fan-in XXX
 

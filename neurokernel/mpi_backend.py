@@ -49,10 +49,13 @@ for k, v in emitters.iteritems():
         name = v._output.filename
         format = v._output._format
         mode = v._output.mode
-        # XXX what about close_atexit? XXX        
+
+        # The close_atexit argument is explicitly set to False here because we need
+        # to manually close the file handle associated with MPIOutput before
+        # MPI.Finalize() is called via atexit in the base/core modules:
         twiggy.addEmitters(('file', level, None, 
             neurokernel.tools.comm.MPIOutput(name, format, 
-                                             MPI.COMM_WORLD, mode)))
+                                             MPI.COMM_WORLD, mode, False)))
     else:
         twiggy.emitters[k] = v
 
