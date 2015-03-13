@@ -227,14 +227,13 @@ class Module(BaseModule):
                                self.pm['gpot'].dtype)
             self._in_buf_int['gpot'][in_id] = bufint(self._in_buf['gpot'][in_id])
             self._in_buf_mtype['gpot'][in_id] = \
-                dtype_to_mpi(self._in_buf['gpot'][in_id])
-
+                dtype_to_mpi(self._in_buf['gpot'][in_id].dtype)
             self._in_buf['spike'][in_id] = \
                 gpuarray.empty(len(self._in_port_dict_ids['spike'][in_id]),
                                self.pm['spike'].dtype)
             self._in_buf_int['spike'][in_id] = bufint(self._in_buf['spike'][in_id])
             self._in_buf_mtype['spike'][in_id] = \
-                dtype_to_mpi(self._in_buf['spike'][in_id])
+                dtype_to_mpi(self._in_buf['spike'][in_id].dtype)
 
         # Buffers (and their interfaces and MPI types) for transmitting data to
         # destination modules:
@@ -253,14 +252,14 @@ class Module(BaseModule):
                                self.pm['gpot'].dtype)
             self._out_buf_int['gpot'][out_id] = bufint(self._out_buf['gpot'][out_id])
             self._out_buf_mtype['gpot'][out_id] = \
-                dtype_to_mpi(self._out_buf['gpot'][out_id])
+                dtype_to_mpi(self._out_buf['gpot'][out_id].dtype)
 
             self._out_buf['spike'][out_id] = \
                 gpuarray.empty(len(self._out_port_dict_ids['spike'][out_id]),
                                self.pm['spike'].dtype)
             self._out_buf_int['spike'][out_id] = bufint(self._out_buf['spike'][out_id])
             self._out_buf_mtype['spike'][out_id] = \
-                dtype_to_mpi(self._out_buf['spike'][out_id])
+                dtype_to_mpi(self._out_buf['spike'][out_id].dtype)
 
     def _sync(self):
         """

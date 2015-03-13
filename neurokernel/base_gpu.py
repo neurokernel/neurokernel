@@ -214,16 +214,24 @@ class BaseModule(mpi.Worker):
         """
 
         # Buffers for receiving data transmitted from source modules:
-        self._in_bufs = {}
+        self._in_buf = {}
+        self._in_buf_int = {}
+        self._in_buf_mtype = {}
         for in_id in self._in_ids:
-            self._in_bufs[in_id] = \
+            self._in_buf[in_id] = \
                 gpuarray.empty(len(self._in_port_dict_ids[in_id]), self.pm.dtype)
+            self._in_buf_int[in_id] = bufint(self._in_buf[in_id])
+            self._in_buf_mtype[in_id] = dtype_to_mpi(self._in_buf[in_id].dtype)
 
         # Buffers for transmitting data to destination modules:
-        self._out_bufs = {}
+        self._out_buf = {}
+        self._out_buf_int = {}
+        self._out_buf_mtype = {}
         for out_id in self._out_ids:
-            self._out_bufs[out_id] = \
+            self._out_buf[out_id] = \
                 gpuarray.empty(len(self._out_port_dict_ids[out_id]), self.pm.dtype)
+            self._out_buf_int[out_id] = bufint(self._out_buf[out_id])
+            self._out_buf_mtype[out_id] = dtype_to_mpi(self._out_buf[out_id].dtype)
 
     def _sync(self):
         """
@@ -242,14 +250,14 @@ class BaseModule(mpi.Worker):
         for dest_id in dest_ids:
 
             # Copy data into destination buffer:
-            set_by_inds(self._out_bufs[dest_id],
+            set_by_inds(self._out_buf[dest_id],
                         self._out_port_dict_ids[dest_id], self.data, 'src')
             dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % \
-                              (dest_id, str(self._out_bufs[dest_id])))
-            r = MPI.COMM_WORLD.Isend([bufint(self._out_bufs[dest_id]),
-                                      dtype_to_mpi(self._out_bufs[dest_id])],
+                              (dest_id, str(self._out_buf[dest_id])))
+            r = MPI.COMM_WORLD.Isend([self._out_buf_int[dest_id],
+                                      self._out_buf_mtype[dest_id]],
                                      dest_rank)
 
             requests.append(r)
@@ -263,8 +271,8 @@ class BaseModule(mpi.Worker):
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
-            r = MPI.COMM_WORLD.Irecv([bufint(self._in_bufs[src_id]),
-                                      dtype_to_mpi(self._in_bufs[src_id])],
+            r = MPI.COMM_WORLD.Irecv([self._in_buf_int[src_id],
+                                      self._in_buf_mtype[src_id]],
                                      source=src_rank)
             requests.append(r)
             if not self.time_sync:
@@ -275,8 +283,8 @@ class BaseModule(mpi.Worker):
         n = 0
         for src_id in src_ids:
             ind_in = self._in_port_dict_ids[src_id]
-            self.pm.set_by_inds(ind_in, self._in_bufs[src_id])
-            n += len(self._in_bufs[src_id])
+            self.pm.set_by_inds(ind_in, self._in_buf[src_id])
+            n += len(self._in_buf[src_id])
 
         if not self.time_sync:
             self.log_info('received all data received by %s' % self.id)
