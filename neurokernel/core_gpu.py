@@ -210,30 +210,58 @@ class Module(BaseModule):
         Must be executed after `_init_port_dicts()`.
         """
 
-        # Buffers for receiving data transmitted from source modules:
-        self._in_bufs = {}
-        self._in_bufs['gpot'] = {}
-        self._in_bufs['spike'] = {}
+        # Buffers (and their interfaces and MPI types) for receiving data
+        # transmitted from source modules:
+        self._in_buf = {}
+        self._in_buf['gpot'] = {}
+        self._in_buf['spike'] = {}
+        self._in_buf_int = {}
+        self._in_buf_int['gpot'] = {}
+        self._in_buf_int['spike'] = {}        
+        self._in_buf_mtype = {}
+        self._in_buf_mtype['gpot'] = {}
+        self._in_buf_mtype['spike'] = {}        
         for in_id in self._in_ids:
-            self._in_bufs['gpot'][in_id] = \
+            self._in_buf['gpot'][in_id] = \
                 gpuarray.empty(len(self._in_port_dict_ids['gpot'][in_id]),
                                self.pm['gpot'].dtype)
-            self._in_bufs['spike'][in_id] = \
+            self._in_buf_int['gpot'][in_id] = bufint(self._in_buf['gpot'][in_id])
+            self._in_buf_mtype['gpot'][in_id] = \
+                dtype_to_mpi(self._in_buf['gpot'][in_id])
+
+            self._in_buf['spike'][in_id] = \
                 gpuarray.empty(len(self._in_port_dict_ids['spike'][in_id]),
                                self.pm['spike'].dtype)
+            self._in_buf_int['spike'][in_id] = bufint(self._in_buf['spike'][in_id])
+            self._in_buf_mtype['spike'][in_id] = \
+                dtype_to_mpi(self._in_buf['spike'][in_id])
 
-        # Buffers for transmitting data to destination modules:
-        self._out_bufs = {}
-        self._out_bufs['gpot'] = {}
-        self._out_bufs['spike'] = {}
+        # Buffers (and their interfaces and MPI types) for transmitting data to
+        # destination modules:
+        self._out_buf = {}
+        self._out_buf['gpot'] = {}
+        self._out_buf['spike'] = {}
+        self._out_buf_int = {}
+        self._out_buf_int['gpot'] = {}
+        self._out_buf_int['spike'] = {}
+        self._out_buf_mtype = {}
+        self._out_buf_mtype['gpot'] = {}
+        self._out_buf_mtype['spike'] = {}
         for out_id in self._out_ids:
-            self._out_bufs['gpot'][out_id] = \
+            self._out_buf['gpot'][out_id] = \
                 gpuarray.empty(len(self._out_port_dict_ids['gpot'][out_id]),
                                self.pm['gpot'].dtype)
-            self._out_bufs['spike'][out_id] = \
+            self._out_buf_int['gpot'][out_id] = bufint(self._out_buf['gpot'][out_id])
+            self._out_buf_mtype['gpot'][out_id] = \
+                dtype_to_mpi(self._out_buf['gpot'][out_id])
+
+            self._out_buf['spike'][out_id] = \
                 gpuarray.empty(len(self._out_port_dict_ids['spike'][out_id]),
                                self.pm['spike'].dtype)
-            
+            self._out_buf_int['spike'][out_id] = bufint(self._out_buf['spike'][out_id])
+            self._out_buf_mtype['spike'][out_id] = \
+                dtype_to_mpi(self._out_buf['spike'][out_id])
+
     def _sync(self):
         """
         Send output data and receive input data.
@@ -252,24 +280,24 @@ class Module(BaseModule):
             
             # Copy data into destination buffer:
             dest_rank = self.rank_to_id[:dest_id]
-            set_by_inds(self._out_bufs['gpot'][dest_id],
+            set_by_inds(self._out_buf['gpot'][dest_id],
                         self._out_port_dict_ids['gpot'][dest_id],
                         self.data['gpot'], 'src')
-            set_by_inds(self._out_bufs['spike'][dest_id],
+            set_by_inds(self._out_buf['spike'][dest_id],
                         self._out_port_dict_ids['spike'][dest_id],
                         self.data['spike'], 'src')
 
             if not self.time_sync:
                 self.log_info('gpot data being sent to %s: %s' % \
-                              (dest_id, str(self._out_bufs['gpot'][dest_id])))
+                              (dest_id, str(self._out_buf['gpot'][dest_id])))
                 self.log_info('spike data being sent to %s: %s' % \
-                              (dest_id, str(self._out_bufs['spike'][dest_id])))
-            r = MPI.COMM_WORLD.Isend([bufint(self._out_bufs['gpot'][dest_id]),
-                                      dtype_to_mpi(self._out_bufs['gpot'][dest_id])],
+                              (dest_id, str(self._out_buf['spike'][dest_id])))
+            r = MPI.COMM_WORLD.Isend([self._out_buf_int['gpot'][dest_id],
+                                      self._out_buf_mtype['gpot'][dest_id]],
                                      dest_rank, GPOT_TAG)
             requests.append(r)
-            r = MPI.COMM_WORLD.Isend([bufint(self._out_bufs['spike'][dest_id]),
-                                      dtype_to_mpi(self._out_bufs['gpot'][dest_id])],
+            r = MPI.COMM_WORLD.Isend([self._out_buf_int['spike'][dest_id],
+                                      self._out_buf_mtype['gpot'][dest_id]],
                                      dest_rank, SPIKE_TAG)
             requests.append(r)
 
@@ -283,12 +311,12 @@ class Module(BaseModule):
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
-            r = MPI.COMM_WORLD.Irecv([bufint(self._in_bufs['gpot'][src_id]),
-                                      dtype_to_mpi(self._in_bufs['gpot'][src_id])],
+            r = MPI.COMM_WORLD.Irecv([self._in_buf_int['gpot'][src_id],
+                                      self._in_buf_mtype['gpot'][src_id]],
                                      source=src_rank, tag=GPOT_TAG)
             requests.append(r)
-            r = MPI.COMM_WORLD.Irecv([bufint(self._in_bufs['spike'][src_id]),
-                                      dtype_to_mpi(self._in_bufs['spike'][src_id])],
+            r = MPI.COMM_WORLD.Irecv([self._in_buf_int['spike'][src_id],
+                                      self._in_buf_mtype['spike'][src_id]],
                                      source=src_rank, tag=SPIKE_TAG)
             requests.append(r)
             if not self.time_sync:
@@ -302,11 +330,11 @@ class Module(BaseModule):
         n_spike = 0
         for src_id in src_ids:
             ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
-            self.pm['gpot'].set_by_inds(ind_in_gpot, self._in_bufs['gpot'][src_id])
-            n_gpot += len(self._in_bufs['gpot'][src_id])
+            self.pm['gpot'].set_by_inds(ind_in_gpot, self._in_buf['gpot'][src_id])
+            n_gpot += len(self._in_buf['gpot'][src_id])
             ind_in_spike = self._in_port_dict_ids['spike'][src_id]
-            self.pm['spike'].set_by_inds(ind_in_spike, self._in_bufs['spike'][src_id])
-            n_spike += len(self._in_bufs['spike'][src_id])
+            self.pm['spike'].set_by_inds(ind_in_spike, self._in_buf['spike'][src_id])
+            n_spike += len(self._in_buf['spike'][src_id])
 
         # Save timing data:
         if self.time_sync:
