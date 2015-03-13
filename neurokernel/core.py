@@ -16,7 +16,7 @@ from mixins import LoggerMixin
 import mpi
 from tools.comm import MPIOutput
 from tools.logging import setup_logger
-from tools.misc import catch_exception
+from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
 from plsel import BasePortMapper, PortMapper, SelectorMethods
 from uid import uid
@@ -280,11 +280,11 @@ class Module(BaseModule):
                 self.log_info('spike data being sent to %s: %s' % \
                               (dest_id, str(data_spike)))
             r = MPI.COMM_WORLD.Isend([data_gpot,
-                                      MPI._typedict[data_gpot.dtype.char]],
+                                      dtype_to_mpi(data_gpot.dtype)],
                                      dest_rank, GPOT_TAG)
             requests.append(r)
             r = MPI.COMM_WORLD.Isend([data_spike,
-                                      MPI._typedict[data_spike.dtype.char]],
+                                      dtype_to_mpi(data_spike.dtype)],
                                      dest_rank, SPIKE_TAG)
             requests.append(r)
 
@@ -303,11 +303,11 @@ class Module(BaseModule):
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([self.data_in['gpot'][src_id],
-                                      MPI._typedict[data_gpot.dtype.char]],
+                                      dtype_to_mpi(data_gpot.dtype)],
                                      source=src_rank, tag=GPOT_TAG)
             requests.append(r)
             r = MPI.COMM_WORLD.Irecv([self.data_in['spike'][src_id],
-                                      MPI._typedict[data_spike.dtype.char]],
+                                      dtype_to_mpi(data_spike.dtype)],
                                      source=src_rank, tag=SPIKE_TAG)
             requests.append(r)
             if not self.time_sync:

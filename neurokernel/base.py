@@ -25,7 +25,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
 from routing_table import RoutingTable
 from uid import uid
 from tools.comm import MPIOutput
-from tools.misc import catch_exception
+from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
 from plsel import SelectorMethods, PortMapper
 
@@ -229,7 +229,7 @@ class BaseModule(mpi.Worker):
             dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % (dest_id, str(data)))
-            r = MPI.COMM_WORLD.Isend([data, MPI._typedict[data.dtype.char]],
+            r = MPI.COMM_WORLD.Isend([data, dtype_to_mpi(data.dtype)],
                                      dest_rank)
             requests.append(r)
             if not self.time_sync:
@@ -242,7 +242,7 @@ class BaseModule(mpi.Worker):
         src_ids = self.routing_table.src_ids(self.id)
         for src_id in src_ids:
             src_rank = self.rank_to_id[:src_id]
-            r = MPI.COMM_WORLD.Irecv([self.data_in[src_id], MPI._typedict[data.dtype.char]],
+            r = MPI.COMM_WORLD.Irecv([self.data_in[src_id], dtype_to_mpi(data.dtype)],
                                      source=src_rank)
             requests.append(r)
             if not self.time_sync:
