@@ -314,9 +314,7 @@ class Module(BaseModule):
                 self.log_info('receiving from %s' % src_id)
         req.Waitall(requests)
         if not self.time_sync:
-            self.log_info('received all data received by %s' % self.id)
-        else:
-            stop = time.time()
+            self.log_info('received all data received by %s' % self.id)            
 
         # Copy received elements into the current module's data array:
         n_gpot = 0
@@ -331,7 +329,8 @@ class Module(BaseModule):
 
         # Save timing data:
         if self.time_sync:
-            self.log_info('sent timing data to master')
+            stop = time.time()
+            #self.log_info('sent timing data to master')
             self.intercomm.isend(['time', (self.rank, self.steps, start, stop,
                 n_gpot*self.pm['gpot'].dtype.itemsize+\
                 n_spike*self.pm['spike'].dtype.itemsize)],
