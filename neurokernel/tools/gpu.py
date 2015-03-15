@@ -188,12 +188,13 @@ def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
     assert ind_dest.dtype == ind_src.dtype
     assert issubclass(ind_dest.dtype.type, numbers.Integral)
     assert issubclass(ind_src.dtype.type, numbers.Integral)
-    N = len(ind_dest)
+    N = len(ind_src)
 
     # Manually handle empty index array because it will cause the kernel to
     # fail if processed:
     if N == 0:
         return
+    assert N == len(ind_dest)
     if not isinstance(ind_dest, gpuarray.GPUArray):
         ind_dest = gpuarray.to_gpu(ind_dest)
     if not isinstance(ind_src, gpuarray.GPUArray):
