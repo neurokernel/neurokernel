@@ -896,8 +896,6 @@ class TimeListener(ControlledProcess):
         assert isinstance(ids, set)
         self.ids = ids
 
-        self.timing_data = {}
-
         # Queue for returning timing results to parent process:
         self.queue = mp.Queue()
 
@@ -920,6 +918,7 @@ class TimeListener(ControlledProcess):
         total_nbytes = 0.0
         received_data = {}
         self.average_throughput = 0.0
+        self.average_step_sync_time = 0.0
         while True:
             if sock_time.poll(10):
 
@@ -940,17 +939,19 @@ class TimeListener(ControlledProcess):
                     
                     # The duration an execution is assumed to be the longest of
                     # the received intervals:
-                    step_time = max([(d[1]-d[0]) for d in received_data[steps].values()])
+                    step_sync_time = max([(d[1]-d[0]) for d in received_data[steps].values()])
 
                     # Obtain the total number of bytes received by all of the
                     # modules during the execution step:
                     step_nbytes = sum([d[2] for d in received_data[steps].values()])
                     
-                    total_time += step_time
+                    total_time += step_sync_time
                     total_nbytes += step_nbytes
 
                     self.average_throughput = (self.average_throughput*counter+\
-                                               step_nbytes/step_time)/(counter+1)
+                                               step_nbytes/step_sync_time)/(counter+1)
+                    self.average_step_sync_time = (self.average_step_sync_time*counter+\
+                                                   step_sync_time)/(counter+1)
 
                     # Clear the data for the processed execution step so that
                     # that the received_data dict doesn't consume unnecessary memory:
@@ -967,13 +968,16 @@ class TimeListener(ControlledProcess):
             self.total_throughput = total_nbytes/total_time
         else:
             self.total_throughput = 0.0
-        self.log_info('average per-step/total transmission throughputs: %s, %s bytes/s' % \
-                      (self.average_throughput, self.total_throughput))
-        self.queue.put((self.average_throughput, self.total_throughput))
+        self.log_info('avg step sync time (s)/avg per-step throughput (b/s)' \
+                      '/total transmission throughput (bs) : %s, %s, %s' % \
+                      (self.average_step_sync_time, self.average_throughput, 
+                       self.total_throughput))
+        self.queue.put((self.average_step_sync_time, self.average_throughput,
+                        self.total_throughput))
 
     def get_throughput(self):
         """
-        Retrieve average per-step and total transmission throughputs.
+        Retrieve average step sync time, average per-step throughput, and total transmission throughput.
         """
 
         return self.queue.get()

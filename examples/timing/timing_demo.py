@@ -54,11 +54,11 @@ def gen_sels(n_lpu, n_spike, n_gpot):
     n_lpu : int
         Number of LPUs. Must be at least 2.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
 
@@ -72,11 +72,11 @@ def gen_sels(n_lpu, n_spike, n_gpot):
         Ports in pattern interfaces; the keys are tuples containing the two
         module IDs connected by the pattern and the values are pairs of tuples
         containing the respective selectors for all source ports, all
-        destination ports, all input ports connected to the first module, 
-        all output ports connected to the first module, all graded potential ports 
+        destination ports, all input ports connected to the first module,
+        all output ports connected to the first module, all graded potential ports
         connected to the first module, all spiking ports connected to the first
-        module, all input ports connected to the second module, 
-        all output ports connected to the second  module, all graded potential ports 
+        module, all input ports connected to the second module,
+        all output ports connected to the second  module, all graded potential ports
         connected to the second module, and all spiking ports connected to the second
         module.
     """
@@ -155,11 +155,11 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         Number of LPUs. Must be at least 2 and no greater than the number of
         local GPUs.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
     steps : int
@@ -182,7 +182,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
-    
+
     # Set up modules:
     for i in xrange(n_lpu):
         lpu_i = 'lpu%s' % i
@@ -215,7 +215,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.start(steps=steps)
     man.stop()
     t = man.get_throughput()
-    return t[0], t[1], (time.time()-start)
+    return t[0], t[1], t[2], (time.time()-start)
 
 if __name__ == '__main__':
     num_lpus = 2
