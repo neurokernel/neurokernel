@@ -166,27 +166,6 @@ class BaseModule(mpi.Worker):
         Initial dictionaries of source/destination ports in current module.
         """
 
-        # Extract identifiers of source ports in the current module's interface
-        # for all modules receiving output from the current module:
-        # self._out_port_dict = {}
-        # self._out_port_dict_ids = {}
-        # self._out_ids = self.routing_table.dest_ids(self.id)
-        # for out_id in self._out_ids:
-        #     self.log_info('extracting output ports for %s' % out_id)
-
-        #     # Get interfaces of pattern connecting the current module to
-        #     # destination module `out_id`; `int_0` is connected to the
-        #     # current module, `int_1` is connected to the other module:
-        #     pat = self.routing_table[self.id, out_id]['pattern']
-        #     int_0 = self.routing_table[self.id, out_id]['int_0']
-        #     int_1 = self.routing_table[self.id, out_id]['int_1']
-
-        #     # Get ports in interface (`int_0`) connected to the current
-        #     # module that are connected to the other module via the pattern:
-        #     self._out_port_dict[out_id] = pat.src_idx(int_0, int_1)
-        #     self._out_port_dict_ids[out_id] = \
-        #         self.pm.ports_to_inds(self._out_port_dict[out_id])
-
         # Extract identifiers of source ports in all modules sending input to
         # the current module's ports and of destination ports in the current
         # module's interface for all modules sending input to the current
@@ -195,6 +174,7 @@ class BaseModule(mpi.Worker):
         self._in_port_dict_ids = {}
         self._from_port_dict = {}
         self._from_port_dict_ids = {}
+
         self._in_ids = self.routing_table.src_ids(self.id)
         for in_id in self._in_ids:
             self.log_info('extracting input ports for %s' % in_id)
@@ -227,6 +207,10 @@ class BaseModule(mpi.Worker):
         Must be executed after `_init_port_dicts()`.
         """
 
+        # Buffer interface to and MPI type of this module's port data array:
+        self._data_int = bufint(self.data)
+        self._data_mtype = dtype_to_mpi(self.data.dtype)
+
         # Buffers for receiving data transmitted from source modules:
         self._in_buf = {}
         self._in_buf_int = {}
@@ -251,8 +235,8 @@ class BaseModule(mpi.Worker):
         dest_ids = self.routing_table.dest_ids(self.id)
         for dest_id in dest_ids:
             dest_rank = self.rank_to_id[:dest_id]
-            r = MPI.COMM_WORLD.Isend([bufint(self.data),
-                                      dtype_to_mpi(self.data.dtype)],
+            r = MPI.COMM_WORLD.Isend([self._data_int,
+                                      self._data_mtype],
                                      dest_rank)
 
             requests.append(r)
