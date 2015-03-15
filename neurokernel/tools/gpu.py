@@ -165,3 +165,48 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
         set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)] = func
     func(dest_gpu, ind, src_gpu, range=slice(0, N, 1))
 set_by_inds.cache = {}
+
+def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
+    """
+    Set values in a GPUArray by index from indexed values in another GPUArray.
+
+    Parameters
+    ----------
+    dest_gpu : pycuda.gpuarray.GPUArray
+        GPUArray instance to modify.
+    ind_dest : pycuda.gpuarray.GPUArray or numpy.ndarray
+        1D array of element indices in `dest_gpu` to set. Must have an integer dtype.
+    src_gpu : pycuda.gpuarray.GPUArray
+        GPUArray instance from which to set values.
+    ind_src : pycuda.gpuarray.GPUArray or numpy.ndarray
+        1D array of element indices in `src_gpu` to copy. Must have an integer dtype.
+    """
+
+    assert len(np.shape(ind_dest)) == 1
+    assert len(np.shape(ind_src)) == 1
+    assert dest_gpu.dtype == src_gpu.dtype
+    assert ind_dest.dtype == ind_src.dtype
+    assert issubclass(ind_dest.dtype.type, numbers.Integral)
+    assert issubclass(ind_src.dtype.type, numbers.Integral)
+    N = len(ind_dest)
+
+    # Manually handle empty index array because it will cause the kernel to
+    # fail if processed:
+    if N == 0:
+        return
+    if not isinstance(ind_dest, gpuarray.GPUArray):
+        ind_dest = gpuarray.to_gpu(ind_dest)
+    if not isinstance(ind_src, gpuarray.GPUArray):
+        ind_src = gpuarray.to_gpu(ind_src)
+    try:
+        func = set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)]
+    except KeyError:
+        data_ctype = dtype_to_ctype(dest_gpu.dtype)
+        ind_ctype = dtype_to_ctype(ind_dest.dtype)        
+        v = "{data_ctype} *dest, {ind_ctype} *ind_dest,"\
+            "{data_ctype} *src, {ind_ctype} *ind_src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)        
+        func = elementwise.ElementwiseKernel(v,
+                "dest[ind_dest[i]] = src[ind_src[i]]")
+        set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)] = func
+    func(dest_gpu, ind_dest, src_gpu, ind_src, range=slice(0, N, 1))
+set_by_inds_from_inds.cache = {}
