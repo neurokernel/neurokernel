@@ -29,7 +29,7 @@ from tools.comm import MPIOutput
 from tools.gpu import bufint, set_by_inds_from_inds
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
-from plsel import Selector, SelectorMethods, BasePortMapper
+from plsel import SelectorMethods, BasePortMapper
 from pm_gpu import GPUPortMapper
 from routing_table import RoutingTable
 from uid import uid
@@ -78,7 +78,7 @@ class BaseModule(mpi.Worker):
     ----------
     interface : Interface
         Object containing information about a module's ports.
-    pm : plsel.PortMapper
+    pm : plsel.GPUPortMapper
         Map between a module's ports and the contents of the `data` attribute.
     data : numpy.ndarray
         Array of data associated with a module's ports.
