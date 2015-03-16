@@ -174,7 +174,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     """
 
     # Time everything starting with manager initialization:
-    start = time.time()
+    start_all = time.time()
 
     # Set up manager and broker:
     man = Manager(get_random_port(), get_random_port(), get_random_port())
@@ -212,10 +212,13 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
         man.connect(man.modules[lpu_i], man.modules[lpu_j], pat, 0, 1)
 
+    # Also time main body of emulation excluding setup and collection of timing data:
+    start_main = time.time()
     man.start(steps=steps)
     man.stop()
+    stop_main = time.time()
     t = man.get_throughput()
-    return t[0], t[1], t[2], (time.time()-start)
+    return t[0], t[1], t[2], (time.time()-start_all), (stop_main-start_main)
 
 if __name__ == '__main__':
     num_lpus = 2
