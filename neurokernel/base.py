@@ -398,10 +398,24 @@ class Manager(mpi.WorkerManager):
         self.total_nbytes = 0.0
         self.received_data = {}
 
-        # Computed throughput (only updated after an emulation run):
+        # Average step synchronization time:
+        self._average_step_sync_time = 0.0
+
+        # Computed throughput (only updated after an emulation run):    
         self._average_throughput = 0.0
         self._total_throughput = 0.0
         self.log_info('manager instantiated')
+
+    @property
+    def average_step_sync_time(self):
+        """
+        Average step synchronization time.
+        """
+
+        return self._average_step_sync_time
+    @average_step_sync_time.setter
+    def average_step_sync_time(self, t):
+        self._average_step_sync_time = t
 
     @property
     def total_throughput(self):
@@ -563,17 +577,19 @@ class Manager(mpi.WorkerManager):
 
                 # The duration an execution is assumed to be the longest of
                 # the received intervals:
-                step_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
+                step_sync_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
 
                 # Obtain the total number of bytes received by all of the
                 # modules during the execution step:
                 step_nbytes = sum([d[2] for d in self.received_data[steps].values()])
 
-                self.total_time += step_time
+                self.total_time += step_sync_time
                 self.total_nbytes += step_nbytes
 
                 self.average_throughput = (self.average_throughput*self.counter+\
-                                          step_nbytes/step_time)/(self.counter+1)
+                                          step_nbytes/step_sync_time)/(self.counter+1)
+                self.average_step_sync_time = (self.average_step_sync_time*self.counter+\
+                                               step_sync_time)/(self.counter+1)
 
                 # Clear the data for the processed execution step so that
                 # that the received_data dict doesn't consume unnecessary memory:
@@ -586,8 +602,10 @@ class Manager(mpi.WorkerManager):
                 self.total_throughput = self.total_nbytes/self.total_time
             else:
                 self.total_throughput = 0.0
-            self.log_info('average/total received throughput: %s, %s bytes/s' % \
-                          (self.average_throughput, self.total_throughput))
+                self.log_info('avg step sync time (s)/avg per-step throughput (b/s)' \
+                              '/total transmission throughput (bs) : %s, %s, %s' % \
+                              (self.average_step_sync_time, self.average_throughput, 
+                               self.total_throughput))
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

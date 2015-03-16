@@ -226,7 +226,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.spawn()
     man.start(steps)
     man.wait()
-    return man.average_throughput, man.total_throughput, (time.time()-start)
+    return man.average_step_sync_time, man.average_throughput, \
+        man.total_throughput, (time.time()-start)
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
