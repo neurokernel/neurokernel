@@ -20,7 +20,7 @@ for lpus in xrange(2, 9):
     total_throughput_list = []
     runtime_all_list = []
     runtime_main_list = []
-    for i in xrange(3):
+    for i in xrange(2):
         out = subprocess.check_output(['srun', '-n', '1', '-c', str(lpus),
                                        'python', script_name,
                                        '-u', str(lpus), '-s', '1000', '-g', '0',
