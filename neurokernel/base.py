@@ -464,7 +464,7 @@ class BaseModule(ControlledProcess):
         Data is serialized before being sent and unserialized when
         received.
         """
-        
+
         if self.net in ['none', 'ctrl']:
             self.log_info('not synchronizing with network')
         else:
@@ -499,7 +499,6 @@ class BaseModule(ControlledProcess):
                 # Wait until inbound data is received from all source modules:
                 recv_ids = set(self._in_ids)
                 nbytes = 0
-                start = time.time()
                 while recv_ids:
 
                     # Use poller to avoid blocking:
