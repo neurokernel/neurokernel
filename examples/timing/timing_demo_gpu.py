@@ -181,7 +181,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     """
 
     # Time everything starting with manager initialization:
-    start = time.time()
+    start_all = time.time()
 
     # Check whether a sufficient number of GPUs are available:
     drv.init()
@@ -224,10 +224,12 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         man.connect(lpu_i, lpu_j, pat, 0, 1)
 
     man.spawn()
+    start_main = time.time()
     man.start(steps)
     man.wait()
+    stop_main = time.time()
     return man.average_step_sync_time, man.average_throughput, \
-        man.total_throughput, (time.time()-start)
+        man.total_throughput, (time.time()-start_all), (stop_main-start_main)
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
