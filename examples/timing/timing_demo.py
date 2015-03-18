@@ -56,11 +56,11 @@ def gen_sels(n_lpu, n_spike, n_gpot):
     n_lpu : int
         Number of LPUs. Must be at least 2.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
 
@@ -157,11 +157,11 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         Number of LPUs. Must be at least 2 and no greater than the number of
         local GPUs.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
     steps : int
@@ -169,8 +169,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     Returns
     -------
-    throughput : float
-        Received data throughput in bytes/seconds.
+    average_throughput, total_throughput : float
+        Average per-step and total received data throughput in bytes/seconds.
     exec_time : float
         Execution time in seconds.
     """
@@ -180,6 +180,9 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
 
     # Set up manager:
     man = Manager()
+
+    # Generate selectors for configuring modules and patterns:
+    mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
 
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)

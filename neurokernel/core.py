@@ -348,7 +348,7 @@ class Manager(base.Manager):
         assert issubclass(target, Module)
         super(Manager, self).add(target, id, *args, **kwargs)
 
-    def connect(self, id_0, id_1, pat, int_0=0, int_1=1):
+    def connect(self, id_0, id_1, pat, int_0=0, int_1=1, compat_check=True):
         assert isinstance(pat, Pattern)
 
         assert id_0 in self.rank_to_id.values()
@@ -362,27 +362,28 @@ class Manager(base.Manager):
         # pattern; since the manager only contains module classes and not class
         # instances, we need to create Interface instances from the selectors
         # associated with the modules in order to test their compatibility:
-        rank_0 = self.rank_to_id.inv[id_0]
-        rank_1 = self.rank_to_id.inv[id_1]
+        if compat_check:
+            rank_0 = self.rank_to_id.inv[id_0]
+            rank_1 = self.rank_to_id.inv[id_1]
 
-        self.log_info('checking compatibility of modules {0} and {1} and'
-                         ' assigned pattern'.format(id_0, id_1))
-        mod_int_0 = Interface(self._kwargs[rank_0]['sel'])
-        mod_int_0[self._kwargs[rank_0]['sel']] = 0
-        mod_int_1 = Interface(self._kwargs[rank_1]['sel'])
-        mod_int_1[self._kwargs[rank_1]['sel']] = 0
+            self.log_info('checking compatibility of modules {0} and {1} and'
+                             ' assigned pattern'.format(id_0, id_1))
+            mod_int_0 = Interface(self._kwargs[rank_0]['sel'])
+            mod_int_0[self._kwargs[rank_0]['sel']] = 0
+            mod_int_1 = Interface(self._kwargs[rank_1]['sel'])
+            mod_int_1[self._kwargs[rank_1]['sel']] = 0
 
-        mod_int_0[self._kwargs[rank_0]['sel_in'], 'io'] = 'in'
-        mod_int_0[self._kwargs[rank_0]['sel_out'], 'io'] = 'out'
-        mod_int_0[self._kwargs[rank_0]['sel_gpot'], 'type'] = 'gpot'
-        mod_int_0[self._kwargs[rank_0]['sel_spike'], 'type'] = 'spike'
-        mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
-        mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
-        mod_int_1[self._kwargs[rank_1]['sel_gpot'], 'type'] = 'gpot'
-        mod_int_1[self._kwargs[rank_1]['sel_spike'], 'type'] = 'spike'
+            mod_int_0[self._kwargs[rank_0]['sel_in'], 'io'] = 'in'
+            mod_int_0[self._kwargs[rank_0]['sel_out'], 'io'] = 'out'
+            mod_int_0[self._kwargs[rank_0]['sel_gpot'], 'type'] = 'gpot'
+            mod_int_0[self._kwargs[rank_0]['sel_spike'], 'type'] = 'spike'
+            mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
+            mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
+            mod_int_1[self._kwargs[rank_1]['sel_gpot'], 'type'] = 'gpot'
+            mod_int_1[self._kwargs[rank_1]['sel_spike'], 'type'] = 'spike'
 
-        assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
-        assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
+            assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
+            assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
 
         # XXX Need to check for fan-in XXX
 

@@ -590,6 +590,16 @@ class test_path_like_selector(TestCase):
         assert self.sel.max_levels([['foo', 'bar', slice(0, 10)],
                                     ['baz', 'qux']]) == 3
 
+    def test_pad_tuple_list(self):
+        x = [('a', 'b'), ('c', 'd')]
+        self.assertSequenceEqual(self.sel.pad_tuple_list(x, 0), x)
+        self.assertSequenceEqual(self.sel.pad_tuple_list(x, 3),
+                                 [('a', 'b', ''), ('c', 'd', '')])
+        x = [('a', 'b'), ('c',)]
+        self.assertSequenceEqual(self.sel.pad_tuple_list(x, 0), x)
+        self.assertSequenceEqual(self.sel.pad_tuple_list(x, 3),
+                                 [('a', 'b', ''), ('c', '', '')])
+
     def test_pad_parsed(self):
         sel = [['x', 'y'], ['a', 'b', 'c']]
         sel_id = id(sel)
