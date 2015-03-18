@@ -669,13 +669,14 @@ class Interface(object):
                 return False
 
             # Compatible identifiers must have the same non-null 'type'
-            # attribute and their 'io' attributes must be the inverse of each
-            # other:
+            # attribute and their non-null 'io' attributes must be the inverse
+            # of each other:
             if not data_merged.apply(lambda row: \
                     ((row['type_x'] == row['type_y']) or \
                      (pd.isnull(row['type_x']) and pd.isnull(row['type_y']))) and \
                     ((row['io_x'] == 'out' and row['io_y'] == 'in') or \
-                     (row['io_x'] == 'in' and row['io_y'] == 'out')),
+                     (row['io_x'] == 'in' and row['io_y'] == 'out') or \
+                     (pd.isnull(row['io_x']) and pd.isnull(row['io_y']))),
                                      axis=1).any():
                 return False
 
@@ -688,20 +689,15 @@ class Interface(object):
                                       len(i.data[i.data['interface'] == b])):
                 return False
 
-            # If the 'type' attributes of the same identifiers in each
-            # interfaces are not equivalent or both null, they are incompatible:
+            # Compatible identifiers must have the same non-null 'type'
+            # attribute and their non-null 'io' attributes must be the inverse
+            # of each other:
             if not data_merged.apply(lambda row: \
-                    (row['type_x'] == row['type_y']) or \
-                    (pd.isnull(row['type_x']) and pd.isnull(row['type_y'])),
-                                     axis=1).all():
-                return False
-
-            # If the 'io' attributes of the same identifiers in each interfaces
-            # are not the inverse of each other, they are incompatible:
-            if not data_merged.apply(lambda row: \
-                    (row['io_x'] == 'out' and row['io_y'] == 'in') or \
-                    (row['io_x'] == 'in' and row['io_y'] == 'out') or \
-                    (pd.isnull(row['io_x']) and pd.isnull(row['io_y'])),
+                    ((row['type_x'] == row['type_y']) or \
+                     (pd.isnull(row['type_x']) and pd.isnull(row['type_y']))) and \
+                    ((row['io_x'] == 'out' and row['io_y'] == 'in') or \
+                     (row['io_x'] == 'in' and row['io_y'] == 'out') or \
+                     (pd.isnull(row['io_x']) and pd.isnull(row['io_y']))),
                                      axis=1).all():
                 return False
 
