@@ -1502,6 +1502,26 @@ class SelectorMethods(SelectorParser):
             return [(i,) for i in idx.tolist()]
 
     @classmethod
+    def pad_tuple_list(cls, tuple_list, pad_len):
+        """
+        Pad a list of tuples with blank strings.
+
+        Parameters
+        ----------
+        tuple_list : list of tuples
+            List of tuples to process.
+        pad_len : int
+            Length to which tuples should be padded with blanks.
+
+        Returns
+        -------
+        result : list of tuples
+            List of padded tuples.
+        """
+
+        return [tuple(x)+('',)*(pad_len-len(x)) for x in tuple_list]
+
+    @classmethod
     def pad_selector(cls, selector, pad_len=float('inf')):
         """
         Expand and pad a selector with blank tokens.
@@ -1533,11 +1553,11 @@ class SelectorMethods(SelectorParser):
             max_levels = max(map(len, expanded))
 
         if pad_len == float('inf'):
-            return [tuple(x)+('',)*(max_levels-len(x)) for x in expanded]
+            return cls.pad_tuple_list(expanded, max_levels)
         elif pad_len == 0:
             return expanded
         else:
-            return [tuple(x)+('',)*(pad_len-len(x)) for x in expanded]
+            return cls.pad_tuple_list(expanded, pad_len)
 
     @classmethod
     def make_index_two_concat(cls, sel_0, sel_1, names=[]):
