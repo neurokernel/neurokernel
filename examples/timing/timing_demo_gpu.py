@@ -228,7 +228,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         pat.interface[sel_out_j, 'interface', 'io'] = [1, 'out']
         pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
         pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
-        man.connect(man.modules[lpu_i], man.modules[lpu_j], pat, 0, 1)
+        man.connect(man.modules[lpu_i], man.modules[lpu_j], pat, 0, 1,
+                compat_check=False)
 
     start_main = time.time()
     man.start(steps=steps)
