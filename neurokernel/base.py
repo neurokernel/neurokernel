@@ -251,7 +251,7 @@ class BaseModule(ControlledProcess):
                 if self.patterns[m].is_connected(self.pat_ints[m][0],
                                                  self.pat_ints[m][1])]
 
-    def connect(self, m, pat, int_0, int_1):
+    def connect(self, m, pat, int_0, int_1, compat_check=True):
         """
         Connect the current module instance to another module with a pattern instance.
 
@@ -264,6 +264,10 @@ class BaseModule(ControlledProcess):
         int_0, int_1 : int
             Which of the pattern's interface to connect to the current module
             and the specified module, respectively.
+        compat_check : bool        
+            Check whether the interfaces of the current and specified modules
+            are compatible with the specified pattern. This option is provided
+            because compatibility checking can be expensive.
         """
 
         assert isinstance(m, BaseModule)
@@ -273,8 +277,11 @@ class BaseModule(ControlledProcess):
 
         # Check compatibility of the interfaces exposed by the modules and the
         # pattern:
-        assert self.interface.is_compatible(0, pat.interface, int_0, True)
-        assert m.interface.is_compatible(0, pat.interface, int_1, True)
+        if compat_check:
+            self.log_info('checking compatibility of modules {0} and {1} and'
+                             ' assigned pattern'.format(self.id, m.id))
+            assert self.interface.is_compatible(0, pat.interface, int_0, True)
+            assert m.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Check that no fan-in from different source modules occurs as a result
         # of the new connection by getting the union of all connected input
@@ -1057,7 +1064,7 @@ class BaseManager(LoggerMixin):
         # Set up process to handle time data:
         self.time_listener = TimeListener(self.port_ctrl, self.port_time)
 
-    def connect(self, m_0, m_1, pat, int_0=0, int_1=1):
+    def connect(self, m_0, m_1, pat, int_0=0, int_1=1, compat_check=True):
         """
         Connect two module instances with a Pattern instance.
 
@@ -1070,8 +1077,11 @@ class BaseManager(LoggerMixin):
         int_0, int_1 : int
             Which of the pattern's interfaces to connect to `m_0` and `m_1`,
             respectively.
+        compat_check : bool
+            Check whether the interfaces of the specified modules
+            are compatible with the specified pattern. This option is provided
+            because compatibility checking can be expensive.
         """
-
 
         assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
         assert isinstance(pat, Pattern)
@@ -1082,10 +1092,11 @@ class BaseManager(LoggerMixin):
 
         # Check whether the interfaces exposed by the modules and the
         # pattern share compatible subsets of ports:
-        self.log_info('checking compatibility of modules {0} and {1} and'
-                         ' assigned pattern'.format(m_0.id, m_1.id))
-        assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
-        assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
+        if compat_check:
+            self.log_info('checking compatibility of modules {0} and {1} and'
+                             ' assigned pattern'.format(m_0.id, m_1.id))
+            assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
+            assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Add the module and pattern instances to the internal dictionaries of
         # the manager instance if they are not already there:

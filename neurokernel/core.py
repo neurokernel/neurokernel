@@ -508,7 +508,7 @@ class Manager(BaseManager):
         Table of data transmission connections between modules.
     """ 
 
-    def connect(self, m_0, m_1, pat, int_0=0, int_1=1):
+    def connect(self, m_0, m_1, pat, int_0=0, int_1=1, compat_check=True):
         """
         Connect two module instances with a Pattern instance.
 
@@ -521,6 +521,10 @@ class Manager(BaseManager):
         int_0, int_1 : int
             Which of the pattern's interfaces to connect to `m_0` and `m_1`,
             respectively.
+        compat_check : bool
+            Check whether the interfaces of the specified modules
+            are compatible with the specified pattern. This option is provided
+            because compatibility checking can be expensive.        
         """
 
         assert isinstance(m_0, BaseModule) and isinstance(m_1, BaseModule)
@@ -532,10 +536,11 @@ class Manager(BaseManager):
 
         # Check whether the interfaces exposed by the modules and the
         # pattern share compatible subsets of ports:
-        self.log_info('checking compatibility of modules {0} and {1} and'
-                         ' assigned pattern'.format(m_0.id, m_1.id))
-        assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
-        assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
+        if compat_check:
+            self.log_info('checking compatibility of modules {0} and {1} and'
+                             ' assigned pattern'.format(m_0.id, m_1.id))
+            assert m_0.interface.is_compatible(0, pat.interface, int_0, True)
+            assert m_1.interface.is_compatible(0, pat.interface, int_1, True)
 
         # Find the ports common to each of the pattern's interfaces and the
         # respective interfaces of the modules connected to them; these two sets
@@ -569,8 +574,8 @@ class Manager(BaseManager):
 
         # Pass the pattern to the modules being connected:
         self.log_info('passing connection pattern to modules {0} and {1}'.format(m_0.id, m_1.id))
-        m_0.connect(m_1, pat, int_0, int_1)
-        m_1.connect(m_0, pat, int_1, int_0)
+        m_0.connect(m_1, pat, int_0, int_1, compat_check)
+        m_1.connect(m_0, pat, int_1, int_0, compat_check)
 
         # Update the routing table:
         self.log_info('updating routing table')
