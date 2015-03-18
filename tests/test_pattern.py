@@ -52,7 +52,16 @@ class test_interface(TestCase):
         assert not j.equals(i)
 
     def test_get_common_ports(self):
-        # Without type:
+        # Without type, single level:
+        i = Interface('/foo,/bar,/baz')
+        i['/*', 'interface'] = 0
+        j = Interface('/bar,/baz,/qux')
+        j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
+        self.assertItemsEqual(i.get_common_ports(0, j, 0),
+                              [('bar',), ('baz',)])
+
+        # Without type, multiple levels:
         i = Interface('/foo[0:6]')
         i['/*', 'interface'] = 0
         j = Interface('/foo[3:9]')
@@ -61,7 +70,15 @@ class test_interface(TestCase):
         self.assertItemsEqual(i.get_common_ports(0, j, 0),
                               [('foo', 3), ('foo', 4), ('foo', 5)])
 
-        # With type:
+        # With type, single level:
+        i = Interface('/foo,/bar,/baz')
+        i['/foo,/bar', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/bar,/baz,/qux')
+        j['/bar,/baz', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'),
+                              [('bar',)])
+        
+        # With type, multiple levels:
         i = Interface('/foo[0:6]')
         i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
         j = Interface('/foo[3:9]')
@@ -71,7 +88,16 @@ class test_interface(TestCase):
 
 
     def test_get_common_ports_unequal_num_levels(self):
-        # Without type:
+        # Without type, some with only one level:
+        i = Interface('/foo[0:6],/bar')
+        i['/*', 'interface'] = 0
+        j = Interface('/bar,/baz')
+        j['/*', 'interface'] = 0
+        assert i.get_common_ports(0, j, 0, 'spike') == []
+        self.assertItemsEqual(i.get_common_ports(0, j, 0),
+                              [('bar',)])
+
+        # Without type, more than one level:
         i = Interface('/foo[0:6],/bar[0:2]/baz')
         i['/*', 'interface'] = 0
         j = Interface('/foo[3:9]')
@@ -80,7 +106,15 @@ class test_interface(TestCase):
         self.assertItemsEqual(i.get_common_ports(0, j, 0),
                               [('foo', 3), ('foo', 4), ('foo', 5)])
 
-        # With type:
+        # With type, some with only one level:
+        i = Interface('/foo[0:6],/bar,/baz')
+        i['/foo[3,4],/bar', 'interface', 'type'] = [0, 'spike']
+        j = Interface('/bar,/baz,/qux')
+        j['/bar,/baz', 'interface', 'type'] = [0, 'spike']
+        self.assertItemsEqual(i.get_common_ports(0, j, 0, 'spike'),
+                              [('bar',)])
+
+        # With type, more than one level:
         i = Interface('/foo[0:6],/bar[0:2]/baz')
         i['/foo[3,4]', 'interface', 'type'] = [0, 'spike']
         j = Interface('/foo[3:9]')
