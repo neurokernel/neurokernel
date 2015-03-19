@@ -264,33 +264,12 @@ class BaseModule(mpi.Worker):
         # Send timing data to manager:
         if self.time_sync:
             self.log_info('sent timing data to manager')
-            self.intercomm.isend(['time', (self.rank, self.steps,
+            self.intercomm.isend(['sync_time', (self.rank, self.steps,
                                            start, stop,
                                            n*self.pm.dtype.itemsize)],
                                  dest=0, tag=self._ctrl_tag)
         else:
             self.log_info('saved all data received by %s' % self.id)
-
-    def pre_run(self, *args, **kwargs):
-        """
-        Code to run before main module run loop.
-
-        Code in this method will be executed after a module's process has been
-        launched and all connectivity objects made available, but before the
-        main run loop begins.
-        """
-
-        self.log_info('performing pre-emulation operations')
-
-    def post_run(self, *args, **kwargs):
-        """
-        Code to run after main module run loop.
-
-        Code in this method will be executed after a module's main loop has
-        terminated.
-        """
-
-        self.log_info('performing post-emulation operations')
 
     def run_step(self):
         """
@@ -304,6 +283,49 @@ class BaseModule(mpi.Worker):
 
         self.log_info('running execution step')
 
+    def pre_run(self):
+        """
+        Code to run before main loop.
+
+        This method is invoked by the `run()` method before the main loop is
+        started.
+        """
+
+        self.log_info('running code before body of worker %s' % self.rank)
+
+        # Initialize _out_port_dict and _in_port_dict attributes:
+        self._init_port_dicts()
+
+        # Initialize data_in attribute:
+        self._init_data_in()
+
+        # Start timing the main loop:
+        if self.time_sync:
+            self.intercomm.isend(['start_time', time.time()],
+                                 dest=0, tag=self._ctrl_tag)                
+            self.log_info('sent start time to manager')
+
+    def post_run(self):
+        """
+        Code to run after main loop.
+
+        This method is invoked by the `run()` method after the main loop is
+        started.
+        """
+
+        self.log_info('running code after body of worker %s' % self.rank)
+
+        # Stop timing the main loop before shutting down the emulation:
+        if self.time_sync:
+            self.intercomm.isend(['stop_time', time.time()],
+                                 dest=0, tag=self._ctrl_tag)
+
+            self.log_info('sent stop time to manager')
+
+        # Send acknowledgment message:
+        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
+        self.log_info('done message sent to manager')
+
     def run(self):
         """
         Body of process.
@@ -312,20 +334,8 @@ class BaseModule(mpi.Worker):
         # Don't allow keyboard interruption of process:
         with IgnoreKeyboardInterrupt():
 
-            # Initialize _out_port_dict and _in_port_dict attributes:
-            self._init_port_dicts()
-
-            # Initialize data_in attribute:
-            self._init_data_in()
-
-            # Perform any pre-emulation operations:
-            self.pre_run()
-
             # Activate execution loop:
             super(BaseModule, self).run()
-
-            # Perform any post-emulation operations:
-            self.post_run()
 
     def do_work(self):
         """
@@ -392,10 +402,14 @@ class Manager(mpi.WorkerManager):
         # Number of emulation steps to run:
         self.steps = np.inf
 
+        # Variables for timing run loop:
+        self.start_time = 0.0
+        self.stop_time = 0.0
+
         # Variables for computing throughput:
         self.counter = 0
-        self.total_time = 0.0
-        self.total_nbytes = 0.0
+        self.total_sync_time = 0.0
+        self.total_sync_nbytes = 0.0
         self.received_data = {}
 
         # Average step synchronization time:
@@ -567,9 +581,15 @@ class Manager(mpi.WorkerManager):
     def process_worker_msg(self, msg):
 
         # Process timing data sent by workers:
-        if msg[0] == 'time':
+        if msg[0] == 'start_time':
+            self.start_time = msg[1]
+            self.log_info('start time data: %s' % str(msg[1]))
+        elif msg[0] == 'stop_time':
+            self.stop_time = msg[1]
+            self.log_info('stop time data: %s' % str(msg[1]))
+        elif msg[0] == 'sync_time':
             rank, steps, start, stop, nbytes = msg[1]
-            self.log_info('time data: %s' % str(msg[1]))
+            self.log_info('sync time data: %s' % str(msg[1]))
 
             # Collect timing data for each execution step:
             if steps not in self.received_data:
@@ -588,8 +608,8 @@ class Manager(mpi.WorkerManager):
                 # modules during the execution step:
                 step_nbytes = sum([d[2] for d in self.received_data[steps].values()])
 
-                self.total_time += step_sync_time
-                self.total_nbytes += step_nbytes
+                self.total_sync_time += step_sync_time
+                self.total_sync_nbytes += step_nbytes
 
                 self.average_throughput = (self.average_throughput*self.counter+\
                                           step_nbytes/step_sync_time)/(self.counter+1)
@@ -603,14 +623,18 @@ class Manager(mpi.WorkerManager):
                 self.counter += 1
 
             # Compute throughput using accumulated timing data:
-            if self.total_time > 0:
-                self.total_throughput = self.total_nbytes/self.total_time
+            if self.total_sync_time > 0:
+                self.total_throughput = self.total_sync_nbytes/self.total_sync_time
             else:
                 self.total_throughput = 0.0
-                self.log_info('avg step sync time (s)/avg per-step throughput (b/s)' \
-                              '/total transmission throughput (bs) : %s, %s, %s' % \
-                              (self.average_step_sync_time, self.average_throughput, 
-                               self.total_throughput))
+
+    def wait(self):
+        super(Manager, self).wait()
+        self.log_info('avg step sync time/avg per-step throughput' \
+                      '/total transm throughput/run loop duration:' \
+                      '%s, %s, %s, %s' % \
+                      (self.average_step_sync_time, self.average_throughput, 
+                       self.total_throughput, self.stop_time-self.start_time))
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

@@ -149,19 +149,6 @@ class Module(BaseModule):
                 atexit.register(self.gpu_ctx.pop)
                 self.log_info('GPU initialized')
 
-    def pre_run(self, *args, **kwargs):
-        """
-        Code to run before main module run loop.
-
-        Code in this method will be executed after a module's process has been
-        launched and all connectivity objects made available, but before the
-        main run loop begins. Initialization routines (such as GPU
-        initialization) should be performed in this method.
-        """
-
-        super(Module, self).pre_run(*args, **kwargs)
-        self._init_gpu()
-
     def _init_port_dicts(self):
         """
         Initial dictionaries of source/destination ports in current module.
@@ -330,11 +317,12 @@ class Module(BaseModule):
         # Save timing data:
         if self.time_sync:
             stop = time.time()
-            #self.log_info('sent timing data to master')
-            self.intercomm.isend(['time', (self.rank, self.steps, start, stop,
-                n_gpot*self.pm['gpot'].dtype.itemsize+\
-                n_spike*self.pm['spike'].dtype.itemsize)],
-                    dest=0, tag=self._ctrl_tag)
+            self.log_info('sent timing data to master')
+            self.intercomm.isend(['sync_time',
+                                  (self.rank, self.steps, start, stop,
+                                   n_gpot*self.pm['gpot'].dtype.itemsize+\
+                                   n_spike*self.pm['spike'].dtype.itemsize)],
+                                 dest=0, tag=self._ctrl_tag)
         else:
             self.log_info('saved all data received by %s' % self.id)
 

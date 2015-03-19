@@ -66,10 +66,36 @@ class Worker(Process):
 
         self.log_info('executing do_work')
 
+    def pre_run(self):
+        """
+        Code to run before main loop.
+
+        This method is invoked by the `run()` method before the main loop is
+        started.
+        """
+
+        self.log_info('running code before body of worker %s' % self.rank)
+
+    def post_run(self):
+        """
+        Code to run after main loop.
+
+        This method is invoked by the `run()` method after the main loop is
+        started.
+        """
+
+        self.log_info('running code after body of worker %s' % self.rank)
+
+        # Send acknowledgment message:
+        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
+        self.log_info('done message sent to manager')
+
     def run(self):
         """
         Main body of worker process.
         """
+
+        self.pre_run()
 
         self.log_info('running body of worker %s' % self.rank)
 
@@ -135,9 +161,7 @@ class Worker(Process):
                 self.log_info('maximum steps reached')
                 break
 
-        # Send acknowledgment message:
-        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
-        self.log_info('done message send to manager')
+        self.post_run()
 
 class WorkerManager(ProcessManager):
     """

@@ -53,6 +53,8 @@ class Module(BaseModule):
         assert 'io' in columns
         assert 'type' in columns
 
+        # Initialize GPU here so as to be able to initialize a port mapper
+        # containing GPU memory:
         self._init_gpu()
 
         # This is needed to ensure that MPI_Finalize is called before PyCUDA
@@ -338,11 +340,12 @@ class Module(BaseModule):
         # Save timing data:
         if self.time_sync:
             stop = time.time()
-            #self.log_info('sent timing data to master')
-            self.intercomm.isend(['time', (self.rank, self.steps, start, stop,
-                n_gpot*self.pm['gpot'].dtype.itemsize+\
-                n_spike*self.pm['spike'].dtype.itemsize)],
-                    dest=0, tag=self._ctrl_tag)
+            self.log_info('sent timing data to master')
+            self.intercomm.isend(['sync_time',
+                                  (self.rank, self.steps, start, stop,
+                                   n_gpot*self.pm['gpot'].dtype.itemsize+\
+                                   n_spike*self.pm['spike'].dtype.itemsize)],
+                                 dest=0, tag=self._ctrl_tag)
         else:
             self.log_info('saved all data received by %s' % self.id)
 
@@ -508,5 +511,5 @@ if __name__ == '__main__':
     # steps, start it as follows and remove the sleep statement:
     # man.start(500)
     man.spawn()
-    man.start(10)
+    man.start(5)
     man.wait()
