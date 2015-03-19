@@ -9,6 +9,7 @@ import collections
 import time
 
 import bidict
+import msgpack
 import numpy as np
 import twiggy
 
@@ -423,6 +424,10 @@ class Module(BaseModule):
 
             self.running = True
             self.steps = 0
+            if self.time_sync:
+                self.sock_time.send(msgpack.packb((self.id, self.steps, 'start',
+                                                   time.time())))
+                self.log_info('sent start time to master')
             while self.steps < self.max_steps:
                 self.log_info('execution step: %s/%s' % (self.steps, self.max_steps))
 
@@ -470,6 +475,10 @@ class Module(BaseModule):
                     break
 
                 self.steps += 1
+            if self.time_sync:
+                self.sock_time.send(msgpack.packb((self.id, self.steps, 'stop',
+                                                   time.time())))
+                self.log_info('sent stop time to master')
             self.log_info('maximum number of steps reached')
 
             # Perform any post-emulation operations:

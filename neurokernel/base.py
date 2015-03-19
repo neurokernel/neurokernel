@@ -539,8 +539,8 @@ class BaseModule(ControlledProcess):
             stop = time.time()
             if self.time_sync:
                 self.log_info('sent timing data to master')
-                self.sock_time.send(msgpack.packb((self.id, self.steps,
-                                                   start, stop, nbytes)))
+                self.sock_time.send(msgpack.packb((self.id, self.steps, 'sync',
+                                                   (start, stop, nbytes))))
 
     def pre_run(self, *args, **kwargs):
         """
@@ -655,6 +655,10 @@ class BaseModule(ControlledProcess):
 
             self.running = True
             self.steps = 0
+            if self.time_sync:
+                self.sock_time.send(msgpack.packb((self.id, self.steps, 'start',
+                                                   time.time())))
+                self.log_info('sent start time to master')
             while self.steps < self.max_steps:
                 self.log_info('execution step: %s/%s' % (self.steps, self.max_steps))
 
@@ -698,6 +702,10 @@ class BaseModule(ControlledProcess):
                     break
 
                 self.steps += 1
+            if self.time_sync:
+                self.sock_time.send(msgpack.packb((self.id, self.steps, 'stop',
+                                                   time.time())))
+                self.log_info('sent stop time to master')
             self.log_info('maximum number of steps reached')
 
             # Perform any post-emulation operations:
@@ -920,9 +928,11 @@ class TimeListener(ControlledProcess):
         self.log_info('time port initialized')
         self.running = True
         counter = 0
-        total_time = 0.0
-        total_nbytes = 0.0
+        total_sync_time = 0.0
+        total_sync_nbytes = 0.0
         received_data = {}
+        self.start_time = 0.0
+        self.stop_time = 0.0
         self.average_throughput = 0.0
         self.average_step_sync_time = 0.0
         while True:
@@ -930,60 +940,72 @@ class TimeListener(ControlledProcess):
 
                 # Receive timing data:
                 id, data = sock_time.recv_multipart()
-                id, steps, start, stop, nbytes = msgpack.unpackb(data)
-                self.log_info('time data: %s' % \
-                              str(msgpack.unpackb(data)))
-                
-                # Collect timing data for each execution step:
-                if steps not in received_data:
-                    received_data[steps] = {}                    
-                received_data[steps][id] = (start, stop, nbytes)
+                id, steps, time_type, data = msgpack.unpackb(data)
+                self.log_info('time data: %s, %s, %s, %s' % (id, steps,
+                                                             time_type, str(data)))
 
-                # After adding the latest timing data for a specific step, check
-                # whether data from all modules has arrived for that step:
-                if set(received_data[steps].keys()) == self.ids:
+                # The time_type may be 'start' (emulation run loop start time), 
+                # 'stop' (emulation loop stop time), or 'sync' (emulation sync
+                # time data):
+                if time_type == 'start':
+                    self.start_time = data
+                elif time_type == 'stop':
+                    self.stop_time = data
+                elif time_type == 'sync':
+                    start, stop, nbytes = data
+
+                    # Collect timing data for each execution step:
+                    if steps not in received_data:
+                        received_data[steps] = {}                    
+                    received_data[steps][id] = (start, stop, nbytes)
+
+                    # After adding the latest timing data for a specific step, check
+                    # whether data from all modules has arrived for that step:
+                    if set(received_data[steps].keys()) == self.ids:
+
+                        # The duration an execution is assumed to be the longest of
+                        # the received intervals:
+                        step_sync_time = max([(d[1]-d[0]) for d in received_data[steps].values()])
+
+                        # Obtain the total number of bytes received by all of the
+                        # modules during the execution step:
+                        step_nbytes = sum([d[2] for d in received_data[steps].values()])
+
+                        total_sync_time += step_sync_time
+                        total_sync_nbytes += step_nbytes
+
+                        self.average_throughput = (self.average_throughput*counter+\
+                                                   step_nbytes/step_sync_time)/(counter+1)
+                        self.average_step_sync_time = (self.average_step_sync_time*counter+\
+                                                       step_sync_time)/(counter+1)
+
+                        # Clear the data for the processed execution step so that
+                        # that the received_data dict doesn't consume unnecessary memory:
+                        del received_data[steps]
+
+                        counter += 1
                     
-                    # The duration an execution is assumed to be the longest of
-                    # the received intervals:
-                    step_sync_time = max([(d[1]-d[0]) for d in received_data[steps].values()])
-
-                    # Obtain the total number of bytes received by all of the
-                    # modules during the execution step:
-                    step_nbytes = sum([d[2] for d in received_data[steps].values()])
-                    
-                    total_time += step_sync_time
-                    total_nbytes += step_nbytes
-
-                    self.average_throughput = (self.average_throughput*counter+\
-                                               step_nbytes/step_sync_time)/(counter+1)
-                    self.average_step_sync_time = (self.average_step_sync_time*counter+\
-                                                   step_sync_time)/(counter+1)
-
-                    # Clear the data for the processed execution step so that
-                    # that the received_data dict doesn't consume unnecessary memory:
-                    del received_data[steps]
-
-                    counter += 1
-
             if not self.running:
                 self.log_info('stopping run loop')
                 break
         self.log_info('done')
 
-        if total_time > 0.0:
-            self.total_throughput = total_nbytes/total_time
+        if total_sync_time > 0.0:
+            self.total_throughput = total_sync_nbytes/total_sync_time
         else:
             self.total_throughput = 0.0
-        self.log_info('avg step sync time (s)/avg per-step throughput (b/s)' \
-                      '/total transmission throughput (bs) : %s, %s, %s' % \
+        self.log_info('avg step sync time/avg per-step throughput' \
+                      '/total transm throughput/run loop duration:' \
+                      '%s, %s, %s, %s' % \
                       (self.average_step_sync_time, self.average_throughput, 
-                       self.total_throughput))
+                       self.total_throughput, self.stop_time-self.start_time))
         self.queue.put((self.average_step_sync_time, self.average_throughput,
-                        self.total_throughput))
+                        self.total_throughput, self.stop_time-self.start_time))
 
     def get_throughput(self):
         """
-        Retrieve average step sync time, average per-step throughput, and total transmission throughput.
+        Retrieve average step sync time, average per-step throughput, total
+        transmission throughput, and run loop duration.
         """
 
         return self.queue.get()
