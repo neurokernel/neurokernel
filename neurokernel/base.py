@@ -26,7 +26,7 @@ from mixins import LoggerMixin
 from ctrl_proc import ControlledProcess, LINGER_TIME
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from tools.comm import is_poll_in, get_random_port, sync_router, sync_dealer
+from tools.comm import get_random_port, sync_router, sync_dealer
 from tools.logging import setup_logger
 from routing_table import RoutingTable
 from uid import uid
@@ -37,6 +37,8 @@ from plsel import SelectorMethods, PortMapper
 PORT_DATA = 5000
 PORT_CTRL = 5001
 PORT_TIME = 5002
+
+POLL_TIMEOUT = 100
 
 class BaseModule(ControlledProcess):
     """
@@ -387,10 +389,6 @@ class BaseModule(ControlledProcess):
                 self.sock_data.connect("tcp://localhost:%i" % self.port_data)
                 self.log_info('data network connection initialized')
 
-                # Set up a poller for detecting incoming data:
-                self.data_poller = zmq.Poller()
-                self.data_poller.register(self.sock_data, zmq.POLLIN)
-
                 # Initialize timing port:
                 self.log_info('initializing time port')
                 self.sock_time = self.zmq_ctx.socket(zmq.DEALER)
@@ -508,8 +506,8 @@ class BaseModule(ControlledProcess):
                 nbytes = 0
                 while recv_ids:
 
-                    # Use poller to avoid blocking:
-                    if is_poll_in(self.sock_data, self.data_poller):
+                    # Poll to avoid blocking:
+                    if self.sock_data.poll(POLL_TIMEOUT):
                         data_packed = self.sock_data.recv()
                         in_id, data = msgpack.unpackb(data_packed)
                         if not self.time_sync:
@@ -1066,10 +1064,6 @@ class BaseManager(LoggerMixin):
         self.sock_ctrl = self.zmq_ctx.socket(zmq.ROUTER)
         self.sock_ctrl.setsockopt(zmq.LINGER, LINGER_TIME)
         self.sock_ctrl.bind("tcp://*:%i" % self.port_ctrl)
-
-        # Set up a poller for detecting acknowledgements to control messages:
-        self.ctrl_poller = zmq.Poller()
-        self.ctrl_poller.register(self.sock_ctrl, zmq.POLLIN)
         
         # Data structures for instances of objects that correspond to processes
         # keyed on object IDs (bidicts are used to enable retrieval of
@@ -1232,7 +1226,7 @@ class BaseManager(LoggerMixin):
         self.sock_ctrl.send_multipart([i]+msg)
         self.log_info('sent to   %s: %s' % (i, msg))
         while True:
-            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
+            if self.sock_ctrl.poll(POLL_TIMEOUT):
                 j, data = self.sock_ctrl.recv_multipart()
                 self.log_info('recv from %s: ack' % j)
                 break
@@ -1283,7 +1277,7 @@ class BaseManager(LoggerMixin):
 
             # If a module acknowledges receiving a quit message,
             # wait for it to shutdown:
-            if is_poll_in(self.sock_ctrl, self.ctrl_poller):
+            if self.sock_ctrl.poll(POLL_TIMEOUT):
                  j, data = self.sock_ctrl.recv_multipart()
                  self.log_info('recv from %s: %s' % (j, data))                 
                  if j in recv_ids and data == 'shutdown':
