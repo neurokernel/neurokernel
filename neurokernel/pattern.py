@@ -1721,8 +1721,8 @@ class Pattern(object):
 
         # Get indices of the 'from' and 'to' interfaces as lists to speed up the
         # check below [*]:
-        from_idx = self.interface.interface_ports(from_int, True)
-        to_idx = self.interface.interface_ports(to_int, True)
+        from_idx = set(self.interface.data[self.interface.data['interface'] == from_int].index.tolist())
+        to_idx = set(self.interface.data[self.interface.data['interface'] == to_int].index.tolist())
 
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
