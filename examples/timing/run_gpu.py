@@ -14,14 +14,14 @@ import sys
 script_name = 'timing_demo_gpu.py'
 
 w = csv.writer(sys.stdout)
-for spikes in np.linspace(500, 15000, 10, dtype=int):
+for spikes in np.linspace(500, 15000, 20, dtype=int):
     average_step_sync_time_list = []
     average_throughput_list = []
     total_throughput_list = []
     runtime_all_list = []
     runtime_main_list = []
     runtime_loop_list = []
-    for i in xrange(2):
+    for i in xrange(3):
         out = subprocess.check_output(['python', script_name,
                         '-u', '2', '-s', str(spikes), '-g', '0', '-m', '50'])
         average_step_sync_time, average_throughput, total_throughput, \
