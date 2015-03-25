@@ -236,7 +236,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.stop()
     stop_main = time.time()
     t = man.get_throughput()
-    return t[0], t[1], t[2], (time.time()-start_all), (stop_main-start_main), t[3]
+    return t[0], (time.time()-start_all), (stop_main-start_main), t[3]
 
 if __name__ == '__main__':
     num_lpus = 2
