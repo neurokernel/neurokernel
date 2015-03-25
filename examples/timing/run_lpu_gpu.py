@@ -14,6 +14,7 @@ import sys
 script_name = 'timing_demo_gpu.py'
 
 w = csv.writer(sys.stdout)
+total_spike = 1000
 for lpus in xrange(2, 9):
     average_step_sync_time_list = []
     average_throughput_list = []
@@ -21,11 +22,12 @@ for lpus in xrange(2, 9):
     runtime_all_list = []
     runtime_main_list = []
     runtime_loop_list = []
-    for i in xrange(2):
+    for i in xrange(3):
         out = subprocess.check_output(['srun', '-n', '1', '-c', str(lpus),
                                        '--gres=gpu:%i' % lpus,
                                        'python', script_name,
-                                       '-u', str(lpus), '-s', '1000', '-g', '0',
+                                       '-u', str(lpus),
+                                       '-s', str(total_spike/(lpus-1)), '-g', '0',
                                        '-m', '50'])
         average_step_sync_time, average_throughput, total_throughput, \
             runtime_all, runtime_main, runtime_loop = out.strip('()\n\"').split(', ')
