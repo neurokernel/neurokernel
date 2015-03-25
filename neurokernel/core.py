@@ -435,36 +435,22 @@ class Module(BaseModule):
                 # errors will lead to visible failures:
                 if self.debug:
 
-                    # Get transmitted input data for processing:
-                    self._get_in_data()
-
                     # Run the processing step:
                     self.run_step()
 
                     # Do post-processing:
                     self.post_run_step()
 
-                    # Stage generated output data for transmission to other
-                    # modules:
-                    self._put_out_data()
-
                     # Synchronize:
                     self._sync()
 
                 else:
-
-                    # Get transmitted input data for processing:
-                    catch_exception(self._get_in_data, self.log_info)
 
                     # Run the processing step:
                     catch_exception(self.run_step, self.log_info)
 
                     # Do post processing:
                     catch_exception(self.post_run_step, self.log_info)
-
-                    # Stage generated output data for transmission to other
-                    # modules:
-                    catch_exception(self._put_out_data, self.log_info)
 
                     # Synchronize:
                     catch_exception(self._sync, self.log_info)

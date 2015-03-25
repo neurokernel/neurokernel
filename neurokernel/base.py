@@ -477,6 +477,7 @@ class BaseModule(ControlledProcess):
 
             # Send outbound data:
             start = time.time()
+            self._put_out_data()
             if self.net in ['out', 'full']:
 
                 # Send all data in outbound buffer:
@@ -532,6 +533,7 @@ class BaseModule(ControlledProcess):
 
                 if not self.time_sync:
                     self.log_info('recv data from all input IDs')
+            self._get_in_data()
 
             # Transmit synchronization time:
             stop = time.time()
@@ -664,32 +666,20 @@ class BaseModule(ControlledProcess):
                 # errors will lead to visible failures:
                 if self.debug:
 
-                    # Get input data:
-                    self._get_in_data()
-
                     # Run the processing step:
                     self.run_step()
 
                     # Do post-processing:
                     self.post_run_step()
 
-                    # Prepare the generated data for output:
-                    self._put_out_data()
-
                     # Synchronize:
                     self._sync()
                 else:
-                    # Get input data:
-                    catch_exception(self._get_in_data, self.log_info)
-
                     # Run the processing step:
                     catch_exception(self.run_step, self.log_info)
 
                     # Do post processing:
                     catch_exception(self.post_run_step, self.log_info)
-
-                    # Prepare the generated data for output:
-                    catch_exception(self._put_out_data, self.log_info)
 
                     # Synchronize:
                     catch_exception(self._sync, self.log_info)
