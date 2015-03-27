@@ -298,7 +298,7 @@ class Module(BaseModule):
                                      dest_rank, GPOT_TAG)
             requests.append(r)
             r = MPI.COMM_WORLD.Isend([self._out_buf_int['spike'][dest_id],
-                                      self._out_buf_mtype['gpot'][dest_id]],
+                                      self._out_buf_mtype['spike'][dest_id]],
                                      dest_rank, SPIKE_TAG)
             requests.append(r)
 
