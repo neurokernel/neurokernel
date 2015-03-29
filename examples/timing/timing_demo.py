@@ -218,8 +218,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.start(steps)
     man.wait()
     stop_main = time.time()
-    return man.average_step_sync_time, man.average_throughput, \
-        man.total_throughput, (time.time()-start_all), (stop_main-start_main), \
+    return man.average_step_sync_time, (time.time()-start_all), (stop_main-start_main), \
         (man.stop_time-man.start_time)
 
 if __name__ == '__main__':
