@@ -14,11 +14,13 @@ import numpy as np
 script_name = 'timing_demo.py'
 trials = 3
 
-w = csv.writer(sys.stdout)
-for spikes in xrange(1000, 6000, 250):
+f = open(out_file, 'w', 0)
+w = csv.writer(f)
+for spikes in xrange(250, 7000, 250):
     for lpus in xrange(2, 9):
         for i in xrange(trials):
             out = subprocess.check_output(['srun', '-n', '1', '-c', str(lpus),
+                                           '-p', 'huxley',
                                            'python', script_name,
                                            '-u', str(lpus), '-s', str(spikes/(lpus-1)),
                                            '-g', '0', '-m', '50'])
@@ -26,3 +28,4 @@ for spikes in xrange(1000, 6000, 250):
                 runtime_loop  = out.strip('()\n\"').split(', ')
             w.writerow([lpus, spikes, average_step_sync_time,
                         runtime_all, runtime_main, runtime_loop])
+f.close()
