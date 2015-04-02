@@ -13,25 +13,14 @@ from data.gen_vis_gexf import generate_gexf
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-r', '--rec-micro', dest='record_microvilli',
-                    action="store_true", help='records microvilli if set')
-parser.add_argument('-u', '--unrec-neuro', dest='record_neuron',
-                    action="store_false",
-                    help='does not record neuron if set')
-
 parser.add_argument('-l', '--layers', dest='num_layers', type=int,
                     default=16,
                     help='number of layers of ommatidia on circle')
-parser.add_argument('-m', '--micro', dest='num_microvilli', type=int,
-                    default=30000,
-                    help='number of microvilli in each photoreceptor')
 
 parser.add_argument('-d', '--port_data', default=None, type=int,
                     help='Data port [default: randomly selected]')
 parser.add_argument('-c', '--port_ctrl', default=None, type=int,
                     help='Control port [default: randomly selected]')
-parser.add_argument('-a', '--ret_dev', default=0, type=int,
-                    help='GPU for lamina lobe [default: 0]')
 
 parser.add_argument('-i', '--input', action="store_true",
                     help='generates input if set')
