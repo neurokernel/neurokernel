@@ -1859,7 +1859,7 @@ class SelectorMethods(SelectorParser):
 # Set the option optimize=1 in the production version; need to perform these
 # assignments after definition of the rest of the class because the class'
 # internal namespace can't be accessed within its body definition:
-optimize = 1
+optimize = 0
 SelectorParser.lexer = lex.lex(module=SelectorParser, optimize=optimize)
-SelectorParser.parser = yacc.yacc(module=SelectorParser, 
+SelectorParser.parser = yacc.yacc(module=SelectorParser,
                                   debug=0, write_tables=0, optimize=optimize)
