@@ -11,6 +11,7 @@ import sys
 
 import numpy as np
 
+out_file = sys.argv[1]
 script_name = 'timing_demo.py'
 trials = 3
 
