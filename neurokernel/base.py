@@ -27,7 +27,8 @@ from uid import uid
 from tools.comm import MPIOutput
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
-from plsel import SelectorMethods, PortMapper
+from plsel import SelectorMethods
+from pm import PortMapper
 
 CTRL_TAG = 1
 

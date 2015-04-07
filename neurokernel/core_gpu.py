@@ -22,7 +22,7 @@ from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
 from uid import uid
 from pattern import Interface, Pattern
-from plsel import SelectorMethods, BasePortMapper, PortMapper
+from plsel import SelectorMethods
 from pm_gpu import GPUPortMapper
 
 # MPI tags for distinguishing messages associated with different port types:

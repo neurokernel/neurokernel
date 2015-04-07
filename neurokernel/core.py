@@ -18,7 +18,8 @@ from tools.comm import MPIOutput
 from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
-from plsel import BasePortMapper, PortMapper, SelectorMethods
+from plsel import SelectorMethods
+from pm import BasePortMapper, PortMapper
 from uid import uid
 
 # MPI tags for distinguishing messages associated with different port types:

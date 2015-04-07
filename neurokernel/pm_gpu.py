@@ -11,7 +11,7 @@ import pycuda.gpuarray as gpuarray
 import pycuda.elementwise as elementwise
 import pycuda.tools as tools
 
-from plsel import PortMapper
+from pm import PortMapper
 
 class GPUPortMapper(PortMapper):
     """

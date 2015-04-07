@@ -29,7 +29,7 @@ from tools.comm import MPIOutput
 from tools.gpu import bufint, set_by_inds
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
-from plsel import Selector, SelectorMethods, PortMapper
+from plsel import Selector, SelectorMethods
 from pm_gpu import GPUPortMapper
 from routing_table import RoutingTable
 from uid import uid
