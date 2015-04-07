@@ -57,11 +57,9 @@ class Selector(object):
 
     def __init__(self, s):
         if isinstance(s, Selector):
-            self._str = copy.copy(s._str)
             self._expanded = copy.copy(s._expanded)
             self._max_levels = copy.copy(s._max_levels)
         elif isinstance(s, basestring): # python2 dependency
-            self._str = copy.copy(s)
 
             # Save expanded selector as tuple because it shouldn't need to be
             # modified after expansion:
@@ -70,7 +68,6 @@ class Selector(object):
         else:
             self._expanded = tuple(SelectorMethods.expand(s))
             self._max_levels = max(map(len, self._expanded))
-            self._str = SelectorMethods.collapse(self._expanded)
 
     @property
     def nonempty(self):
@@ -86,7 +83,7 @@ class Selector(object):
         String representation of selector.
         """
 
-        return self._str
+        return SelectorMethods.collapse(self._expanded)
 
     @property
     def expanded(self):
@@ -122,7 +119,6 @@ class Selector(object):
         """
 
         out = cls('')
-        out._str = ','.join([s.str for s in sels if s.nonempty])
         try:
             out._max_levels = max([s.max_levels for s in sels if s.nonempty])
         except ValueError:
@@ -164,7 +160,6 @@ class Selector(object):
                 for e, t in zip(e_list, s._expanded):
                     e.extend(t)
         out._expanded = tuple(tuple(e) for e in e_list)
-        out._str = '.+'.join([s.str for s in sels if s.nonempty])
         out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
         return out
 
@@ -175,7 +170,6 @@ class Selector(object):
         """
 
         out = cls('')
-        out._str = '+'.join([s.str for s in sels if s.nonempty])
         out._max_levels = sum([s.max_levels for s in sels if s.nonempty])
         out._expanded = tuple(tuple(j for j in itertools.chain(*i)) \
                 for i in itertools.product(*[s.expanded for s in sels]))
@@ -200,7 +194,6 @@ class Selector(object):
             out._max_levels = max([s.max_levels for s in sels if s.nonempty])
         except ValueError:
             out._max_levels = 0
-        out._str = SelectorMethods.collapse(out._expanded)
         return out
 
     def __add__(self, y):
@@ -220,10 +213,11 @@ class Selector(object):
             yield ((),)
 
     def __repr__(self):
-        if len(self._str) <= 100:
-            return 'Selector(\'%s\')' % self._str
+        s = self.str
+        if len(s) <= 100:
+            return 'Selector(\'%s\')' % s
         else:
-            return 'Selector(\'%s\')' % (self._str[0:25]+' ... '+self._str[-25:])
+            return 'Selector(\'%s\')' % (s[0:25]+' ... '+s[-25:])
 
 class SelectorParser(object):
     """
