@@ -65,7 +65,7 @@ class test_selector_class(TestCase):
         assert s.nonempty
         assert s.expanded == (('foo', 0), ('bar', 0))
         assert s.max_levels == 2
-        assert s.str == '/foo[0],/bar[0]'
+        assert s.str == '/foo/0,/bar/0'
 
         s = Selector('')+Selector('/foo[0:0]')
         assert len(s) == 0
@@ -88,7 +88,7 @@ class test_selector_class(TestCase):
         assert s.nonempty
         assert s.expanded == (('x', 0), ('y', 1))
         assert s.max_levels == 2
-        assert s.str == '[x,y].+[0,1]'
+        assert s.str == '/x/0,/y/1'
 
         self.assertRaises(Exception, Selector.concat, Selector('[x,y]'),
                           Selector('[0:3]'))
@@ -107,14 +107,14 @@ class test_selector_class(TestCase):
         assert s.nonempty
         assert s.expanded == (('x', 0), ('x', 1))
         assert s.max_levels == 2
-        assert s.str == '/x+[0,1]'
+        assert s.str == '/x/0,/x/1'
 
         s = Selector.prod(Selector('/x[0:2]'), Selector('[a,b,c]'))
         assert len(s) == 6
         assert s.nonempty
         assert s.expanded == (('x', 0, 'a'), ('x', 0, 'b'), ('x', 0, 'c'),
                               ('x', 1, 'a'), ('x', 1, 'b'), ('x', 1, 'c'))
-        assert s.str == '/x[0:2]+[a,b,c]'
+        assert s.str == '/x/0/a,/x/0/b,/x/0/c,/x/1/a,/x/1/b,/x/1/c'
 
     def test_selector_iter(self):
         sel = Selector('/x[0:3]')
@@ -732,9 +732,16 @@ class test_base_port_mapper(TestCase):
         pm = BasePortMapper('/foo[0:5],/bar[0:5]')
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [4, 5])
 
+        # Nonexistent ports should return an empty index array:
+        i = pm.ports_to_inds('/baz')
+        assert len(i) == 0 and i.dtype == np.int64
+
         # With a specified port map:
         pm = BasePortMapper('/foo[0:5],/bar[0:5]', range(10, 20))
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [14, 15])
+
+        i = pm.ports_to_inds('/baz')
+        assert len(i) == 0 and i.dtype == np.int64
 
     def test_get_map(self):
         # Try to get selector that is in the mapper:
