@@ -8,7 +8,7 @@ import inspect
 
 import numpy as np
 
-def allglobalvars(x):
+def all_global_vars(x):
     """
     Find all globals accessed by an object.
     """
@@ -24,7 +24,7 @@ def allglobalvars(x):
         level += 1
 
         results = {}
-        if inspect.isbuiltin(x) or type(x) == np.ufunc:        
+        if inspect.isbuiltin(x) or type(x) == np.ufunc:
             return {x.__name__: x}
         elif inspect.isroutine(x):
 
@@ -80,7 +80,7 @@ def allglobalvars(x):
                     results.update(recursive(b, set([b.__name__]).union(seen), level))
 
             # Recurse into class/object methods:
-            for f in inspect.getmembers(x, predicate=inspect.ismethod): 
+            for f in inspect.getmembers(x, predicate=inspect.ismethod):
                 results.update(recursive(f[1], set([f[1].__name__]).union(seen), level))
         return results
     return recursive(x)
@@ -93,13 +93,13 @@ if __name__ == '__main__':
         def bar(self, x):
             return np.linalg.svd(x)
 
-    print allglobalvars(Foo)
+    print all_global_vars(Foo)
     print '---'
 
     import math
     f = lambda x: math.lgamma(x)
-    print allglobalvars(f)
+    print all_global_vars(f)
 
     print '---'
     import pandas
-    print allglobalvars(pandas.DataFrame)
+    print all_global_vars(pandas.DataFrame)

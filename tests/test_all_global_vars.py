@@ -1,4 +1,4 @@
-from allglobalvars import allglobalvars
+from neurokernel.all_global_vars import all_global_vars
 
 import inspect
 import random
@@ -12,13 +12,13 @@ from numbers import Integral
 def func2(x):
     return isinstance(x, Integral)
 
-class test_allglobalvars(TestCase):
+class test_all_global_vars(TestCase):
     def test_func(self):
-        r = allglobalvars(func1)
+        r = all_global_vars(func1)
         assert r.has_key('random') and inspect.ismodule(r['random'])
 
     def test_func_imported(self):
-        r = allglobalvars(func2)
+        r = all_global_vars(func2)
         assert len(r.keys()) == 1 and \
             r.has_key('Integral') and inspect.isclass(r['Integral'])
 
@@ -27,7 +27,7 @@ class test_allglobalvars(TestCase):
             def foo(self, x):
                 return random.random()+x
 
-        r = allglobalvars(Foo)
+        r = all_global_vars(Foo)
         assert len(r.keys()) == 1 and \
             r.has_key('random') and inspect.ismodule(r['random'])
 
@@ -36,7 +36,7 @@ class test_allglobalvars(TestCase):
             def foo(self, x):
                 return random.random()+x
 
-        r = allglobalvars(Foo())
+        r = all_global_vars(Foo())
         assert len(r.keys()) == 1 and \
             r.has_key('random') and inspect.ismodule(r['random'])
 
@@ -45,7 +45,7 @@ class test_allglobalvars(TestCase):
             def foo(self, x):
                 return func1(x)
 
-        r = allglobalvars(Foo)
+        r = all_global_vars(Foo)
         assert len(r.keys()) == 2 and \
             r.has_key('random') and inspect.ismodule(r['random']) and \
             r.has_key('func1') and inspect.isfunction(r['func1'])
@@ -59,7 +59,7 @@ class test_allglobalvars(TestCase):
             def foo(self, x):
                 return super(Bar, self).foo(x)
 
-        r = allglobalvars(Bar)
+        r = all_global_vars(Bar)
         assert len(r.keys()) == 3 and \
             r.has_key('random') and inspect.ismodule(r['random']) and \
             r.has_key('Foo') and inspect.isclass(r['Foo']) and \
@@ -73,9 +73,9 @@ class test_allglobalvars(TestCase):
         def bar(x):
             return Foo().foo(x)
 
-        r = allglobalvars(bar)
+        r = all_global_vars(bar)
         assert len(r.keys()) == 2 and \
             r.has_key('random') and inspect.ismodule(r['random'])
-        
+
 if __name__ == '__main__':
     main()

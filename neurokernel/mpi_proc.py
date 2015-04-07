@@ -25,7 +25,7 @@ MPI.pickle.loads = dill.loads
 from mixins import LoggerMixin
 from tools.logging import set_excepthook
 from tools.misc import memoized_property
-from allglobalvars import allglobalvars
+from all_global_vars import all_global_vars
 
 def getargnames(f):
     """
@@ -254,7 +254,7 @@ class ProcessManager(LoggerMixin):
             # the constructor arguments; the backend will wait to receive
             # them and then start running the targets on the appropriate nodes.
             for i in self._targets.keys():
-                target_globals = allglobalvars(self._targets[i])
+                target_globals = all_global_vars(self._targets[i])
                 data = (self._targets[i], target_globals, self._kwargs[i])
                 self._intercomm.send(data, i)
 
