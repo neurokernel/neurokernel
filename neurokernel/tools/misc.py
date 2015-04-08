@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
 from functools import wraps
+import re
+import subprocess
+import sys
+import traceback
 
 from mpi4py import MPI
 import numpy as np
-import sys, traceback
 
 def rand_bin_matrix(sh, N, dtype=np.double):
     """
@@ -112,3 +115,35 @@ def dtype_to_mpi(t):
     else:
         raise ValueError('cannot convert type')
     return m
+
+def openmpi_cuda_support(path='ompi_info'):
+    """
+    Check whether CUDA support is available in OpenMPI.
+
+    Parameters
+    ----------
+    path : str
+        Path to ompi_info binary.
+
+    Returns
+    -------
+    result : bool
+        True if OpenMPI was built with CUDA support.
+    """
+
+    try:
+        out = subprocess.check_output([path, '-l', '9', '--param', 'mpi', 'all',
+                                       '--parsable'])
+    except:
+        return False
+    else:
+        lines = out.split('\n')
+        for line in lines:
+            if re.search(r'mpi_built_with_cuda_support\:value', line):
+                tokens = line.split(':')
+                if tokens[-1] == 'true':
+                    return True
+                else:
+                    return False
+        return False
+    
