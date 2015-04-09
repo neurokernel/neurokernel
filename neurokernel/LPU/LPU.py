@@ -502,7 +502,7 @@ class LPU(Module):
 
             self.buffer.step()
         else:
-             self.first_step = False
+            self.first_step = False
 
         if self.debug:
             self.gpot_buffer_file.root.array.append(
