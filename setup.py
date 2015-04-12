@@ -81,6 +81,7 @@ if __name__ == "__main__":
             'pycuda >= 2014.1',
             'pyzmq >= 13.0',
             'scipy >= 0.11.0',
+            'shutilwhich >= 1.0.1',
             'tables >= 2.4.0',
             'twiggy >= 0.4.0',
         ],
