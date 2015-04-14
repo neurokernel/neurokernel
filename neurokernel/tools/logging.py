@@ -100,16 +100,16 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
     if file_name:
         file_output = \
             twiggy.outputs.FileOutput(file_name, fmt, 'w')
-        twiggy.addEmitters(('file', level, None, file_output))
+        twiggy.add_emitters(('file', level, None, file_output))
 
     if screen:
         screen_output = \
           twiggy.outputs.StreamOutput(fmt, stream=sys.stdout)
-        twiggy.addEmitters(('screen', level, None, screen_output))
+        twiggy.add_emitters(('screen', level, None, screen_output))
 
     if zmq_addr:
         zmq_output = ZMQOutput(zmq_addr, fmt)
-        twiggy.addEmitters(('zmq', level, None, zmq_output))
+        twiggy.add_emitters(('zmq', level, None, zmq_output))
 
     logger = twiggy.log.name(fmt_name(name))
     if log_exceptions:

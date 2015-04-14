@@ -82,7 +82,7 @@ if __name__ == "__main__":
             'pyzmq >= 13.0',
             'scipy >= 0.11.0',
             'tables >= 2.4.0',
-            'twiggy >= 0.4.0',
+            'twiggy >= 0.4.7',
         ],
         extras_require = {
             'sphinx_rtd_theme': ['sphinx_rtd_theme >= 0.1.6'],
