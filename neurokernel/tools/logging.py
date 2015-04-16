@@ -111,7 +111,7 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         else:
             file_output = \
                 twiggy.outputs.FileOutput(file_name, fmt, 'w')
-        twiggy.add_mitters(('file', level, None, file_output))
+        twiggy.add_emitters(('file', level, None, file_output))
 
     if screen:
         screen_output = \
