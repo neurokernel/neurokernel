@@ -44,7 +44,7 @@ emitters = parent.recv()
 # by newly initialized instances so that they write to valid file handles and
 # use the intercommunicator to the parent process:
 for k, v in emitters.iteritems():
-    if isinstance(v._output, neurokernel.tools.comm.MPIOutput):       
+    if isinstance(v._output, neurokernel.tools.comm.MPIOutput):
         level = v.min_level
         name = v._output.filename
         format = v._output._format
@@ -53,8 +53,8 @@ for k, v in emitters.iteritems():
         # The close_atexit argument is explicitly set to False here because we need
         # to manually close the file handle associated with MPIOutput before
         # MPI.Finalize() is called via atexit in the base/core modules:
-        twiggy.addEmitters(('file', level, None, 
-            neurokernel.tools.comm.MPIOutput(name, format, 
+        twiggy.add_emitters(('file', level, None,
+            neurokernel.tools.comm.MPIOutput(name, format,
                                              MPI.COMM_WORLD, mode, False)))
     else:
         twiggy.emitters[k] = v
