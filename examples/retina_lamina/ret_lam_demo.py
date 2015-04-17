@@ -9,7 +9,7 @@ mpl.use('Agg')
 import neurokernel.core as core
 import neurokernel.base as base
 from neurokernel.LPU.LPU import LPU
-from neurokernel.tools.comm import get_random_port
+from neurokernel.tools.zmq import get_random_port
 
 from data.eyeimpl import EyeGeomImpl
 
