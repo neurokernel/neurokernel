@@ -149,7 +149,7 @@ class Worker(Process):
 
             # Execute work method; the work method may send data back to the master
             # as a serialized control message containing two elements, e.g.,
-            # self.intercomm.isend(msgpack.dumps(['foo', str(self.rank)]),
+            # self.intercomm.isend(['foo', str(self.rank)],
             #                      dest=0, tag=self._ctrl_tag)            
             if running:
                 self.do_work()

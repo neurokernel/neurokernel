@@ -8,7 +8,6 @@ import copy
 import itertools
 import re
 
-import msgpack
 import numpy as np
 import pandas as pd
 import ply.lex as lex
@@ -31,8 +30,16 @@ def _decode(obj):
     except:
         return obj
 
-_packb = lambda x: msgpack.packb(x, default=_encode)
-_unpackb = lambda x: msgpack.unpackb(x, object_hook=_decode)
+# Fall back to using pickle for hashing if msgpack isn't available:
+try:
+    import msgpack
+except ImportError:
+    import cPickle as pickle
+    _packb = pickle.dumps
+    _unpackb = pickle.loads
+else:
+    _packb = lambda x: msgpack.packb(x, default=_encode)
+    _unpackb = lambda x: msgpack.unpackb(x, object_hook=_decode)
 
 class Selector(object):
     """
