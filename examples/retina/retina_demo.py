@@ -5,7 +5,7 @@ import time
 
 import neurokernel.core as core
 from neurokernel.LPU.LPU import LPU
-from neurokernel.tools.comm import get_random_port
+from neurokernel.tools.zmq import get_random_port
 
 from data.gen_vis_input import generate_input
 from data.gen_vis_gexf import generate_gexf

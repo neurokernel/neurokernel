@@ -81,7 +81,6 @@ if __name__ == "__main__":
             'ply >= 3.4',
             'psutil >= 2.0',
             'pycuda >= 2014.1',
-            'pyzmq >= 13.0',
             'scipy >= 0.11.0',
             'shortuuid >= 0.4.2',
             'shutilwhich >= 1.0.1',

@@ -25,7 +25,7 @@ nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 from neurokernel.mixins import LoggerMixin
 from neurokernel.core import Module
 import neurokernel.base as base
-from neurokernel.tools.comm import get_random_port
+from neurokernel.tools.zmq import get_random_port
 
 from types import *
 from collections import Counter

@@ -26,7 +26,7 @@ MPI.pickle.loads = dill.loads
 # so that the isinstance() check below for MPIOutput instances in transmitted
 # emitters below can succeed; using a relative import in either place can cause
 # the name of the class to not match:
-import neurokernel.tools.comm
+import neurokernel.tools.mpi
 
 # Process needs to be imported directly into the script's namespace in order to
 # ensure that the issubclass() check later in the script succeeds:
@@ -44,7 +44,7 @@ emitters = parent.recv()
 # by newly initialized instances so that they write to valid file handles and
 # use the intercommunicator to the parent process:
 for k, v in emitters.iteritems():
-    if isinstance(v._output, neurokernel.tools.comm.MPIOutput):
+    if isinstance(v._output, neurokernel.tools.mpi.MPIOutput):
         level = v.min_level
         name = v._output.filename
         format = v._output._format
@@ -54,7 +54,7 @@ for k, v in emitters.iteritems():
         # to manually close the file handle associated with MPIOutput before
         # MPI.Finalize() is called via atexit in the base/core modules:
         twiggy.add_emitters(('file', level, None,
-            neurokernel.tools.comm.MPIOutput(name, format,
+            neurokernel.tools.mpi.MPIOutput(name, format,
                                              MPI.COMM_WORLD, mode, False)))
     else:
         twiggy.emitters[k] = v

@@ -14,7 +14,7 @@ import base
 #                           ExceptionOnSignal, TryExceptionOnSignal)
 from mixins import LoggerMixin
 import mpi
-from tools.comm import MPIOutput
+from tools.mpi import MPIOutput
 from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern

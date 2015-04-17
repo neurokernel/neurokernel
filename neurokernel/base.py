@@ -24,7 +24,7 @@ from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
 from routing_table import RoutingTable
 from uid import uid
-from tools.comm import MPIOutput
+from tools.mpi import MPIOutput
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern
 from plsel import SelectorMethods
@@ -42,7 +42,7 @@ class BaseModule(mpi.Worker):
     Parameters
     ----------
     sel : str, unicode, or sequence
-        Path-like selector describing the module's interface of 
+        Path-like selector describing the module's interface of
         exposed ports.
     sel_in : str, unicode, or sequence
         Selector describing all input ports in the module's interface.
@@ -89,23 +89,29 @@ class BaseModule(mpi.Worker):
         self.time_sync = time_sync
 
         # Require several necessary attribute columns:
-        assert 'interface' in columns
-        assert 'io' in columns
-        assert 'type' in columns
+        if 'interface' not in columns:
+            raise ValueError('interface column required')
+        if 'io' not in columns:
+            raise ValueError('io column required')
+        if 'type' not in columns:
+            raise ValueError('type column required')
 
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
         # closed after MPI.Finalize() is called, an error will occur):
         for k, v in twiggy.emitters.iteritems():
-             if isinstance(v._output, MPIOutput):       
+             if isinstance(v._output, MPIOutput):
                  atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        assert SelectorMethods.is_in(sel_in, sel)
-        assert SelectorMethods.is_in(sel_out, sel)
-        assert SelectorMethods.are_disjoint(sel_in, sel_out)
+        if not SelectorMethods.is_in(sel_in, sel):
+            raise ValueError('input port selector not in selector of all ports')
+        if not SelectorMethods.is_in(sel_out, sel):
+            raise ValueError('output port selector not in selector of all ports')
+        if not SelectorMethods.are_disjoint(sel_in, sel_out):
+            raise ValueError('input and output port selectors not disjoint')
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -140,7 +146,8 @@ class BaseModule(mpi.Worker):
         self.out_ports = self.interface.out_ports().to_tuples()
 
         # Set up mapper between port identifiers and their associated data:
-        assert len(data) == len(self.interface)
+        if len(data) != len(self.interface):
+            raise ValueError('length of specified data array does not match interface length')
         self.data = data
         self.pm = PortMapper(sel, self.data, make_copy=False)
 
@@ -494,7 +501,8 @@ class Manager(mpi.WorkerManager):
             associated with identifier `id`.
         """
 
-        assert issubclass(target, BaseModule)
+        if not issubclass(target, BaseModule):
+            raise ValueError('target class is not a BaseModule subclass')
         argnames = mpi.getargnames(target.__init__)
 
         # Selectors must be passed to the module upon instantiation;
@@ -534,11 +542,15 @@ class Manager(mpi.WorkerManager):
         parameter.
         """
 
-        assert isinstance(pat, Pattern)
+        if not isinstance(pat, Pattern):
+            raise ValueError('specified pattern is not a Pattern instance')
 
-        assert id_0 in self.rank_to_id.values()
-        assert id_1 in self.rank_to_id.values()
-        assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
+        if id_0 not in self.rank_to_id.values():
+            raise ValueError('unrecognized interface %s' % id_0)
+        if id_1 not in self.rank_to_id.values():
+            raise ValueError('unrecognized interface %s' % id_1)
+        if not (int_0 in pat.interface_ids and int_1 in pat.interface_ids):
+            raise ValueError('specified interfaces not in pattern') 
 
         self.log_info('connecting modules {0} and {1}'
                       .format(id_0, id_1))
@@ -563,8 +575,14 @@ class Manager(mpi.WorkerManager):
             mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
             mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
 
-            assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
-            assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
+            if not mod_int_0.is_compatible(0, pat.interface, int_0, True):
+                raise ValueError('interface 0 of module %s is incompatible '
+                                 'with interface %s of specified pattern' % \
+                                 (id_0, int_0))
+            if not mod_int_1.is_compatible(0, pat.interface, int_1, True):
+                raise ValueError('interface 0 of module %s is incompatible '
+                                 'with interface %s of specified pattern' % \
+                                 (id_1, int_1))
 
         # XXX Need to check for fan-in XXX
 

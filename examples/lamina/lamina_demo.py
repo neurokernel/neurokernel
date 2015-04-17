@@ -16,7 +16,7 @@ import networkx as nx
 import neurokernel.core as core
 import neurokernel.base as base
 import neurokernel.tools.graph as graph_tools
-from neurokernel.tools.comm import get_random_port
+from neurokernel.tools.zmq import get_random_port
 
 from neurokernel.LPU.LPU import LPU
 

@@ -25,7 +25,7 @@ from mixins import LoggerMixin
 import mpi
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
-from tools.comm import MPIOutput
+from tools.mpi import MPIOutput
 from tools.gpu import bufint, set_by_inds
 from tools.misc import catch_exception, dtype_to_mpi
 from pattern import Interface, Pattern

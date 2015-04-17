@@ -24,7 +24,7 @@ import networkx as nx
 
 import neurokernel.core as core
 import neurokernel.base as base
-from neurokernel.tools.comm import get_random_port
+from neurokernel.tools.zmq import get_random_port
 
 import neurokernel.pattern as pattern
 from neurokernel.LPU.LPU import LPU

@@ -8,10 +8,22 @@ import copy
 import sys
 import traceback
 
-import mpi4py.MPI
 import twiggy
 
-import neurokernel.tools.comm
+# Try to import various dependencies here so that they can be serialized
+# and transmitted to mpi_backend during model execution:
+try:
+    import mpi4py.MPI
+except ImportError:
+    pass
+try:
+    import neurokernel.tools.zmq
+except ImportError:
+    pass
+try:
+    import neurokernel.tools.mpi
+except ImportError:
+    pass
 
 def log_exception(type, value, tb, logger=twiggy.log, multiline=False):
     """
@@ -75,8 +87,8 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
     file_name : str
         Create output handler to specified file.
     mpi_comm : mpi4py.MPI.Intracomm
-        If not None, use MPI I/O with the specified communicator for 
-        output file handler. Ignored if the `file_name` parameter 
+        If not None, use MPI I/O with the specified communicator for
+        output file handler. Ignored if the `file_name` parameter
         is not specified.
     zmq_addr : str
         ZeroMQ socket address.
@@ -92,7 +104,7 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
 
     Bug
     ---
-    To use the ZeroMQ output class with multiprocessing, it must be added 
+    To use the ZeroMQ output class with multiprocessing, it must be added
     as an emitter within each process.
     """
 
@@ -105,9 +117,15 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
 
     if file_name:
         if mpi_comm:
-            assert isinstance(mpi_comm, mpi4py.MPI.Intracomm)
+            if 'mpi4py.MPI' not in sys.modules:
+                raise ValueError('mpi4py not available')
+            if not isinstance(mpi_comm, mpi4py.MPI.Intracomm):
+                raise ValueError('mpi_comm must be an instance of '
+                                 'mpi4py.MPI.Intracomm')
+            if 'neurokernel.tools.mpi' not in sys.modules:
+                raise ValueError('neurokernel.tools.mpi not available')
             file_output = \
-                neurokernel.tools.comm.MPIOutput(file_name, fmt, mpi_comm)
+                neurokernel.tools.mpi.MPIOutput(file_name, fmt, mpi_comm)
         else:
             file_output = \
                 twiggy.outputs.FileOutput(file_name, fmt, 'w')
@@ -119,7 +137,9 @@ def setup_logger(name='', level=twiggy.levels.DEBUG,
         twiggy.add_emitters(('screen', level, None, screen_output))
 
     if zmq_addr:
-        zmq_output = neurokernel.tools.comm.ZMQOutput(zmq_addr, fmt)
+        if 'neurokernel.tools.zmq' not in sys.modules:
+            raise ValueError('neurokernel.tools.zmq not available')
+        zmq_output = neurokernel.tools.zmq.ZMQOutput(zmq_addr, fmt)
         twiggy.add_emitters(('zmq', level, None, zmq_output))
 
     logger = twiggy.log.name(fmt_name(name))

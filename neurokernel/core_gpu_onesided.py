@@ -16,7 +16,7 @@ import base_gpu_onesided
 #                           ExceptionOnSignal, TryExceptionOnSignal)
 from mixins import LoggerMixin
 import mpi
-from tools.comm import MPIOutput
+from tools.mpi import MPIOutput
 from tools.gpu import bufint, set_by_inds_from_inds
 from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
