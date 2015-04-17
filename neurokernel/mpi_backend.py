@@ -19,8 +19,15 @@ def save_property(pickler, obj):
 
 import twiggy
 from mpi4py import MPI
-MPI.pickle.dumps = dill.dumps
-MPI.pickle.loads = dill.loads
+
+# The MPI._p_pickle attribute in the stable release of mpi4py 1.3.1
+# was renamed to pickle in subsequent dev revisions:
+try:
+    MPI.pickle.dumps = dill.dumps
+    MPI.pickle.loads = dill.loads
+except AttributeError:
+    MPI._p_pickle.dumps = dill.dumps
+    MPI._p_pickle.loads = dill.loads
 
 # This import must match the corresponding import in neurokernel.tools.logging
 # so that the isinstance() check below for MPIOutput instances in transmitted
