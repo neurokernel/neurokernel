@@ -101,7 +101,12 @@ class Worker(Process):
 
         # Start listening for control messages from parent process:
         r_ctrl = []
-        r_ctrl.append(self.intercomm.irecv(source=0, tag=self._ctrl_tag))
+        try:
+            d = self.intercomm.irecv(source=0, tag=self._ctrl_tag)
+        except TypeError:
+            # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
+            d = self.intercomm.irecv(dest=0, tag=self._ctrl_tag)
+        r_ctrl.append(d)
 
         running = False
         req = MPI.Request()
@@ -145,7 +150,12 @@ class Worker(Process):
 
                 # Get next message:
                 r_ctrl = []
-                r_ctrl.append(self.intercomm.irecv(source=0, tag=self._ctrl_tag))
+                try:
+                    d = self.intercomm.irecv(source=0, tag=self._ctrl_tag)
+                except TypeError:
+                    # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
+                    d = self.intercomm.irecv(dest=0, tag=self._ctrl_tag)
+                r_ctrl.append(d)
 
             # Execute work method; the work method may send data back to the master
             # as a serialized control message containing two elements, e.g.,
@@ -231,8 +241,14 @@ class WorkerManager(ProcessManager):
 
         # Start listening for control messages:
         r_ctrl = []
-        r_ctrl.append(self.intercomm.irecv(source=MPI.ANY_SOURCE,
-                                           tag=self._ctrl_tag))
+        try:
+            d = self.intercomm.irecv(source=MPI.ANY_SOURCE,
+                                     tag=self._ctrl_tag)
+        except TypeError:
+            # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
+            d = self.intercomm.irecv(dest=MPI.ANY_SOURCE,
+                                     tag=self._ctrl_tag)
+        r_ctrl.append(d)
         workers = range(len(self))
         req = MPI.Request()
         while True:
@@ -251,8 +267,14 @@ class WorkerManager(ProcessManager):
 
                 # Get new control messages:
                 r_ctrl = []
-                r_ctrl.append(self.intercomm.irecv(source=MPI.ANY_SOURCE,
-                                                   tag=self._ctrl_tag))
+                try:
+                    d = self.intercomm.irecv(source=MPI.ANY_SOURCE,
+                                             tag=self._ctrl_tag)
+                except TypeError:
+                    # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
+                    d = self.intercomm.irecv(dest=MPI.ANY_SOURCE,
+                                             tag=self._ctrl_tag)
+                r_ctrl.append(d)
 
             if not workers:
                 self.log_info('finished running manager')
