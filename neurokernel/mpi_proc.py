@@ -262,6 +262,11 @@ class ProcessManager(LoggerMixin):
             # them and then start running the targets on the appropriate nodes.
             for i in self._targets.keys():
                 target_globals = all_global_vars(self._targets[i])
+
+                # Serializing atexit with dill appears to fail in virtualenvs
+                # sometimes if atexit._exithandlers contains an unserializable function:
+                if 'atexit' in target_globals:
+                    del target_globals['atexit']
                 data = (self._targets[i], target_globals, self._kwargs[i])
                 self._intercomm.send(data, i)
 
