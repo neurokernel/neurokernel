@@ -37,8 +37,10 @@ class Mock(object):
     def __getitem__(self, v):
         return Mock()
 
-MOCK_MODULES = ['bidict', 'chash', 'lxml', 'matplotlib', 'matplotlib.pyplot',
-                'mpi4py', 'mpi4py.MPI',
+#import ipdb
+#ipdb.set_trace()
+MOCK_MODULES = ['bidict', 'chash', 'dill', 'lxml', 'matplotlib', 'matplotlib.pyplot',
+                'mpi4py', 'mpi4py.MPI', 'mpi4py.MPI._p_pickle',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
                 'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
@@ -94,7 +96,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Neurokernel'
-copyright = u'2013-2014, Lev Givon'
+copyright = u'2013-2015, Lev Givon'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
