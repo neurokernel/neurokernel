@@ -38,6 +38,7 @@ class Mock(object):
         return Mock()
 
 MOCK_MODULES = ['bidict', 'chash', 'lxml', 'matplotlib', 'matplotlib.pyplot',
+                'mpi4py',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
                 'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
