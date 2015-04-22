@@ -10,11 +10,28 @@ Path-Like Port Identifier Handling
    :toctree: generated/
    :nosignatures:
 
-   BasePortMapper
-   PortMapper
    Selector
    SelectorMethods
    SelectorParser
+
+GPU Port Mappers
+----------------
+.. currentmodule:: neurokernel.pm_gpu
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    GPUPortMapper
+
+Python Port Mappers
+-------------------
+.. currentmodule:: neurokernel.pm
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    BasePortMapper
+    PortMapper
 
 XML Tools
 ---------
@@ -43,9 +60,30 @@ Context Managers
    OnKeyboardInterrupt
    TryExceptionOnSignal
 
-Communication Tools
--------------------
-.. currentmodule:: neurokernel.tools.comm
+GPU Tools
+---------
+.. currentmodule:: neurokernel.tools.gpu
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   bufint
+   set_by_inds
+   set_by_inds_from_inds
+   set_realloc
+   
+MPI Tools
+---------
+.. currentmodule:: neurokernel.tools.mpi
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   MPIOutput
+
+ZeroMQ Tools
+------------
+.. currentmodule:: neurokernel.tools.zmq
 .. autosummary::
    :toctree: generated/
    :nosignatures:
@@ -74,6 +112,17 @@ Visualization Tools
    imdisp
    show_pydot
    show_pygraphviz
+
+Logging Tools
+-------------
+.. currentmodule:: neurokernel.tools.logging
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   log_exception
+   set_excepthook
+   setup_logger
 
 Other
 -----
