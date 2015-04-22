@@ -215,7 +215,7 @@ class LPU(Module):
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
-        self.LPU_id = id
+        self.LPU_id = LPU_id
         self.dt = dt
         self.debug = debug
         self.device = device
