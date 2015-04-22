@@ -37,6 +37,9 @@ class Mock(object):
     def __getitem__(self, v):
         return Mock()
 
+    def __add__(self, m):
+        return Mock()
+
 MOCK_MODULES = ['bidict', 'chash', 'lxml', 'matplotlib', 'matplotlib.pyplot',
                 'mpi4py',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
