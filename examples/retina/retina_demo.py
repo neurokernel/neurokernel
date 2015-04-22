@@ -63,7 +63,7 @@ print('Initializing LPU')
 lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
               input_file=INPUT_FILE,
               output_file=OUTPUT_FILE, port_ctrl=port_ctrl,
-              port_data=port_data, device=args.ret_dev, id='retina',
+              port_data=port_data, device=0, id='retina',
               debug=False)
 
 man.add_mod(lpu_ret)
