@@ -4,10 +4,6 @@
 Backend program invoked by MPI spawn.
 """
 
-import inspect
-import os.path
-import sys
-
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
 import dill
