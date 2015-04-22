@@ -205,13 +205,17 @@ class LPU(Module):
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG,
-                 spike_tag=SPIKE_TAG,
-                 LPU_id=None, debug=False, columns = ['io', 'type', 'interface'],
+                 spike_tag=SPIKE_TAG, rank_to_id=None, routing_table=None,
+                 id=None, debug=False, columns=['io', 'type', 'interface'],
                  cuda_verbose=False, time_sync=False):
+
+        LoggerMixin.__init__(self, 'mod {}'.format(id))
+        self.log_info('Test')
+
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
-        self.LPU_id = LPU_id
+        self.LPU_id = id
         self.dt = dt
         self.debug = debug
         self.device = device
@@ -219,8 +223,6 @@ class LPU(Module):
             self.compile_options = ['--ptxas-options=-v']
         else:
             self.compile_options = []
-
-        LoggerMixin.__init__(self, 'mod %s' % self.LPU_id)
 
         # handle file I/O
         self.output_file = output_file
@@ -444,10 +446,11 @@ class LPU(Module):
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
         super(LPU, self).__init__(sel=sel, sel_in=sel_in, sel_out=sel_out,
-                                  sel_gpot=sel_gpot, sel_spk=sel_spk,
+                                  sel_gpot=sel_gpot, sel_spike=sel_spk,
                                   data_gpot=data_gpot, data_spike=data_spike,
                                   columns=columns, ctrl_tag=ctrl_tag, gpot_tag=gpot_tag,
                                   spike_tag=spike_tag, id=self.LPU_id,
+                                  rank_to_id=rank_to_id, routing_table=routing_table,
                                   device=device, debug=debug, time_sync=time_sync)
 
         self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
