@@ -17,7 +17,6 @@ from neurokernel.core_gpu import CTRL_TAG, GPOT_TAG, SPIKE_TAG, Manager, Module
 from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
 from neurokernel.tools.logging import setup_logger
-from neurokernel.pm_gpu import GPUPortMapper
 
 class MyModule(Module):
     """
