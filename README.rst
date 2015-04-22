@@ -60,6 +60,11 @@ running 64-bit
 Linux. If you continue to encounter installation problems, see the `PyCUDA Wiki 
 <http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
 
+You need to have `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled 
+with CUDA support installed. See `this page 
+<https://www.open-mpi.org/faq/?category=building#easy-build>`_ for installation 
+information.
+
 You will also need to have `ffmpeg <http://www.fmpeg.org>`_ or `libav 
 <http://libav.org>`_ installed to generate some of the demo visualizations.
 
