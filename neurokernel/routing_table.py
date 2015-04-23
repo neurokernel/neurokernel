@@ -145,14 +145,22 @@ class RoutingTable(object):
         Source identifiers connected to the specified destination identifier.
         """
 
-        return self.data.predecessors(dest_id)
+        # Return empty list if the specified id isn't in the routing table:
+        try:
+            return self.data.predecessors(dest_id)
+        except nx.NetworkXError:
+            return []
 
     def dest_ids(self, src_id):
         """
         Destination identifiers connected to the specified source identifier.
         """
 
-        return self.data.successors(src_id)
+        # Return empty list if the specified id isn't in the routing table:
+        try:
+            return self.data.successors(src_id)
+        except nx.NetworkXError:
+            return []
 
     def to_df(self):
         """

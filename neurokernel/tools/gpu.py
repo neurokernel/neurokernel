@@ -9,8 +9,13 @@ import pycuda.gpuarray as gpuarray
 from pycuda.tools import dtype_to_ctype
 
 # List of available numerical types provided by numpy: 
-num_types = [np.typeDict[t] for t in \
-             np.typecodes['AllInteger']+np.typecodes['AllFloat']]
+# XXX This try/except is an ugly hack to prevent the doc build on
+# ReadTheDocs from failing:
+try:
+    num_types = [np.typeDict[t] for t in \
+                 np.typecodes['AllInteger']+np.typecodes['AllFloat']]
+except TypeError:
+    num_types = []
 
 # Numbers of bytes occupied by each numerical type:
 num_nbytes = dict((np.dtype(t), t(1).nbytes) for t in num_types)

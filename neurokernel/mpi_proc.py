@@ -238,10 +238,6 @@ class ProcessManager(LoggerMixin):
         """
 
         if self._is_parent:
-            # Find the file name of the module in which the Process class
-            # is instantiated:
-            file_name = inspect.stack()[1][1]
-
             # Find the path to the mpi_backend.py script (which should be in the
             # same directory as this module:
             parent_dir = os.path.dirname(__file__)
@@ -249,7 +245,7 @@ class ProcessManager(LoggerMixin):
 
             # Spawn processes:
             self._intercomm = MPI.COMM_SELF.Spawn(sys.executable,
-                                            args=[mpi_backend_path, file_name],
+                                            args=[mpi_backend_path],
                                             maxprocs=len(self))
 
             # First, transmit twiggy logging emitters to spawned processes so
