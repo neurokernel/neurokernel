@@ -53,10 +53,12 @@ class test_routingtable(TestCase):
     def test_src_ids(self):
         for i in self.connections_orig:
             assert i[0] in self.t.src_ids(i[1])
+        assert self.t.src_ids('d') == []
 
     def test_dest_ids(self):
         for i in self.connections_orig:
             assert i[1] in self.t.dest_ids(i[0])
+        assert self.t.src_ids('d') == []
 
 if __name__ == '__main__':
     main()
