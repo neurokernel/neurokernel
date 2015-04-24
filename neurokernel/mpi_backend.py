@@ -13,6 +13,11 @@ import dill
 def save_property(pickler, obj):
     pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel), obj=obj)
 
+# Import atexit explicitly just in case a target class uses it because we can't
+# serialize it properly in certain circumstances with dill 0.2.2; see
+# https://github.com/uqfoundation/dill/issues/91
+import atexit
+
 import twiggy
 from mpi4py import MPI
 
