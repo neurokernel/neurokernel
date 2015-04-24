@@ -92,9 +92,11 @@ class Module(BaseModule):
             self.id = uid()
         else:
 
-            # Save routing table; if a unique ID was specified, it must be a node in
-            # the routing table:
-            if routing_table is not None and not routing_table.has_node(id):
+            # If a unique ID was specified and the routing table is not empty
+            # (i.e., there are connections between multiple modules), the id
+            # must be a node in the routing table:
+            if routing_table is not None and len(routing_table.ids) and \
+                    not routing_table.has_node(id):
                 raise ValueError('routing table must contain specified module ID')
             self.id = id
 
