@@ -613,15 +613,11 @@ class LPU(Module):
         self.block_extract = (256, 1, 1)
         if len(self.out_ports_ids_gpot) > 0:
             self.out_ports_ids_gpot_g = garray.to_gpu(self.out_ports_ids_gpot)
-            #self.out_port_data_gpot = garray.zeros(len(self.out_ports_ids_gpot), 
-            #                                       np.double)
             self._extract_gpot = self._extract_projection_gpot_func()
 
         if len(self.out_ports_ids_spk) > 0:
             self.out_ports_ids_spk_g = garray.to_gpu(
                 (self.out_ports_ids_spk - self.spike_shift).astype(np.int32))
-            #self.out_port_data_spk = garray.zeros(len(self.out_ports_ids_spk), 
-            #                                      np.int32)
             self._extract_spike = self._extract_projection_spike_func()
 
     def _read_LPU_input(self):
@@ -645,14 +641,14 @@ class LPU(Module):
             self._extract_gpot.prepared_async_call(
                 self.grid_extract_gpot,
                 self.block_extract, st, self.V.gpudata,
-                self.pm['gpot'].data,
+                self.pm['gpot'].data.gpudata,
                 self.out_ports_ids_gpot_g.gpudata,
                 self.num_public_gpot)
         if len(self.out_ports_ids_spk) > 0:
             self._extract_spike.prepared_async_call(
                 self.grid_extract_spike,
                 self.block_extract, st, self.spike_state.gpudata,
-                self.pm['spike'].data,
+                self.pm['spike'].data.gpudata,
                 self.out_ports_ids_spk_g.gpudata,
                 len(self.out_ports_ids_spk))
 
