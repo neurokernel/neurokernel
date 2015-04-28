@@ -95,9 +95,12 @@ class BaseModule(mpi.Worker):
         self.device = device
 
         # Require several necessary attribute columns:
-        assert 'interface' in columns
-        assert 'io' in columns
-        assert 'type' in columns
+        if 'interface' not in columns:
+            raise ValueError('interface column required')
+        if 'io' not in columns:
+            raise ValueError('io column required')
+        if 'type' not in columns:
+            raise ValueError('type column required')
 
         # Initialize GPU here so as to be able to initialize a port mapper
         # containing GPU memory:
@@ -118,9 +121,12 @@ class BaseModule(mpi.Worker):
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        assert SelectorMethods.is_in(sel_in, sel)
-        assert SelectorMethods.is_in(sel_out, sel)
-        assert SelectorMethods.are_disjoint(sel_in, sel_out)
+        if not SelectorMethods.is_in(sel_in, sel):
+            raise ValueError('input port selector not in selector of all ports')
+        if not SelectorMethods.is_in(sel_out, sel):
+            raise ValueError('output port selector not in selector of all ports')
+        if not SelectorMethods.are_disjoint(sel_in, sel_out):
+            raise ValueError('input and output port selectors not disjoint')
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -157,7 +163,8 @@ class BaseModule(mpi.Worker):
         self.out_ports = self.interface.out_ports().to_tuples()
 
         # Set up mapper between port identifiers and their associated data:
-        assert len(data) == len(self.interface)
+        if len(data) != len(self.interface):
+            raise ValueError('length of specified data array does not match interface length')
         self.data = gpuarray.to_gpu(data)
         self.pm = GPUPortMapper(sel, self.data, make_copy=False)
 

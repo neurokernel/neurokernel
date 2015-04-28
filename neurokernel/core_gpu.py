@@ -49,9 +49,12 @@ class Module(BaseModule):
         self._spike_tag = spike_tag
 
         # Require several necessary attribute columns:
-        assert 'interface' in columns
-        assert 'io' in columns
-        assert 'type' in columns
+        if 'interface' not in columns:
+            raise ValueError('interface column required')
+        if 'io' not in columns:
+            raise ValueError('io column required')
+        if 'type' not in columns:
+            raise ValueError('type column required')
 
         # Initialize GPU here so as to be able to initialize a port mapper
         # containing GPU memory:
@@ -72,16 +75,22 @@ class Module(BaseModule):
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        assert SelectorMethods.is_in(sel_in, sel)
-        assert SelectorMethods.is_in(sel_out, sel)
-        assert SelectorMethods.are_disjoint(sel_in, sel_out)
+        if not SelectorMethods.is_in(sel_in, sel):
+            raise ValueError('input port selector not in selector of all ports')
+        if not SelectorMethods.is_in(sel_out, sel):
+            raise ValueError('output port selector not in selector of all ports')
+        if not SelectorMethods.are_disjoint(sel_in, sel_out):
+            raise ValueError('input and output port selectors not disjoint')
 
         # Ensure that the graded potential and spiking port selectors
         # respectively select mutually exclusive subsets of the set of all ports
         # exposed by the module:
-        assert SelectorMethods.is_in(sel_gpot, sel)
-        assert SelectorMethods.is_in(sel_spike, sel)
-        assert SelectorMethods.are_disjoint(sel_gpot, sel_spike)
+        if not SelectorMethods.is_in(sel_in, sel):
+            raise ValueError('input port selector not in selector of all ports')
+        if not SelectorMethods.is_in(sel_out, sel):
+            raise ValueError('output port selector not in selector of all ports')
+        if not SelectorMethods.are_disjoint(sel_in, sel_out):
+            raise ValueError('input and output port selectors not disjoint')
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -129,8 +138,10 @@ class Module(BaseModule):
         self.out_spike_ports = self.interface.out_ports().spike_ports().to_tuples()
 
         # Set up mapper between port identifiers and their associated data:
-        assert len(data_gpot) == len(self.gpot_ports)
-        assert len(data_spike) == len(self.spike_ports)
+        if len(data_gpot) != len(self.gpot_ports):
+            raise ValueError('incompatible gpot port data array length')
+        if len(data_spike) != len(self.spike_ports):
+            raise ValueError('incompatible spike port data array length')
         self.data = {}
         self.data['gpot'] = gpuarray.to_gpu(data_gpot)
         self.data['spike'] = gpuarray.to_gpu(data_spike)
@@ -358,16 +369,19 @@ class Manager(base_gpu.Manager):
         super(Manager, self).__init__(required_args, ctrl_tag)
  
     def add(self, target, id, *args, **kwargs):
-        assert issubclass(target, Module)
+        if not issubclass(target, Module):
+            raise ValueError('target is not a Module subclass')
         super(Manager, self).add(target, id, *args, **kwargs)
 
     def connect(self, id_0, id_1, pat, int_0=0, int_1=1, compat_check=True):
-        assert isinstance(pat, Pattern)
-
-        assert id_0 in self.rank_to_id.values()
-        assert id_1 in self.rank_to_id.values()
-        assert int_0 in pat.interface_ids and int_1 in pat.interface_ids
-
+        if not isinstance(pat, Pattern):
+            raise ValueError('pat is not a Pattern instance')
+        if id_0 not in self.rank_to_id.values():
+            raise ValueError('unrecognized module id %s' % id_0)
+        if id_1 not in self.rank_to_id.values():
+            raise ValueError('unrecognized module id %s' % id_1)
+        if not (int_0 in pat.interface_ids and int_1 in pat.interface_ids):
+            raise ValueError('unrecognized pattern interface identifiers')
         self.log_info('connecting modules {0} and {1}'
                       .format(id_0, id_1))
 
@@ -395,8 +409,12 @@ class Manager(base_gpu.Manager):
             mod_int_1[self._kwargs[rank_1]['sel_gpot'], 'type'] = 'gpot'
             mod_int_1[self._kwargs[rank_1]['sel_spike'], 'type'] = 'spike'
 
-            assert mod_int_0.is_compatible(0, pat.interface, int_0, True)
-            assert mod_int_1.is_compatible(0, pat.interface, int_1, True)
+            if not mod_int_0.is_compatible(0, pat.interface, int_0, True):
+                raise ValueError('module %s interface incompatible '
+                                 'with pattern interface %s' % (id_0, int_0))
+            if not mod_int_1.is_compatible(0, pat.interface, int_1, True):
+                raise ValueError('module %s interface incompatible '
+                                 'with pattern interface %s' % (id_1, int_1))
 
         # XXX Need to check for fan-in XXX
 
