@@ -82,7 +82,6 @@ if __name__ == "__main__":
             'psutil >= 2.0',
             'pycuda >= 2014.1',
             'scipy >= 0.11.0',
-            'shortuuid >= 0.4.2',
             'shutilwhich >= 1.0.1',
             'tables >= 2.4.0',
             'twiggy >= 0.4.7',
