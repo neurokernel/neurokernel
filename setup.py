@@ -36,6 +36,10 @@ CLASSIFIERS = [
     'Topic :: Scientific/Engineering',
     'Topic :: Software Development']
 NAMESPACE_PACKAGES = ['neurokernel']
+
+# Explicitly switch to parent directory of setup.py in case it
+# is run from elsewhere:
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
 PACKAGES =           find_packages()
 
 if __name__ == "__main__":
