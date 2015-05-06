@@ -560,7 +560,9 @@ class Manager(mpi.WorkerManager):
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
-        #if not self.validate_args(target):
+        # XXX: keep this commented out for the time being because it interferes
+        # with instantiation of child classes (such as those in LPU.py): 
+        # if not self.validate_args(target):
         #    raise ValueError('class constructor missing required args')
 
         # Need to associate an ID and the routing table with each module class
