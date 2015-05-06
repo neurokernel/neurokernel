@@ -10,6 +10,8 @@ import pycuda.gpuarray as garray
 from pycuda.tools import dtype_to_ctype
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
+import pycuda.elementwise as elementwise
+
 
 import numpy as np
 import networkx as nx
@@ -23,8 +25,7 @@ nx.readwrite.gexf.GEXF.convert_bool['true'] = True
 nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
 from neurokernel.mixins import LoggerMixin
-from neurokernel.core import Module
-import neurokernel.base as base
+from neurokernel.core_gpu import Module, CTRL_TAG, GPOT_TAG, SPIKE_TAG
 from neurokernel.tools.zmq import get_random_port
 
 from types import *
@@ -43,6 +44,7 @@ PORT_IN_SPK = 'port_in_spk'
 class LPU(Module):
     """
     Local Processing Unit (LPU).
+    TODO (this documentation refers to a previous version)
 
     Parameters
     ----------
@@ -205,10 +207,14 @@ class LPU(Module):
         return n_dict, s_dict
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
-                 device=0, port_ctrl=base.PORT_CTRL, port_data=base.PORT_DATA,
-                 port_time=base.PORT_TIME,
-                 id=None, debug=False, columns = ['io', 'type', 'interface'],
+                 device=0, ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG,
+                 spike_tag=SPIKE_TAG, rank_to_id=None, routing_table=None,
+                 id=None, debug=False, columns=['io', 'type', 'interface'],
                  cuda_verbose=False, time_sync=False):
+
+        LoggerMixin.__init__(self, 'mod {}'.format(id))
+        self.log_info('Test')
+
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
@@ -220,8 +226,6 @@ class LPU(Module):
             self.compile_options = ['--ptxas-options=-v']
         else:
             self.compile_options = []
-
-        LoggerMixin.__init__(self, 'mod %s' % self.LPU_id)
 
         # handle file I/O
         self.output_file = output_file
@@ -326,7 +330,7 @@ class LPU(Module):
         in_ports_ids_spk = self.order[in_ports_ids_spk]
         self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
         self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
-        
+
         #TODO: comment
         self.s_dict = s_dict
         if s_dict:
@@ -337,7 +341,7 @@ class LPU(Module):
                              for neu_id in s['pre'] ]
                 s['post'] = [ self.order[int(neu_id)] 
                               for neu_id in s['post'] ]
-                
+
         gpot_delay_steps = 0
         spike_delay_steps = 0
 
@@ -357,7 +361,7 @@ class LPU(Module):
             order = np.argsort(s['post']).astype(np.int32)
             for k, v in s.items():
                 s[k] = np.asarray(v)[order]
-            
+
             if s['conductance'][0]:
                 cond_post.extend(s['post'])
                 reverse.extend(s['reverse'])
@@ -444,15 +448,22 @@ class LPU(Module):
                              np.double)
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
                               np.bool)
-        super(LPU, self).__init__(sel, sel_in, sel_out,
-                                  sel_gpot, sel_spk, data_gpot, data_spike,
-                                  columns, port_data, port_ctrl, port_time,
-                                  self.LPU_id, device, debug, time_sync)
+        super(LPU, self).__init__(sel=sel, sel_in=sel_in, sel_out=sel_out,
+                                  sel_gpot=sel_gpot, sel_spike=sel_spk,
+                                  data_gpot=data_gpot, data_spike=data_spike,
+                                  columns=columns, ctrl_tag=ctrl_tag, gpot_tag=gpot_tag,
+                                  spike_tag=spike_tag, id=self.LPU_id,
+                                  rank_to_id=rank_to_id, routing_table=routing_table,
+                                  device=device, debug=debug, time_sync=time_sync)
 
-        self.sel_in_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_in_gpot)
-        self.sel_out_gpot_ids = self.pm['gpot'].ports_to_inds(self.sel_out_gpot)
-        self.sel_in_spk_ids = self.pm['spike'].ports_to_inds(self.sel_in_spk)
-        self.sel_out_spk_ids = self.pm['spike'].ports_to_inds(self.sel_out_spk)
+        self.sel_in_gpot_ids = np.array(self.pm['gpot'].ports_to_inds(self.sel_in_gpot),
+                                        dtype=np.int32)
+        self.sel_out_gpot_ids = np.array(self.pm['gpot'].ports_to_inds(self.sel_out_gpot),
+                                        dtype=np.int32)
+        self.sel_in_spk_ids = np.array(self.pm['spike'].ports_to_inds(self.sel_in_spk),
+                                        dtype=np.int32)
+        self.sel_out_spk_ids = np.array(self.pm['spike'].ports_to_inds(self.sel_out_spk),
+                                        dtype=np.int32)
 
     def pre_run(self):
         super(LPU, self).pre_run()
@@ -491,12 +502,12 @@ class LPU(Module):
             self._read_external_input()
 
         if not self.first_step:
-            for neuron in self.neurons:
+            for i,neuron in enumerate(self.neurons):
                 neuron.update_I(self.synapse_state.gpudata)
                 neuron.eval()
-                
+
             self._update_buffer()
-        
+
             for synapse in self.synapses:
                 synapse.update_state(self.buffer)
 
@@ -510,7 +521,7 @@ class LPU(Module):
                     .reshape(1, self.gpot_delay_steps, -1))
             self.synapse_state_file.root.array.append(
                 self.synapse_state.get().reshape(1, -1))
-            
+
         self._extract_output()
 
         # Save output data to disk:
@@ -592,11 +603,11 @@ class LPU(Module):
         """
         Setup GPU arrays.
         """
-        
+
         self.synapse_state = garray.zeros(
             int(self.total_synapses) + len(self.input_neuron_list), 
             np.float64)
-        
+
         if self.my_num_gpot_neurons > 0:
             self.V = garray.zeros(int(self.my_num_gpot_neurons), np.float64)
         else:
@@ -606,65 +617,74 @@ class LPU(Module):
             self.spike_state = garray.zeros(int(self.my_num_spike_neurons), 
                                             np.int32)
 
+        self.block_extract = (256, 1, 1)
         if len(self.out_ports_ids_gpot) > 0:
             self.out_ports_ids_gpot_g = garray.to_gpu(self.out_ports_ids_gpot)
-            self.out_port_data_gpot = garray.zeros(len(self.out_ports_ids_gpot), 
-                                                   np.double)
+            self.sel_out_gpot_ids_g = garray.to_gpu(self.sel_out_gpot_ids)
+
             self._extract_gpot = self._extract_projection_gpot_func()
 
         if len(self.out_ports_ids_spk) > 0:
             self.out_ports_ids_spk_g = garray.to_gpu(
                 (self.out_ports_ids_spk - self.spike_shift).astype(np.int32))
-            self.out_port_data_spk = garray.zeros(len(self.out_ports_ids_spk), 
-                                                  np.int32)
+            self.sel_out_spk_ids_g = garray.to_gpu(self.sel_out_spk_ids)
+
             self._extract_spike = self._extract_projection_spike_func()
+
+        if self.ports_in_gpot_mem_ind is not None:
+            inds = self.sel_in_gpot_ids + self.V.dtype.itemsize* \
+                self.idx_start_gpot[self.ports_in_gpot_mem_ind]
+            self.inds_gpot = garray.to_gpu(inds)
+
+        if self.ports_in_spk_mem_ind is not None:
+            inds = self.sel_in_gpot_ids + \
+                self.spike_state.dtype.itemsize* \
+                self.idx_start_spike[self.ports_in_spk_mem_ind]
+            self.inds_spike = garray.to_gpu(inds)
 
     def _read_LPU_input(self):
         """
         Put inputs from other LPUs to buffer.
-
         """
+
         if self.ports_in_gpot_mem_ind is not None:
-            cuda.memcpy_htod(
-                int(int(self.V.gpudata) +
-                self.V.dtype.itemsize*
-                self.idx_start_gpot[self.ports_in_gpot_mem_ind]),
-                self.pm['gpot'].data[self.sel_in_gpot_ids])
+            self.set_inds(self.pm['gpot'].data, self.V, self.inds_gpot)
         if self.ports_in_spk_mem_ind is not None:
-            cuda.memcpy_htod(
-                int(int(self.spike_state.gpudata) +
-                self.spike_state.dtype.itemsize*
-                self.idx_start_spike[self.ports_in_spk_mem_ind]),
-                self.pm['spike'].data[self.sel_in_spk_ids])
+            self.set_inds(self.pm['spike'].data, self.spike_state, self.inds_spike)
+
+    def set_inds(self, src, dest, inds):
+        try:
+            func = self.set_inds.cache[inds.dtype]
+        except KeyError:
+            inds_ctype = dtype_to_ctype(inds.dtype)
+            data_ctype = dtype_to_ctype(src.dtype)
+            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src"\
+                .format(data_ctype=data_ctype,
+                        inds_ctype=inds_ctype)
+            func = elementwise.ElementwiseKernel(v, "dest[i] = src[inds[i]]")
+            self.set_inds.cache[inds.dtype] = func
+        func(dest, inds, src, range=slice(0, len(inds), 1) )
+
+    set_inds.cache = {}
 
     def _extract_output(self, st=None):
-        """
-        This function should be changed so that if the output attribute is True,
-        the following kernel calls are not made as all the GPU data will have to be
-        transferred to the host anyways.
-        """
         if len(self.out_ports_ids_gpot) > 0:
             self._extract_gpot.prepared_async_call(
                 self.grid_extract_gpot,
                 self.block_extract, st, self.V.gpudata,
-                self.out_port_data_gpot.gpudata,
+                self.pm['gpot'].data.gpudata,
+                self.sel_out_gpot_ids_g.gpudata,
                 self.out_ports_ids_gpot_g.gpudata,
                 self.num_public_gpot)
+
         if len(self.out_ports_ids_spk) > 0:
             self._extract_spike.prepared_async_call(
                 self.grid_extract_spike,
                 self.block_extract, st, self.spike_state.gpudata,
-                self.out_port_data_spk.gpudata,
+                self.pm['spike'].data.gpudata,
+                self.sel_out_spk_ids_g.gpudata,
                 self.out_ports_ids_spk_g.gpudata,
                 len(self.out_ports_ids_spk))
-
-        # Save the states of the graded potential neurons and the indices of the
-        # spiking neurons that have emitted a spike:
-        self.log_info('Extracting out port data')
-        if len(self.out_ports_ids_gpot) > 0:
-            self.pm['gpot'].data[self.sel_out_gpot_ids] = (self.out_port_data_gpot.get())
-        if len(self.out_ports_ids_spk) > 0:
-            self.pm['spike'].data[self.sel_out_spk_ids] = (self.out_port_data_spk.get())
 
     def _write_output(self):
         """
@@ -692,7 +712,7 @@ class LPU(Module):
             self.frame_count += 1
         else:
             self.log_info('Input end of file reached. '
-                             'Subsequent behaviour is undefined.')
+                          'Subsequent behaviour is undefined.')
         # if all buffer frames were read, read from file
         if self.frame_count >= self._one_time_import and not self.input_eof:
             input_ld = self.input_h5file.root.array.shape[0]
@@ -734,63 +754,44 @@ class LPU(Module):
 
     #TODO
     def _extract_projection_gpot_func(self):
-        template = """
-        __global__ void extract_projection(%(type)s* all_V, 
-                                           %(type)s* projection_V, 
-                                           int* projection_list, int N)
-        {
-              int tid = threadIdx.x + blockIdx.x * blockDim.x;
-              int total_threads = blockDim.x * gridDim.x;
-
-              int ind;
-              for(int i = tid; i < N; i += total_threads)
-              {
-                   ind = projection_list[i];
-                   projection_V[i] = all_V[ind];
-              }
-        }
-
-        """
-        mod = SourceModule(template % {"type": dtype_to_ctype(self.V.dtype)},
-                           options=self.compile_options)
-        func = mod.get_function("extract_projection")
-        func.prepare([np.intp, np.intp, np.intp, np.int32])
-        self.block_extract = (256, 1, 1)
-        self.grid_extract_gpot = (min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT,\
-                            (self.num_public_gpot-1) / 256 + 1), 1)
-        return func
+        self.grid_extract_gpot = (min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT,
+                                      (self.num_public_gpot-1) / 256 + 1), 
+                                  1)
+        return self._extract_projection_func(self.V)
 
     #TODO
     def _extract_projection_spike_func(self):
+       self.grid_extract_spike = (min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT,
+                                      (self.num_public_spike-1) / 256 + 1),
+                                  1)
+       return self._extract_projection_func(self.spike_state)
+
+    def _extract_projection_func(self, state_var):
         template = """
         __global__ void extract_projection(%(type)s* all_V,
                                            %(type)s* projection_V,
-                                           int* projection_list, int N)
+                                           int* all_index,
+                                           int* projection_index, int N)
         {
               int tid = threadIdx.x + blockIdx.x * blockDim.x;
               int total_threads = blockDim.x * gridDim.x;
 
-              int ind;
+              int a_ind, p_ind;
               for(int i = tid; i < N; i += total_threads)
               {
-                   ind = projection_list[i];
-                   projection_V[i] = all_V[ind];
+                   a_ind = all_index[i];
+                   p_ind = projection_index[i];
+
+                   projection_V[p_ind] = all_V[a_ind];
               }
         }
-
         """
         mod = SourceModule(
-            template % {"type": dtype_to_ctype(self.spike_state.dtype)},
+            template % {"type": dtype_to_ctype(state_var.dtype)},
             options=self.compile_options)
         func = mod.get_function("extract_projection")
-        func.prepare([np.intp, np.intp, np.intp, np.int32])
-        self.block_extract = (256, 1, 1)
-        self.grid_extract_spike = (
-            min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT,
-                (self.num_public_spike-1) / 256 + 1), 
-            1)
+        func.prepare([np.intp, np.intp, np.intp, np.intp, np.int32])
         return func
-
 
     #TODO
     def _instantiate_neuron(self, i, t, n):
@@ -816,7 +817,7 @@ class LPU(Module):
 
         if not neuron.update_I_override:
             baseneuron.BaseNeuron.__init__(
-                neuron, n, 
+                neuron, n,
                 int(int(self.V.gpudata) +
                 self.V.dtype.itemsize*self.idx_start_gpot[i]),
                 self.dt, debug=self.debug, LPU_id=self.id)
@@ -892,7 +893,7 @@ class CircularArray:
                 (gpot_delay_steps, num_gpot_neurons), np.double)
 
             self.gpot_current = 0
-            
+
             for i in range(gpot_delay_steps):
                 cuda.memcpy_dtod(
                     int(self.gpot_buffer.gpudata) +

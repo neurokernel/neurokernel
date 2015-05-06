@@ -22,62 +22,51 @@ import random
 
 import networkx as nx
 
-import neurokernel.core as core
-import neurokernel.base as base
-from neurokernel.tools.zmq import get_random_port
+from neurokernel.tools.logging import setup_logger
+import neurokernel.core_gpu as core
 
 import neurokernel.pattern as pattern
 from neurokernel.LPU.LPU import LPU
 
-dt = 1e-4
-dur = 1.0
-steps = int(dur/dt)
+def main():
+    import neurokernel.mpi_relaunch
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--debug', default=False,
-                    dest='debug', action='store_true',
-                    help='Write connectivity structures and inter-LPU routed data in debug folder')
-parser.add_argument('-l', '--log', default='none', type=str,
-                    help='Log output to screen [file, screen, both, or none; default:none]')
-parser.add_argument('-s', '--steps', default=steps, type=int,
-                    help='Number of steps [default: %s]' % steps)
-parser.add_argument('-d', '--port_data', default=None, type=int,
-                    help='Data port [default: randomly selected]')
-parser.add_argument('-c', '--port_ctrl', default=None, type=int,
-                    help='Control port [default: randomly selected]')
-parser.add_argument('-t', '--port_time', default=None, type=int,
-                    help='Timing port [default: randomly selected]')
-parser.add_argument('-r', '--time_sync', default=False, action='store_true',
-                    help='Time data reception throughput [default: False]')
-parser.add_argument('-g', '--gpu_dev', default=[0, 1], type=int, nargs='+',
-                    help='GPU device numbers [default: 0 1]')
-args = parser.parse_args()
+    dt = 1e-4
+    dur = 1.0
+    steps = int(dur/dt)
 
-file_name = None
-screen = False
-if args.log.lower() in ['file', 'both']:
-    file_name = 'neurokernel.log'
-if args.log.lower() in ['screen', 'both']:
-    screen = True
-logger = base.setup_logger(file_name=file_name, screen=screen)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', default=False,
+                        dest='debug', action='store_true',
+                        help='Write connectivity structures and inter-LPU routed data in debug folder')
+    parser.add_argument('-l', '--log', default='none', type=str,
+                        help='Log output to screen [file, screen, both, or none; default:none]')
+    parser.add_argument('-s', '--steps', default=steps, type=int,
+                        help='Number of steps [default: %s]' % steps)
+    parser.add_argument('-r', '--time_sync', default=False, action='store_true',
+                        help='Time data reception throughput [default: False]')
+    parser.add_argument('-g', '--gpu_dev', default=[0, 1], type=int, nargs='+',
+                        help='GPU device numbers [default: 0 1]')
+    args = parser.parse_args()
+
+    file_name = None
+    screen = False
+    if args.log.lower() in ['file', 'both']:
+        file_name = 'neurokernel.log'
+    if args.log.lower() in ['screen', 'both']:
+        screen = True
+    logger = setup_logger(file_name=file_name, screen=screen)
+
+    random.seed(0)
+    with futures.ProcessPoolExecutor() as executor:
+        for connected in [False, True]:
+            executor.submit(run, connected)
+
 
 def run(connected):
-    if args.port_data is None:
-        port_data = get_random_port()
-    else:
-        port_data = args.port_data
-    if args.port_ctrl is None:
-        port_ctrl = get_random_port()
-    else:
-        port_ctrl = args.port_ctrl
-    if args.port_time is None:
-        port_time = get_random_port()
-    else:
-        port_time = args.port_time
 
     out_name = 'un' if not connected else 'co'
-    man = core.Manager(port_data, port_ctrl, port_time)
-    man.add_brok()
+    man = core.Manager()
 
     lpu_file_0 = './data/generic_lpu_0.gexf.gz'
     lpu_file_1 = './data/generic_lpu_1.gexf.gz'
@@ -85,29 +74,38 @@ def run(connected):
     (n_dict_1, s_dict_1) = LPU.lpu_parser(lpu_file_1)
 
     lpu_0_id = 'lpu_0'
-    lpu_0 = LPU(dt, n_dict_0, s_dict_0,
+    #lpu_0 = LPU(dt, n_dict_0, s_dict_0,
+    #            input_file='./data/generic_lpu_0_input.h5',
+    #            output_file='generic_lpu_0_%s_output.h5' % out_name,
+    #            port_ctrl=port_ctrl, port_data=port_data,
+    #            port_time=port_time,
+    #            device=args.gpu_dev[0], id=lpu_0_id,
+    #            debug=args.debug, time_sync=args.time_sync)
+    #man.add_mod(lpu_0)
+    man.add(LPU, lpu_0_id, dt, n_dict_0, s_dict_0,
                 input_file='./data/generic_lpu_0_input.h5',
                 output_file='generic_lpu_0_%s_output.h5' % out_name,
-                port_ctrl=port_ctrl, port_data=port_data,
-                port_time=port_time,
-                device=args.gpu_dev[0], id=lpu_0_id,
+                device=args.gpu_dev[0],
                 debug=args.debug, time_sync=args.time_sync)
-    man.add_mod(lpu_0)
 
     lpu_1_id = 'lpu_1'
-    lpu_1 = LPU(dt, n_dict_1, s_dict_1,
-                input_file='./data/generic_lpu_1_input.h5',
-                output_file='generic_lpu_1_%s_output.h5' % out_name,
-                port_ctrl=port_ctrl, port_data=port_data,
-                port_time=port_time,
-                device=args.gpu_dev[1], id=lpu_1_id,
-                debug=args.debug, time_sync=args.time_sync)
-    man.add_mod(lpu_1)
+    #lpu_1 = LPU(dt, n_dict_1, s_dict_1,
+    #            input_file='./data/generic_lpu_1_input.h5',
+    #            output_file='generic_lpu_1_%s_output.h5' % out_name,
+    #            port_ctrl=port_ctrl, port_data=port_data,
+    #            port_time=port_time,
+    #            device=args.gpu_dev[1], id=lpu_1_id,
+    #            debug=args.debug, time_sync=args.time_sync)
+    #man.add_mod(lpu_1)
+    man.add(LPU, lpu_1_id, dt, n_dict_1, s_dict_1,
+            input_file='./data/generic_lpu_1_input.h5',
+            output_file='generic_lpu_1_%s_output.h5' % out_name,
+            device=args.gpu_dev[1],
+            debug=args.debug, time_sync=args.time_sync)
 
     # Create random connections between the input and output ports if the LPUs
     # are to be connected:
     if connected:
-
         # Find all output and input port selectors in each LPU:
         out_ports_0 = lpu_0.interface.out_ports().to_selectors()
         out_ports_1 = lpu_1.interface.out_ports().to_selectors()
@@ -148,13 +146,12 @@ def run(connected):
             pat.interface[src, 'type'] = 'gpot'
             pat.interface[dest, 'type'] = 'gpot'
 
-        man.connect(lpu_0, lpu_1, pat, 0, 1)
+        man.connect(lpu_0_id, lpu_1_id, pat, 0, 1, compat_check=True)
 
+    man.spawn()
     man.start(steps=args.steps)
-    man.stop()
+    man.wait()
 
-random.seed(0)
-with futures.ProcessPoolExecutor() as executor:
-    for connected in [False, True]:
-        executor.submit(run, connected)
+if __name__=='__main__':
+    main()
 
