@@ -184,9 +184,6 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
 
-    # Generate selectors for configuring modules and patterns:
-    mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
-
     # Set up modules:
     for i in xrange(n_lpu):
         lpu_i = 'lpu%s' % i
