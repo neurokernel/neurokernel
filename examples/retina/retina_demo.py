@@ -50,12 +50,6 @@ def main():
     print('Parsing lpu data')
     n_dict_ret, s_dict_ret = LPU.lpu_parser(GEXF_FILE)
     print('Initializing LPU')
-    #lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
-    #              input_file=INPUT_FILE,
-    #              output_file=OUTPUT_FILE, port_ctrl=port_ctrl,
-    #              port_data=port_data, device=args.ret_dev, id='retina',
-    #              debug=False)
-
     man.add(LPU, 'retina', dt, n_dict_ret, s_dict_ret,
                   input_file=INPUT_FILE,
                   output_file=OUTPUT_FILE, 
