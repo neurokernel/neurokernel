@@ -1137,7 +1137,7 @@ class Pattern(object):
         sel0, sel1, ...: str
             Selectors defining the sets of ports potentially connected by the 
             pattern. These selectors must be disjoint, i.e., no identifier comprised
-            by one selector may be in any other selector.   
+            by one selector may be in any other selector, and non-empty.
         from_sel, to_sel : str
             Selectors that describe the pattern's initial index. If specified, 
             both selectors must be set. If no selectors are set, the index is
@@ -1163,6 +1163,9 @@ class Pattern(object):
         comb_op = kwargs['comb_op'] if kwargs.has_key('comb_op') else '+'
 
         # Create empty pattern:
+        for s in selectors:
+            if not len(s):
+                raise ValueError('cannot create pattern with empty selector %s' % s)
         p = cls(*selectors, columns=columns)
 
         # Construct index from concatenated selectors if specified:
