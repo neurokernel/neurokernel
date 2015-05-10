@@ -69,7 +69,7 @@ Virtualenv
 See `this page <https://virtualenv.pypa.io/en/latest/installation.html>`_ for
 virtualenv installation information.
 
-Create a new virtualenv environment and install several required dependencies:
+Create a new virtualenv environment and install several required dependencies: ::
 
   cd ~/
   virtualenv NK
@@ -102,10 +102,10 @@ request to the* |nk_developers|_.
 .. _nk_developers: http://github.com/neurokernel/neurokernel/issues
 .. |nk_developers| replace:: *Neurokernel developers*
 
-First, install the `libibverbs1`, `libnuma1`, `libpmi0`, `libslurm26`, and
-`libtorque2` packages; these are required by the conda OpenMPI packages prepared
+First, install the ``libibverbs1``, ``libnuma1``, ``libpmi0``, ``libslurm26``, and
+``libtorque2`` packages; these are required by the conda OpenMPI packages prepared
 for Neurokernel. You also need to ensure that CUDA has been installed in
-`/usr/local/cuda`.
+``/usr/local/cuda``.
 
 Install conda by either installing `Anaconda
 <https://store.continuum.io/cshop/anaconda/>`_
@@ -123,7 +123,7 @@ by running the following command: ::
    conda create -n NK neurokernel_deps
 
 Run the following to install the remaining Python package dependencies listed in 
-`setup.py`: ::
+``setup.py``: ::
 
   source activate NK
   cd ~/neurokernel
