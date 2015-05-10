@@ -45,7 +45,10 @@ The `mpi <https://github.com/neurokernel/neurokernel/tree/mpi>`_ branch of
 Neurokernel also requires `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled 
 with CUDA support. See `this page 
 <https://www.open-mpi.org/faq/?category=building#easy-build>`_ for installation 
-information. *Note that OpenMPI 1.8.5 `cannot run on Windows <https://www.open-mpi.org/software/ompi/v1.6/ms-windows.php>`_.*
+information. *Note that OpenMPI 1.8.5* |openmpi_no_windows|_.
+
+.. _openmpi_no_windows: https://www.open-mpi.org/software/ompi/v1.6/ms-windows.php
+.. |openmpi_no_windows| replace:: *cannot run on Windows*
 
 Some of Neurokernel's demos require either `ffmpeg <http://www.fmpeg.org>`_ or `libav 
 <http://libav.org>`_ installed to generate visualizations.
