@@ -97,8 +97,10 @@ Conda
 ^^^^^
 *Note that conda packages are currently only available for 64-bit Ubuntu Linux
 14.04. If you would like packages for another distribution, please submit a
-request to the `Neurokernel developers
-<http://github.com/neurokernel/neurokernel/issues>`_.*
+request to the* |nk_developers|_.
+
+.. _nk_developers: http://github.com/neurokernel/neurokernel/issues
+.. |nk_developers| replace:: *Neurokernel developers*
 
 First, install the `libibverbs1`, `libnuma1`, `libpmi0`, `libslurm26`, and
 `libtorque2` packages; these are required by the conda OpenMPI packages prepared
