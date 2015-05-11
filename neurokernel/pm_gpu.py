@@ -120,6 +120,7 @@ class GPUPortMapper(PortMapper):
         raise NotImplementedError
 
     def set(self, selector, data):
+#        import ipdb; ipdb.set_trace()
         self.set_by_inds(np.asarray(self.sel.select(self.portmap,
                         selector).dropna().values, dtype=np.int), data)
 
@@ -169,27 +170,73 @@ class GPUPortMapper(PortMapper):
         return result.get()
     get_by_inds.cache = {}
 
-    def set_by_inds(self, inds, data):
+    def set_by_inds_scalar(self, inds, data):
         """
-        Set mapped data by integer indices.
+        Set mapped data with scalar by integer indices.
 
         Parameters
         ----------
-        inds : sequence of int
+        inds : array-like
+            Integer indices of data elements to update.
+        data : scalar
+            Data to assign.
+        """
+
+        if not np.isscalar(data):
+            raise ValueError('data must be scalar')
+        if len(np.shape(inds)) > 1:
+            raise ValueError('index array must be 1D')
+        N = len(inds)
+        if N == 0:
+            return
+
+        if not isinstance(inds, gpuarray.GPUArray):
+            inds = gpuarray.to_gpu(inds)
+        if not issubclass(inds.dtype.type, numbers.Integral):
+            raise ValueError('index array must contain integers')
+
+        # Allocate data array if it doesn't exist:
+        if not self.data:
+            self.data = gpuarray.empty(N, type(data))
+        else:
+            assert self.data.dtype == type(data)
+        try:
+            func = self.set_by_inds_scalar.cache[(inds.dtype, self.data.dtype)]
+        except KeyError:
+            inds_ctype = tools.dtype_to_ctype(inds.dtype)
+            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)        
+            func = elementwise.ElementwiseKernel(v, "dest[inds[i]] = src")
+            self.set_by_inds_scalar.cache[(inds.dtype, self.data.dtype)] = func
+        func(self.data, inds, data, range=slice(0, N, 1))
+    set_by_inds_scalar.cache = {}
+
+    def set_by_inds_array(self, inds, data):
+        """
+        Set mapped data with array by integer indices.
+
+        Parameters
+        ----------
+        inds : array-like
             Integer indices of data elements to update.
         data : numpy.ndarray
             Data to assign.
         """
 
-        assert len(np.shape(inds)) == 1
-        assert issubclass(inds.dtype.type, numbers.Integral)
+        if np.isscalar(data):
+            raise ValueError('data must be array-like')
+        if len(np.shape(inds)) > 1:
+            raise ValueError('index array must be 1D')
         N = len(inds)
         if N == 0:
             return
-        assert N == len(data)
 
         if not isinstance(inds, gpuarray.GPUArray):
             inds = gpuarray.to_gpu(inds)
+        if not issubclass(inds.dtype.type, numbers.Integral):
+            raise ValueError('index array must contain integers')
+        if N != len(data):
+            raise ValueError('data and index arrays must have equal lengths')
+
         if not isinstance(data, gpuarray.GPUArray):
             data = gpuarray.to_gpu(data)
 
@@ -199,11 +246,28 @@ class GPUPortMapper(PortMapper):
         else:
             assert self.data.dtype == data.dtype
         try:
-            func = self.set_by_inds.cache[inds.dtype]
+            func = self.set_by_inds_array.cache[(inds.dtype, self.data.dtype)]
         except KeyError:
             inds_ctype = tools.dtype_to_ctype(inds.dtype)
             v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)        
             func = elementwise.ElementwiseKernel(v, "dest[inds[i]] = src[i]")
-            self.set_by_inds.cache[inds.dtype] = func
+            self.set_by_inds_array.cache[(inds.dtype, self.data.dtype)] = func
         func(self.data, inds, data, range=slice(0, N, 1))
-    set_by_inds.cache = {}
+    set_by_inds_array.cache = {}
+
+    def set_by_inds(self, inds, data):
+        """
+        Set mapped data by integer indices.
+
+        Parameters
+        ----------
+        inds : sequence of int
+            Integer indices of data elements to update.
+        data : numpy.ndarray or scalar
+            Data to assign.
+        """
+
+        if np.isscalar(data):
+            self.set_by_inds_scalar(inds, data)
+        else:
+            self.set_by_inds_array(inds, data)

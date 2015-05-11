@@ -256,16 +256,24 @@ class test_port_mapper(TestCase):
                                  [('foo', 1),
                                   ('foo', 3)])
 
-    def test_set(self):
-        # Mapper with data:
+    def test_set_scalar(self):
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
         pm['/foo/baz[0:5]'] = 1.0
-        np.allclose(np.ones(5), pm['/foo/baz[0:5]'])
-        
-        # Mapper without data:
-        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]')
-        self.assertRaises(Exception, pm.__setitem__, '/foo/bar[0]', 0)
+        assert_array_equal(np.ones(5), pm['/foo/baz[0:5]'])
 
+    def test_set_array(self):
+        # Valid empty:
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]')
+        new_data = np.arange(10).astype(np.double)
+        pm['/foo/bar[0:10]'] = new_data
+        assert_array_equal(new_data, pm.data[0:10])
+
+        # Valid nonempty:
+        pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)
+        new_data = np.arange(10).astype(np.double)
+        pm['/foo/bar[0:10]'] = new_data
+        assert_array_equal(new_data, pm.data[0:10])
+        
     def test_set_discontinuous(self):
         pm = PortMapper('/foo/bar[0:10],/foo/baz[0:10]', self.data)         
         pm['/foo/*[0:2]'] = 1.0
