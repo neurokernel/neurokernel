@@ -331,7 +331,7 @@ class BaseModule(mpi.Worker):
                 self.log_info('_init_gpu exception: ' + e.message)
             else:
                 atexit.register(self.gpu_ctx.pop)
-                self.log_info('GPU initialized')
+                self.log_info('GPU %s initialized' % self.device)
 
     def pre_run(self):
         """
