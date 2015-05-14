@@ -556,7 +556,6 @@ class Manager(mpi.WorkerManager):
         """
 
         assert issubclass(target, BaseModule)
-        argnames = mpi.getargnames(target.__init__)
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
