@@ -78,7 +78,6 @@ def args_to_dict(f, *args, **kwargs):
         Maps argument names to values.
     """
 
-    spec = inspect.getargspec(f)
     d = {}
 
     arg_names = getargnames(f)
