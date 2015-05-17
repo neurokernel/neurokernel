@@ -16,6 +16,7 @@ import re
 import sys
 import time
 
+import cudamps
 from mpi4py import MPI
 import networkx as nx
 import numpy as np
@@ -61,9 +62,6 @@ class MyModule(Module):
         self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = 1.0
         self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = 1
 
-        #MPI.COMM_WORLD.Set_errhandler(MPI.ERRORS_RETURN)
-
-import cudamps
 class MyManager(Manager):
     """
     Manager that can use Multi-Process Service.
@@ -82,8 +80,6 @@ class MyManager(Manager):
             self._mps_man = cudamps.MultiProcessServiceManager()
         else:
             self._mps_man = None
-
-        #MPI.COMM_WORLD.Set_errhandler(MPI.ERRORS_RETURN)
 
     def spawn(self, part_map):
         """
@@ -137,16 +133,15 @@ class MyManager(Manager):
                set([t for t in itertools.chain.from_iterable(part_map.values())]):
                 raise ValueError('partition must contain all target ranks')
 
-            # Invert partition to map target ranks to GPU IDs:
-            rank_to_gpu_map = {rank:gpu for gpu in part_map for rank in part_map[gpu]}
+            # Invert mapping of GPUs to MPI ranks:
+            rank_to_gpu_map = {rank:gpu for gpu in part_map.keys() for rank in part_map[gpu]}
 
             # Set MPS pipe directory for each spawned process based upon the GPU
             # associated with the target:
             info_list = [MPI.Info.Create() for i in xrange(n_targets)]
             if self._mps_man:
-                for t in self._targets.keys():
-                    # mps_dir = self._mps_man.get_mps_dir_by_dev(rank_to_gpu_map[rank])
-                    mps_dir = self._mps_man.get_mps_dir_by_dev(self._kwargs[t]['device'])
+                for rank in sorted(self._targets.keys()):
+                    mps_dir = self._mps_man.get_mps_dir_by_dev(rank_to_gpu_map[rank])
                     info_list[t].Set('env', 'CUDA_MPS_PIPE_DIRECTORY=%s' % mps_dir)
 
             # Spawn processes:
@@ -342,7 +337,7 @@ def partition(mat, n_parts):
         part_map[p] = ind
     return part_map
 
-def emulate(conn_mat, scaling, n_gpus, steps):
+def emulate(conn_mat, scaling, n_gpus, steps, use_mps):
     """
     Benchmark inter-LPU communication throughput.
 
@@ -359,6 +354,8 @@ def emulate(conn_mat, scaling, n_gpus, steps):
         Number of GPUs over which to partition the emulation.
     steps : int
         Number of steps to execute.
+    use_mps : bool
+        Use Multi-Process Service if True.
 
     Returns
     -------
@@ -372,7 +369,7 @@ def emulate(conn_mat, scaling, n_gpus, steps):
     start_all = time.time()
 
     # Set up manager:
-    man = MyManager(False)
+    man = MyManager(use_mps)
 
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(conn_mat, scaling)
@@ -386,9 +383,15 @@ def emulate(conn_mat, scaling, n_gpus, steps):
     for i in ranks:
         lpu_i = 'lpu%s' % i
         sel, sel_in, sel_out, sel_gpot, sel_spike = mod_sels[lpu_i]
+
+        # When MPS is activated, each partition will only see one GPU numbered 0:
+        if man._mps_man:
+            device = 0
+        else:
+            device = rank_to_gpu_map[i]
         man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,
                 None, None, ['interface', 'io', 'type'],
-                CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=rank_to_gpu_map[i],
+                CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=device,
                 time_sync=True)
 
     # Set up connections between module pairs:
@@ -420,8 +423,9 @@ if __name__ == '__main__':
 
     conn_mat_file = 's2.xlsx'
     scaling = 1
-    max_steps = 10
+    max_steps = 100
     n_gpus = 4
+    use_mps = False
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', default=False,
@@ -437,6 +441,8 @@ if __name__ == '__main__':
                         help='Maximum number of steps [default: %s]' % max_steps)
     parser.add_argument('-g', '--gpus', default=n_gpus, type=int,
                         help='Number of GPUs [default: %s]' % n_gpus)
+    parser.add_argument('-p', '--use_mps', action='store_true',
+                        help='Use Multi-Process Service [default: False]')
     args = parser.parse_args()
 
     file_name = None
@@ -452,9 +458,7 @@ if __name__ == '__main__':
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
     
-    #conn_mat = conn_mat[0:20, 0:20]
-    conn_mat = np.array([[0, 2, 2, 2],
-                         [2, 0, 2, 2],
-                         [2, 2, 0, 2],
-                         [2, 2, 2, 0]], int)
-    print emulate(conn_mat, args.scaling, args.gpus, args.max_steps)
+    #conn_mat = conn_mat[0:8, 0:8]
+    N = 8
+    conn_mat = 1000*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
+    print emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
