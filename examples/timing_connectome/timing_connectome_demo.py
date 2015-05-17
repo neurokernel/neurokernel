@@ -1,4 +1,4 @@
-M#!/usr/bin/env python
+#!/usr/bin/env python
 
 """
 Create and run multiple empty LPUs to time data reception throughput.
@@ -11,14 +11,20 @@ Requires connectivity matrix in Document S2 from http://dx.doi.org/10.1016/j.cub
 import argparse
 import itertools
 import numbers
+import os
+import re
+import sys
 import time
 
 from mpi4py import MPI
 import networkx as nx
 import numpy as np
 import pandas as pd
+import pycuda.driver as drv
 import pymetis
+import twiggy
 
+from neurokernel.all_global_vars import all_global_vars
 from neurokernel.core_gpu import CTRL_TAG, GPOT_TAG, SPIKE_TAG, Manager, Module
 from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
@@ -57,6 +63,127 @@ class MyModule(Module):
 
         #MPI.COMM_WORLD.Set_errhandler(MPI.ERRORS_RETURN)
 
+import cudamps
+class MyManager(Manager):
+    """
+    Manager that can use Multi-Process Service.
+
+    Parameters
+    ----------
+    use_mps : bool
+        If True, use Multi-Process Service so that multiple MPI processes
+        can use the same GPUs concurrently.
+    """
+
+    def __init__(self, use_mps=False):
+        super(MyManager, self).__init__()
+
+        if use_mps:
+            self._mps_man = cudamps.MultiProcessServiceManager()
+        else:
+            self._mps_man = None
+
+        #MPI.COMM_WORLD.Set_errhandler(MPI.ERRORS_RETURN)
+
+    def spawn(self, part_map):
+        """
+        Spawn MPI processes for and execute each of the managed targets.
+
+        Parameters
+        ----------
+        part_map : dict
+            Maps GPU ID to list of target MPI ranks.
+        """
+
+        if self._is_parent:
+
+            # The number of GPUs over which the targets are partitioned may not
+            # exceed the actual number of supported devices:
+            n_part_gpus = len(part_map.keys())
+            if self._mps_man:
+                n_avail_gpus = len(self._mps_man.get_supported_devs())
+            else:
+                n_avail_gpus = 0
+                drv.init()
+                for i in xrange(drv.Device.count()):
+                    d = drv.Device(i)
+                    if d.compute_capability() >= (3, 5) and \
+                       re.search('Tesla|Quadro', d.name()):
+                        n_avail_gpus += 1
+
+            if n_part_gpus > n_avail_gpus:
+                raise RuntimeError('partition size (%s) exceeds '
+                                   'number of available GPUs (%s)' % \
+                                   (n_part_gpus, n_avail_gpus))
+                
+            # Start MPS control daemons (this assumes that the available GPUs
+            # are numbered consecutively from 0 onwards - as are the elements of
+            # part_map.keys()):
+            if self._mps_man:
+                for i in part_map.keys():
+                    self.log_info('starting MPS control daemon for GPU %i' % i)
+                    self._mps_man.start(i)
+
+            # Find the path to the mpi_backend.py script (which should be in the
+            # same directory as this module:
+            import neurokernel.mpi
+            parent_dir = os.path.dirname(neurokernel.mpi.__file__)
+            mpi_backend_path = os.path.join(parent_dir, 'mpi_backend.py')
+
+            # Check that the union ranks in the partition correspond exactly to 
+            # those of the targets added to the manager:
+            n_targets = len(self._targets.keys())
+            if set(self._targets.keys()) != \
+               set([t for t in itertools.chain.from_iterable(part_map.values())]):
+                raise ValueError('partition must contain all target ranks')
+
+            # Invert partition to map target ranks to GPU IDs:
+            rank_to_gpu_map = {rank:gpu for gpu in part_map for rank in part_map[gpu]}
+
+            # Set MPS pipe directory for each spawned process based upon the GPU
+            # associated with the target:
+            info_list = [MPI.Info.Create() for i in xrange(n_targets)]
+            if self._mps_man:
+                for t in self._targets.keys():
+                    # mps_dir = self._mps_man.get_mps_dir_by_dev(rank_to_gpu_map[rank])
+                    mps_dir = self._mps_man.get_mps_dir_by_dev(self._kwargs[t]['device'])
+                    info_list[t].Set('env', 'CUDA_MPS_PIPE_DIRECTORY=%s' % mps_dir)
+
+            # Spawn processes:
+            cmd_list = [sys.executable]*n_targets
+            args_list = [mpi_backend_path]*n_targets
+            maxprocs_list = [1]*n_targets
+            self._intercomm = MPI.COMM_SELF.Spawn_multiple(cmd_list,
+                                                           args=args_list,
+                                                           maxprocs=maxprocs_list,
+                                                           info=info_list)
+
+            # First, transmit twiggy logging emitters to spawned processes so
+            # that they can configure their logging facilities:
+            for i in self._targets.keys():
+                self._intercomm.send(twiggy.emitters, i)
+
+            # Transmit class to instantiate, globals required by the class, and
+            # the constructor arguments; the backend will wait to receive
+            # them and then start running the targets on the appropriate nodes.
+            for i in self._targets.keys():
+                target_globals = all_global_vars(self._targets[i])
+
+                # Serializing atexit with dill appears to fail in virtualenvs
+                # sometimes if atexit._exithandlers contains an unserializable function:
+                if 'atexit' in target_globals:
+                    del target_globals['atexit']
+                data = (self._targets[i], target_globals, self._kwargs[i])
+                self._intercomm.send(data, i)
+
+    def __del__(self):
+        # Shut down MPS daemons when the manager is cleaned up:
+        if self._mps_man:
+            pids = self._mps_man.get_mps_ctrl_procs()
+            for pid in pids:
+                self.log_info('stopping MPS control daemon %i' % pid)
+                self._mps_man.stop(pid)
+        
 def gen_sels(conn_mat, scaling=1):
     """
     Generate port selectors for LPUs in benchmark test.
@@ -167,7 +294,7 @@ def gen_sels(conn_mat, scaling=1):
 
     return mod_sels, pat_sels
 
-def partition(mat, parts):
+def partition(mat, n_parts):
     """
     Partition a directed graph described by a weighted connectivity matrix.
     
@@ -175,12 +302,12 @@ def partition(mat, parts):
     ----------
     mat : numpy.ndarray
         Square weighted connectivity matrix for a directed graph.
-    parts : int
+    n_parts : int
         Number of partitions.
 
     Returns
     -------
-    part_nodes : dict of list
+    part_map : dict of list
         Dictionary of partitions. The dict keys are the partition identifiers,
         and the values are the lists of nodes in each partition.
     """
@@ -205,15 +332,15 @@ def partition(mat, parts):
         xadj[i+1] = end_node
 
     # Compute edge-cut partition:
-    cutcount, part_vert = pymetis.part_graph(parts, xadj=xadj,
+    cutcount, part_vert = pymetis.part_graph(n_parts, xadj=xadj,
                                              adjncy=adjncy, eweights=eweights)
 
     # Find notes in each partition:
-    part_nodes = {}
+    part_map = {}
     for i, p in enumerate(set(part_vert)):
         ind = np.where(np.array(part_vert) == p)[0]
-        part_nodes[p] = ind
-    return part_nodes
+        part_map[p] = ind
+    return part_map
 
 def emulate(conn_mat, scaling, n_gpus, steps):
     """
@@ -245,26 +372,26 @@ def emulate(conn_mat, scaling, n_gpus, steps):
     start_all = time.time()
 
     # Set up manager:
-    man = Manager()
+    man = MyManager(False)
 
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(conn_mat, scaling)
 
     # Partition nodes in connectivity matrix:
-    part_nodes = partition(conn_mat, n_gpus)
+    part_map = partition(conn_mat, n_gpus)
 
     # Set up modules such that those in each partition use that partition's GPU:
-    for p in part_nodes:
-        for i in part_nodes[p]:
-            lpu_i = 'lpu%s' % i
-            sel, sel_in, sel_out, sel_gpot, sel_spike = mod_sels[lpu_i]
-            man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,
-                    None, None, ['interface', 'io', 'type'],
-                    CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=p,
-                    time_sync=True)
+    ranks = set([rank for rank in itertools.chain.from_iterable(part_map.values())])
+    rank_to_gpu_map = {rank:gpu for gpu in part_map for rank in part_map[gpu]}
+    for i in ranks:
+        lpu_i = 'lpu%s' % i
+        sel, sel_in, sel_out, sel_gpot, sel_spike = mod_sels[lpu_i]
+        man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,
+                None, None, ['interface', 'io', 'type'],
+                CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=rank_to_gpu_map[i],
+                time_sync=True)
 
     # Set up connections between module pairs:
-    #try:
     for lpu_i, lpu_j in pat_sels.keys():
         sel_from, sel_to, sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i, \
             sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = pat_sels[(lpu_i, lpu_j)]
@@ -279,12 +406,8 @@ def emulate(conn_mat, scaling, n_gpus, steps):
         pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
         pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
         man.connect(lpu_i, lpu_j, pat, 0, 1, compat_check=True)
-    # except:
-    #     import rpdb
-    #     d = rpdb.Rpdb(port=12345)
-    #     d.set_trace()
 
-    man.spawn()
+    man.spawn(part_map)
     start_main = time.time()
     man.start(steps)
     man.wait()
@@ -297,7 +420,7 @@ if __name__ == '__main__':
 
     conn_mat_file = 's2.xlsx'
     scaling = 1
-    max_steps = 100
+    max_steps = 10
     n_gpus = 4
 
     parser = argparse.ArgumentParser()
@@ -329,4 +452,9 @@ if __name__ == '__main__':
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
     
+    #conn_mat = conn_mat[0:20, 0:20]
+    conn_mat = np.array([[0, 2, 2, 2],
+                         [2, 0, 2, 2],
+                         [2, 2, 0, 2],
+                         [2, 2, 2, 0]], int)
     print emulate(conn_mat, args.scaling, args.gpus, args.max_steps)
