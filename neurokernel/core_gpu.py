@@ -104,7 +104,8 @@ class Module(BaseModule):
             # must be a node in the routing table:
             if routing_table is not None and len(routing_table.ids) and \
                     not routing_table.has_node(id):
-                raise ValueError('routing table must contain specified module ID')
+                raise ValueError('routing table must contain specified '
+                                 'module ID: {}'.format(id))
             self.id = id
 
         # Reformat logger name:
