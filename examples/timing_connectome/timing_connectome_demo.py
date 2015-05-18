@@ -9,12 +9,14 @@ Requires connectivity matrix in Document S2 from http://dx.doi.org/10.1016/j.cub
 """
 
 import argparse
+import glob
 import itertools
 import numbers
 import os
 import re
 import sys
 import time
+import warnings
 
 import cudamps
 from mpi4py import MPI
@@ -117,8 +119,9 @@ class MyManager(Manager):
             # part_map.keys()):
             if self._mps_man:
                 for i in part_map.keys():
-                    self.log_info('starting MPS control daemon for GPU %i' % i)
                     self._mps_man.start(i)
+                    self.log_info('starting MPS for GPU %i: %s' % (i, self._mps_man.get_mps_dir_by_dev(i)))
+
 
             # Find the path to the mpi_backend.py script (which should be in the
             # same directory as this module:
@@ -142,7 +145,9 @@ class MyManager(Manager):
             if self._mps_man:
                 for rank in sorted(self._targets.keys()):
                     mps_dir = self._mps_man.get_mps_dir_by_dev(rank_to_gpu_map[rank])
-                    info_list[t].Set('env', 'CUDA_MPS_PIPE_DIRECTORY=%s' % mps_dir)
+                    self.log_info('setting MPS directory for rank %i to %s' % \
+                                  (rank, mps_dir))
+                    info_list[rank].Set('env', 'CUDA_MPS_PIPE_DIRECTORY=%s' % mps_dir)
 
             # Spawn processes:
             cmd_list = [sys.executable]*n_targets
@@ -327,8 +332,10 @@ def partition(mat, n_parts):
         xadj[i+1] = end_node
 
     # Compute edge-cut partition:
-    cutcount, part_vert = pymetis.part_graph(n_parts, xadj=xadj,
-                                             adjncy=adjncy, eweights=eweights)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cutcount, part_vert = pymetis.part_graph(n_parts, xadj=xadj,
+                                                 adjncy=adjncy, eweights=eweights)
 
     # Find notes in each partition:
     part_map = {}
@@ -458,7 +465,7 @@ if __name__ == '__main__':
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
     
-    #conn_mat = conn_mat[0:8, 0:8]
-    N = 8
-    conn_mat = 1000*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
+    conn_mat = conn_mat[0:16, 0:16]
+    # N = 8
+    # conn_mat = 500*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
     print emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
