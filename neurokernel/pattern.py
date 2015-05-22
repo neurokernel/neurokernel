@@ -1149,6 +1149,8 @@ class Pattern(object):
         comp_op : str
             Operator to use to combine selectors into single selector that
             comprises both the source and destination ports in a pattern.
+        validate : bool
+            If True, validate the index of the Pattern's DataFrame.
 
         Returns
         -------
@@ -1161,6 +1163,7 @@ class Pattern(object):
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         comb_op = kwargs['comb_op'] if kwargs.has_key('comb_op') else '+'
+        validate = kwargs['validate'] if kwargs.has_key('validate') else True
 
         # Create empty pattern:
         for s in selectors:
@@ -1183,7 +1186,8 @@ class Pattern(object):
                 raise ValueError('incompatible selectors specified')
         else:
             idx = p.sel.make_index('(%s)%s(%s)' % (from_sel, comb_op, to_sel), names)
-        p.__validate_index__(idx)
+        if validate:
+            p.__validate_index__(idx)
 
         # Replace the pattern's DataFrame:
         p.data = pd.DataFrame(data=data, index=idx, columns=columns)
@@ -1283,6 +1287,8 @@ class Pattern(object):
             Data to load store in class instance.
         columns : sequence of str
             Data column names.
+        validate : bool
+            If True, validate the index of the Pattern's DataFrame.
 
         Returns
         -------
@@ -1294,8 +1300,9 @@ class Pattern(object):
         to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        validate = kwargs['validate'] if kwargs.has_key('validate') else True
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
-                                data=data, columns=columns, comb_op='+')
+                                data=data, columns=columns, comb_op='+', validate=validate)
 
     def gpot_ports(self, i=None, tuples=False):
         return self.interface.gpot_ports(i, tuples)
@@ -1388,6 +1395,8 @@ class Pattern(object):
             initially empty.
         columns : sequence of str
             Data column names.
+        validate : bool
+            If True, validate the index of the Pattern's DataFrame.
 
         Returns
         -------
@@ -1399,8 +1408,9 @@ class Pattern(object):
         to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        validate = kwargs['validate'] if kwargs.has_key('validate') else True
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
-                                data=data, columns=columns, comb_op='.+')
+                                data=data, columns=columns, comb_op='.+', validate=validate)
 
     def __validate_index__(self, idx):
         """
