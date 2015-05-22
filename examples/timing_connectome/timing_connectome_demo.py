@@ -21,7 +21,12 @@ import sys
 import time
 import warnings
 
-import cudamps
+try:
+    import cudamps
+except ImportError:
+    mps_avail = False
+else:
+    mps_avail = True
 from mpi4py import MPI
 import networkx as nx
 import numpy as np
@@ -104,11 +109,15 @@ class MyManager(Manager):
             n_avail_gpus = 0
             drv.init()
             for i in xrange(drv.Device.count()):
-                d = drv.Device(i)
-                if d.compute_capability() >= (3, 5) and \
-                   re.search('Tesla|Quadro', d.name()):
-                    n_avail_gpus += 1
 
+                # MPS requires Tesla/Quadro GPUs with compute capability 3.5 or greater:
+                if mps_avail:
+                    d = drv.Device(i)
+                    if d.compute_capability() >= (3, 5) and \
+                       re.search('Tesla|Quadro', d.name()):
+                        n_avail_gpus += 1
+                else:
+                    n_avail_gpus += 1
             if n_part_gpus > n_avail_gpus:
                 raise RuntimeError('partition size (%s) exceeds '
                                    'number of available GPUs (%s)' % \
@@ -390,7 +399,7 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps):
         sel_from, sel_to, sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i, \
             sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = pat_sels[(lpu_i, lpu_j)]
         pat = Pattern.from_concat(sel_from, sel_to,
-                                  from_sel=sel_from, to_sel=sel_to, data=1)
+                                  from_sel=sel_from, to_sel=sel_to, data=1, validate=False)
         pat.interface[sel_in_i, 'interface', 'io'] = [0, 'in']
         pat.interface[sel_out_i, 'interface', 'io'] = [0, 'out']
         pat.interface[sel_gpot_i, 'interface', 'type'] = [0, 'gpot']
@@ -450,6 +459,6 @@ if __name__ == '__main__':
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
     
     #conn_mat = conn_mat[0:25, 0:25]
-    # N = 16
-    # conn_mat = 200*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
+    #N = 10
+    #conn_mat = 200*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
     print emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
