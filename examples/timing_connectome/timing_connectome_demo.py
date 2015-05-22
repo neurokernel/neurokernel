@@ -5,7 +5,10 @@ Create and run multiple empty LPUs to time data reception throughput.
 
 Notes
 -----
-Requires connectivity matrix in Document S2 from http://dx.doi.org/10.1016/j.cub.2015.03.021
+* Requires connectivity matrix in Document S2 from 
+  http://dx.doi.org/10.1016/j.cub.2015.03.021
+* Requires CUDA 7.0 when using MPS because of multi-GPU support.
+* The maximum allowed number of open file descriptors must be sufficiently high.
 """
 
 import argparse
@@ -98,16 +101,13 @@ class MyManager(Manager):
             # The number of GPUs over which the targets are partitioned may not
             # exceed the actual number of supported devices:
             n_part_gpus = len(part_map.keys())
-            if self._mps_man:
-                n_avail_gpus = len(self._mps_man.get_supported_devs())
-            else:
-                n_avail_gpus = 0
-                drv.init()
-                for i in xrange(drv.Device.count()):
-                    d = drv.Device(i)
-                    if d.compute_capability() >= (3, 5) and \
-                       re.search('Tesla|Quadro', d.name()):
-                        n_avail_gpus += 1
+            n_avail_gpus = 0
+            drv.init()
+            for i in xrange(drv.Device.count()):
+                d = drv.Device(i)
+                if d.compute_capability() >= (3, 5) and \
+                   re.search('Tesla|Quadro', d.name()):
+                    n_avail_gpus += 1
 
             if n_part_gpus > n_avail_gpus:
                 raise RuntimeError('partition size (%s) exceeds '
@@ -118,10 +118,8 @@ class MyManager(Manager):
             # are numbered consecutively from 0 onwards - as are the elements of
             # part_map.keys()):
             if self._mps_man:
-                for i in part_map.keys():
-                    self._mps_man.start(i)
-                    self.log_info('starting MPS for GPU %i: %s' % (i, self._mps_man.get_mps_dir_by_dev(i)))
-
+                self._mps_man.start()
+                self.log_info('starting MPS')
 
             # Find the path to the mpi_backend.py script (which should be in the
             # same directory as this module:
@@ -139,24 +137,17 @@ class MyManager(Manager):
             # Invert mapping of GPUs to MPI ranks:
             rank_to_gpu_map = {rank:gpu for gpu in part_map.keys() for rank in part_map[gpu]}
 
-            # Set MPS pipe directory for each spawned process based upon the GPU
-            # associated with the target:
-            info_list = [MPI.Info.Create() for i in xrange(n_targets)]
+            # Set MPS pipe directory:
+            info = MPI.Info.Create()
             if self._mps_man:
-                for rank in sorted(self._targets.keys()):
-                    mps_dir = self._mps_man.get_mps_dir_by_dev(rank_to_gpu_map[rank])
-                    self.log_info('setting MPS directory for rank %i to %s' % \
-                                  (rank, mps_dir))
-                    info_list[rank].Set('env', 'CUDA_MPS_PIPE_DIRECTORY=%s' % mps_dir)
+                mps_dir = self._mps_man.get_mps_dir(self._mps_man.get_mps_ctrl_proc())
+                info.Set('env', 'CUDA_MPS_PIPE_DIRECTORY=%s' % mps_dir)
 
             # Spawn processes:
-            cmd_list = [sys.executable]*n_targets
-            args_list = [mpi_backend_path]*n_targets
-            maxprocs_list = [1]*n_targets
-            self._intercomm = MPI.COMM_SELF.Spawn_multiple(cmd_list,
-                                                           args=args_list,
-                                                           maxprocs=maxprocs_list,
-                                                           info=info_list)
+            self._intercomm = MPI.COMM_SELF.Spawn(sys.executable,
+                                                  args=[mpi_backend_path],
+                                                  maxprocs=n_targets,
+                                                  info=info)
 
             # First, transmit twiggy logging emitters to spawned processes so
             # that they can configure their logging facilities:
@@ -177,12 +168,11 @@ class MyManager(Manager):
                 self._intercomm.send(data, i)
 
     def __del__(self):
-        # Shut down MPS daemons when the manager is cleaned up:
+        # Shut down MPS daemon when the manager is cleaned up:
         if self._mps_man:
-            pids = self._mps_man.get_mps_ctrl_procs()
-            for pid in pids:
-                self.log_info('stopping MPS control daemon %i' % pid)
-                self._mps_man.stop(pid)
+            pid = self._mps_man.get_mps_ctrl_proc()
+            self.log_info('stopping MPS control daemon %i' % pid)
+            self._mps_man.stop(pid)
         
 def gen_sels(conn_mat, scaling=1):
     """
@@ -337,7 +327,7 @@ def partition(mat, n_parts):
         cutcount, part_vert = pymetis.part_graph(n_parts, xadj=xadj,
                                                  adjncy=adjncy, eweights=eweights)
 
-    # Find notes in each partition:
+    # Find nodes in each partition:
     part_map = {}
     for i, p in enumerate(set(part_vert)):
         ind = np.where(np.array(part_vert) == p)[0]
@@ -390,15 +380,9 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps):
     for i in ranks:
         lpu_i = 'lpu%s' % i
         sel, sel_in, sel_out, sel_gpot, sel_spike = mod_sels[lpu_i]
-
-        # When MPS is activated, each partition will only see one GPU numbered 0:
-        if man._mps_man:
-            device = 0
-        else:
-            device = rank_to_gpu_map[i]
         man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,
                 None, None, ['interface', 'io', 'type'],
-                CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=device,
+                CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=rank_to_gpu_map[i],
                 time_sync=True)
 
     # Set up connections between module pairs:
@@ -415,7 +399,7 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps):
         pat.interface[sel_out_j, 'interface', 'io'] = [1, 'out']
         pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
         pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
-        man.connect(lpu_i, lpu_j, pat, 0, 1, compat_check=True)
+        man.connect(lpu_i, lpu_j, pat, 0, 1, compat_check=False)
 
     man.spawn(part_map)
     start_main = time.time()
@@ -465,7 +449,7 @@ if __name__ == '__main__':
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
     
-    conn_mat = conn_mat[0:16, 0:16]
-    # N = 8
-    # conn_mat = 500*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
+    #conn_mat = conn_mat[0:25, 0:25]
+    # N = 16
+    # conn_mat = 200*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
     print emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
