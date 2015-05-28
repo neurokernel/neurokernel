@@ -31,3 +31,5 @@ class MPIOutput(twiggy.outputs.Output):
     def _write(self, x):
         self.file.Iwrite_shared(x)
 
+        # This seems to be necessary to prevent some log lines from being lost:
+        self.file.Sync()
