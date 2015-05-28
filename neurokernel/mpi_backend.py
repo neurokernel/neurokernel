@@ -63,7 +63,7 @@ for k, v in emitters.iteritems():
         # MPI.Finalize() is called via atexit in the base/core modules:
         twiggy.add_emitters(('file', level, None,
             neurokernel.tools.mpi.MPIOutput(name, format,
-                                             MPI.COMM_WORLD, mode, False)))
+                                            MPI.COMM_WORLD, mode, False)))
     else:
         twiggy.emitters[k] = v
 
