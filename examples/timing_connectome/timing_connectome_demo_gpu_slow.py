@@ -27,6 +27,8 @@ except ImportError:
     mps_avail = False
 else:
     mps_avail = True
+import dill
+import lmdb
 from mpi4py import MPI
 import networkx as nx
 import numpy as np
@@ -57,7 +59,7 @@ class MyModule(Module):
                  ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG, spike_tag=SPIKE_TAG,
                  id=None, device=None,
                  routing_table=None, rank_to_id=None,
-                 debug=False, time_sync=False):
+                 debug=False, time_sync=False, cache_file='cache.db'):
         if data_gpot is None:
             data_gpot = np.zeros(SelectorMethods.count_ports(sel_gpot), float)
         if data_spike is None:
@@ -70,6 +72,7 @@ class MyModule(Module):
                  routing_table, rank_to_id,
                  debug, time_sync)
 
+        self.cache_file = cache_file
         self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = 1.0
         self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = 1
 
@@ -82,6 +85,43 @@ class MyModule(Module):
         self.pm['spike'] = GPUPortMapper.from_pm(self.pm['spike'])
 
         super(MyModule, self).run()
+
+    def pre_run(self):
+        self.log_info('running code before body of worker %s' % self.rank)
+
+        # Initialize _out_port_dict and _in_port_dict attributes:
+        env = lmdb.open(self.cache_file)
+        with env.begin() as txn:
+            data = txn.get(self.id)
+        if data is not None:
+            data = dill.loads(data)
+            self.log_info('loading cached port data')
+            self._out_ids = data['_out_ids']
+            self._out_port_dict = data['_out_port_dict']
+            self._out_port_dict_ids = data['_out_port_dict_ids']
+            self._in_ids = data['_in_ids']
+            self._in_port_dict = data['_in_port_dict']
+            self._in_port_dict_ids = data['_in_port_dict_ids']
+        else:
+            self.log_info('no cached port data found - generating')
+            self._init_port_dicts()            
+            with env.begin(write=True) as txn:
+                data = dill.dumps({'_in_ids': self._in_ids,
+                                   '_in_port_dict': self._in_port_dict,
+                                   '_in_port_dict_ids': self._in_port_dict_ids,
+                                   '_out_ids': self._out_ids,
+                                   '_out_port_dict': self._out_port_dict,
+                                   '_out_port_dict_ids': self._out_port_dict_ids})
+                txn.put(self.id, data)
+
+        # Initialize data_in attribute:
+        self._init_data_in()
+
+        # Start timing the main loop:
+        if self.time_sync:
+            self.intercomm.isend(['start_time', time.time()],
+                                 dest=0, tag=self._ctrl_tag)
+            self.log_info('sent start time to manager')
 
 class MyManager(Manager):
     """
@@ -354,7 +394,7 @@ def partition(mat, n_parts):
         part_map[p] = ind
     return part_map
 
-def emulate(conn_mat, scaling, n_gpus, steps, use_mps):
+def emulate(conn_mat, scaling, n_gpus, steps, use_mps, cache_file='cache.db'):
     """
     Benchmark inter-LPU communication throughput.
 
@@ -406,20 +446,30 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps):
                 time_sync=True)
 
     # Set up connections between module pairs:
-    for lpu_i, lpu_j in pat_sels.keys():
-        sel_from, sel_to, sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i, \
-            sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = pat_sels[(lpu_i, lpu_j)]
-        pat = Pattern.from_concat(sel_from, sel_to,
-                                  from_sel=sel_from, to_sel=sel_to, data=1, validate=False)
-        pat.interface[sel_in_i, 'interface', 'io'] = [0, 'in']
-        pat.interface[sel_out_i, 'interface', 'io'] = [0, 'out']
-        pat.interface[sel_gpot_i, 'interface', 'type'] = [0, 'gpot']
-        pat.interface[sel_spike_i, 'interface', 'type'] = [0, 'spike']
-        pat.interface[sel_in_j, 'interface', 'io'] = [1, 'in']
-        pat.interface[sel_out_j, 'interface', 'io'] = [1, 'out']
-        pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
-        pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
-        man.connect(lpu_i, lpu_j, pat, 0, 1, compat_check=False)
+    env = lmdb.open(cache_file)
+    with env.begin() as txn:
+        data = txn.get('routing_table')
+    if data is not None:
+        man.log_info('loading cached routing table')
+        man.routing_table = dill.loads(data)
+    else:
+        man.log_info('no cached routing table found - generating')
+        for lpu_i, lpu_j in pat_sels.keys():
+            sel_from, sel_to, sel_in_i, sel_out_i, sel_gpot_i, sel_spike_i, \
+                sel_in_j, sel_out_j, sel_gpot_j, sel_spike_j = pat_sels[(lpu_i, lpu_j)]
+            pat = Pattern.from_concat(sel_from, sel_to,
+                                      from_sel=sel_from, to_sel=sel_to, data=1, validate=False)
+            pat.interface[sel_in_i, 'interface', 'io'] = [0, 'in']
+            pat.interface[sel_out_i, 'interface', 'io'] = [0, 'out']
+            pat.interface[sel_gpot_i, 'interface', 'type'] = [0, 'gpot']
+            pat.interface[sel_spike_i, 'interface', 'type'] = [0, 'spike']
+            pat.interface[sel_in_j, 'interface', 'io'] = [1, 'in']
+            pat.interface[sel_out_j, 'interface', 'io'] = [1, 'out']
+            pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
+            pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
+            man.connect(lpu_i, lpu_j, pat, 0, 1, compat_check=False)
+        with env.begin(write=True) as txn:
+            txn.put('routing_table', dill.dumps(man.routing_table))
 
     man.spawn(part_map)
     start_main = time.time()
