@@ -351,7 +351,7 @@ class BaseModule(mpi.Worker):
 
         # Start timing the main loop:
         if self.time_sync:
-            self.intercomm.isend(['start_time', time.time()],
+            self.intercomm.isend(['start_time', (self.rank, time.time())],
                                  dest=0, tag=self._ctrl_tag)                
             self.log_info('sent start time to manager')
 
@@ -367,7 +367,7 @@ class BaseModule(mpi.Worker):
 
         # Stop timing the main loop before shutting down the emulation:
         if self.time_sync:
-            self.intercomm.isend(['stop_time', time.time()],
+            self.intercomm.isend(['stop_time', (self.rank, time.time())],
                                  dest=0, tag=self._ctrl_tag)
 
             self.log_info('sent stop time to manager')
@@ -645,14 +645,14 @@ class Manager(mpi.WorkerManager):
 
         # Process timing data sent by workers:
         if msg[0] == 'start_time':
-            self.start_time = msg[1]
+            rank, self.start_time = msg[1]
             self.log_info('start time data: %s' % str(msg[1]))
         elif msg[0] == 'stop_time':
-            self.stop_time = msg[1]
+            rank, self.stop_time = msg[1]
             self.log_info('stop time data: %s' % str(msg[1]))
         elif msg[0] == 'sync_time':
             rank, steps, start, stop, nbytes = msg[1]
-            self.log_info('time data: %s' % str(msg[1]))
+            self.log_info('sync time data: %s' % str(msg[1]))
 
             # Collect timing data for each execution step:
             if steps not in self.received_data:
