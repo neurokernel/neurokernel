@@ -451,7 +451,7 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps, cache_file='cache.db'):
         data = txn.get('routing_table')
     if data is not None:
         man.log_info('loading cached routing table')
-        man.routing_table = dill.loads(data)
+        routing_table = dill.loads(data)
 
         # Don't replace man.routing_table outright because its reference is
         # already in the dict of named args to transmit to the child MPI process:
