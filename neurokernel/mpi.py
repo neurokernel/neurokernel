@@ -167,7 +167,7 @@ class Worker(Process):
                 self.log_info('execution step: %s' % self.steps)
 
             # Leave loop if maximum number of steps has been reached:
-            if self.steps > self.max_steps:
+            if self.steps >= self.max_steps:
                 self.log_info('maximum steps reached')
                 break
 
