@@ -108,7 +108,7 @@ class MyModule(Module):
 
         # Start timing the main loop:
         if self.time_sync:
-            self.intercomm.isend(['start_time', time.time()],
+            self.intercomm.isend(['start_time', (self.rank, time.time())],
                                  dest=0, tag=self._ctrl_tag)
             self.log_info('sent start time to manager')
 
@@ -440,7 +440,12 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps, cache_file='cache.db'):
         data = txn.get('routing_table')
     if data is not None:
         man.log_info('loading cached routing table')
-        man.routing_table = dill.loads(data)
+        routing_table = dill.loads(data)
+
+        # Don't replace man.routing_table outright because its reference is
+        # already in the dict of named args to transmit to the child MPI process:
+        for c in routing_table.connections:
+            man.routing_table[c] = routing_table[c]
     else:
         man.log_info('no cached routing table found - generating')
         for lpu_i, lpu_j in pat_sels.keys():
@@ -507,7 +512,5 @@ if __name__ == '__main__':
 
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
-    
-    N = 10
-    conn_mat = 200*(np.ones((N, N), dtype=int)-np.eye(N, dtype=int))
-    print emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
+
+    print (args.gpus,)+emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
