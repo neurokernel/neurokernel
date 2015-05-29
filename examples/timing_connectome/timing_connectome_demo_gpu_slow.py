@@ -90,7 +90,7 @@ class MyModule(Module):
         self.log_info('running code before body of worker %s' % self.rank)
 
         # Initialize _out_port_dict and _in_port_dict attributes:
-        env = lmdb.open(self.cache_file)
+        env = lmdb.open(self.cache_file, map_size=10**10)
         with env.begin() as txn:
             data = txn.get(self.id)
         if data is not None:
@@ -446,7 +446,7 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps, cache_file='cache.db'):
                 time_sync=True)
 
     # Set up connections between module pairs:
-    env = lmdb.open(cache_file)
+    env = lmdb.open(cache_file, map_size=10**10)
     with env.begin() as txn:
         data = txn.get('routing_table')
     if data is not None:
@@ -523,5 +523,6 @@ if __name__ == '__main__':
 
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
-        
+
+    conn_mat = conn_mat[0:8, 0:8]        
     print (args.gpus,)+emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
