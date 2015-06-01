@@ -230,8 +230,7 @@ class BaseModule(mpi.Worker):
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
-        dest_ids = self.routing_table.dest_ids(self.id)
-        for dest_id in dest_ids:
+        for dest_id in self._out_ids:
 
             # Get data associated with source ports in current module that are
             # connected to the destination module:
@@ -249,8 +248,7 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        src_ids = self.routing_table.src_ids(self.id)
-        for src_id in src_ids:
+        for src_id in self._in_ids:
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([self.data_in[src_id], dtype_to_mpi(data.dtype)],
                                      source=src_rank)
@@ -261,7 +259,7 @@ class BaseModule(mpi.Worker):
 
         # Copy received elements into the current module's data array:
         n = 0
-        for src_id in src_ids:
+        for src_id in self._in_ids:
             ind_in = self._in_port_dict_ids[src_id]
             self.pm.set_by_inds(ind_in, self.data_in[src_id])
             n += len(self.data_in[src_id])

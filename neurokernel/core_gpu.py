@@ -288,8 +288,7 @@ class Module(BaseModule):
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
-        dest_ids = self.routing_table.dest_ids(self.id)
-        for dest_id in dest_ids:            
+        for dest_id in self._out_ids:
             
             # Copy data into destination buffer:
             dest_rank = self.rank_to_id[:dest_id]
@@ -321,8 +320,7 @@ class Module(BaseModule):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        src_ids = self.routing_table.src_ids(self.id)
-        for src_id in src_ids:
+        for src_id in self._in_ids:
             src_rank = self.rank_to_id[:src_id]
             r = MPI.COMM_WORLD.Irecv([self._in_buf_int['gpot'][src_id],
                                       self._in_buf_mtype['gpot'][src_id]],
@@ -341,7 +339,7 @@ class Module(BaseModule):
         # Copy received elements into the current module's data array:
         n_gpot = 0
         n_spike = 0
-        for src_id in src_ids:
+        for src_id in self._in_ids:
             ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
             self.pm['gpot'].set_by_inds(ind_in_gpot, self._in_buf['gpot'][src_id])
             n_gpot += len(self._in_buf['gpot'][src_id])
