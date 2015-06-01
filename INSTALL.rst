@@ -133,9 +133,3 @@ Once these are installed, run the following: ::
 
   cd neurokernel/docs
   make html
-
-Supported Platforms
--------------------
-Neurokernel has been tested and installed on Linux. It may run on other
-platforms too; if you encounter problems, submit a bug report on
-`GitHub <https://github.com/neurokernel/neurokernel/issues>`_.
