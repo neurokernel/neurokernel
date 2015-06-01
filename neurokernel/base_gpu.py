@@ -683,6 +683,8 @@ class Manager(mpi.WorkerManager):
                 # that the received_data dict doesn't consume unnecessary memory:
                 del self.received_data[steps]
 
+                self.counter += 1
+
             # Compute throughput using accumulated timing data:
             if self.total_sync_time > 0:
                 self.total_throughput = self.total_sync_nbytes/self.total_sync_time
