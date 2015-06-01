@@ -13,34 +13,19 @@
 
 import sys, os, re
 
-# Prevent project dependencies from interfering with autodoc:
-class Mock(object):
-    __all__ = []
+import mock
+class Mock(mock.Mock):
+    def __add__(self, m):
+        return mock.Mock()
 
-    def __init__(self, *args, **kwargs):
+    def __or__(self, m):
+        return mock.Mock()
+
+    def __setitem__(self, k, v):
         pass
 
-    def __call__(self, *args, **kwargs):
-        return Mock()
-
-    @classmethod
-    def __getattr__(cls, name):
-        if name in ('__file__', '__path__'):
-            return '/dev/null'
-        elif name[0] == name[0].upper():
-            mockType = type(name, (), {})
-            mockType.__module__ = __name__
-            return mockType
-        else:
-            return Mock()
-
-    def __getitem__(self, v):
-        return Mock()
-
-#import ipdb
-#ipdb.set_trace()
 MOCK_MODULES = ['bidict', 'chash', 'dill', 'lxml', 'matplotlib', 'matplotlib.pyplot',
-                'mpi4py', 'mpi4py.MPI', 'mpi4py.MPI._p_pickle',
+                'mpi4py', 'mpi4py.MPI', 'mpi4py.MPI',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
                 'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
