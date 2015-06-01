@@ -31,7 +31,7 @@ MOCK_MODULES = ['bidict', 'chash', 'dill', 'lxml', 'matplotlib', 'matplotlib.pyp
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
                 'pycuda.elementwise', 'pycuda.gpuarray',
                 'pycuda.reduction', 'pycuda.scan', 'pycuda.tools', 'pytools',
-                'scipy', 'scipy.sparse', 'twiggy', 'xxh',
+                'scipy', 'scipy.sparse', 'tables', 'twiggy', 'xxh',
                 'zmq', 'zmq.eventloop',
                 'zmq.eventloop.ioloop', 'zmq.eventloop.zmqstream']
 for mod_name in MOCK_MODULES:
