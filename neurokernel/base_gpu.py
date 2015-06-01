@@ -564,10 +564,12 @@ class Manager(mpi.WorkerManager):
         # if not self.validate_args(target):
         #    raise ValueError('class constructor missing required args')
 
-        # Need to associate an ID and the routing table with each module class
-        # to instantiate:
+        # Need to associate an ID with each module class
+        # to instantiate; because the routing table's can potentially occupy
+        # lots of space, we don't add it to the argument dict here - it is
+        # broadcast to all processes separately and then added to the argument
+        # dict in mpi_backend.py:
         kwargs['id'] = id
-        kwargs['routing_table'] = self.routing_table
         kwargs['rank_to_id'] = self.rank_to_id
         rank = super(Manager, self).add(target, *args, **kwargs)
         self.rank_to_id[rank] = id

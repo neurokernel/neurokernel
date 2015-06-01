@@ -203,9 +203,15 @@ class MyManager(Manager):
             for i in self._targets.keys():
                 self._intercomm.send(twiggy.emitters, i)
 
+            # Next, serialize the routing table ONCE and then transmit it to all
+            # of the child nodes:
+            self._intercomm.bcast(self.routing_table, root=MPI.ROOT)
+
             # Transmit class to instantiate, globals required by the class, and
             # the constructor arguments; the backend will wait to receive
             # them and then start running the targets on the appropriate nodes.
+            req = MPI.Request()
+            r_list = []
             for i in self._targets.keys():
                 target_globals = all_global_vars(self._targets[i])
 
@@ -214,7 +220,15 @@ class MyManager(Manager):
                 if 'atexit' in target_globals:
                     del target_globals['atexit']
                 data = (self._targets[i], target_globals, self._kwargs[i])
-                self._intercomm.send(data, i)
+                start = time.time()
+                # d = dill.dumps(data)                
+                # self.log_info('serialization time, len for %s: %f, %i' % \
+                #               (i, time.time()-start, len(d)))
+                self.log_info('before target send to %s' % i)
+                # Use asynchronous transmission to enable interleaving:
+                r_list.append(self._intercomm.isend(data, i))
+                self.log_info('after target send to %s' % i)
+            req.Waitall(r_list)
 
     def __del__(self):
         # Shut down MPS daemon when the manager is cleaned up:

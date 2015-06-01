@@ -4,6 +4,8 @@
 Backend program invoked by MPI spawn.
 """
 
+import importlib
+
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
 import dill
@@ -67,6 +69,10 @@ for k, v in emitters.iteritems():
     else:
         twiggy.emitters[k] = v
 
+# Get the routing table:
+routing_table =  parent.bcast(None, root=0)
+logger.info('received routing table')
+
 # Get the target class/function and its constructor arguments:
 target, target_globals, kwargs = parent.recv()
 
@@ -74,6 +80,9 @@ target, target_globals, kwargs = parent.recv()
 globals()[target.__name__] = target
 for k, n in target_globals.iteritems():
     globals()[k] = n
+
+# Add the routing table to the target arguments:
+kwargs['routing_table'] = routing_table
 
 # Instantiate and run the target class:
 instance = target(**kwargs)

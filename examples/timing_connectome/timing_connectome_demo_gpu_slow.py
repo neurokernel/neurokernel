@@ -214,9 +214,15 @@ class MyManager(Manager):
             for i in self._targets.keys():
                 self._intercomm.send(twiggy.emitters, i)
 
+            # Next, serialize the routing table ONCE and then transmit it to all
+            # of the child nodes:
+            self._intercomm.bcast(self.routing_table, root=MPI.ROOT)
+
             # Transmit class to instantiate, globals required by the class, and
             # the constructor arguments; the backend will wait to receive
             # them and then start running the targets on the appropriate nodes.
+            req = MPI.Request()
+            r_list = []
             for i in self._targets.keys():
                 target_globals = all_global_vars(self._targets[i])
 
@@ -225,7 +231,8 @@ class MyManager(Manager):
                 if 'atexit' in target_globals:
                     del target_globals['atexit']
                 data = (self._targets[i], target_globals, self._kwargs[i])
-                self._intercomm.send(data, i)
+                r_list.append(self._intercomm.isend(data, i))
+            req.Waitall(r_list)
 
     def __del__(self):
         # Shut down MPS daemon when the manager is cleaned up:
@@ -524,5 +531,4 @@ if __name__ == '__main__':
     conn_mat = pd.read_excel('s2.xlsx',
                              sheetname='Connectivity Matrix').astype(int).as_matrix()
 
-    conn_mat = conn_mat[0:8, 0:8]        
     print (args.gpus,)+emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)

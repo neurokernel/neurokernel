@@ -252,6 +252,10 @@ class ProcessManager(LoggerMixin):
             for i in self._targets.keys():
                 self._intercomm.send(twiggy.emitters, i)
 
+            # Next, serialize the routing table ONCE and then transmit it to all
+            # of the child nodes:
+            self._intercomm.bcast(self.routing_table, root=MPI.ROOT)
+
             # Transmit class to instantiate, globals required by the class, and
             # the constructor arguments; the backend will wait to receive
             # them and then start running the targets on the appropriate nodes.
