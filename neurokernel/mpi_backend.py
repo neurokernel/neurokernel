@@ -71,7 +71,6 @@ for k, v in emitters.iteritems():
 
 # Get the routing table:
 routing_table =  parent.bcast(None, root=0)
-logger.info('received routing table')
 
 # Get the target class/function and its constructor arguments:
 target, target_globals, kwargs = parent.recv()
