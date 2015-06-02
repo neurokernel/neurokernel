@@ -9,6 +9,35 @@ import traceback
 from mpi4py import MPI
 import numpy as np
 
+def get_open_files(pid):
+    """
+    Find files opened by the specified process ID.
+
+    Parameters
+    ----------
+    pid : int
+        Process ID.
+
+    Returns
+    -------
+    files : list of str
+        Open file names.
+    """
+
+    if not isinstance(pid, numbers.Integral):
+        raise ValueError('invalid PID')
+    try:
+        out = subprocess.check_output(['lsof', '-wFn', '+p', str(pid)])
+    except:
+        raise RuntimeError('error retrieving open files')
+    else:
+        lines = out.split('\n')
+        files = set()
+        for line in lines:
+            if line.startswith('n'):
+                files.add(line[1:])
+        return list(files)
+
 def rand_bin_matrix(sh, N, dtype=np.double):
     """
     Generate a rectangular binary matrix with randomly distributed nonzero entries.
