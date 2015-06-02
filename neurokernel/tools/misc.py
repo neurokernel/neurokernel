@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from functools import wraps
+import numbers
 import re
 import subprocess
 import sys
@@ -9,14 +10,14 @@ import traceback
 from mpi4py import MPI
 import numpy as np
 
-def get_open_files(pid):
+def get_open_files(*pids):
     """
-    Find files opened by the specified process ID.
+    Find files opened by specified process ID(s).
 
     Parameters
     ----------
-    pid : int
-        Process ID.
+    pids : list of int
+        Process IDs.
 
     Returns
     -------
@@ -24,19 +25,53 @@ def get_open_files(pid):
         Open file names.
     """
 
-    if not isinstance(pid, numbers.Integral):
-        raise ValueError('invalid PID')
+    for pid in pids:
+        if not isinstance(pid, numbers.Integral):
+            raise ValueError('invalid PID')
+    files = set()
+    for pid in pids:
+        try:
+            out = subprocess.check_output(['lsof', '-wXFn', '+p', str(pid)])
+        except:
+            raise RuntimeError('error retrieving open files')
+        else:
+            lines = out.strip().split('\n')
+            for line in lines:
+
+                # Skip sockets, pipes, etc.:
+                if line.startswith('n') and line[1] == '/':
+                    files.add(line[1:])
+    return list(files)
+
+def get_pids_open(*files):
+    """
+    Find processes with open handles for the specified file(s).
+
+    Parameters
+    ----------
+    files : list of str
+        File paths.
+
+    Returns
+    -------
+    pids : list of int
+        Process IDs with open handles to the specified files.
+    """
+
+    for f in files:
+        if not isinstance(f, basestring):
+            raise ValueError('invalid file name %s' % f)
+    pids = set()
     try:
-        out = subprocess.check_output(['lsof', '-wFn', '+p', str(pid)])
+
+        out = subprocess.check_output(['lsof', '+wt']+list(files))
     except:
-        raise RuntimeError('error retrieving open files')
+        raise RuntimeError('error retrieving PIDs')
     else:
-        lines = out.split('\n')
-        files = set()
+        lines = out.strip().split('\n')
         for line in lines:
-            if line.startswith('n'):
-                files.add(line[1:])
-        return list(files)
+            pids.add(int(line))
+    return list(pids)
 
 def rand_bin_matrix(sh, N, dtype=np.double):
     """
