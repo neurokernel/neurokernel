@@ -232,6 +232,10 @@ class MyManager(Manager):
                     del target_globals['atexit']
                 data = (self._targets[i], target_globals, self._kwargs[i])
                 r_list.append(self._intercomm.isend(data, i))
+
+                # Need to clobber data to prevent all_global_vars from
+                # including it in its output:
+                del data
             req.Waitall(r_list)
 
     def __del__(self):

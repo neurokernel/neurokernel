@@ -259,6 +259,8 @@ class ProcessManager(LoggerMixin):
             # Transmit class to instantiate, globals required by the class, and
             # the constructor arguments; the backend will wait to receive
             # them and then start running the targets on the appropriate nodes.
+            req = MPI.Request()
+            r_list = []
             for i in self._targets.keys():
                 target_globals = all_global_vars(self._targets[i])
 
@@ -267,7 +269,12 @@ class ProcessManager(LoggerMixin):
                 if 'atexit' in target_globals:
                     del target_globals['atexit']
                 data = (self._targets[i], target_globals, self._kwargs[i])
-                self._intercomm.send(data, i)
+                r_list.append(self._intercomm.isend(data, i))
+
+                # Need to clobber data to prevent all_global_vars from
+                # including it in its output:
+                del data
+            req.Waitall(r_list)
 
     def send(self, data, dest, tag=0):
         """

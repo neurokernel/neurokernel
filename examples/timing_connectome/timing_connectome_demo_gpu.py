@@ -220,14 +220,11 @@ class MyManager(Manager):
                 if 'atexit' in target_globals:
                     del target_globals['atexit']
                 data = (self._targets[i], target_globals, self._kwargs[i])
-                start = time.time()
-                # d = dill.dumps(data)                
-                # self.log_info('serialization time, len for %s: %f, %i' % \
-                #               (i, time.time()-start, len(d)))
-                self.log_info('before target send to %s' % i)
-                # Use asynchronous transmission to enable interleaving:
                 r_list.append(self._intercomm.isend(data, i))
-                self.log_info('after target send to %s' % i)
+
+                # Need to clobber data to prevent all_global_vars from
+                # including it in its output:
+                del data
             req.Waitall(r_list)
 
     def __del__(self):
