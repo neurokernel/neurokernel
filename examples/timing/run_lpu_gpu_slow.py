@@ -27,19 +27,21 @@ script_name = 'timing_demo_gpu_slow.py'
 trials = 3
 
 def check_and_print_output(*args):
-    try:
-        out = subprocess.check_output(args[0], env=os.environ, stderr=DEVNULL)
-    except Exception as e:
-        out = e.output
+    while True:
+        try:
+            out = subprocess.check_output(args[0], env=os.environ, stderr=DEVNULL)
+        except Exception as e:
+            pass
+        else:
+            break
     row = out.strip('[]\n\"').split(', ')
     row[1] = str(args[1])
     out = ','.join(row)
     print out
     return out
 
-pool = mp.Pool(5)
+pool = mp.Pool(1)
 results = []
-results_spikes = []
 for spikes in xrange(250, 7000, 250):
     for lpus in xrange(2, 9):
         for i in xrange(trials):
@@ -60,10 +62,9 @@ for spikes in xrange(250, 7000, 250):
                                    '-u', str(lpus), '-s', str(spikes/(lpus-1)),
                                    '-g', '0', '-m', '50'], spikes])
             results.append(r)
-            results_spikes.append(spikes)
 f = open(out_file, 'w', 0)
 w = csv.writer(f)
-for r, s in zip(results, results_spikes):
+for r in results:
 
     # Include total number of spikes rather than per-LPU number of spikes in output:
     row = r.get().strip('[]\n\"').split(',')
