@@ -10,6 +10,12 @@ import traceback
 from mpi4py import MPI
 import numpy as np
 
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    import os
+    DEVNULL = open(os.devnull, 'wb')
+
 def get_open_files(*pids):
     """
     Find files opened by specified process ID(s).
@@ -31,9 +37,10 @@ def get_open_files(*pids):
     files = set()
     for pid in pids:
         try:
-            out = subprocess.check_output(['lsof', '-wXFn', '+p', str(pid)])
+            out = subprocess.check_output(['lsof', '-wXFn', '+p', str(pid)],
+                    stderr=DEVNULL)
         except:
-            raise RuntimeError('error retrieving open files')
+            pass
         else:
             lines = out.strip().split('\n')
             for line in lines:
@@ -63,14 +70,15 @@ def get_pids_open(*files):
             raise ValueError('invalid file name %s' % f)
     pids = set()
     try:
-
-        out = subprocess.check_output(['lsof', '+wt']+list(files))
-    except:
-        raise RuntimeError('error retrieving PIDs')
-    else:
-        lines = out.strip().split('\n')
-        for line in lines:
-            pids.add(int(line))
+        out = subprocess.check_output(['lsof', '+wt']+list(files),
+                stderr=DEVNULL)
+    except Exception as e:
+        out = str(e.output)
+    if not out.strip():
+        return []
+    lines = out.strip().split('\n')
+    for line in lines:
+        pids.add(int(line))
     return list(pids)
 
 def rand_bin_matrix(sh, N, dtype=np.double):
