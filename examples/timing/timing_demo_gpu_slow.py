@@ -272,4 +272,5 @@ if __name__ == '__main__':
                           mpi_comm=MPI.COMM_WORLD,
                           multiline=True)
 
-    print emulate(args.num_lpus, args.num_spike, args.num_gpot, args.max_steps)
+    print list((args.num_lpus, args.num_spike)+\
+               emulate(args.num_lpus, args.num_spike, args.num_gpot, args.max_steps))
