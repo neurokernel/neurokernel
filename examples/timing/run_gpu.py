@@ -28,13 +28,10 @@ trials = 3
 lpus = 2
 
 def check_and_print_output(*args):
-    while True:
-        try:
-            out = subprocess.check_output(*args, env=os.environ, stderr=DEVNULL)
-        except Exception as e:
-            print 'error, retrying'
-        else:
-            break
+    try:
+        out = subprocess.check_output(*args, env=os.environ, stderr=DEVNULL)
+    except Exception as e:
+        out = e.output
     print out,
     return out
 
