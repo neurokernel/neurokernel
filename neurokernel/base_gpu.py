@@ -168,6 +168,9 @@ class BaseModule(mpi.Worker):
         self.data = gpuarray.to_gpu(data)
         self.pm = GPUPortMapper(sel, self.data, make_copy=False)
 
+        # MPI Request object for resolving asynchronous transfers:
+        self.req = MPI.Request()
+
     def _init_port_dicts(self):
         """
         Initial dictionaries of source/destination ports in current module.
@@ -178,6 +181,7 @@ class BaseModule(mpi.Worker):
         self._out_port_dict = {}
         self._out_port_dict_ids = {}
         self._out_ids = self.routing_table.dest_ids(self.id)
+        self._out_ranks = [self.rank_to_id[:i] for i in self._out_ids]
         for out_id in self._out_ids:
             self.log_info('extracting output ports for %s' % out_id)
 
@@ -199,6 +203,7 @@ class BaseModule(mpi.Worker):
         self._in_port_dict = {}
         self._in_port_dict_ids = {}
         self._in_ids = self.routing_table.src_ids(self.id)
+        self._in_ranks = [self.rank_to_id[:i] for i in self._in_ids]
         for in_id in self._in_ids:
             self.log_info('extracting input ports for %s' % in_id)
 
@@ -251,18 +256,16 @@ class BaseModule(mpi.Worker):
 
         if self.time_sync:
             start = time.time()
-        req = MPI.Request()
         requests = []
 
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
-        for dest_id in self._out_ids:
+        for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
 
             # Copy data into destination buffer:
             set_by_inds(self._out_buf[dest_id],
                         self._out_port_dict_ids[dest_id], self.data, 'src')
-            dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % \
                               (dest_id, str(self._out_buf[dest_id])))
@@ -278,15 +281,14 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        for src_id in self._in_ids:
-            src_rank = self.rank_to_id[:src_id]
+        for src_id, src_rank in zip(self._in_ids, self._in_ranks):
             r = MPI.COMM_WORLD.Irecv([self._in_buf_int[src_id],
                                       self._in_buf_mtype[src_id]],
                                      source=src_rank)
             requests.append(r)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
-        req.Waitall(requests)
+        self.req.Waitall(requests)
 
         # Copy received elements into the current module's data array:
         n = 0
