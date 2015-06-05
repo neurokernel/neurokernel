@@ -28,17 +28,7 @@ trials = 3
 lpus = 2
 
 def check_and_print_output(*args):
-    try:
-        out = subprocess.check_output(*args, env=os.environ, stderr=DEVNULL)
-    except Exception as e:
-        out = e.output
-    print out,
-    return out
-
-pool = mp.Pool(1)
-results = []
-for spikes in [3164,15000]:#np.linspace(50, 15000, 25, dtype=int):
-    for i in xrange(trials):
+    for i in xrange(3):
         # CUDA < 7.0 doesn't properly clean up IPC-related files; since
         # these can cause problems, we manually remove them before launching
         # each job:
@@ -47,7 +37,23 @@ for spikes in [3164,15000]:#np.linspace(50, 15000, 25, dtype=int):
 
             # Only remove files that are not being held open by any processes:
             if not get_pids_open(ipc_file):
-                os.remove(ipc_file)
+                try:
+                    os.remove(ipc_file)
+                except:
+                    pass
+        try:
+            out = subprocess.check_output(*args, env=os.environ, stderr=DEVNULL)
+        except Exception as e:
+            out = e.output
+        if 'error' not in out:
+            break
+    print out,
+    return out
+
+pool = mp.Pool(1)
+results = []
+for spikes in np.linspace(50, 15000, 25, dtype=int):
+    for i in xrange(trials):
         r = pool.apply_async(check_and_print_output, 
                              [['srun', '-n', '1', '-c', str(lpus+2),
                                '-p', 'huxley',
