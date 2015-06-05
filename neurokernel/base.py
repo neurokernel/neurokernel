@@ -623,27 +623,35 @@ class Manager(mpi.WorkerManager):
             # whether data from all modules has arrived for that step:
             if set(self.received_data[steps].keys()) == set(self.rank_to_id.keys()):
 
-                # The duration an execution is assumed to be the longest of
-                # the received intervals:
-                step_sync_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
+                # Exclude the very first step to avoid including delays due to
+                # PyCUDA kernel compilation:
+                if steps != 0:
 
-                # Obtain the total number of bytes received by all of the
-                # modules during the execution step:
-                step_nbytes = sum([d[2] for d in self.received_data[steps].values()])
+                    # The duration an execution is assumed to be the longest of
+                    # the received intervals:
+                    step_sync_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
 
-                self.total_sync_time += step_sync_time
-                self.total_sync_nbytes += step_nbytes
+                    # Obtain the total number of bytes received by all of the
+                    # modules during the execution step:
+                    step_nbytes = sum([d[2] for d in self.received_data[steps].values()])
 
-                self.average_throughput = (self.average_throughput*self.counter+\
-                                          step_nbytes/step_sync_time)/(self.counter+1)
-                self.average_step_sync_time = (self.average_step_sync_time*self.counter+\
-                                               step_sync_time)/(self.counter+1)
+                    self.total_sync_time += step_sync_time
+                    self.total_sync_nbytes += step_nbytes
+
+                    self.average_throughput = (self.average_throughput*self.counter+\
+                                              step_nbytes/step_sync_time)/(self.counter+1)
+                    self.average_step_sync_time = (self.average_step_sync_time*self.counter+\
+                                                   step_sync_time)/(self.counter+1)
+
+                    self.counter += 1
+                else:
+                    # To skip the first sync step, set the start time to the
+                    # latest stop time of the first step:
+                    self.start_time = max([d[1] for d in self.received_data[steps].values()])
 
                 # Clear the data for the processed execution step so that
                 # that the received_data dict doesn't consume unnecessary memory:
                 del self.received_data[steps]
-
-                self.counter += 1
 
             # Compute throughput using accumulated timing data:
             if self.total_sync_time > 0:
