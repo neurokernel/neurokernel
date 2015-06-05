@@ -27,7 +27,7 @@ script_name = 'timing_demo_gpu_slow.py'
 trials = 3
 
 def check_and_print_output(*args):
-    for i in xrange(3):
+    for i in xrange(5):
         # CUDA < 7.0 doesn't properly clean up IPC-related files; since
         # these can cause problems, we manually remove them before launching
         # each job:
