@@ -60,5 +60,15 @@ class test_routingtable(TestCase):
             assert i[1] in self.t.dest_ids(i[0])
         assert self.t.src_ids('d') == []
 
+    def test_subtable(self):
+        t = RoutingTable()
+        t['a', 'b'] = 1
+        t['b', 'c'] = 1
+        t['c', 'd'] = 1
+        t['d', 'a'] = 1
+        s = t.subtable(['a', 'b', 'c'])
+        assert set(s.ids) == set(['a', 'b', 'c'])
+        assert set(s.connections) == set([('a', 'b'), ('b', 'c')])
+
 if __name__ == '__main__':
     main()

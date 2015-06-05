@@ -59,6 +59,8 @@ class RoutingTable(object):
         IDs currently in routing
     src_ids(dest_id)
         Source identifiers connected to the specified destination identifier.
+    subtable(ids)
+        Return subtable containing only those connections between specified identifiers.
     to_df()
         Return a pandas DataFrame listing all of the connections.
     """
@@ -161,6 +163,13 @@ class RoutingTable(object):
             return self.data.successors(src_id)
         except nx.NetworkXError:
             return []
+
+    def subtable(self, ids):
+        """
+        Return subtable containing only those connections between specified identifiers.
+        """
+        
+        return RoutingTable(self.data.subgraph(ids))
 
     def to_df(self):
         """
