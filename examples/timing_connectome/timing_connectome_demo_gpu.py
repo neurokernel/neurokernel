@@ -34,6 +34,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import pycuda.driver as drv
+import pycuda.gpuarray as gpuarray
 import pymetis
 import twiggy
 
