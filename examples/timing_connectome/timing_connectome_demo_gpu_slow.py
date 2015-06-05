@@ -97,11 +97,31 @@ class MyModule(Module):
             data = dill.loads(data)
             self.log_info('loading cached port data')
             self._out_ids = data['_out_ids']
+            self._out_ranks = [self.rank_to_id[:i] for i in self._out_ids]
             self._out_port_dict = data['_out_port_dict']
             self._out_port_dict_ids = data['_out_port_dict_ids']
+            for out_id in self._out_ids:
+                if not isinstance(self._out_port_dict_ids['gpot'][out_id],
+                                  gpuarray.GPUArray):
+                    self._out_port_dict_ids['gpot'][out_id] = \
+                        gpuarray.to_gpu(self._out_port_dict_ids['gpot'][out_id])
+                if not isinstance(self._out_port_dict_ids['spike'][out_id],
+                                  gpuarray.GPUArray):
+                    self._out_port_dict_ids['spike'][out_id] = \
+                        gpuarray.to_gpu(self._out_port_dict_ids['spike'][out_id])
             self._in_ids = data['_in_ids']
+            self._in_ranks = [self.rank_to_id[:i] for i in self._in_ids]
             self._in_port_dict = data['_in_port_dict']
             self._in_port_dict_ids = data['_in_port_dict_ids']
+            for in_id in self._in_ids:
+                if not isinstance(self._in_port_dict_ids['gpot'][in_id],
+                                  gpuarray.GPUArray):
+                    self._in_port_dict_ids['gpot'][in_id] = \
+                        gpuarray.to_gpu(self._in_port_dict_ids['gpot'][in_id])
+                if not isinstance(self._in_port_dict_ids['spike'][in_id],
+                                  gpuarray.GPUArray):
+                    self._in_port_dict_ids['spike'][in_id] = \
+                        gpuarray.to_gpu(self._in_port_dict_ids['spike'][in_id])
         else:
             self.log_info('no cached port data found - generating')
             self._init_port_dicts()            
