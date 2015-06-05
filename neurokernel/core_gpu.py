@@ -182,11 +182,11 @@ class Module(BaseModule):
             self._out_port_dict['gpot'][out_id] = \
                     pat.src_idx(int_0, int_1, 'gpot', 'gpot')
             self._out_port_dict_ids['gpot'][out_id] = \
-                    self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id])
+                    gpuarray.to_gpu(self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id]))
             self._out_port_dict['spike'][out_id] = \
                     pat.src_idx(int_0, int_1, 'spike', 'spike')
             self._out_port_dict_ids['spike'][out_id] = \
-                    self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id])
+                    gpuarray.to_gpu(self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id]))
            
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
@@ -214,11 +214,11 @@ class Module(BaseModule):
             self._in_port_dict['gpot'][in_id] = \
                     pat.dest_idx(int_0, int_1, 'gpot', 'gpot')
             self._in_port_dict_ids['gpot'][in_id] = \
-                    self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id])
+                    gpuarray.to_gpu(self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id]))
             self._in_port_dict['spike'][in_id] = \
                     pat.dest_idx(int_0, int_1, 'spike', 'spike')
             self._in_port_dict_ids['spike'][in_id] = \
-                    self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
+                    gpuarray.to_gpu(self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id]))
 
     def _init_comm_bufs(self):
         """
