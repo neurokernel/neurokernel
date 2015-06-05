@@ -520,7 +520,7 @@ if __name__ == '__main__':
 
     conn_mat_file = 's2.xlsx'
     scaling = 1
-    max_steps = 100
+    max_steps = 50
     n_gpus = 4
     use_mps = False
 
