@@ -686,6 +686,11 @@ class Manager(mpi.WorkerManager):
                                                    step_sync_time)/(self.counter+1)
 
                     self.counter += 1
+                else:
+
+                    # To skip the first sync step, set the start time to the
+                    # latest stop time of the first step:
+                    self.start_time = max([d[1] for d in self.received_data[steps].values()])
 
                 # Clear the data for the processed execution step so that
                 # that the received_data dict doesn't consume unnecessary memory:
