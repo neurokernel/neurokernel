@@ -163,6 +163,7 @@ class BaseModule(mpi.Worker):
         self._out_port_dict = {}
         self._out_port_dict_ids = {}
         self._out_ids = self.routing_table.dest_ids(self.id)
+        self._out_ranks = [self.rank_to_id[:i] for i in self._out_ids]
         for out_id in self._out_ids:
             self.log_info('extracting output ports for %s' % out_id)
 
@@ -184,6 +185,7 @@ class BaseModule(mpi.Worker):
         self._in_port_dict = {}
         self._in_port_dict_ids = {}
         self._in_ids = self.routing_table.src_ids(self.id)
+        self._in_ranks = [self.rank_to_id[:i] for i in self._in_ids]
         for in_id in self._in_ids:
             self.log_info('extracting input ports for %s' % in_id)
 
@@ -230,12 +232,11 @@ class BaseModule(mpi.Worker):
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
-        for dest_id in self._out_ids:
+        for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
 
             # Get data associated with source ports in current module that are
             # connected to the destination module:
             data = self.pm.get_by_inds(self._out_port_dict_ids[dest_id])
-            dest_rank = self.rank_to_id[:dest_id]
             if not self.time_sync:
                 self.log_info('data being sent to %s: %s' % (dest_id, str(data)))
             r = MPI.COMM_WORLD.Isend([data, dtype_to_mpi(data.dtype)],
@@ -248,8 +249,7 @@ class BaseModule(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        for src_id in self._in_ids:
-            src_rank = self.rank_to_id[:src_id]
+        for src_id, src_rank in zip(self._in_ids, self._in_ranks):
             r = MPI.COMM_WORLD.Irecv([self.data_in[src_id], dtype_to_mpi(data.dtype)],
                                      source=src_rank)
             requests.append(r)
@@ -513,9 +513,11 @@ class Manager(mpi.WorkerManager):
         #    raise ValueError('class constructor missing required args')
 
         # Need to associate an ID and the routing table with each module class
-        # to instantiate:
+        # to instantiate; because the routing table's can potentially occupy
+        # lots of space, we don't add it to the argument dict here - it is
+        # broadcast to all processes separately and then added to the argument
+        # dict in mpi_backend.py:
         kwargs['id'] = id
-        kwargs['routing_table'] = self.routing_table
         kwargs['rank_to_id'] = self.rank_to_id
         rank = super(Manager, self).add(target, *args, **kwargs)
         self.rank_to_id[rank] = id
