@@ -72,7 +72,7 @@ if __name__ == "__main__":
         install_requires = [
             'bidict >= 0.1.0',
             'dill >= 0.2.2',
-            'futures >= 2.1.5',
+            'futures >= 3.0.0',
             'h5py >= 2.2.1',
             'lxml >= 3.3.0',
             'matplotlib >= 1.3.0',

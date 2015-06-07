@@ -16,7 +16,7 @@ that generates no meaningful responses to the input signal.
 """
 
 import argparse
-import futures
+import concurrent.futures as futures
 import itertools
 import random
 
