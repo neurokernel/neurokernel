@@ -101,6 +101,14 @@ class Selector(object):
         return self._expanded
 
     @property
+    def identifiers(self):
+        """
+        List of individual identifiers in selector.
+        """
+        
+        return [SelectorMethods.collapse((i,)) for i in self._expanded]
+
+    @property
     def max_levels(self):
         """
         Maximum number of levels in selector.

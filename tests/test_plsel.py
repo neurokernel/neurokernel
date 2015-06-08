@@ -153,6 +153,10 @@ class test_selector_class(TestCase):
         assert c.max_levels == 2
         assert c.str == '/x/0,/x/1,/x/2'
 
+    def test_selector_identifiers(self):
+        a = Selector('/x[0:3]')
+        assert a.identifiers == ['/x/0', '/x/1', '/x/2']
+
 class test_path_like_selector(TestCase):
     def setUp(self):
         self.df = df.copy()
