@@ -291,19 +291,9 @@ class Module(BaseModule):
             # Select data that should be sent to each destination module and append
             # it to the outgoing queue:
             for out_id in self._out_ids:
-                # Select port data using list of graded potential ports that can
-                # transmit output:
-                if len(self._out_port_dict_ids['gpot'][out_id]):
-                    gpot_data = \
-                        self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][out_id])
-                else:
-                    gpot_data = np.array([], self.pm['gpot'].dtype)
-                if len(self._out_port_dict_ids['spike'][out_id]):
-                    spike_data = \
-                        self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][out_id])
-                else:
-                    spike_data = np.array([], self.pm['spike'].dtype)
-
+                gpot_data = self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][out_id])
+                spike_data = self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][out_id])
+                        
                 # Attempt to stage the emitted port data for transmission:            
                 try:
                     self._out_data.append((out_id, (gpot_data, spike_data)))
