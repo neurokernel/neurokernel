@@ -262,11 +262,10 @@ class Module(BaseModule):
                     self.log_info('input data from [%s] retrieved' % in_id)
 
                     # Assign transmitted values directly to port data array:
-                    if len(self._in_port_dict_ids['gpot'][in_id]):
+                    if len(self._in_port_dict_ids['gpot'][in_id]) and data[0] is not None:
                         self.pm['gpot'].set_by_inds(self._in_port_dict_ids['gpot'][in_id], data[0])
-                    if len(self._in_port_dict_ids['spike'][in_id]):
+                    if len(self._in_port_dict_ids['spike'][in_id]) and data[1] is not None:
                         self.pm['spike'].set_by_inds(self._in_port_dict_ids['spike'][in_id], data[1])
-                    
 
     def _put_out_data(self):
         """
@@ -291,9 +290,19 @@ class Module(BaseModule):
             # Select data that should be sent to each destination module and append
             # it to the outgoing queue:
             for out_id in self._out_ids:
-                gpot_data = self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][out_id])
-                spike_data = self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][out_id])
-                        
+                # Select port data using list of graded potential ports that can
+                # transmit output:
+                if len(self._out_port_dict_ids['gpot'][out_id]):
+                    gpot_data = \
+                        self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][out_id])
+                else:
+                    gpot_data = None
+                if len(self._out_port_dict_ids['spike'][out_id]):
+                    spike_data = \
+                        self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][out_id])
+                else:
+                    spike_data = None
+
                 # Attempt to stage the emitted port data for transmission:            
                 try:
                     self._out_data.append((out_id, (gpot_data, spike_data)))
