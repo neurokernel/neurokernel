@@ -339,19 +339,20 @@ class Module(BaseModule):
             self.log_info('received all data received by %s' % self.id)
 
         # Copy received elements into the current module's data array:
-        n_gpot = 0
-        n_spike = 0
         for src_id in self._in_ids:
             ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
             self.pm['gpot'].set_by_inds(ind_in_gpot, self._in_buf['gpot'][src_id])
-            n_gpot += len(self._in_buf['gpot'][src_id])
             ind_in_spike = self._in_port_dict_ids['spike'][src_id]
             self.pm['spike'].set_by_inds(ind_in_spike, self._in_buf['spike'][src_id])
-            n_spike += len(self._in_buf['spike'][src_id])
 
         # Save timing data:
         if self.time_sync:
             stop = time.time()
+            n_gpot = 0
+            n_spike = 0
+            for src_id in self._in_ids:
+                n_gpot += len(self._in_buf['gpot'][src_id])
+                n_spike += len(self._in_buf['spike'][src_id])
             self.log_info('sent timing data to master')
             self.intercomm.isend(['sync_time',
                                   (self.rank, self.steps, start, stop,

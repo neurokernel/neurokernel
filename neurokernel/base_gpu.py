@@ -291,11 +291,9 @@ class BaseModule(mpi.Worker):
         self.req.Waitall(requests)
 
         # Copy received elements into the current module's data array:
-        n = 0
         for src_id in self._in_ids:
             ind_in = self._in_port_dict_ids[src_id]
             self.pm.set_by_inds(ind_in, self._in_buf[src_id])
-            n += len(self._in_buf[src_id])
 
         if not self.time_sync:
             self.log_info('received all data received by %s' % self.id)
@@ -304,6 +302,9 @@ class BaseModule(mpi.Worker):
 
         # Send timing data to manager:
         if self.time_sync:
+            n = 0
+            for src_id in self._in_ids:
+                n += len(self._in_buf[src_id])
             self.log_info('sent timing data to manager')
             self.intercomm.isend(['sync_time', 
                                   (self.rank, self.steps, start, stop,
