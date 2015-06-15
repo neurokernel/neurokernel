@@ -193,4 +193,4 @@ class RoutingTable(object):
         return df
 
     def __repr__(self):
-        return self.to_df().__repr__()
+        return 'RoutingTable(%s)' % self.ids
