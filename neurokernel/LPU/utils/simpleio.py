@@ -1,5 +1,6 @@
 import tables
 import numpy as np
+
 try:
     import pycuda.gpuarray as garray
     PYCUDA = True
@@ -78,15 +79,16 @@ def write_array(A, filename, mode = 'w', title='test'):
     file can be read by read_array in python
     """
 
-
     h5file = tables.openFile(filename, mode, title)
 
     if (A.dtype == np.float32):
         tb = tables.Float32Atom
     elif (A.dtype == np.float64):
         tb = tables.Float64Atom
-    elif (A.dtype == np.complex64) or (A.dtype == np.complex128):
-        tb = tables.ComplexAtom
+    # FIXME: Does not work because ComplexAtom requires at least 1 argument and fails later.
+    # Non named argument is the itemsize: 8 single precision 16 double
+    #elif (A.dtype == np.complex64) or (A.dtype == np.complex128):
+    #    tb = tables.ComplexAtom
     elif A.dtype == np.int32:
         tb = tables.Int32Atom
     elif A.dtype == np.int64:
