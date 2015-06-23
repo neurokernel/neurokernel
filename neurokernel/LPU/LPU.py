@@ -335,13 +335,12 @@ class LPU(Module):
                     if s['class'][0] == 0 or s['class'][0] == 1 else 0
                 s['pre'] = [ self.order[int(neu_id)] - shift
                              for neu_id in s['pre'] ]
+                # why don't why need shift for post neuron?
                 s['post'] = [ self.order[int(neu_id)]
                               for neu_id in s['post'] ]
 
         gpot_delay_steps = 0
         spike_delay_steps = 0
-
-        spike_shift = self.spike_shift
 
         cond_pre = []
         cond_post = []
@@ -413,15 +412,15 @@ class LPU(Module):
         for i, (t, n) in enumerate(self.n_list):
             if n['spiking'][0]:
                 idx = np.where(
-                    (cond_post >= self.idx_start_spike[i] + spike_shift)&
-                    (cond_post < self.idx_start_spike[i+1] + spike_shift) )
-                n['cond_post'] = cond_post[idx] - self.idx_start_spike[i] - spike_shift
+                    (cond_post >= self.idx_start_spike[i] + self.spike_shift)&
+                    (cond_post < self.idx_start_spike[i+1] + self.spike_shift) )
+                n['cond_post'] = cond_post[idx] - self.idx_start_spike[i] - self.spike_shift
                 n['cond_pre'] = cond_pre[idx]
                 n['reverse'] = reverse[idx]
                 idx = np.where(
-                    (I_post >= self.idx_start_spike[i] + spike_shift)&
-                    (I_post < self.idx_start_spike[i+1] + spike_shift) )
-                n['I_post'] = I_post[idx] - self.idx_start_spike[i] - spike_shift
+                    (I_post >= self.idx_start_spike[i] + self.spike_shift)&
+                    (I_post < self.idx_start_spike[i+1] + self.spike_shift) )
+                n['I_post'] = I_post[idx] - self.idx_start_spike[i] - self.spike_shift
                 n['I_pre'] = I_pre[idx]
             else:
                 idx = np.where( (cond_post >= self.idx_start_gpot[i])&
