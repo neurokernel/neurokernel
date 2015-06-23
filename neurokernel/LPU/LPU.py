@@ -14,7 +14,7 @@ from pycuda.compiler import SourceModule
 import numpy as np
 import networkx as nx
 
-# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF 
+# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF
 # files with boolean attributes that contain the strings 'True' or 'False'
 # (bug already observed in https://github.com/networkx/networkx/pull/971)
 nx.readwrite.gexf.GEXF.convert_bool['false'] = False
@@ -106,8 +106,8 @@ class LPU(Module):
 
         Notes
         -----
-        All neurons must have the following attributes; any additional 
-        attributes for a specific neuron model must be provided 
+        All neurons must have the following attributes; any additional
+        attributes for a specific neuron model must be provided
         for all neurons of that model type:
 
         1. spiking - True if the neuron emits spikes, False if it emits graded
@@ -143,7 +143,7 @@ class LPU(Module):
         n_dict = {}
         neurons = graph.node.items()
         # sort based on id (id is first converted to an integer)
-        # this is done so that consecutive neurons of the same type 
+        # this is done so that consecutive neurons of the same type
         # in the constructed LPU is the same in neurokernel
         neurons.sort(cmp=neuron_cmp)
         for id, neu in neurons:
@@ -240,9 +240,9 @@ class LPU(Module):
         n_model_is_spk = [ n['spiking'][0] for _, n in self.n_list ]
         n_model_num = [ len(n['id']) for _, n in self.n_list ]
         # concatenation of lists of neurons
-        # n['id'] is a list of integers that correspond to the positions 
+        # n['id'] is a list of integers that correspond to the positions
         # of the neuron model n['model'] in LPU graph
-        n_id = np.array(sum( [ n['id'] for _, n in self.n_list ], []), 
+        n_id = np.array(sum( [ n['id'] for _, n in self.n_list ], []),
                         dtype=np.int32)
         # concatenates lists of common attributes in model dictionaries
         n_is_spk = np.array(sum( [ n['spiking'] for _, n in self.n_list ], []))
@@ -263,16 +263,16 @@ class LPU(Module):
         try:
             sel_in_spk = ','.join(filter(None,
                                          n_dict[PORT_IN_SPK]['selector']))
-            in_ports_ids_spk = np.array(n_dict[PORT_IN_SPK]['id'], 
+            in_ports_ids_spk = np.array(n_dict[PORT_IN_SPK]['id'],
                                         dtype=np.int32)
             self.ports_in_spk_mem_ind = zip(*self.n_list)[0].index(PORT_IN_SPK)
         except KeyError:
             sel_in_spk = ''
             in_ports_ids_spk = np.array([], dtype=np.int32)
             self.ports_in_spk_mem_ind = None
-            
+
         sel_in = ','.join(filter(None, [sel_in_gpot, sel_in_spk]))
-        
+
         sel_out_gpot = ','.join(filter(None, [sel for _, n in self.n_list for sel, pub, spk in
                                  zip(n['selector'], n['public'], n['spiking'])
                                  if pub and not spk ]))
@@ -297,19 +297,19 @@ class LPU(Module):
         self.sel_out_spk = sel_out_spk
         self.sel_in_gpot = sel_in_gpot
         self.sel_out_gpot = sel_out_gpot
-        
+
         #TODO: comment
         num_gpot_neurons = np.where( n_model_is_spk, 0, n_model_num)
         num_spike_neurons = np.where( n_model_is_spk, n_model_num, 0)
-        self.my_num_gpot_neurons = sum( num_gpot_neurons )
-        self.my_num_spike_neurons = sum( num_spike_neurons )
+        self.total_num_gpot_neurons = sum( num_gpot_neurons )
+        self.total_num_spike_neurons = sum( num_spike_neurons )
         gpot_idx = n_id[ ~n_is_spk ]
         spike_idx = n_id[ n_is_spk ]
         self.order = np.argsort(
             np.concatenate((gpot_idx, spike_idx))).astype(np.int32)
         self.gpot_order = np.argsort(gpot_idx).astype(np.int32)
         self.spike_order = np.argsort(spike_idx).astype(np.int32)
-        self.spike_shift = self.my_num_gpot_neurons
+        self.spike_shift = self.total_num_gpot_neurons
         in_id = n_id[n_has_in]
         in_id.sort()
         pub_spk_id = n_id[ n_is_pub & n_is_spk ]
@@ -326,18 +326,18 @@ class LPU(Module):
         in_ports_ids_spk = self.order[in_ports_ids_spk]
         self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
         self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
-        
+
         #TODO: comment
         self.s_dict = s_dict
         if s_dict:
             for s in self.s_dict.itervalues():
                 shift = self.spike_shift \
                     if s['class'][0] == 0 or s['class'][0] == 1 else 0
-                s['pre'] = [ self.order[int(neu_id)] - shift 
+                s['pre'] = [ self.order[int(neu_id)] - shift
                              for neu_id in s['pre'] ]
-                s['post'] = [ self.order[int(neu_id)] 
+                s['post'] = [ self.order[int(neu_id)]
                               for neu_id in s['post'] ]
-                
+
         gpot_delay_steps = 0
         spike_delay_steps = 0
 
@@ -357,7 +357,7 @@ class LPU(Module):
             order = np.argsort(s['post']).astype(np.int32)
             for k, v in s.items():
                 s[k] = np.asarray(v)[order]
-            
+
             if s['conductance'][0]:
                 cond_post.extend(s['post'])
                 reverse.extend(s['reverse'])
@@ -375,7 +375,7 @@ class LPU(Module):
                     max_del = np.max( s['delay'] )
                     spike_delay_steps = max_del if max_del > spike_delay_steps \
                                         else spike_delay_steps
-        
+
         self.total_synapses = int(np.sum(num_synapses))
         I_post.extend(self.input_neuron_list)
         I_pre.extend(range(self.total_synapses, self.total_synapses + \
@@ -464,9 +464,9 @@ class LPU(Module):
     def post_run(self):
         super(LPU, self).post_run()
         if self.output:
-            if self.my_num_gpot_neurons > 0:
+            if self.total_num_gpot_neurons > 0:
                 self.output_gpot_file.close()
-            if self.my_num_spike_neurons > 0:
+            if self.total_num_spike_neurons > 0:
                 self.output_spike_file.close()
         if self.debug:
             # for file in self.in_gpot_files.itervalues():
@@ -494,9 +494,9 @@ class LPU(Module):
             for neuron in self.neurons:
                 neuron.update_I(self.synapse_state.gpudata)
                 neuron.eval()
-                
+
             self._update_buffer()
-        
+
             for synapse in self.synapses:
                 synapse.update_state(self.buffer)
 
@@ -510,7 +510,7 @@ class LPU(Module):
                     .reshape(1, self.gpot_delay_steps, -1))
             self.synapse_state_file.root.array.append(
                 self.synapse_state.get().reshape(1, -1))
-            
+
         self._extract_output()
 
         # Save output data to disk:
@@ -518,15 +518,15 @@ class LPU(Module):
             self._write_output()
 
     def _init_objects(self):
-        self.neurons = [ self._instantiate_neuron(i, t, n) 
+        self.neurons = [ self._instantiate_neuron(i, t, n)
                          for i, (t, n) in enumerate(self.n_list)
                          if t!=PORT_IN_GPOT and t!=PORT_IN_SPK]
-        self.synapses = [ self._instantiate_synapse(i, t, n) 
+        self.synapses = [ self._instantiate_synapse(i, t, n)
                          for i, (t, n) in enumerate(self.s_list)
                          if t!='pass']
-        self.buffer = CircularArray(self.my_num_gpot_neurons,
-                                    self.gpot_delay_steps, self.V, 
-                                    self.my_num_spike_neurons, 
+        self.buffer = CircularArray(self.total_num_gpot_neurons,
+                                    self.gpot_delay_steps, self.V,
+                                    self.total_num_spike_neurons,
                                     self.spike_delay_steps)
         if self.input_file:
             self.input_h5file = tables.openFile(self.input_file)
@@ -548,20 +548,20 @@ class LPU(Module):
             else:
                 ext = 'h5'
 
-            if self.my_num_gpot_neurons > 0:
+            if self.total_num_gpot_neurons > 0:
                 self.output_gpot_file = tables.openFile(filename +
                                                         '_gpot.' + ext, 'w')
                 self.output_gpot_file.createEArray(
                     "/", "array",
                     tables.Float64Atom(),
-                    (0, self.my_num_gpot_neurons))
-            if self.my_num_spike_neurons > 0:
+                    (0, self.total_num_gpot_neurons))
+            if self.total_num_spike_neurons > 0:
                 self.output_spike_file = tables.openFile(filename +
                                                          '_spike.' + ext, 'w')
                 self.output_spike_file.createEArray(
                     "/", "array",
                     tables.Float64Atom(),
-                    (0, self.my_num_spike_neurons))
+                    (0, self.total_num_spike_neurons))
 
         if self.debug:
             '''
@@ -578,44 +578,44 @@ class LPU(Module):
             self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
             self.gpot_buffer_file.createEArray(
                 "/", "array",
-                tables.Float64Atom(), 
-                (0, self.gpot_delay_steps, self.my_num_gpot_neurons))
+                tables.Float64Atom(),
+                (0, self.gpot_delay_steps, self.total_num_gpot_neurons))
 
             self.synapse_state_file = tables.openFile(self.id + '_synapses.h5',
                                                       'w')
             self.synapse_state_file.createEArray(
                 "/", "array",
-                tables.Float64Atom(), 
+                tables.Float64Atom(),
                 (0, self.total_synapses + len(self.input_neuron_list)))
 
     def _initialize_gpu_ds(self):
         """
         Setup GPU arrays.
         """
-        
+
         self.synapse_state = garray.zeros(
-            int(self.total_synapses) + len(self.input_neuron_list), 
+            int(self.total_synapses) + len(self.input_neuron_list),
             np.float64)
-        
-        if self.my_num_gpot_neurons > 0:
-            self.V = garray.zeros(int(self.my_num_gpot_neurons), np.float64)
+
+        if self.total_num_gpot_neurons > 0:
+            self.V = garray.zeros(int(self.total_num_gpot_neurons), np.float64)
         else:
             self.V = None
 
-        if self.my_num_spike_neurons > 0:
-            self.spike_state = garray.zeros(int(self.my_num_spike_neurons), 
+        if self.total_num_spike_neurons > 0:
+            self.spike_state = garray.zeros(int(self.total_num_spike_neurons),
                                             np.int32)
 
         if len(self.out_ports_ids_gpot) > 0:
             self.out_ports_ids_gpot_g = garray.to_gpu(self.out_ports_ids_gpot)
-            self.out_port_data_gpot = garray.zeros(len(self.out_ports_ids_gpot), 
+            self.out_port_data_gpot = garray.zeros(len(self.out_ports_ids_gpot),
                                                    np.double)
             self._extract_gpot = self._extract_projection_gpot_func()
 
         if len(self.out_ports_ids_spk) > 0:
             self.out_ports_ids_spk_g = garray.to_gpu(
                 (self.out_ports_ids_spk - self.spike_shift).astype(np.int32))
-            self.out_port_data_spk = garray.zeros(len(self.out_ports_ids_spk), 
+            self.out_port_data_spk = garray.zeros(len(self.out_ports_ids_spk),
                                                   np.int32)
             self._extract_spike = self._extract_projection_spike_func()
 
@@ -672,10 +672,10 @@ class LPU(Module):
         The order is the same as the order of the assigned ids in gexf
         """
 
-        if self.my_num_gpot_neurons > 0:
+        if self.total_num_gpot_neurons > 0:
             self.output_gpot_file.root.array.append(
                 self.V.get()[self.gpot_order].reshape((1, -1)))
-        if self.my_num_spike_neurons > 0:
+        if self.total_num_spike_neurons > 0:
             self.output_spike_file.root.array.append(
                 self.spike_state.get()[self.spike_order].reshape((1, -1)))
 
@@ -720,23 +720,23 @@ class LPU(Module):
 
     #TODO
     def _update_buffer(self):
-        if self.my_num_gpot_neurons>0:
+        if self.total_num_gpot_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.gpot_buffer.gpudata) +
                 self.buffer.gpot_current*self.buffer.gpot_buffer.ld*
-                self.buffer.gpot_buffer.dtype.itemsize, 
+                self.buffer.gpot_buffer.dtype.itemsize,
                 self.V.gpudata, self.V.nbytes)
-        if self.my_num_spike_neurons>0:
+        if self.total_num_spike_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.spike_buffer.gpudata) +
                 self.buffer.spike_current*self.buffer.spike_buffer.ld*
                 self.buffer.spike_buffer.dtype.itemsize,
                 self.spike_state.gpudata,
-                int(self.spike_state.dtype.itemsize*self.my_num_spike_neurons))
+                int(self.spike_state.dtype.itemsize*self.total_num_spike_neurons))
 
     #TODO
     def _extract_projection_gpot_func(self):
         template = """
-        __global__ void extract_projection(%(type)s* all_V, 
-                                           %(type)s* projection_V, 
+        __global__ void extract_projection(%(type)s* all_V,
+                                           %(type)s* projection_V,
                                            int* projection_list, int N)
         {
               int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -787,7 +787,7 @@ class LPU(Module):
         self.block_extract = (256, 1, 1)
         self.grid_extract_spike = (
             min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT,
-                (self.num_public_spike-1) / 256 + 1), 
+                (self.num_public_spike-1) / 256 + 1),
             1)
         return func
 
@@ -805,7 +805,7 @@ class LPU(Module):
 
         if n['spiking'][0]:
             neuron = self._neuron_classes[ind](
-                n, int(int(self.spike_state.gpudata) + 
+                n, int(int(self.spike_state.gpudata) +
                 self.spike_state.dtype.itemsize*self.idx_start_spike[i]),
                 self.dt, debug=self.debug, LPU_id=self.id)
         else:
@@ -816,7 +816,7 @@ class LPU(Module):
 
         if not neuron.update_I_override:
             baseneuron.BaseNeuron.__init__(
-                neuron, n, 
+                neuron, n,
                 int(int(self.V.gpudata) +
                 self.V.dtype.itemsize*self.idx_start_gpot[i]),
                 self.dt, debug=self.debug, LPU_id=self.id)
@@ -892,7 +892,7 @@ class CircularArray:
                 (gpot_delay_steps, num_gpot_neurons), np.double)
 
             self.gpot_current = 0
-            
+
             for i in range(gpot_delay_steps):
                 cuda.memcpy_dtod(
                     int(self.gpot_buffer.gpudata) +
@@ -918,9 +918,9 @@ class CircularArray:
                 self.spike_current = 0
 
     '''
-    def update_other_rest(self, gpot_data, my_num_gpot_neurons, num_virtual_gpot_neurons):
+    def update_other_rest(self, gpot_data, total_num_gpot_neurons, num_virtual_gpot_neurons):
         # ??? is the second part of the below condition correct?
-        if num_virtual_gpot_neurons > 0:            
+        if num_virtual_gpot_neurons > 0:
             d_other_rest = garray.zeros(num_virtual_gpot_neurons, np.double)
             a = 0
             for data in gpot_data.itervalues():
@@ -930,7 +930,7 @@ class CircularArray:
 
             for i in range(self.gpot_delay_steps):
                 cuda.memcpy_dtod( int(self.gpot_buffer.gpudata) + \
-                    (self.gpot_buffer.ld * i + int(my_num_gpot_neurons)) * \
+                    (self.gpot_buffer.ld * i + int(total_num_gpot_neurons)) * \
                     self.gpot_buffer.dtype.itemsize, d_other_rest.gpudata, \
                     d_other_rest.nbytes )
     '''
