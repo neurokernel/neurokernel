@@ -131,6 +131,23 @@ class BaseModule(ControlledProcess):
                         (self._max_steps, value))
         self._max_steps = value
 
+    # Define properties to perform validation when the synchronization 
+    # period is set:
+    _sync_period = 0
+    @property
+    def sync_period(self):
+        """
+        How many steps between synchronization.
+        """
+        return self._sync_period
+    @sync_period.setter
+    def sync_period(self, value):
+        if value < 0:
+            raise ValueError('invalid synchronization period')
+        self.log_info('synchronization period changed: %s -> %s' % \
+                      (self._sync_period, value))
+        self._sync_period = value
+
     def __init__(self, sel, sel_in, sel_out,
                  data, columns=['interface', 'io', 'type'],
                  port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
@@ -659,6 +676,9 @@ class BaseModule(ControlledProcess):
                 self.sock_time.send(msgpack.packb((self.id, self.steps, 'start',
                                                    time.time())))
                 self.log_info('sent start time to master')
+
+            # Counter for number of steps between synchronizations:
+            steps_since_sync = 0
             while self.steps < self.max_steps:
                 self.log_info('execution step: %s/%s' % (self.steps, self.max_steps))
 
@@ -673,7 +693,13 @@ class BaseModule(ControlledProcess):
                     self.post_run_step()
 
                     # Synchronize:
-                    self._sync()
+                    if steps_since_sync == self.sync_period:
+                        self._sync()
+                        steps_since_sync = 0
+                    else:
+                        self.log_info('skipping sync (%s/%s)' % \
+                                      (steps_since_sync, self.sync_period))
+                        steps_since_sync += 1
                 else:
                     # Run the processing step:
                     catch_exception(self.run_step, self.log_info)
@@ -682,7 +708,13 @@ class BaseModule(ControlledProcess):
                     catch_exception(self.post_run_step, self.log_info)
 
                     # Synchronize:
-                    catch_exception(self._sync, self.log_info)
+                    if steps_since_sync == self.sync_period:
+                        catch_exception(self._sync, self.log_info)
+                        steps_since_sync = 0
+                    else:
+                        self.log_info('skipping sync (%s/%s)' % \
+                                      (steps_since_sync, self.sync_period))
+                        steps_since_sync += 1
 
                 # Exit run loop when a quit message has been received:
                 if not self.running:
@@ -1179,7 +1211,7 @@ class BaseManager(LoggerMixin):
         self.log_info('added module %s' % m.id)
         return m
 
-    def start(self, steps=np.inf):
+    def start(self, steps=np.inf, sync_period=0):
         """
         Start execution of all processes.
 
@@ -1187,9 +1219,14 @@ class BaseManager(LoggerMixin):
         ----------
         steps : number
             Maximum number of steps to execute.
+        sync_period : number
+            Transmit data between modules every `sync_period` steps, i.e., 
+            if 0, transmit data at every step, if 1, transmit data at every
+            other step, etc.
         """
 
         self.max_steps = steps
+        self.sync_period = sync_period
         with IgnoreKeyboardInterrupt():
             self.log_info('time listener about to start')
             self.time_listener.start()
@@ -1203,6 +1240,7 @@ class BaseManager(LoggerMixin):
                 bi+=1
             for m in self.modules.values():
                 m.max_steps = steps
+                m.sync_period = sync_period
                 self.log_info('module ' + str(mi) + ' about to start')
                 m.start()
                 self.log_info('module ' + str(mi) + ' started')

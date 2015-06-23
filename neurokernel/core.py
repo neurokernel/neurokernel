@@ -427,6 +427,9 @@ class Module(BaseModule):
                 self.sock_time.send(msgpack.packb((self.id, self.steps, 'start',
                                                    time.time())))
                 self.log_info('sent start time to master')
+
+            # Counter for number of steps between synchronizations:
+            steps_since_sync = 0
             while self.steps < self.max_steps:
                 self.log_info('execution step: %s/%s' % (self.steps, self.max_steps))
 
@@ -441,7 +444,13 @@ class Module(BaseModule):
                     self.post_run_step()
 
                     # Synchronize:
-                    self._sync()
+                    if steps_since_sync == self.sync_period:
+                        self._sync()
+                        steps_since_sync = 0
+                    else:
+                        self.log_info('skipping sync (%s/%s)' % \
+                                      (steps_since_sync, self.sync_period))
+                        steps_since_sync += 1
 
                 else:
 
@@ -452,7 +461,13 @@ class Module(BaseModule):
                     catch_exception(self.post_run_step, self.log_info)
 
                     # Synchronize:
-                    catch_exception(self._sync, self.log_info)
+                    if steps_since_sync == self.sync_period:
+                        catch_exception(self._sync, self.log_info)
+                        steps_since_sync = 0
+                    else:
+                        self.log_info('skipping sync (%s/%s)' % \
+                                      (steps_since_sync, self.sync_period))
+                        steps_since_sync += 1
 
                 # Exit run loop when a quit signal has been received:
                 if not self.running:
