@@ -298,7 +298,28 @@ class LPU(Module):
         self.sel_in_gpot = sel_in_gpot
         self.sel_out_gpot = sel_out_gpot
 
-        #TODO: comment
+        # The following code creates a mapping for each neuron from its "id" to
+        # its position on the gpu array. The gpu array is arranged as follows,
+        #
+        #    | gpot_neuron | spike_neuron |
+        #
+        # For example, suppose the id's of the gpot neurons and of the spike
+        # neurons are 1,4,5 and 2,0,3, respectively. We allocate gpu memory
+        # for each neuron as follows,
+        #
+        #    | 1 4 5 | 2 0 3 |
+        #
+        # To get the position of each neuron, we simply use numpy.argsort:
+        #
+        # >>> x = [1,4,5,2,0,3]
+        # >>> y = numpy.argsort( x )
+        # >>> y
+        # [4,0,3,5,1,2]
+        #
+        # The i-th value of the returned array is the positon to find the
+        # i-th smallest element in the original array, which is exactly i.
+        # In other words, we have the relations: x[i]=j and y[j]=i.
+
         num_gpot_neurons = np.where( n_model_is_spk, 0, n_model_num)
         num_spike_neurons = np.where( n_model_is_spk, n_model_num, 0)
         self.total_num_gpot_neurons = sum( num_gpot_neurons )
