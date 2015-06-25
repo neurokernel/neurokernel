@@ -324,6 +324,50 @@ class LeakyIAF:
             etree.SubElement( etree_element, "attribute",\
                 id=str(i+10), type="string", title=attr )
 
+class LocalNeuron():
+    def __init__(self, name, pre_gl_list, post_gl_list=None, \
+                para=dict(),pre_para=dict(), post_para=dict(), database = Hallem06 ):
+        """
+        Inter-Glomerular Local Neuron
+        """
+        self.neu = LeakyIAF(
+            name   = name,
+            V0     = database['pn_para']['V0'],
+            Vr     = database['pn_para']['Vr'],
+            Vt     = database['pn_para']['Vt'],
+            R      = database['pn_para']['R'],
+            C      = database['pn_para']['C'],
+            public = False,
+            extern = False)
+
+        self.syn_list = []
+        # assuming that LN-GL connectivity is reciprical
+        for gl in pre_gl_list:
+            # OSN->LN synapse
+            for osn in gl.osn_list:
+                self.syn_list.append( AlphaSynapse(
+                    name     = str('%s-%s'% (osn.name,self.neu.name)),
+                    gmax     = database['op_syn_para']['gmax'],
+                    reverse  = database['op_syn_para']['reverse'],
+                    ar       = database['op_syn_para']['ar'],
+                    ad       = database['op_syn_para']['ad'],
+                    pre_neu  = osn,
+                    post_neu = self.neu))
+        # Assuming that LN-GL connectivity is reciprical if post_gl is None
+        if not post_gl_list:
+            post_gl_list = pre_gl_list
+        for gl in post_gl_list:
+            # LN->OSN synapse
+            for osn in gl.osn_list:
+                self.syn_list.append( AlphaSynapse(
+                    name     = str('%s-%s'% (self.neu.name,osn.name)),
+                    gmax     = database['op_syn_para']['gmax'],
+                    reverse  = database['op_syn_para']['reverse'],
+                    ar       = database['op_syn_para']['ar'],
+                    ad       = database['op_syn_para']['ad'],
+                    pre_neu  = self.neu,
+                    post_neu = osn))
+
 class Glomerulus:
     """
     Glomerulus in the Antenna lobe of Drosophila olfactory system
@@ -392,7 +436,7 @@ class Glomerulus:
                 name=str('rece-%s' % (self.osn_list[i].name,)),
                 pre_neu=self.rece_list[i],
                 post_neu=self.osn_list[i]))
-           # setup synpases from the current OSN to each of PNs
+            # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
                 self.syn_list.append(AlphaSynapse(
                     name=str('%s-%s'% (self.osn_list[i].name,\
@@ -431,12 +475,13 @@ class AntennalLobe():
         self.gl_name = gl_name
         self.neu_list = None
         self.syn_list = None
+        self.ln_list = []
+        self.gl_list = []
 
     def setGlomeruli(self, anatomy_db=None, odor_db=None, gl_name=None, rand=0.):
         if anatomy_db is not None: self.anatomy_db = anatomy_db
         if odor_db is not None: self.odor_db = odor_db
         if gl_name is not None: self.gl_name = gl_name
-        self.gl_list = []
         for i,gl in enumerate(self.gl_name):
             #assert( gl is in self.database['gl'] )
             self.gl_list.append( Glomerulus(
@@ -446,6 +491,17 @@ class AntennalLobe():
                 database=self.odor_db,
                 osn_type=self.anatomy_db['gl'][gl],
                 rand=rand))
+        self.gl_dict = {gl.name:gl for gl in self.gl_list}
+
+    def addLN(self, ln_name, pre_gl_list, post_gl_list = [], pre_para = {}, post_para = {}):
+            assert( set(pre_gl_list) <= set(self.gl_name.keys()))
+            assert( set(post_gl_list) <= set(self.gl_name.keys()))
+            pre_gl_list = {self.gl_dict[x] for x in pre_gl_list}
+            post_gl_list = {self.gl_dict[x] for x in post_gl_list}
+            self.ln_list.append(LocalNeuron(
+                ln_name,
+                pre_gl_list,
+                post_gl_list))
 
     def setLN():
         pass
@@ -479,11 +535,11 @@ class AntennalLobe():
 
     def _getAllNeuList(self):
         self.neu_list = []
-        # stack OSN into the neuron list
+        # stack OSN onto the neuron list
         for gl in self.gl_list:
             for neu in gl.osn_list:
                 self.neu_list.append( neu.setattr( id=len(self.neu_list)))
-        # stack PN into the neuron list
+        # stack PN onto the neuron list
         for gl in self.gl_list:
             for neu in gl.pn_list:
                 self.neu_list.append( neu.setattr( id=len(self.neu_list)))
@@ -491,9 +547,15 @@ class AntennalLobe():
         for gl in self.gl_list:
             for rece in gl.rece_list:
                 self.neu_list.append( rece.setattr(id=len(self.neu_list)))
+        # stack OSN onto the neuron list
+        for ln in self.ln_list:
+            self.neu_list.append( ln.neu.setattr( id=len(self.neu_list)))
 
     def _getAllSynList(self):
         self.syn_list = []
         for gl in self.gl_list:
             for syn in gl.syn_list:
+                self.syn_list.append( syn.setattr( id=len(self.syn_list)))
+        for neu in self.ln_list:
+            for syn in neu.syn_list:
                 self.syn_list.append( syn.setattr( id=len(self.syn_list)))
