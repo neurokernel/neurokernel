@@ -181,7 +181,8 @@ class AlphaSynapse:
 
     def toGEXF(self,etree_element):
         edge = etree.SubElement( etree_element, "edge", id=str(self.id),
-            source=str(self.pre_neu.id), target=str(self.post_neu.id))
+            source=str(self.pre_neu.id),
+            target=str(self.post_neu.id) if self.post_neu is LeakyIAF else 'synapse-'+ str(self.post_neu.id))
         attr = etree.SubElement( edge, "attvalues" )
         etree.SubElement(attr,"attvalue",attrib={"for":"0","value":"AlphaSynapse"})
         for i,att in enumerate( ("name","reverse","ar","ad","gmax") ):
@@ -198,6 +199,67 @@ class AlphaSynapse:
         def_type = etree.SubElement( etree_element, "attribute",\
                        id="0", type="string", title="model" )
         etree.SubElement( def_type, "default" ).text = "AlphaSynapse"
+        etree.SubElement( etree_element, "attribute",\
+            id="1", type="string", title="name" )
+        for (i,attr) in enumerate( ("reverse","ar","ad","gmax") ):
+            etree.SubElement( etree_element, "attribute",\
+                id=str(i+2), type="float", title=attr )
+        etree.SubElement( etree_element, "attribute", id="6",\
+            type="integer", title="class" )
+        etree.SubElement( etree_element, "attribute", id="7",
+            type="boolean", title="conductance")
+
+class OSNAxTerm:
+    """
+    Alpha-Synapse
+    """
+    def __init__(self, name=None, id=None, reverse=-0.06, ar=400., ad=400., gmax=1.,\
+                 pre_neu=None,post_neu=None, rand=0.):
+        self.id = id
+        self.name = name
+        self.reverse = reverse*uniform(1.-rand,1.+rand) # the reverse potential
+        self.ar = ar*uniform(1.-rand,1.+rand)           # the rise rate of the synaptic conductance
+        self.ad = ad *uniform(1.-rand,1.+rand)          # the drop rate of the synaptic conductance
+        self.gmax = gmax*uniform(1.-rand,1.+rand)       # maximum conductance
+        self.I = 0.
+        self.a = np.zeros(3,)       # a stands for alpha
+        self.pre_neu = pre_neu
+        self.post_neu = post_neu
+
+    def prepare(self,dt=0.):
+        pass
+
+    def show(self):
+        print "%s gmax:%.2f reverse:%.2f ar:%.2f ad:%.2f" % \
+              (self.name,self.gmax,self.Vr,self.ar,self.ad)
+
+    def setattr(self,**kwargs):
+        """
+        A wrapper of python built-in setattr(). self is returned.
+        """
+        for kw, val in kwargs.items():
+            setattr( self, kw, val )
+        return self
+
+    def toGEXF(self,etree_element):
+        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
+            source=str(self.pre_neu.id), target=str(self.post_neu.id))
+        attr = etree.SubElement( edge, "attvalues" )
+        etree.SubElement(attr,"attvalue",attrib={"for":"0","value":"OSNAnTerm"})
+        for i,att in enumerate( ("name","reverse","ar","ad","gmax") ):
+            etree.SubElement( attr, "attvalue",\
+                attrib={"for":str(i+1), "value":str(getattr(self,att)) })
+        etree.SubElement(attr,"attvalue",attrib={"for":"6","value":"0"})
+        etree.SubElement(attr,"attvalue",attrib={"for":"7","value":"true"})
+
+    @staticmethod
+    def getGEXFattr(etree_element):
+        """
+        generate GXEF attributes
+        """
+        def_type = etree.SubElement( etree_element, "attribute",\
+                       id="0", type="string", title="model" )
+        etree.SubElement( def_type, "default" ).text = "OSNAxTerm"
         etree.SubElement( etree_element, "attribute",\
             id="1", type="string", title="name" )
         for (i,attr) in enumerate( ("reverse","ar","ad","gmax") ):
@@ -358,15 +420,15 @@ class LocalNeuron():
             post_gl_list = pre_gl_list
         for gl in post_gl_list:
             # LN->OSN synapse
-            for osn in gl.osn_list:
+            for syn in gl.syn_list:
                 self.syn_list.append( AlphaSynapse(
-                    name     = str('%s-%s'% (self.neu.name,osn.name)),
+                    name     = str('%s<%s'% (self.neu.name,syn.name)),
                     gmax     = database['op_syn_para']['gmax'],
                     reverse  = database['op_syn_para']['reverse'],
                     ar       = database['op_syn_para']['ar'],
                     ad       = database['op_syn_para']['ad'],
                     pre_neu  = self.neu,
-                    post_neu = osn))
+                    post_neu = syn))
 
 class Glomerulus:
     """
@@ -438,7 +500,7 @@ class Glomerulus:
                 post_neu=self.osn_list[i]))
             # setup synpases from the current OSN to each of PNs
             for j in xrange(self.pn_num):
-                self.syn_list.append(AlphaSynapse(
+                self.syn_list.append(OSNAxTerm(
                     name=str('%s-%s'% (self.osn_list[i].name,\
                                          self.pn_list[j].name)),
                     gmax=database['op_syn_para']['gmax'],
