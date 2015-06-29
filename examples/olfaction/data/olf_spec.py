@@ -3,7 +3,9 @@ Olfaction specification for NeuroKernel
 """
 from random import uniform
 import numpy as np
+from collections import OrderedDict
 from lxml import etree
+from abc import ABCMeta, abstractmethod, abstractproperty
 import gzip
 
 Odor_databas       = {'Acetone':[ 1, -10,  29,   0, -25, 38,
@@ -67,7 +69,61 @@ Hallem06 = {
     'type':'osn_spike_rate'
     }
 
-class Receptor:
+class Neuron(object):
+    __metaclass__ = ABCMeta
+
+    _default_attr_dict = OrderedDict((
+                 ('model','string'),
+                 ('name','string'),
+                 ('spiking','float'),
+                 ('public','float'),
+                 ('extern','float'),
+                 ('selector','string')))
+
+    _attr_dict = OrderedDict({})
+
+    def __init__(self):
+        pass
+
+    @property
+    def commonAttr(self):
+        return super(type(self),self)._attr_dict
+
+    @classmethod
+    def getAttr(cls):
+        return OrderedDict({})
+
+    @classmethod
+    def getGEXFattr(cls,etree_element):
+        """
+        Generate GXEF attributes
+
+        First, add the common attribute, then add attribute from all subclasses
+        """
+        cls._attr_dict = OrderedDict(cls._default_attr_dict)
+        for scls in cls.__subclasses__():
+            for k,v in scls.getAttr().items():
+                if k not in cls._attr_dict:
+                    cls._attr_dict[k] = v
+                else:
+                    assert(cls._attr_dict[k] == v)
+
+        for i,(k,v) in enumerate(cls._attr_dict.items()):
+            etree.SubElement( etree_element, "attribute",\
+                id=str(i), type=v, title=k )
+
+    def toGEXF(self,etree_element):
+        # BUG: can not get model attribute
+        comm_attr = self.commonAttr.keys()
+        node = etree.SubElement( etree_element, "node", id=str(self.id) )
+        attr = etree.SubElement( node, "attvalues" )
+        for i,k in enumerate(comm_attr):
+            v = getattr(self, k, None)
+            if v is not None and v != "":
+                etree.SubElement(attr, "attvalue",
+                                 attrib={"for":str(i), "value":str(v)})
+
+class Receptor(Neuron):
     """
     Dummy receptor for setting up ports; no computation invloved in this class
     """
@@ -85,13 +141,14 @@ class Receptor:
         return self
 
     def toGEXF(self,etree_element):
+        comm_attr = self.commonAttr.keys()
         node = etree.SubElement(etree_element, "node", id=str(self.id))
         attr = etree.SubElement(node, "attvalues")
-        etree.SubElement(attr, "attvalue", attrib={"for":"0", "value":"port_in_gpot"})
-        etree.SubElement(attr, "attvalue", attrib={"for":"1", "value":self.name})
-        for i, _ in enumerate(('spiking','public','extern')):
-            etree.SubElement( attr, "attvalue", attrib={"for":str(7+i), "value":"false" })
-        etree.SubElement(attr, "attvalue", attrib={"for":"10", "value":self.selector})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"port_in_gpot"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('name')), "value":self.name})
+        for i, x in enumerate(('spiking','public','extern')):
+            etree.SubElement( attr, "attvalue", attrib={"for":str(comm_attr.index(x)), "value":"false" })
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('selector')), "value":self.selector})
 
 class DummySynapse:
     """
@@ -270,10 +327,17 @@ class OSNAxTerm:
         etree.SubElement( etree_element, "attribute", id="7",
             type="boolean", title="conductance")
 
-class LeakyIAF:
+class LeakyIAF(Neuron):
     """
     Leaky Integrated-and-Fire Neuron
     """
+
+    _default_attr_dict = OrderedDict((
+        ("V","float"),
+        ("Vr","float"),
+        ("Vt","float"),
+        ("R","float"),
+        ("C","float")))
 
     def __init__(self,id=None,name=None,V0=0.,Vr=-0.05,Vt=-0.02,R=1.,C=1.,\
                  syn_list=None,public=True,extern=True,rand=0.,\
@@ -354,39 +418,25 @@ class LeakyIAF:
         return self
 
     def toGEXF(self,etree_element):
+        comm_attr = self.commonAttr.keys()
         node = etree.SubElement( etree_element, "node", id=str(self.id) )
         attr = etree.SubElement( node, "attvalues" )
-        etree.SubElement(attr,"attvalue",attrib={"for":"0","value":"LeakyIAF"})
-        for i,att in enumerate( ("name","V","Vr","Vt","R","C",) ):
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"LeakyIAF"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('name')), "value":self.name})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('spiking')), "value":"true"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('public')), "value":"true" if self.public else "false"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('extern')), "value":"true" if self.extern else "false"})
+        if self.selector != "":
+            etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('selector')), "value":self.selector})
+        for i,att in enumerate( self._default_attr_dict.keys() ):
             etree.SubElement( attr, "attvalue",\
-                attrib={"for":str(i+1), "value":str(getattr(self,att)) })
-        etree.SubElement( attr, "attvalue", attrib={"for":"7", "value":"true" })
-        etree.SubElement( attr, "attvalue", attrib={"for":"8", "value":"true" if self.public else "false" })
-        etree.SubElement( attr, "attvalue", attrib={"for":"9", "value":"true" if self.extern else "false" })
-        etree.SubElement( attr, "attvalue", attrib={"for":"10", "value":self.selector })
+                attrib={"for":str(comm_attr.index(att)), "value":str(getattr(self,att)) })
 
-    @staticmethod
-    def getGEXFattr(etree_element):
-        """
-        generate GXEF attributes
+    @classmethod
+    def getAttr(cls):
+        return cls._default_attr_dict
 
-        """
-        def_type = etree.SubElement( etree_element, "attribute",\
-                       id="0", type="string", title="model" )
-        etree.SubElement( def_type, "default" ).text = "LeakyIAF"
-        etree.SubElement( etree_element, "attribute",\
-            id="1", type="string", title="name" )
-        for (i,attr) in enumerate( ("V","Vr","Vt","R","C") ):
-            etree.SubElement( etree_element, "attribute",\
-                id=str(i+2), type="float", title=attr )
-        for (i,attr) in enumerate( ("spiking","public","extern") ):
-            etree.SubElement( etree_element, "attribute",\
-                id=str(i+7), type="boolean", title=attr )
-        for (i,attr) in enumerate(("selector",)):
-            etree.SubElement( etree_element, "attribute",\
-                id=str(i+10), type="string", title=attr )
-
-class LocalNeuron():
+class LocalNeuron:
     def __init__(self, name, pre_gl_list, post_gl_list=None, \
                 para=dict(),pre_para=dict(), post_para=dict(), database = Hallem06 ):
         """
@@ -577,7 +627,7 @@ class AntennalLobe():
         graph = etree.SubElement( root, "graph", defaultedgetype="directed" )
         # add node(neuron) attributes
         node = etree.SubElement( graph, "attributes", attrib={"class":"node"} )
-        LeakyIAF.getGEXFattr( node )
+        Neuron.getGEXFattr( node )
         # add edge(synapse) attributes
         edge = etree.SubElement( graph, "attributes", attrib={"class":"edge"} )
         AlphaSynapse.getGEXFattr( edge )
