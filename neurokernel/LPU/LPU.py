@@ -348,18 +348,6 @@ class LPU(Module):
         self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
         self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
 
-        #TODO: comment
-        self.s_dict = s_dict
-        if s_dict:
-            for s in self.s_dict.itervalues():
-                shift = self.spike_shift \
-                    if s['class'][0] == 0 or s['class'][0] == 1 else 0
-                s['pre'] = [ self.order[int(neu_id)] - shift
-                             for neu_id in s['pre'] ]
-                # why don't why need shift for post neuron?
-                s['post'] = [ self.order[int(neu_id)]
-                              for neu_id in s['post'] ]
-
         gpot_delay_steps = 0
         spike_delay_steps = 0
 
@@ -371,9 +359,15 @@ class LPU(Module):
 
         count = 0
 
+        self.s_dict = s_dict
         self.s_list = self.s_dict.items()
         num_synapses = [ len(s['id']) for _, s in self.s_list ]
         for (_, s) in self.s_list:
+            shift = self.spike_shift if s['class'][0] <= 1 else 0
+            s['pre'] = [ self.order[int(nid)] - shift for nid in s['pre'] ]
+            # why don't why need shift for post neuron?
+            s['post'] = [ self.order[int(nid)] for nid in s['post'] ]
+
             order = np.argsort(s['post']).astype(np.int32)
             for k, v in s.items():
                 s[k] = np.asarray(v)[order]
