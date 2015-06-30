@@ -361,12 +361,18 @@ class LPU(Module):
 
         self.s_dict = s_dict
         self.s_list = self.s_dict.items()
+        self.max_nid = np.max(n_id) + 1
         num_synapses = [ len(s['id']) for _, s in self.s_list ]
         for (_, s) in self.s_list:
             shift = self.spike_shift if s['class'][0] <= 1 else 0
             s['pre'] = [ self.order[int(nid)] - shift for nid in s['pre'] ]
             # why don't why need shift for post neuron?
-            s['post'] = [ self.order[int(nid)] for nid in s['post'] ]
+            # For synapses whose post-synaptic site is another synapse, we set
+            # its post-id to be max_neuron_id + synapse_id. By doing so, we
+            # won't confuse synapse ID's with neurons ID's.
+            s_neu_post = [self.order[int(nid)] for nid in s['post'] if 'synapse' not in nid]
+            s_syn_post = [int(nid[8:])+self.max_nid for nid in s['post'] if 'synapse' in nid]
+            s['post'] = s_neu_post + s_syn_post
 
             order = np.argsort(s['post']).astype(np.int32)
             for k, v in s.items():
@@ -450,6 +456,22 @@ class LPU(Module):
 
             n['num_dendrites_cond'] = Counter(n['cond_post'])
             n['num_dendrites_I'] = Counter(n['I_post'])
+
+        for i, (t, n) in enumerate(self.s_list):
+            idx = np.where(
+                (cond_post >= self.nid_max + self.idx_start_synapse[i]) &
+                (cond_post < self.nid_max + self.idx_start_synapse[i+1]))
+            s['cond_post'] = cond_post[idx] - self.idx_start_gpot[i] - self.nid_max
+            s['cond_pre'] = cond_pre[idx]
+            s['reverse'] = reverse[idx]
+            idx = np.where(
+                (I_post >= self.nid_max + self.idx_start_synapse[i]) &
+                (I_post < self.nid_max + self.idx_start_synapse[i+1]))
+            s['I_post'] = I_post[idx] - self.idx_start_gpot[i] - self.nid_max
+            s['I_pre'] = I_pre[idx]
+
+            s['num_dendrites_cond'] = Counter(s['cond_post'])
+            s['num_dendrites_I'] = Counter(s['I_post'])
 
         self.gpot_delay_steps = int(round(gpot_delay_steps*1e-3/self.dt)) + 1
         self.spike_delay_steps = int(round(spike_delay_steps*1e-3/self.dt)) + 1
