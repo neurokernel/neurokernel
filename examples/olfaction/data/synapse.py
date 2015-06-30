@@ -11,7 +11,7 @@ class Synapse(object):
         ("model","string"),
         ("name","string"),
         ("reverse","float"),
-        ("class","int"),
+        ("class","integer"),
         ("conductance","boolean")))
 
     _attr_dict = OrderedDict({})
