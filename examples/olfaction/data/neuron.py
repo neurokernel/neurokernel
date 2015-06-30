@@ -10,9 +10,9 @@ class Neuron(object):
     _default_attr_dict = OrderedDict((
                  ('model','string'),
                  ('name','string'),
-                 ('spiking','float'),
-                 ('public','float'),
-                 ('extern','float'),
+                 ('spiking','boolean'),
+                 ('public','boolean'),
+                 ('extern','boolean'),
                  ('selector','string')))
 
     _attr_dict = OrderedDict({})
