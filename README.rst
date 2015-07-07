@@ -20,7 +20,7 @@ Neurokernel requires
 * Python 2.7 (Python 3.0 is not guaranteed to work)
 * at least one NVIDIA GPU with `Fermi
   <http://www.nvidia.com/content/pdf/fermi_white_papers/nvidia_fermi_compute_architecture_whitepaper.pdf>`_
-  architecture
+  architecture (or something more recent)
 * NVIDIA's `GPU drivers <http://www.nvidia.com/content/drivers/>`_
 * `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.
 
@@ -153,7 +153,7 @@ Authors & Acknowledgements
 --------------------------
 See the included `AUTHORS`_ file for more information.
 
-.. _AUTHORS: docs/source/authors.rst
+.. _AUTHORS: AUTHORS.rst
 
 License
 -------
@@ -161,7 +161,7 @@ This software is licensed under the `BSD License
 <http://www.opensource.org/licenses/bsd-license.php>`_.
 See the included `LICENSE`_ file for more information.
 
-.. _LICENSE: docs/source/license.rst
+.. _LICENSE: LICENSE.rst
 
 Notes
 -----
