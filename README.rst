@@ -151,13 +151,17 @@ Neurokernel's documentation is available at `<http://neurokernel.readthedocs.org
 
 Authors & Acknowledgements
 --------------------------
-See the included AUTHORS file for more information.
+See the included `AUTHORS`_ file for more information.
+
+.. _AUTHORS: docs/source/authors.rst
 
 License
 -------
 This software is licensed under the `BSD License
 <http://www.opensource.org/licenses/bsd-license.php>`_.
-See the included LICENSE file for more information.
+See the included `LICENSE`_ file for more information.
+
+.. _LICENSE: docs/source/license.rst
 
 Notes
 -----
