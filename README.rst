@@ -114,7 +114,7 @@ following lines appear in your `~/.condarc` file so that conda can find the
 packages required by Neurokernel: ::
 
    channels:
-   - https://conda.binstar.org/neurokernel/channel/ubuntu1404
+   - https://conda.anaconda.org/neurokernel/channel/ubuntu1404
    - defaults
 
 Create a new conda environment containing the packages required by Neurokernel
