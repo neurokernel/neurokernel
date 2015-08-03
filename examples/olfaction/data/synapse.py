@@ -16,8 +16,10 @@ class Synapse(object):
 
     _attr_dict = OrderedDict({})
 
-    def __init__(self):
-        pass
+    def __init__(self, id, pre_neu, post_neu):
+        self.id = id
+        self.pre_neu = pre_neu
+        self.post_neu = post_neu
 
     @property
     def commonAttr(self):
@@ -48,24 +50,18 @@ class Synapse(object):
 
     def toGEXF(self,etree_element):
         # BUG: can not get model attribute
-        comm_attr = self.commonAttr.keys()
-        node = etree.SubElement( etree_element, "node", id=str(self.id) )
-        attr = etree.SubElement( node, "attvalues" )
-        for i,k in enumerate(comm_attr):
-            v = getattr(self, k, None)
-            if v is not None and v != "":
-                etree.SubElement(attr, "attvalue",
-                                 attrib={"for":str(i), "value":str(v)})
+        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
+            source=str(self.pre_neu.id),
+            target=str(self.post_neu.id) if not isinstance(self.post_neu, Synapse) else 'synapse-'+ str(self.post_neu.id))
+        return edge
 
 class DummySynapse(Synapse):
     """
     Dummy-Synapse
     """
     def __init__(self, name=None, id=None, pre_neu=None, post_neu=None):
-        self.id = id
+        super(DummySynapse, self).__init__(id, pre_neu, post_neu)
         self.name = name
-        self.pre_neu = pre_neu
-        self.post_neu = post_neu
 
     def prepare(self,dt=0.):
         pass
@@ -86,13 +82,13 @@ class DummySynapse(Synapse):
 
     def toGEXF(self,etree_element):
         comm_attr = self.commonAttr.keys()
-        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
-            source=str(self.pre_neu.id), target=str(self.post_neu.id))
+        edge = super(DummySynapse, self).toGEXF(etree_element)
         attr = etree.SubElement( edge, "attvalues" )
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index("model")),"value":"DummySynapse"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index("name")), "value":self.name})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index("class")),"value":"2"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index("conductance")),"value":"false"})
+        return edge
 
 class AlphaSynapse(Synapse):
     """
@@ -106,7 +102,7 @@ class AlphaSynapse(Synapse):
 
     def __init__(self, name=None, id=None, reverse=-0.06, ar=400., ad=400., gmax=1.,\
                  pre_neu=None,post_neu=None, rand=0.):
-        self.id = id
+        super(AlphaSynapse, self).__init__(id, pre_neu, post_neu)
         self.name = name
         self.reverse = reverse*uniform(1.-rand,1.+rand) # the reverse potential
         self.ar = ar*uniform(1.-rand,1.+rand)           # the rise rate of the synaptic conductance
@@ -114,8 +110,6 @@ class AlphaSynapse(Synapse):
         self.gmax = gmax*uniform(1.-rand,1.+rand)       # maximum conductance
         self.I = 0.
         self.a = np.zeros(3,)       # a stands for alpha
-        self.pre_neu = pre_neu
-        self.post_neu = post_neu
 
     def prepare(self,dt=0.):
         pass
@@ -152,15 +146,14 @@ class AlphaSynapse(Synapse):
 
     def toGEXF(self,etree_element):
         comm_attr = self.commonAttr.keys()
-        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
-            source=str(self.pre_neu.id),
-            target=str(self.post_neu.id) if not isinstance(self.post_neu, Synapse) else 'synapse-'+ str(self.post_neu.id))
+        edge = super(AlphaSynapse, self).toGEXF(etree_element)
         attr = etree.SubElement( edge, "attvalues" )
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"AlphaSynapse"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('name')), "value":str(self.name)})
-        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('reverse')), "value":str(self.reverse)})
+        if not np.isnan(self.reverse):
+            etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('reverse')), "value":str(self.reverse)})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('class')), "value":"0"})
-        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('conductance')), "value":"true"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('conductance')), "value":"true" if not np.isnan(self.reverse) else "false" })
         for att in ("gmax","ar","ad"):
             etree.SubElement( attr, "attvalue",\
                 attrib={"for":str(comm_attr.index(att)), "value":str(getattr(self,att)) })
@@ -180,7 +173,7 @@ class PreInhSynapse(Synapse):
 
     def __init__(self, name=None, id=None, reverse=-0.06, ar=400., ad=400., gmax=1.,\
                  pre_neu=None,post_neu=None, rand=0.):
-        self.id = id
+        super(PreInhSynapse, self).__init__(id, pre_neu, post_neu)
         self.name = name
         self.reverse = reverse*uniform(1.-rand,1.+rand) # the reverse potential
         self.ar = ar*uniform(1.-rand,1.+rand)           # the rise rate of the synaptic conductance
@@ -188,8 +181,6 @@ class PreInhSynapse(Synapse):
         self.gmax = gmax*uniform(1.-rand,1.+rand)       # maximum conductance
         self.I = 0.
         self.a = np.zeros(3,)       # a stands for alpha
-        self.pre_neu = pre_neu
-        self.post_neu = post_neu
 
     def prepare(self,dt=0.):
         pass
@@ -208,11 +199,9 @@ class PreInhSynapse(Synapse):
 
     def toGEXF(self,etree_element):
         comm_attr = self.commonAttr.keys()
-        edge = etree.SubElement( etree_element, "edge", id=str(self.id),
-            source=str(self.pre_neu.id),
-            target=str(self.post_neu.id))
+        edge = super(PreInhSynapse, self).toGEXF(etree_element)
         attr = etree.SubElement( edge, "attvalues" )
-        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"PreInhSynapse"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"OSNTerm"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('name')), "value":str(self.name)})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('reverse')), "value":str(self.reverse)})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('class')), "value":"0"})
