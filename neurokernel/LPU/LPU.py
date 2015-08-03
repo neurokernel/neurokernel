@@ -141,7 +141,7 @@ class LPU(Module):
 
         # parse neuron data
         n_dict = {}
-        neurons = graph.node.items()
+        neurons = [x for x in graph.node.items() if 'synapse' not in x[0]]
         # sort based on id (id is first converted to an integer)
         # this is done so that consecutive neurons of the same type
         # in the constructed LPU is the same in neurokernel
@@ -361,7 +361,7 @@ class LPU(Module):
 
         self.s_dict = s_dict
         self.s_list = self.s_dict.items()
-        self.max_nid = np.max(n_id) + 1
+        self.nid_max = np.max(n_id) + 1
         num_synapses = [ len(s['id']) for _, s in self.s_list ]
         for (_, s) in self.s_list:
             shift = self.spike_shift if s['class'][0] <= 1 else 0
@@ -371,7 +371,7 @@ class LPU(Module):
             # its post-id to be max_neuron_id + synapse_id. By doing so, we
             # won't confuse synapse ID's with neurons ID's.
             s_neu_post = [self.order[int(nid)] for nid in s['post'] if 'synapse' not in nid]
-            s_syn_post = [int(nid[8:])+self.max_nid for nid in s['post'] if 'synapse' in nid]
+            s_syn_post = [int(nid[8:])+self.nid_max for nid in s['post'] if 'synapse' in nid]
             s['post'] = s_neu_post + s_syn_post
 
             order = np.argsort(s['post']).astype(np.int32)
@@ -903,13 +903,24 @@ def neuron_cmp(x, y):
         return 0
 
 def synapse_cmp(x, y):
-    if int(x[1]) < int(y[1]):
-        return -1
-    elif int(x[1]) > int(y[1]):
+    """
+    post-synaptic cite might be another synapse, with convention 'synapse-id'.
+    """
+    pre_x = 'synapse' in x[1]
+    pre_y = 'synapse' in y[1]
+    int_x = int(x[1]) if not pre_x else int(x[1][8:])
+    int_y = int(y[1]) if not pre_y else int(y[1][8:])
+    if pre_x and not pre_y:
         return 1
+    elif not pre_x and pre_y:
+        return -1
     else:
-        return 0
-
+        if int_x < int_y:
+            return -1
+        elif int_x > int_y:
+            return 1
+        else:
+            return 0
 
 class CircularArray:
     '''
