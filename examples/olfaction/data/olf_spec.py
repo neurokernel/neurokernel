@@ -111,7 +111,7 @@ class LocalNeuron:
                     self.syn_list.append( AlphaSynapse(
                         name     = str('%s=%s'% (self.neu.name,syn.name)),
                         gmax     = database['op_syn_para']['gmax'],
-                        reverse  = database['op_syn_para']['reverse'],
+                        reverse  = np.nan,
                         ar       = database['op_syn_para']['ar'],
                         ad       = database['op_syn_para']['ad'],
                         pre_neu  = self.neu,
