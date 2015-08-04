@@ -150,8 +150,8 @@ class AlphaSynapse(Synapse):
         attr = etree.SubElement( edge, "attvalues" )
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"AlphaSynapse"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('name')), "value":str(self.name)})
-        if not np.isnan(self.reverse):
-            etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('reverse')), "value":str(self.reverse)})
+        #if not np.isnan(self.reverse):
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('reverse')), "value":str(self.reverse)})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('class')), "value":"0"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('conductance')), "value":"true" if not np.isnan(self.reverse) else "false" })
         for att in ("gmax","ar","ad"):
