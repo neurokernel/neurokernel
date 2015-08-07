@@ -378,23 +378,31 @@ class LPU(Module):
             for k, v in s.items():
                 s[k] = np.asarray(v)[order]
 
-            if s['conductance'][0]:
-                cond_post.extend(s['post'])
-                reverse.extend(s['reverse'])
-                cond_pre.extend(range(count, count+len(s['post'])))
-                count += len(s['post'])
-                if 'delay' in s:
-                    max_del = np.max( s['delay'] )
-                    gpot_delay_steps = max_del if max_del > gpot_delay_steps \
+            # NOTE: a computational model of synapse could be either
+            # conductance based or non-conducatance based under the same set of
+            # ODEs. If the EPSC comes directly from one of the state variables,
+            # the model is non-conductacne. Otherwise, if the calculation of
+            # EPSC involves reverse potential, the model is recognized as
+            # conductance based.
+
+            idx = np.where( np.assarray(np.s['conductance']) == 'true')
+            cond_post.extend(s['post'][idx])
+            reverse.extend(s['reverse'][idx])
+            cond_pre.extend(range(count, count+len(idx)))
+            count += len(idx)
+            if 'delay' in s:
+                max_del = np.max( s['delay'][idx] )
+                gpot_delay_steps = max_del if max_del > gpot_delay_steps \
                                        else gpot_delay_steps
-            else:
-                I_post.extend(s['post'])
-                I_pre.extend(range(count, count+len(s['post'])))
-                count += len(s['post'])
-                if 'delay' in s:
-                    max_del = np.max( s['delay'] )
-                    spike_delay_steps = max_del if max_del > spike_delay_steps \
-                                        else spike_delay_steps
+
+            idx = np.where( np.assarray(np.s['conductance']) == 'false')
+            I_post.extend(s['post'][idx])
+            I_pre.extend(range(count, count+len(s['post'][idx])))
+            count += len(s['post'])
+            if 'delay' in s:
+                max_del = np.max( s['delay'][idx] )
+                spike_delay_steps = max_del if max_del > spike_delay_steps \
+                                    else spike_delay_steps
 
         self.total_synapses = int(np.sum(num_synapses))
         I_post.extend(self.input_neuron_list)
