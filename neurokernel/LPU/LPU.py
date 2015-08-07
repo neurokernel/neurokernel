@@ -464,6 +464,12 @@ class LPU(Module):
             s['cond_post'] = cond_post[idx] - self.idx_start_gpot[i] - self.nid_max
             s['cond_pre'] = cond_pre[idx]
             s['reverse'] = reverse[idx]
+            # NOTE: after this point, s['reverse'] is no longer the reverse
+            # potential associated with the current synapse class, but the
+            # reverse potential of other synapses projecting to the current one.
+            # Its purpose is exactly the same as n['reverse'].
+            # Not sure if this is good though, since it obvious creates some
+            # degree of confusion.
             idx = np.where(
                 (I_post >= self.nid_max + self.idx_start_synapse[i]) &
                 (I_post < self.nid_max + self.idx_start_synapse[i+1]))
