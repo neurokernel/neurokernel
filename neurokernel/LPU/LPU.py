@@ -550,6 +550,8 @@ class LPU(Module):
             self._update_buffer()
 
             for synapse in self.synapses:
+                if hasattr(synapse, 'update_I'):
+                    synapse.update_I(self.synapse_state.gpu_date)
                 synapse.update_state(self.buffer)
 
             self.buffer.step()
