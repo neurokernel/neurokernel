@@ -57,7 +57,7 @@ __global__ void alpha_synapse(
 """
 cuda_src_synapse_update_I = """
 #define N 32
-#define NUM_NEURONS %(num_neurons)d
+#define NUM %(num)d
 
 __global__ void get_input(
     double* synapse,
@@ -70,7 +70,7 @@ __global__ void get_input(
     int tidy = threadIdx.y;
     int bid = blockIdx.x;
 
-    int neuron;
+    int sid;
 
     __shared__ int num_den[32];
     __shared__ int den_start[32];
@@ -78,17 +78,17 @@ __global__ void get_input(
 
     if(tidy == 0)
     {
-        neuron = bid * N + tidx;
-        if(neuron < NUM_NEURONS)
+        sid = bid * N + tidx;
+        if(sid < NUM)
         {
-            num_den[tidx] = num_dendrite[neuron];
+            num_den[tidx] = num_dendrite[sid];
         }
-    }else if(tidy == 1)
+    } else if(tidy == 1)
     {
-        neuron = bid * N + tidx;
-        if(neuron < NUM_NEURONS)
+        sid = bid * N + tidx;
+        if(sid < NUM)
         {
-            den_start[tidx] = cum_num_dendrite[neuron];
+            den_start[tidx] = cum_num_dendrite[sid];
         }
     }
 
@@ -96,8 +96,8 @@ __global__ void get_input(
 
     __syncthreads();
 
-    neuron = bid * N + tidy;
-    if(neuron < NUM_NEURONS){
+    sid = bid * N + tidy;
+    if(sid < NUM){
        int n_den = num_den[tidy];
        int start = den_start[tidy];
 
@@ -136,10 +136,10 @@ __global__ void get_input(
     if(tidy == 0)
     {
         input[tidx][0] += input[tidx][1];
-        neuron = bid*N+tidx;
-        if(neuron < NUM_NEURONS)
+        sid = bid*N+tidx;
+        if(sid < NUM)
         {
-            I_pre[neuron] += input[tidx][0];
+            I_pre[sid] += input[tidx][0];
         }
     }
 }
@@ -173,9 +173,9 @@ class OSNTerm(BaseSynapse):
         self._cum_num_dendrite_cond = garray.to_gpu(_0_cumsum(_num_dendrite_cond))
         self._num_dendrite = garray.to_gpu(_num_dendrite)
         self._num_dendrite_cond = garray.to_gpu(_num_dendrite_cond)
-        self._pre = garray.to_gpu(np.asarray(n_dict['I_pre'], dtype=np.int32))
-        self._cond_pre = garray.to_gpu(np.asarray(n_dict['cond_pre'], dtype=np.int32))
-        self._V_rev = garray.to_gpu(np.asarray(n_dict['reverse'],dtype=np.double))
+        self._pre = garray.to_gpu(np.asarray(s_dict['I_pre'], dtype=np.int32))
+        self._cond_pre = garray.to_gpu(np.asarray(s_dict['cond_pre'], dtype=np.int32))
+        self._V_rev = garray.to_gpu(np.asarray(s_dict['reverse'],dtype=np.double))
         self.I = garray.zeros(self.num, np.double)
         #self._update_I_cond = self._get_update_I_cond_func()
         self._update_I_non_cond = self._get_update_I_non_cond_func()
@@ -199,17 +199,17 @@ class OSNTerm(BaseSynapse):
             self.a0.gpudata,\
             self.a1.gpudata,\
             self.a2.gpudata,\
-            self.I,\
+            self.I.gpudata,\
             self.cond)
 
     def update_I(self, synapse_state, st=None):
         self.I.fill(0.)
-        if self._pre.size > 0
-            self._update_I_non_cond.prepare_async_call(
+        if self._pre.size > 0:
+            self._update_I_non_cond.prepared_async_call(
                 self._grid_get_input,
                 self._block_get_input,
                 st,
-                int(synapse_state),
+                synapse_state,
                 self._cum_num_dendrite.gpudata,
                 self._num_dendrite.gpudata,
                 self._pre.gpudata,
@@ -240,7 +240,7 @@ class OSNTerm(BaseSynapse):
 
     def _get_update_I_non_cond_func(self):
         mod = SourceModule(\
-                cuda_src_synapse_update_I % {"num_neurons": self.num_neurons},
+                cuda_src_synapse_update_I % {"num": self.num},
                 options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
         func.prepare([np.intp,  # synapse state
@@ -259,4 +259,4 @@ def _0_cumsum(it, dtype=np.int32):
     [0, np.cumsum(it)]
     """
     return np.concatenate((np.asarray([0,], dtype=dtype),
-                           np.cumsum(_num_dendrite, dtype=dtype)))
+                           np.cumsum(it, dtype=dtype)))
