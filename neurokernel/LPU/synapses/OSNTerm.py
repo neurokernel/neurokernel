@@ -209,7 +209,7 @@ class OSNTerm(BaseSynapse):
                 self._grid_get_input,
                 self._block_get_input,
                 st,
-                synapse_state,
+                int(synapse_state),
                 self._cum_num_dendrite.gpudata,
                 self._num_dendrite.gpudata,
                 self._pre.gpudata,
