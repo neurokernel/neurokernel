@@ -201,7 +201,7 @@ class PreInhSynapse(Synapse):
         comm_attr = self.commonAttr.keys()
         edge = super(PreInhSynapse, self).toGEXF(etree_element)
         attr = etree.SubElement( edge, "attvalues" )
-        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"OSNTerm"})
+        etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('model')), "value":"AlphaSynapsePre"})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('name')), "value":str(self.name)})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('reverse')), "value":str(self.reverse)})
         etree.SubElement(attr, "attvalue", attrib={"for":str(comm_attr.index('class')), "value":"0"})
