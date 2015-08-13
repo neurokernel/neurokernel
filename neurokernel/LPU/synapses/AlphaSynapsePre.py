@@ -1,3 +1,6 @@
+"""
+Alpha Synapse with Pre-Synaptic Innervation
+"""
 from basesynapse import BaseSynapse
 
 import numpy as np
@@ -25,7 +28,7 @@ __global__ void alpha_synapse(
     int tid = threadIdx.x + blockIdx.x*blockDim.x;
     int tot_threads = gridDim.x * blockDim.x;
     int pre;
-    %(type)s ar,ad,gmax;
+    %(type)s ar,ad,gmax,presyn;
     %(type)s old_a[3];
     %(type)s new_a[3];
 
@@ -35,6 +38,7 @@ __global__ void alpha_synapse(
         ad = Ad[i];
         pre = Pre[i];
         gmax = Gmax[i];
+        presyn = I[i];
         old_a[0] = a0[i];
         old_a[1] = a1[i];
         old_a[2] = a2[i];
@@ -43,7 +47,7 @@ __global__ void alpha_synapse(
         new_a[0] = fmax( 0., old_a[0] + dt*old_a[1] );
         new_a[1] = old_a[1] + dt*old_a[2];
         if( spike[pre] )
-            new_a[1] += ar*ad;
+            new_a[1] += ar*ad*exp(-presyn); //NOTE: choose between exp and expf
         new_a[2] = -( ar+ad )*old_a[1] - ar*ad*old_a[0];
 
         // copy data from register to the global memory
