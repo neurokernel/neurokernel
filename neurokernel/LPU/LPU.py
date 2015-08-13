@@ -3,7 +3,7 @@
 """
 Local Processing Unit (LPU) draft implementation.
 """
-
+import pdb
 import collections
 
 import pycuda.gpuarray as garray
@@ -467,11 +467,11 @@ class LPU(Module):
             n['num_dendrites_cond'] = Counter(n['cond_post'])
             n['num_dendrites_I'] = Counter(n['I_post'])
 
-        for i, (t, n) in enumerate(self.s_list):
+        for i, (t, s) in enumerate(self.s_list):
             idx = np.where(
                 (cond_post >= self.nid_max + self.idx_start_synapse[i]) &
                 (cond_post < self.nid_max + self.idx_start_synapse[i+1]))
-            s['cond_post'] = cond_post[idx] - self.idx_start_gpot[i] - self.nid_max
+            s['cond_post'] = cond_post[idx] - self.idx_start_synapse[i] - self.nid_max
             s['cond_pre'] = cond_pre[idx]
             s['reverse'] = reverse[idx]
             # NOTE: after this point, s['reverse'] is no longer the reverse
@@ -483,7 +483,7 @@ class LPU(Module):
             idx = np.where(
                 (I_post >= self.nid_max + self.idx_start_synapse[i]) &
                 (I_post < self.nid_max + self.idx_start_synapse[i+1]))
-            s['I_post'] = I_post[idx] - self.idx_start_gpot[i] - self.nid_max
+            s['I_post'] = I_post[idx] - self.idx_start_synapse[i] - self.nid_max
             s['I_pre'] = I_pre[idx]
 
             s['num_dendrites_cond'] = Counter(s['cond_post'])

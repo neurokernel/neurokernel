@@ -11,6 +11,8 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 
 cuda_src_synapse_kernel = """
+#include <math.h>
+
 __global__ void alpha_synapse(
     int num,
     %(type)s dt,
@@ -150,7 +152,7 @@ __global__ void get_input(
 //can be improved
 """
 
-class OSNTerm(BaseSynapse):
+class AlphaSynapsePre(BaseSynapse):
 
     def __init__( self, s_dict, synapse_state, dt, debug=False):
         self.debug = debug
