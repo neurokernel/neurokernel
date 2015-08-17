@@ -467,13 +467,21 @@ class LPU(Module):
             n['num_dendrites_cond'] = Counter(n['cond_post'])
             n['num_dendrites_I'] = Counter(n['I_post'])
 
+        s_id = np.concatenate([s['id'] for _, s in self.s_list]).astype(np.int32)
+        s_order = np.arange(self.total_synapses)[s_id]
+        idx = np.where(cond_post >= self.nid_max)[0]
+        cond_post_syn = s_order[cond_post[idx] - self.nid_max]
+        cond_post_syn_offset = idx[0] if len(idx) > 0 else 0
+        idx = np.where(I_post >= self.nid_max)[0]
+        I_post_syn = s_order[I_post[idx] - self.nid_max]
+        I_post_syn_offset = idx[0] if len(idx) > 0 else 0
         for i, (t, s) in enumerate(self.s_list):
             idx = np.where(
-                (cond_post >= self.nid_max + self.idx_start_synapse[i]) &
-                (cond_post < self.nid_max + self.idx_start_synapse[i+1]))
-            s['cond_post'] = cond_post[idx] - self.idx_start_synapse[i] - self.nid_max
-            s['cond_pre'] = cond_pre[idx]
-            s['reverse'] = reverse[idx]
+                (cond_post_syn >= self.idx_start_synapse[i]) &
+                (cond_post_syn < self.idx_start_synapse[i+1]))[0]
+            s['cond_post'] = cond_post[idx+cond_post_syn_offset] - self.nid_max
+            s['cond_pre'] = cond_pre[idx+cond_post_syn_offset]
+            s['reverse'] = reverse[idx+cond_post_syn_offset]
             # NOTE: after this point, s['reverse'] is no longer the reverse
             # potential associated with the current synapse class, but the
             # reverse potential of other synapses projecting to the current one.
@@ -481,10 +489,10 @@ class LPU(Module):
             # Not sure if this is good though, since it obvious creates some
             # degree of confusion.
             idx = np.where(
-                (I_post >= self.nid_max + self.idx_start_synapse[i]) &
-                (I_post < self.nid_max + self.idx_start_synapse[i+1]))
-            s['I_post'] = I_post[idx] - self.idx_start_synapse[i] - self.nid_max
-            s['I_pre'] = I_pre[idx]
+                (I_post_syn >= self.idx_start_synapse[i]) &
+                (I_post_syn < self.idx_start_synapse[i+1]))[0]
+            s['I_post'] = I_post[idx+I_post_syn_offset] - self.nid_max
+            s['I_pre'] = I_pre[idx+I_post_syn_offset]
 
             s['num_dendrites_cond'] = Counter(s['cond_post'])
             s['num_dendrites_I'] = Counter(s['I_post'])

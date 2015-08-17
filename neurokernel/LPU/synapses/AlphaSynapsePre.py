@@ -169,10 +169,10 @@ class AlphaSynapsePre(BaseSynapse):
         self.cond = synapse_state
 
         _num_dendrite_cond = np.asarray(
-            [s_dict['num_dendrites_cond'][i] for i in range(self.num)],\
+            [s_dict['num_dendrites_cond'][i] for i in s_dict['id']],\
             dtype=np.int32).flatten()
         _num_dendrite = np.asarray(
-            [s_dict['num_dendrites_I'][i] for i in range(self.num)],\
+            [s_dict['num_dendrites_I'][i] for i in s_dict['id']],\
             dtype=np.int32).flatten()
 
         self._cum_num_dendrite = garray.to_gpu(_0_cumsum(_num_dendrite))
