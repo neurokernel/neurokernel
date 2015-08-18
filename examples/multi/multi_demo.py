@@ -12,12 +12,14 @@ import numpy as np
 
 import data.gen_generic_lpu as g
 
-import neurokernel.core as core
-import neurokernel.base as base
-from neurokernel.tools.zmq import get_random_port
+from neurokernel.tools.logging import setup_logger
+import neurokernel.core_gpu as core
 
 import neurokernel.pattern as pattern
+import neurokernel.plsel as plsel
 from neurokernel.LPU.LPU import LPU
+
+import neurokernel.mpi_relaunch
 
 # Execution parameters:
 dt = 1e-4
@@ -41,12 +43,6 @@ parser.add_argument('-l', '--log', default='none', type=str,
                     help='Log output to screen [file, screen, both, or none; default:none]')
 parser.add_argument('-s', '--steps', default=steps, type=int,
                     help='Number of steps [default: %s]' % steps)
-parser.add_argument('-d', '--port_data', default=None, type=int,
-                    help='Data port [default: randomly selected]')
-parser.add_argument('-c', '--port_ctrl', default=None, type=int,
-                    help='Control port [default: randomly selected]')
-parser.add_argument('-t', '--port_time', default=None, type=int,
-                    help='Timing port [default: randomly selected]')
 parser.add_argument('-r', '--time_sync', default=False, action='store_true',
                     help='Time data reception throughput [default: False]')
 parser.add_argument('-y', '--num_sensory', default=N_sensory, type=int,
@@ -65,7 +61,7 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name=file_name, screen=screen)
+logger = setup_logger(file_name=file_name, screen=screen)
 
 # Set number of local and projection neurons in each LPU:
 N = args.num_lpus
@@ -86,20 +82,8 @@ g.create_input(in_file_name_0, neu_dict[0][0], dt, dur, start, stop, I_max)
 # Store info for all instantiated LPUs in the following dict:
 lpu_dict = {}
 
-# Create several LPUs:
-if args.port_data is None:
-    port_data = get_random_port()
-else:
-    port_data = args.port_data
-if args.port_ctrl is None:
-    port_ctrl = get_random_port()
-else:
-    port_ctrl = args.port_ctrl
-if args.port_time is None:
-    port_time = get_random_port()
-else:
-    port_time = args.port_time
-
+# Set up several LPUs:
+man = core.Manager()
 for i, neu_num in neu_dict.iteritems():
     lpu_entry = {}
 
@@ -115,66 +99,66 @@ for i, neu_num in neu_dict.iteritems():
     g.create_lpu(lpu_file_name, id, *neu_num)
     (n_dict, s_dict) = LPU.lpu_parser(lpu_file_name)
 
-    lpu = LPU(dt, n_dict, s_dict, input_file=in_file_name,
-              output_file=out_file_name,
-              port_ctrl=port_ctrl, port_data=port_data,
-              port_time=port_time,
-              device=i, id=id,
-              debug=args.debug, time_sync=args.time_sync)
+    man.add(LPU, id, dt, n_dict, s_dict,
+            input_file=in_file_name,
+            output_file=out_file_name,
+            device=i,
+            debug=args.debug)
 
     lpu_entry['lpu_file_name'] = lpu_file_name
     lpu_entry['in_file_name'] = in_file_name
     lpu_entry['out_file_name'] = out_file_name
-    lpu_entry['lpu'] = lpu
-    lpu_entry['id'] = id
+    lpu_entry['n_dict'] = n_dict
+    lpu_entry['s_dict'] = s_dict
 
-    lpu_dict[i] = lpu_entry
-
-man = core.Manager(port_data, port_ctrl, port_time)
-man.add_brok()
+    lpu_dict[id] = lpu_entry
 
 # Create connectivity patterns between each combination of LPU pairs:
 for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
 
-    lpu_0 = lpu_dict[id_0]['lpu']
-    lpu_1 = lpu_dict[id_1]['lpu']
+    n_dict_0 = lpu_dict[id_0]['n_dict']
+    n_dict_1 = lpu_dict[id_1]['n_dict']
 
     # Find all output and input port selectors in each LPU:
-    out_ports_0 = lpu_0.interface.out_ports().to_selectors()
-    out_ports_1 = lpu_1.interface.out_ports().to_selectors()
+    out_ports_spk_0 = plsel.Selector(LPU.extract_out_spk(n_dict_0))
+    out_ports_gpot_0 = plsel.Selector(LPU.extract_out_gpot(n_dict_0))
 
-    in_ports_0 = lpu_0.interface.in_ports().to_selectors()
-    in_ports_1 = lpu_1.interface.in_ports().to_selectors()
+    out_ports_spk_1 = plsel.Selector(LPU.extract_out_spk(n_dict_1))
+    out_ports_gpot_1 = plsel.Selector(LPU.extract_out_gpot(n_dict_1))
 
-    out_ports_spk_0 = lpu_0.interface.out_ports().spike_ports().to_selectors()
-    out_ports_gpot_0 = lpu_0.interface.out_ports().gpot_ports().to_selectors()
+    in_ports_spk_0 = plsel.Selector(LPU.extract_in_spk(n_dict_0))
+    in_ports_gpot_0 = plsel.Selector(LPU.extract_in_gpot(n_dict_0))
 
-    out_ports_spk_1 = lpu_1.interface.out_ports().spike_ports().to_selectors()
-    out_ports_gpot_1 = lpu_1.interface.out_ports().gpot_ports().to_selectors()
+    in_ports_spk_1 = plsel.Selector(LPU.extract_in_spk(n_dict_1))
+    in_ports_gpot_1 = plsel.Selector(LPU.extract_in_gpot(n_dict_1)) 
 
-    in_ports_spk_0 = lpu_0.interface.in_ports().spike_ports().to_selectors()
-    in_ports_gpot_0 = lpu_0.interface.in_ports().gpot_ports().to_selectors()
+    out_ports_0 = plsel.Selector.union(out_ports_spk_0, out_ports_gpot_0)
+    out_ports_1 = plsel.Selector.union(out_ports_spk_1, out_ports_gpot_1)
 
-    in_ports_spk_1 = lpu_1.interface.in_ports().spike_ports().to_selectors()
-    in_ports_gpot_1 = lpu_1.interface.in_ports().gpot_ports().to_selectors()
+    in_ports_0 = plsel.Selector.union(in_ports_spk_0, in_ports_gpot_0)
+    in_ports_1 = plsel.Selector.union(in_ports_spk_1, in_ports_gpot_1)
 
     # Initialize a connectivity pattern between the two sets of port
     # selectors:
-    pat = pattern.Pattern(','.join(out_ports_0+in_ports_0),
-                          ','.join(out_ports_1+in_ports_1))
+    pat = pattern.Pattern(plsel.Selector.union(out_ports_0, in_ports_0),
+                          plsel.Selector.union(out_ports_1, in_ports_1))
 
     # Create connections from the ports with identifiers matching the output
     # ports of one LPU to the ports with identifiers matching the input
     # ports of the other LPU. First, define connections from LPU0 to LPU1:
     N_conn_spk_0_1 = min(len(out_ports_spk_0), len(in_ports_spk_1))
     N_conn_gpot_0_1 = min(len(out_ports_gpot_0), len(in_ports_gpot_1))
-    for src, dest in zip(random.sample(out_ports_spk_0, N_conn_spk_0_1), 
-                         random.sample(in_ports_spk_1, N_conn_spk_0_1)):
+    for src, dest in zip(random.sample(out_ports_spk_0.identifiers,
+                                       N_conn_spk_0_1), 
+                         random.sample(in_ports_spk_1.identifiers,
+                                       N_conn_spk_0_1)):
         pat[src, dest] = 1
         pat.interface[src, 'type'] = 'spike'
         pat.interface[dest, 'type'] = 'spike'
-    for src, dest in zip(random.sample(out_ports_gpot_0, N_conn_gpot_0_1),
-                         random.sample(in_ports_gpot_1, N_conn_gpot_0_1)):
+    for src, dest in zip(random.sample(out_ports_gpot_0.identifiers,
+                                       N_conn_gpot_0_1),
+                         random.sample(in_ports_gpot_1.identifiers,
+                                       N_conn_gpot_0_1)):
         pat[src, dest] = 1
         pat.interface[src, 'type'] = 'gpot'
         pat.interface[dest, 'type'] = 'gpot'
@@ -193,7 +177,8 @@ for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
         pat.interface[src, 'type'] = 'gpot'
         pat.interface[dest, 'type'] = 'gpot'
 
-    man.connect(lpu_0, lpu_1, pat, 0, 1)
+    man.connect(id_0, id_1, pat, 0, 1, compat_check=False)
 
+man.spawn()
 man.start(steps=steps)
-man.stop()
+man.wait()
