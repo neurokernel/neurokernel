@@ -64,7 +64,7 @@ class ExpSynapse(BaseSynapse):
         self.eff  = garray.zeros( (self.num,), dtype=np.float64 )
         self.cond = synapse_state
 
-        self.update = self.get_gpu_kernel()
+        self.update = self._get_gpu_kernel()
 
     @property
     def synapse_class(self): return int(0)
@@ -84,7 +84,7 @@ class ExpSynapse(BaseSynapse):
             self.eff.gpudata,\
             self.cond)
 
-    def get_gpu_kernel(self):
+    def _get_gpu_kernel(self):
         self.gpu_block = (128,1,1)
         self.gpu_grid = (min( 6*cuda.Context.get_device().MULTIPROCESSOR_COUNT,\
                               (self.num-1)/self.gpu_block[0] + 1), 1)
