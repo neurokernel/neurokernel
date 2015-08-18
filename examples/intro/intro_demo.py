@@ -107,8 +107,6 @@ def main():
                 pat.interface[src, 'type'] = 'gpot'
                 pat.interface[dest, 'type'] = 'gpot'
 
-            import dill
-            dill.dump(pat, open('pat_%s.dill' % int(connected),'w'))
             man.connect(lpu_0_id, lpu_1_id, pat, 0, 1, compat_check=False)
 
         man.spawn()
