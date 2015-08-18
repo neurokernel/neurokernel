@@ -876,7 +876,7 @@ class LPU(Module):
                 ind = int(t)
             except:
                 self.log_info("Error instantiating synapses of model '%s'" % t)
-                return []
+                return None
 
         return self._synapse_classes[ind](
             s, int(int(self.synapse_state.gpudata) +
