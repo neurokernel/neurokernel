@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Lamina specification
+Vision demo configuration routines.
 """
 
 import csv
@@ -13,7 +13,9 @@ import numpy as np
 import gzip
 import networkx as nx
 
+from neurokernel.LPU.LPU import LPU
 from neurokernel.pattern import Pattern
+import neurokernel.plsel as plsel
 
 class hex_array(object):
     """
@@ -777,20 +779,26 @@ class Synapse(object):
         return self.params['postname']
 
 
-def create_pattern(lpu1, lpu2):
-    lpu1_sel = ','.join(['/'+'/'.join([str(i) for i in sel]) for sel in lpu1.interface.index.tolist()])
-    lpu2_sel = ','.join(['/'+'/'.join([str(i) for i in sel]) for sel in lpu2.interface.index.tolist()])
-    pat = Pattern(lpu1_sel, lpu2_sel)
+def create_pattern(n_dict_1, n_dict_2):
+    lpu1_sel_in_gpot = plsel.Selector(LPU.extract_in_gpot(n_dict_1))
+    lpu1_sel_out_gpot = plsel.Selector(LPU.extract_out_gpot(n_dict_1))
+    lpu2_sel_in_gpot = plsel.Selector(LPU.extract_in_gpot(n_dict_2))
+    lpu2_sel_out_gpot = plsel.Selector(LPU.extract_out_gpot(n_dict_2))
 
-    lpu1_sel_in_gpot = str(','.join( lpu1.interface.in_ports().gpot_ports().to_selectors() ))
-    lpu1_sel_out_gpot = str(','.join( lpu1.interface.out_ports().gpot_ports().to_selectors() ))
-    lpu2_sel_in_gpot = str(','.join( lpu2.interface.in_ports().gpot_ports().to_selectors() ))
-    lpu2_sel_out_gpot = str(','.join( lpu2.interface.out_ports().gpot_ports().to_selectors() ))
-    
-    lpu1_sel_in_spike = str(','.join( lpu1.interface.in_ports().spike_ports().to_selectors() ))
-    lpu1_sel_out_spike = str(','.join( lpu1.interface.out_ports().spike_ports().to_selectors() ))
-    lpu2_sel_in_spike = str(','.join( lpu2.interface.in_ports().spike_ports().to_selectors() ))
-    lpu2_sel_out_spike = str(','.join( lpu2.interface.out_ports().spike_ports().to_selectors() ))
+    lpu1_sel_in_spike = plsel.Selector(LPU.extract_in_spk(n_dict_1))
+    lpu1_sel_out_spike = plsel.Selector(LPU.extract_out_spk(n_dict_1))
+    lpu2_sel_in_spike = plsel.Selector(LPU.extract_in_spk(n_dict_2))
+    lpu2_sel_out_spike = plsel.Selector(LPU.extract_out_spk(n_dict_2))
+
+    lpu1_sel_out = plsel.Selector.union(lpu1_sel_out_gpot, lpu1_sel_out_spike)
+    lpu2_sel_out = plsel.Selector.union(lpu2_sel_out_gpot, lpu2_sel_out_spike)
+    lpu1_sel_in = plsel.Selector.union(lpu1_sel_in_gpot, lpu1_sel_in_spike)
+    lpu2_sel_in = plsel.Selector.union(lpu2_sel_in_gpot, lpu2_sel_in_spike)
+
+    lpu1_sel = plsel.Selector.union(lpu1_sel_out, lpu1_sel_in)
+    lpu2_sel = plsel.Selector.union(lpu2_sel_out, lpu2_sel_in)
+
+    pat = Pattern(lpu1_sel, lpu2_sel)
 
     pat.interface[lpu1_sel_in_gpot, 'io', 'type'] = ['in', 'gpot']
     pat.interface[lpu1_sel_out_gpot, 'io', 'type'] = ['out', 'gpot']

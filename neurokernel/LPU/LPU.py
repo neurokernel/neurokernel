@@ -209,12 +209,18 @@ class LPU(Module):
 
     @classmethod
     def extract_in_gpot(cls, n_dict):
-        return ','.join(filter(None, n_dict[PORT_IN_GPOT]['selector']))
+        if PORT_IN_GPOT in n_dict:
+            return ','.join(filter(None, n_dict[PORT_IN_GPOT]['selector']))
+        else:
+            return ''
 
     @classmethod
     def extract_in_spk(cls, n_dict):
-        return ','.join(filter(None, n_dict[PORT_IN_SPK]['selector']))
-        
+        if PORT_IN_SPK in n_dict:
+            return ','.join(filter(None, n_dict[PORT_IN_SPK]['selector']))
+        else:
+            return ''
+
     @classmethod
     def extract_out_gpot(cls, n_dict):
         """
