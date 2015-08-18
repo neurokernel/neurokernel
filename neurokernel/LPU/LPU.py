@@ -37,8 +37,6 @@ import utils.parray as parray
 from neurons import *
 from synapses import *
 
-import pdb
-
 PORT_IN_GPOT = 'port_in_gpot'
 PORT_IN_SPK = 'port_in_spk'
 
@@ -209,6 +207,10 @@ class LPU(Module):
 
     @classmethod
     def extract_in_gpot(cls, n_dict):
+        """
+        Return selectors of non-spiking input ports.
+        """
+
         if PORT_IN_GPOT in n_dict:
             return ','.join(filter(None, n_dict[PORT_IN_GPOT]['selector']))
         else:
@@ -216,6 +218,10 @@ class LPU(Module):
 
     @classmethod
     def extract_in_spk(cls, n_dict):
+        """
+        Return selectors of spiking input ports.
+        """
+
         if PORT_IN_SPK in n_dict:
             return ','.join(filter(None, n_dict[PORT_IN_SPK]['selector']))
         else:
@@ -226,6 +232,7 @@ class LPU(Module):
         """
         Return selectors of non-spiking output neurons.
         """
+
         return ','.join(filter(None, 
                                [sel for _, n in n_dict.items() for sel, pub, spk in \
                                 zip(n['selector'], n['public'], n['spiking']) \
@@ -234,12 +241,40 @@ class LPU(Module):
     @classmethod
     def extract_out_spk(cls, n_dict):
         """
-        Return selectors of non-spiking output neurons.
+        Return selectors of spiking output neurons.
         """
+
         return ','.join(filter(None,
                                [sel for _, n in n_dict.items() for sel, pub, spk in \
                                 zip(n['selector'], n['public'], n['spiking']) \
                                 if pub and spk ]))
+
+    @classmethod
+    def extract_in(cls, n_dict):
+        """
+        Return selectors of all input ports.
+        """
+
+        return ','.join(filter(None,
+                               [cls.extract_in_spk(n_dict), cls.extract_in_gpot(n_dict)]))
+
+    @classmethod
+    def extract_out(cls, n_dict):
+        """
+        Return selectors of all output neurons.
+        """
+
+        return ','.join(filter(None,
+                               [cls.extract_out_spk(n_dict), cls.extract_out_gpot(n_dict)]))
+
+    @classmethod
+    def extract_all(cls, n_dict):
+        """
+        Return selectors for all input ports and output neurons.
+        """
+
+        return ','.join(filter(None,
+                               [cls.extract_in(n_dict), cls.extract_out(n_dict)]))    
 
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG,
@@ -262,17 +297,17 @@ class LPU(Module):
         else:
             self.compile_options = []
 
-        # handle file I/O
+        # Handle file I/O:
         self.output_file = output_file
         self.output = True if output_file else False
         self.input_file = input_file
         self.input_eof = False if input_file else True
 
-        # load neurons and synapse definition
+        # Load neurons and synapse data:
         self._load_neurons()
         self._load_synapses()
 
-        # set default one time import
+        # Set default one time import:
         self._one_time_import = 10
 
         # Save neuron data in the form
@@ -319,7 +354,7 @@ class LPU(Module):
             
         sel_in = ','.join(filter(None, [sel_in_gpot, sel_in_spk]))
         
-        # Selectors and positions of output ports:
+        # Get selectors and positions of output neurons:
         sel_out_gpot = self.extract_out_gpot(n_dict)
         sel_out_spk = self.extract_out_spk(n_dict)
         self.out_ports_ids_gpot = np.array([id for _, n in self.n_list for id, pub, spk in
@@ -330,10 +365,8 @@ class LPU(Module):
                                            if pub and spk], dtype=np.int32)
 
         sel_out = ','.join(filter(None, [sel_out_gpot, sel_out_spk]))
-
         sel_gpot = ','.join(filter(None, [sel_in_gpot, sel_out_gpot]))
         sel_spk = ','.join(filter(None, [sel_in_spk, sel_out_spk]))
-
         sel = ','.join(filter(None, [sel_gpot, sel_spk]))
 
         self.sel_in_spk = sel_in_spk
@@ -342,15 +375,15 @@ class LPU(Module):
         self.sel_out_gpot = sel_out_gpot
         
         # Lists of numbers of neurons of gpot and spiking model types:
-        num_gpot_neurons = np.where( n_model_is_spk, 0, n_model_num)
-        num_spike_neurons = np.where( n_model_is_spk, n_model_num, 0)
+        num_gpot_neurons = np.where(n_model_is_spk, 0, n_model_num)
+        num_spike_neurons = np.where(n_model_is_spk, n_model_num, 0)
 
         # Total numbers of gpot and spiking neurons:
-        self.my_num_gpot_neurons = sum( num_gpot_neurons )
-        self.my_num_spike_neurons = sum( num_spike_neurons )
+        self.my_num_gpot_neurons = sum(num_gpot_neurons)
+        self.my_num_spike_neurons = sum(num_spike_neurons)
 
-        gpot_idx = n_id[ ~n_is_spk ]
-        spike_idx = n_id[ n_is_spk ]
+        gpot_idx = n_id[~n_is_spk]
+        spike_idx = n_id[n_is_spk]
         self.order = np.argsort(
             np.concatenate((gpot_idx, spike_idx))).astype(np.int32)
         self.gpot_order = np.argsort(gpot_idx).astype(np.int32)
@@ -373,16 +406,16 @@ class LPU(Module):
         self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
         self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
 
-        #TODO: comment
+        # Get presynaptic 
         self.s_dict = s_dict
         if s_dict:
             for s in self.s_dict.itervalues():
                 shift = self.spike_shift \
                     if s['class'][0] == 0 or s['class'][0] == 1 else 0
-                s['pre'] = [ self.order[int(neu_id)] - shift 
-                             for neu_id in s['pre'] ]
-                s['post'] = [ self.order[int(neu_id)] 
-                              for neu_id in s['post'] ]
+                s['pre'] = [self.order[int(neu_id)] - shift 
+                            for neu_id in s['pre'] ]
+                s['post'] = [self.order[int(neu_id)] 
+                             for neu_id in s['post'] ]
 
         gpot_delay_steps = 0
         spike_delay_steps = 0
@@ -918,13 +951,13 @@ def synapse_cmp(x, y):
     else:
         return 0
 
-
 class CircularArray:
-    '''
+    """
     This class implements a circular buffer to support synapses with delays.
     Please refer the documentation of the template synapse class on information
     on how to access data correctly from this buffer
-    '''
+    """
+
     def __init__(self, num_gpot_neurons,  gpot_delay_steps,
                  rest, num_spike_neurons, spike_delay_steps):
 
@@ -960,21 +993,3 @@ class CircularArray:
             self.spike_current += 1
             if self.spike_current >= self.spike_delay_steps:
                 self.spike_current = 0
-
-    '''
-    def update_other_rest(self, gpot_data, my_num_gpot_neurons, num_virtual_gpot_neurons):
-        # ??? is the second part of the below condition correct?
-        if num_virtual_gpot_neurons > 0:            
-            d_other_rest = garray.zeros(num_virtual_gpot_neurons, np.double)
-            a = 0
-            for data in gpot_data.itervalues():
-                if len(data) > 0:
-                    cuda.memcpy_htod(int(d_other_rest.gpudata) +  a , data)
-                    a += data.nbytes
-
-            for i in range(self.gpot_delay_steps):
-                cuda.memcpy_dtod( int(self.gpot_buffer.gpudata) + \
-                    (self.gpot_buffer.ld * i + int(my_num_gpot_neurons)) * \
-                    self.gpot_buffer.dtype.itemsize, d_other_rest.gpudata, \
-                    d_other_rest.nbytes )
-    '''
