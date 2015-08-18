@@ -1,3 +1,6 @@
+"""
+Exponential Synapse Model
+"""
 from basesynapse import BaseSynapse
 
 import numpy as np
