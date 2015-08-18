@@ -16,11 +16,12 @@ import itertools
 
 import networkx as nx
 
-import neurokernel.core as core
-import neurokernel.base as base
-from neurokernel.tools.zmq import get_random_port
+from neurokernel.tools.logging import setup_logger
+import neurokernel.core_gpu as core
 
 from neurokernel.LPU.LPU import LPU
+
+import neurokernel.mpi_relaunch
 
 dt = 1e-4
 dur = 1.0
@@ -48,28 +49,18 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name=file_name, screen=screen)
+logger = setup_logger(file_name=file_name, screen=screen)
 
-if args.port_data is None and args.port_ctrl is None:
-    port_data = get_random_port()
-    port_ctrl = get_random_port()
-else:
-    port_data = args.port_data
-    port_ctrl = args.port_ctrl
-
-port_time = get_random_port()
-man = core.Manager(port_data, port_ctrl, port_time)
-man.add_brok()
+man = core.Manager()
 
 (n_dict, s_dict) = LPU.lpu_parser('./data/generic_lpu.gexf.gz')
 
-ge = LPU(dt, n_dict, s_dict,
-         input_file='./data/generic_input.h5',
-         output_file='generic_output.h5', port_ctrl=port_ctrl,
-         port_data=port_data,
-         device=args.gpu_dev, id='ge',
-         debug=args.debug)
-man.add_mod(ge)
+man.add(LPU, 'ge', dt, n_dict, s_dict,
+        input_file='./data/generic_input.h5',
+        output_file='generic_output.h5', 
+        device=args.gpu_dev,
+        debug=args.debug)
 
+man.spawn()
 man.start(steps=args.steps)
-man.stop()
+man.wait()
