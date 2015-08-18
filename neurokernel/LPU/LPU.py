@@ -5,6 +5,7 @@ Local Processing Unit (LPU) draft implementation.
 """
 
 import collections
+import numbers
 
 import pycuda.gpuarray as garray
 from pycuda.tools import dtype_to_ctype
@@ -206,6 +207,34 @@ class LPU(Module):
             s_dict = {}
         return n_dict, s_dict
 
+    @classmethod
+    def extract_in_gpot(cls, n_dict):
+        return ','.join(filter(None, n_dict[PORT_IN_GPOT]['selector']))
+
+    @classmethod
+    def extract_in_spk(cls, n_dict):
+        return ','.join(filter(None, n_dict[PORT_IN_SPK]['selector']))
+        
+    @classmethod
+    def extract_out_gpot(cls, n_dict):
+        """
+        Return selectors of non-spiking output neurons.
+        """
+        return ','.join(filter(None, 
+                               [sel for _, n in n_dict.items() for sel, pub, spk in \
+                                zip(n['selector'], n['public'], n['spiking']) \
+                                if pub and not spk ]))
+
+    @classmethod
+    def extract_out_spk(cls, n_dict):
+        """
+        Return selectors of non-spiking output neurons.
+        """
+        return ','.join(filter(None,
+                               [sel for _, n in n_dict.items() for sel, pub, spk in \
+                                zip(n['selector'], n['public'], n['spiking']) \
+                                if pub and spk ]))
+
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG,
                  spike_tag=SPIKE_TAG, rank_to_id=None, routing_table=None,
@@ -239,34 +268,41 @@ class LPU(Module):
 
         # set default one time import
         self._one_time_import = 10
-        #TODO: comment
+
+        # Save neuron data in the form
+        # [('Model0', {'attrib0': [..], 'attrib1': [..]}), ('Model1', ...)]
         self.n_list = n_dict.items()
+
+        # List of booleans indicating whether first neuron of each model is a
+        # spiking model:
         n_model_is_spk = [ n['spiking'][0] for _, n in self.n_list ]
+
+        # Number of neurons of each model:
         n_model_num = [ len(n['id']) for _, n in self.n_list ]
-        # concatenation of lists of neurons
-        # n['id'] is a list of integers that correspond to the positions 
-        # of the neuron model n['model'] in LPU graph
+
+        # Concatenate lists of integers corresponding to neuron positions in LPU
+        # graph for all of the models into a single list:
         n_id = np.array(sum( [ n['id'] for _, n in self.n_list ], []), 
                         dtype=np.int32)
-        # concatenates lists of common attributes in model dictionaries
+
+        # Concatenate lists of common attributes in model dictionaries into
+        # single lists:
         n_is_spk = np.array(sum( [ n['spiking'] for _, n in self.n_list ], []))
         n_is_pub = np.array(sum( [ n['public'] for _, n in self.n_list ], []))
         n_has_in = np.array(sum( [ n['extern'] for _, n in self.n_list ], []))
 
+        # Get selectors and positions of input ports:
         try:
-            sel_in_gpot = ','.join(filter(None,
-                                          n_dict[PORT_IN_GPOT]['selector']))
+            sel_in_gpot = self.extract_in_gpot(n_dict)
             in_ports_ids_gpot = np.array(n_dict[PORT_IN_GPOT]['id'])
-            self.ports_in_gpot_mem_ind = zip(*self.n_list)[0] \
-                                            .index(PORT_IN_GPOT)
+            self.ports_in_gpot_mem_ind = zip(*self.n_list)[0].index(PORT_IN_GPOT)
         except KeyError:
             sel_in_gpot = ''
             in_ports_ids_gpot = np.array([], dtype=np.int32)
             self.ports_in_gpot_mem_ind = None
 
         try:
-            sel_in_spk = ','.join(filter(None,
-                                         n_dict[PORT_IN_SPK]['selector']))
+            sel_in_spk = self.extract_in_spk(n_dict)
             in_ports_ids_spk = np.array(n_dict[PORT_IN_SPK]['id'], 
                                         dtype=np.int32)
             self.ports_in_spk_mem_ind = zip(*self.n_list)[0].index(PORT_IN_SPK)
@@ -277,12 +313,9 @@ class LPU(Module):
             
         sel_in = ','.join(filter(None, [sel_in_gpot, sel_in_spk]))
         
-        sel_out_gpot = ','.join(filter(None, [sel for _, n in self.n_list for sel, pub, spk in
-                                 zip(n['selector'], n['public'], n['spiking'])
-                                 if pub and not spk ]))
-        sel_out_spk = ','.join(filter(None, [sel for _, n in self.n_list for sel, pub, spk in
-                                zip(n['selector'], n['public'], n['spiking'])
-                                if pub and spk ]))
+        # Selectors and positions of output ports:
+        sel_out_gpot = self.extract_out_gpot(n_dict)
+        sel_out_spk = self.extract_out_spk(n_dict)
         self.out_ports_ids_gpot = np.array([id for _, n in self.n_list for id, pub, spk in
                                             zip(n['id'], n['public'], n['spiking'])
                                             if pub and not spk], dtype=np.int32)
@@ -302,11 +335,14 @@ class LPU(Module):
         self.sel_in_gpot = sel_in_gpot
         self.sel_out_gpot = sel_out_gpot
         
-        #TODO: comment
+        # Lists of numbers of neurons of gpot and spiking model types:
         num_gpot_neurons = np.where( n_model_is_spk, 0, n_model_num)
         num_spike_neurons = np.where( n_model_is_spk, n_model_num, 0)
+
+        # Total numbers of gpot and spiking neurons:
         self.my_num_gpot_neurons = sum( num_gpot_neurons )
         self.my_num_spike_neurons = sum( num_spike_neurons )
+
         gpot_idx = n_id[ ~n_is_spk ]
         spike_idx = n_id[ n_is_spk ]
         self.order = np.argsort(
@@ -385,7 +421,6 @@ class LPU(Module):
         I_pre.extend(range(self.total_synapses, self.total_synapses + \
                           len(self.input_neuron_list)))
 
-
         cond_post = np.asarray(cond_post, dtype=np.int32)
         cond_pre = np.asarray(cond_pre, dtype = np.int32)
         reverse = np.asarray(reverse, dtype=np.double)
@@ -447,7 +482,7 @@ class LPU(Module):
         data_gpot = np.zeros(self.num_public_gpot + len(in_ports_ids_gpot),
                              np.double)
         data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
-                              np.bool)
+                              np.int32)
         super(LPU, self).__init__(sel=sel, sel_in=sel_in, sel_out=sel_out,
                                   sel_gpot=sel_gpot, sel_spike=sel_spk,
                                   data_gpot=data_gpot, data_spike=data_spike,
@@ -632,14 +667,11 @@ class LPU(Module):
             self._extract_spike = self._extract_projection_spike_func()
 
         if self.ports_in_gpot_mem_ind is not None:
-            inds = self.sel_in_gpot_ids + self.V.dtype.itemsize* \
-                self.idx_start_gpot[self.ports_in_gpot_mem_ind]
+            inds = self.sel_in_gpot_ids
             self.inds_gpot = garray.to_gpu(inds)
 
         if self.ports_in_spk_mem_ind is not None:
-            inds = self.sel_in_gpot_ids + \
-                self.spike_state.dtype.itemsize* \
-                self.idx_start_spike[self.ports_in_spk_mem_ind]
+            inds = self.sel_in_spk_ids
             self.inds_spike = garray.to_gpu(inds)
 
     def _read_LPU_input(self):
@@ -648,21 +680,26 @@ class LPU(Module):
         """
 
         if self.ports_in_gpot_mem_ind is not None:
-            self.set_inds(self.pm['gpot'].data, self.V, self.inds_gpot)
+            self.set_inds(self.pm['gpot'].data, self.V, self.inds_gpot, 
+                          self.idx_start_gpot[self.ports_in_gpot_mem_ind])
         if self.ports_in_spk_mem_ind is not None:
-            self.set_inds(self.pm['spike'].data, self.spike_state, self.inds_spike)
+            self.set_inds(self.pm['spike'].data, self.spike_state,
+                          self.inds_spike,
+                          self.idx_start_spike[self.ports_in_spk_mem_ind])
 
-    def set_inds(self, src, dest, inds):
+    def set_inds(self, src, dest, inds, dest_shift=0):
+        assert isinstance(dest_shift, numbers.Integral)
         try:
-            func = self.set_inds.cache[inds.dtype]
+            func = self.set_inds.cache[(inds.dtype, dest_shift)]
         except KeyError:
             inds_ctype = dtype_to_ctype(inds.dtype)
             data_ctype = dtype_to_ctype(src.dtype)
             v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src"\
                 .format(data_ctype=data_ctype,
                         inds_ctype=inds_ctype)
-            func = elementwise.ElementwiseKernel(v, "dest[i] = src[inds[i]]")
-            self.set_inds.cache[inds.dtype] = func
+            func = elementwise.ElementwiseKernel(v, 
+                                                 "dest[i+%i] = src[inds[i]]" % dest_shift)
+            self.set_inds.cache[(inds.dtype, dest_shift)] = func
         func(dest, inds, src, range=slice(0, len(inds), 1) )
 
     set_inds.cache = {}
@@ -673,8 +710,8 @@ class LPU(Module):
                 self.grid_extract_gpot,
                 self.block_extract, st, self.V.gpudata,
                 self.pm['gpot'].data.gpudata,
-                self.sel_out_gpot_ids_g.gpudata,
                 self.out_ports_ids_gpot_g.gpudata,
+                self.sel_out_gpot_ids_g.gpudata,
                 self.num_public_gpot)
 
         if len(self.out_ports_ids_spk) > 0:
@@ -682,8 +719,8 @@ class LPU(Module):
                 self.grid_extract_spike,
                 self.block_extract, st, self.spike_state.gpudata,
                 self.pm['spike'].data.gpudata,
-                self.sel_out_spk_ids_g.gpudata,
                 self.out_ports_ids_spk_g.gpudata,
+                self.sel_out_spk_ids_g.gpudata,
                 len(self.out_ports_ids_spk))
 
     def _write_output(self):

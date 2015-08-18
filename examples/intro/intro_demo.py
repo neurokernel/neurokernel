@@ -16,7 +16,6 @@ that generates no meaningful responses to the input signal.
 """
 
 import argparse
-import concurrent.futures as futures
 import itertools
 import random
 
@@ -26,13 +25,17 @@ from neurokernel.tools.logging import setup_logger
 import neurokernel.core_gpu as core
 
 import neurokernel.pattern as pattern
+import neurokernel.plsel as plsel
 from neurokernel.LPU.LPU import LPU
 
 def main():
 
-    import neurokernel.mpi_relaunch
-
     def run(connected):
+        """
+        Set `connected` to True to connect the LPUs.
+        """
+
+        import neurokernel.mpi_relaunch
 
         out_name = 'un' if not connected else 'co'
         man = core.Manager()
@@ -59,52 +62,58 @@ def main():
         # Create random connections between the input and output ports if the LPUs
         # are to be connected:
         if connected:
+
             # Find all output and input port selectors in each LPU:
-            out_ports_0 = lpu_0.interface.out_ports().to_selectors()
-            out_ports_1 = lpu_1.interface.out_ports().to_selectors()
+            out_ports_spk_0 = plsel.Selector(LPU.extract_out_spk(n_dict_0))
+            out_ports_gpot_0 = plsel.Selector(LPU.extract_out_gpot(n_dict_0))
 
-            in_ports_0 = lpu_0.interface.in_ports().to_selectors()
-            in_ports_1 = lpu_1.interface.in_ports().to_selectors()
+            out_ports_spk_1 = plsel.Selector(LPU.extract_out_spk(n_dict_1))
+            out_ports_gpot_1 = plsel.Selector(LPU.extract_out_gpot(n_dict_1))
 
-            out_ports_spk_0 = lpu_0.interface.out_ports().spike_ports().to_selectors()
-            out_ports_gpot_0 = lpu_0.interface.out_ports().gpot_ports().to_selectors()
+            in_ports_spk_0 = plsel.Selector(LPU.extract_in_spk(n_dict_0))
+            in_ports_gpot_0 = plsel.Selector(LPU.extract_in_gpot(n_dict_0))
 
-            out_ports_spk_1 = lpu_1.interface.out_ports().spike_ports().to_selectors()
-            out_ports_gpot_1 = lpu_1.interface.out_ports().gpot_ports().to_selectors()
+            in_ports_spk_1 = plsel.Selector(LPU.extract_in_spk(n_dict_1))
+            in_ports_gpot_1 = plsel.Selector(LPU.extract_in_gpot(n_dict_1))
 
-            in_ports_spk_0 = lpu_0.interface.in_ports().spike_ports().to_selectors()
-            in_ports_gpot_0 = lpu_0.interface.in_ports().gpot_ports().to_selectors()
+            out_ports_0 = plsel.Selector.union(out_ports_spk_0, out_ports_gpot_0)
+            out_ports_1 = plsel.Selector.union(out_ports_spk_1, out_ports_gpot_1)
 
-            in_ports_spk_1 = lpu_1.interface.in_ports().spike_ports().to_selectors()
-            in_ports_gpot_1 = lpu_1.interface.in_ports().gpot_ports().to_selectors()
+            in_ports_0 = plsel.Selector.union(in_ports_spk_0, in_ports_gpot_0)
+            in_ports_1 = plsel.Selector.union(in_ports_spk_1, in_ports_gpot_1)
 
             # Initialize a connectivity pattern between the two sets of port
             # selectors:
-            pat = pattern.Pattern(','.join(out_ports_0+in_ports_0),
-                                  ','.join(out_ports_1+in_ports_1))
+            pat = pattern.Pattern(plsel.Selector.union(out_ports_0, in_ports_0),
+                                  plsel.Selector.union(out_ports_1, in_ports_1))
 
             # Create connections from the ports with identifiers matching the output
             # ports of one LPU to the ports with identifiers matching the input
             # ports of the other LPU:
             N_conn_spk_0_1 = min(len(out_ports_spk_0), len(in_ports_spk_1))
             N_conn_gpot_0_1 = min(len(out_ports_gpot_0), len(in_ports_gpot_1))
-            for src, dest in zip(random.sample(out_ports_spk_0, N_conn_spk_0_1), 
-                                 random.sample(in_ports_spk_1, N_conn_spk_0_1)):
+            for src, dest in zip(random.sample(out_ports_spk_0.identifiers,
+                                               N_conn_spk_0_1),
+                                 random.sample(in_ports_spk_1.identifiers,
+                                               N_conn_spk_0_1)):
                 pat[src, dest] = 1
                 pat.interface[src, 'type'] = 'spike'
                 pat.interface[dest, 'type'] = 'spike'
-            for src, dest in zip(random.sample(out_ports_gpot_0, N_conn_gpot_0_1),
-                                 random.sample(in_ports_gpot_1, N_conn_gpot_0_1)):
+            for src, dest in zip(random.sample(out_ports_gpot_0.identifiers,
+                                               N_conn_gpot_0_1),
+                                 random.sample(in_ports_gpot_1.identifiers,
+                                               N_conn_gpot_0_1)):
                 pat[src, dest] = 1
                 pat.interface[src, 'type'] = 'gpot'
                 pat.interface[dest, 'type'] = 'gpot'
 
-            man.connect(lpu_0_id, lpu_1_id, pat, 0, 1, compat_check=True)
+            import dill
+            dill.dump(pat, open('pat_%s.dill' % int(connected),'w'))
+            man.connect(lpu_0_id, lpu_1_id, pat, 0, 1, compat_check=False)
 
         man.spawn()
         man.start(steps=args.steps)
         man.wait()
-
 
     dt = 1e-4
     dur = 1.0
@@ -133,9 +142,7 @@ def main():
     logger = setup_logger(file_name=file_name, screen=screen)
 
     random.seed(0)
-    with futures.ProcessPoolExecutor() as executor:
-        for connected in [False, True]:
-            executor.submit(run, connected)
+    run(True)
 
 if __name__=='__main__':
     main()
