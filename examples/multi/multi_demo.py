@@ -103,7 +103,7 @@ for i, neu_num in neu_dict.iteritems():
             input_file=in_file_name,
             output_file=out_file_name,
             device=i,
-            debug=args.debug)
+            debug=args.debug, time_sync=args.time_sync)
 
     lpu_entry['lpu_file_name'] = lpu_file_name
     lpu_entry['in_file_name'] = in_file_name

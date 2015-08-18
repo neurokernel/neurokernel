@@ -35,10 +35,6 @@ parser.add_argument('-l', '--log', default='none', type=str,
                     help='Log output to screen [file, screen, both, or none; default:none]')
 parser.add_argument('-s', '--steps', default=steps, type=int,
                     help='Number of steps [default: %s]' % steps)
-parser.add_argument('-d', '--port_data', default=None, type=int,
-                    help='Data port [default: randomly selected]')
-parser.add_argument('-c', '--port_ctrl', default=None, type=int,
-                    help='Control port [default: randomly selected]')
 parser.add_argument('-g', '--gpu_dev', default=0, type=int,
                     help='GPU device number [default: 0]')
 args = parser.parse_args()
