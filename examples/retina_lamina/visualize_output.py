@@ -50,8 +50,8 @@ V.add_plot(conf_L1, 'Lamina', 'L1')
 V.fontsize = 22
 V.fps = 5
 V.update_interval = 50
-V.out_filename = 'vision_output.mp4'
-V.codec = 'mpeg4'
+V.out_filename = 'vision_output.avi'
+V.codec = 'libtheora'
 V.dt = 0.0001
-V.FFMpeg = True      # change to False to use LibAV fork instead( default on UBUNTU)
+V.FFMpeg = False      # change to False to use LibAV fork instead( default on UBUNTU)
 V.run()
