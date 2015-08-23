@@ -7,7 +7,7 @@ Vision demo configuration routines.
 import csv
 import os
 import collections
-import pickle
+import cPickle as pickle
 
 import numpy as np
 import gzip
@@ -779,7 +779,11 @@ class Synapse(object):
         return self.params['postname']
 
 
-def create_pattern(n_dict_1, n_dict_2):
+def create_pattern(n_dict_1, n_dict_2, save_as=None):
+    """
+    If `save_as` is not None, save the pattern as the specified file name.
+    """
+
     lpu1_sel_in_gpot = plsel.Selector(LPU.extract_in_gpot(n_dict_1))
     lpu1_sel_out_gpot = plsel.Selector(LPU.extract_out_gpot(n_dict_1))
     lpu2_sel_in_gpot = plsel.Selector(LPU.extract_in_gpot(n_dict_2))
@@ -817,8 +821,9 @@ def create_pattern(n_dict_1, n_dict_2):
             pat['/lamina/cart'+str(i)+'/'+neuron, '/medulla/cart'+str(i)+'/'+neuron] = 1
         for neuron in Neuron_list_21:
             pat['/medulla/cart'+str(i)+'/'+neuron, '/lamina/cart'+str(i)+'/'+neuron] = 1
-    with open('lam_med_pattern', 'wb') as pat_file:
-        pickle.dump(pat, pat_file)
+    if save_as:
+        with open(save_as, 'wb') as pat_file:
+            pickle.dump(pat, pat_file)
     return pat
 
 def append_field(rec, name, arr, dtype=None):
