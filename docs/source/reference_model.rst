@@ -9,8 +9,6 @@ Local Processing Units
    :toctree: generated/
    :nosignatures:
 
-   neurokernel.base.BaseModule
-   neurokernel.base_gpu.BaseModule
    neurokernel.core.Module
    neurokernel.core_gpu.Module
 

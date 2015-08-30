@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+"""
+Core Neurokernel classes.
+"""
+
 import atexit
 import time
 
@@ -10,24 +14,83 @@ import pycuda.gpuarray as gpuarray
 from pycuda.tools import dtype_to_ctype
 import twiggy
 
-from base_gpu import BaseModule, CTRL_TAG
-import base_gpu
+from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+    ExceptionOnSignal, TryExceptionOnSignal
 from mixins import LoggerMixin
 import mpi
-from tools.mpi import MPIOutput
 from tools.gpu import bufint, set_by_inds
 from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
-from uid import uid
+from tools.mpi import MPIOutput
 from pattern import Interface, Pattern
 from plsel import SelectorMethods
 from pm_gpu import GPUPortMapper
+from routing_table import RoutingTable
+from uid import uid
+
+CTRL_TAG = 1
 
 # MPI tags for distinguishing messages associated with different port types:
 GPOT_TAG = CTRL_TAG+1
 SPIKE_TAG = CTRL_TAG+2
 
-class Module(BaseModule):
+class Module(mpi.Worker):
+    """
+    Processing module.
+
+    This class repeatedly executes a work method until it receives a
+    quit message via its control network port.
+
+    Parameters
+    ----------
+    sel : str, unicode, or sequence
+        Path-like selector describing the module's interface of
+        exposed ports.
+    sel_in, sel_out, sel_gpot, sel_spike : str, unicode, or sequence
+        Selectors respectively describing all input, output, graded potential,
+        and spiking ports in the module's interface.
+    data_gpot, data_spike : numpy.ndarray
+        Data arrays associated with the graded potential and spiking ports in
+        the . Array length must equal the number
+        of ports in a module's interface.
+    columns : list of str
+        Interface port attributes.
+        Network port for controlling the module instance.
+    ctrl_tag, gpot_tag, spike_tag : int
+        MPI tags that respectively identify messages containing control data,
+        graded potential port values, and spiking port values transmitted to 
+        worker nodes.
+    id : str
+        Module identifier. If no identifier is specified, a unique
+        identifier is automatically generated.
+    device : int
+        GPU device to use. May be set to None if the module does not perform
+        GPU processing.
+    routing_table : neurokernel.routing_table.RoutingTable
+        Routing table describing data connections between modules. If no routing
+        table is specified, the module will be executed in isolation.
+    rank_to_id : bidict.bidict
+        Mapping between MPI ranks and module object IDs.
+    debug : bool
+        Debug flag. When True, exceptions raised during the work method
+        are not be suppressed.
+    time_sync : bool
+        Time synchronization flag. When True, debug messages are not emitted
+        during module synchronization and the time taken to receive all incoming
+        data is computed.
+
+    Attributes
+    ----------
+    interface : Interface
+        Object containing information about a module's ports.
+    pm : dict
+        `pm['gpot']` and `pm['spike']` are instances of neurokernel.pm_gpu.PortMapper that
+        map a module's ports to the contents of the values in `data`.
+    data : dict
+        `data['gpot']` and `data['spike']` are arrays of data associated with 
+        a module's graded potential and spiking ports.
+    """
+
     def __init__(self, sel, sel_in, sel_out,
                  sel_gpot, sel_spike, data_gpot, data_spike,
                  columns=['interface', 'io', 'type'],
@@ -36,9 +99,7 @@ class Module(BaseModule):
                  routing_table=None, rank_to_id=None,
                  debug=False, time_sync=False):
 
-        # Call super for BaseModule rather than Module because most of the
-        # functionality of the former's constructor must be overridden in any case:
-        super(BaseModule, self).__init__(ctrl_tag)
+        super(Module, self).__init__(ctrl_tag)
         self.debug = debug
         self.time_sync = time_sync
         self.device = device
@@ -150,6 +211,27 @@ class Module(BaseModule):
 
         # MPI Request object for resolving asynchronous transfers:
         self.req = MPI.Request()
+
+    def _init_gpu(self):
+        """
+        Initialize GPU device.
+        """
+
+        if self.device == None:
+            self.log_info('no GPU specified - not initializing ')
+        else:
+
+            # Import pycuda.driver here so as to facilitate the
+            # subclassing of Module to create pure Python LPUs that don't use GPUs:
+            import pycuda.driver as drv
+            drv.init()
+            try:
+                self.gpu_ctx = drv.Device(self.device).make_context()
+            except Exception as e:
+                self.log_info('_init_gpu exception: ' + e.message)
+            else:
+                atexit.register(self.gpu_ctx.pop)
+                self.log_info('GPU %s initialized' % self.device)
 
     def _init_port_dicts(self):
         """
@@ -362,18 +444,273 @@ class Module(BaseModule):
         else:
             self.log_info('saved all data received by %s' % self.id)
 
-class Manager(base_gpu.Manager):
+    def pre_run(self):
+        """
+        Code to run before main loop.
+
+        This method is invoked by the `run()` method before the main loop is
+        started.
+        """
+
+        self.log_info('running code before body of worker %s' % self.rank)
+
+        # Initialize _out_port_dict and _in_port_dict attributes:
+        self._init_port_dicts()
+
+        # Initialize GPU transmission buffers:
+        self._init_comm_bufs()
+
+        # Start timing the main loop:
+        if self.time_sync:
+            self.intercomm.isend(['start_time', (self.rank, time.time())],
+                                 dest=0, tag=self._ctrl_tag)                
+            self.log_info('sent start time to manager')
+
+    def post_run(self):
+        """
+        Code to run after main loop.
+
+        This method is invoked by the `run()` method after the main loop is
+        started.
+        """
+
+        self.log_info('running code after body of worker %s' % self.rank)
+
+        # Stop timing the main loop before shutting down the emulation:
+        if self.time_sync:
+            self.intercomm.isend(['stop_time', (self.rank, time.time())],
+                                 dest=0, tag=self._ctrl_tag)
+
+            self.log_info('sent stop time to manager')
+
+        # Send acknowledgment message:
+        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
+        self.log_info('done message sent to manager')
+
+    def run_step(self):
+        """
+        Module work method.
+
+        This method should be implemented to do something interesting with new
+        input port data in the module's `pm` attribute and update the attribute's
+        output port data if necessary. It should not interact with any other
+        class attributes.
+        """
+
+        self.log_info('running execution step')
+
+    def run(self):
+        """
+        Body of process.
+        """
+
+        # Don't allow keyboard interruption of process:
+        with IgnoreKeyboardInterrupt():
+
+            # Activate execution loop:
+            super(Module, self).run()
+
+    def do_work(self):
+        """
+        Work method.
+
+        This method is repeatedly executed by the Worker instance after the
+        instance receives a 'start' control message and until it receives a 'stop'
+        control message.
+        """
+
+        # If the debug flag is set, don't catch exceptions so that
+        # errors will lead to visible failures:
+        if self.debug:
+
+            # Run the processing step:
+            self.run_step()
+
+            # Synchronize:
+            self._sync()
+        else:
+
+            # Run the processing step:
+            catch_exception(self.run_step, self.log_info)
+
+            # Synchronize:
+            catch_exception(self._sync, self.log_info)
+
+class Manager(mpi.WorkerManager):
+    """
+    Module manager.
+
+    Instantiates, connects, starts, and stops modules comprised by an
+    emulation. All modules and connections must be added to a module manager
+    instance before they can be run.
+
+    Attributes
+    ----------
+    ctrl_tag : int
+        MPI tag to identify control messages.
+    modules : dict
+        Module instances. Keyed by module object ID.
+    routing_table : routing_table.RoutingTable
+        Table of data transmission connections between modules.
+    rank_to_id : bidict.bidict
+        Mapping between MPI ranks and module object IDs.
+    """
+
     def __init__(self, required_args=['sel', 'sel_in', 'sel_out',
                                       'sel_gpot', 'sel_spike'],
                  ctrl_tag=CTRL_TAG):
-        super(Manager, self).__init__(required_args, ctrl_tag)
+        super(Manager, self).__init__(ctrl_tag)
+
+        # Required constructor args:
+        self.required_args = required_args
+
+        # One-to-one mapping between MPI rank and module ID:
+        self.rank_to_id = bidict.bidict()
+
+        # Unique object ID:
+        self.id = uid()
+
+        # Set up a dynamic table to contain the routing table:
+        self.routing_table = RoutingTable()
+
+        # Number of emulation steps to run:
+        self.steps = np.inf
+
+        # Variables for timing run loop:
+        self.start_time = 0.0
+        self.stop_time = 0.0
+
+        # Variables for computing throughput:
+        self.counter = 0
+        self.total_sync_time = 0.0
+        self.total_sync_nbytes = 0.0
+        self.received_data = {}
+
+        # Average step synchronization time:
+        self._average_step_sync_time = 0.0
+
+        # Computed throughput (only updated after an emulation run):
+        self._average_throughput = 0.0
+        self._total_throughput = 0.0
+        self.log_info('manager instantiated')
+
+    @property
+    def average_step_sync_time(self):
+        """
+        Average step synchronization time.
+        """
+
+        return self._average_step_sync_time
+    @average_step_sync_time.setter
+    def average_step_sync_time(self, t):
+        self._average_step_sync_time = t
+
+    @property
+    def total_throughput(self):
+        """
+        Total received data throughput.
+        """
+
+        return self._total_throughput
+    @total_throughput.setter
+    def total_throughput(self, t):
+        self._total_throughput = t
+
+    @property
+    def average_throughput(self):
+        """
+        Average received data throughput per step.
+        """
+
+        return self._average_throughput
+    @average_throughput.setter
+    def average_throughput(self, t):
+        self._average_throughput = t
+
+    def validate_args(self, target):
+        """
+        Check whether a class' constructor has specific arguments.
+
+        Parameters
+        ----------
+        target : Module
+            Module class to instantiate and run.
+        
+        Returns
+        -------
+        result : bool
+            True if all of the required arguments are present, False otherwise.
+        """
+
+        arg_names = set(mpi.getargnames(target.__init__))
+        for required_arg in self.required_args:
+            if required_arg not in arg_names:
+                return False
+        return True
  
     def add(self, target, id, *args, **kwargs):
+        """
+        Add a module class to the emulation.
+
+        Parameters
+        ----------
+        target : Module
+            Module class to instantiate and run.
+        id : str
+            Identifier to use when connecting an instance of this class
+            with an instance of some other class added to the emulation.
+        args : sequence
+            Sequential arguments to pass to the constructor of the class
+            associated with identifier `id`.
+        kwargs : dict
+            Named arguments to pass to the constructor of the class
+            associated with identifier `id`.
+        """
+
         if not issubclass(target, Module):
             raise ValueError('target is not a Module subclass')
-        super(Manager, self).add(target, id, *args, **kwargs)
+
+        # Selectors must be passed to the module upon instantiation;
+        # the module manager must know about them to assess compatibility:
+        # XXX: keep this commented out for the time being because it interferes
+        # with instantiation of child classes (such as those in LPU.py): 
+        # if not self.validate_args(target):
+        #    raise ValueError('class constructor missing required args')
+
+        # Need to associate an ID with each module class
+        # to instantiate; because the routing table's can potentially occupy
+        # lots of space, we don't add it to the argument dict here - it is
+        # broadcast to all processes separately and then added to the argument
+        # dict in mpi_backend.py:
+        kwargs['id'] = id
+        kwargs['rank_to_id'] = self.rank_to_id
+        rank = super(Manager, self).add(target, *args, **kwargs)
+        self.rank_to_id[rank] = id
 
     def connect(self, id_0, id_1, pat, int_0=0, int_1=1, compat_check=True):
+        """
+        Specify connection between two module instances with a Pattern instance.
+
+        Parameters
+        ----------
+        id_0, id_1 : str
+            Identifiers of module instances to connect.
+        pat : Pattern
+            Pattern instance.
+        int_0, int_1 : int
+            Which of the pattern's interfaces to connect to `id_0` and `id_1`,
+            respectively.
+        compat_check : bool
+            Check whether the interfaces of the specified modules
+            are compatible with the specified pattern. This option is provided
+            because compatibility checking can be expensive.
+
+        Notes
+        -----
+        Assumes that the constructors of the module types contain a `sel`
+        parameter.
+        """
+
         if not isinstance(pat, Pattern):
             raise ValueError('pat is not a Pattern instance')
         if id_0 not in self.rank_to_id.values():
@@ -428,6 +765,73 @@ class Manager(base_gpu.Manager):
                                               'int_0': int_1, 'int_1': int_0}
 
         self.log_info('connected modules {0} and {1}'.format(id_0, id_1))
+
+    def process_worker_msg(self, msg):
+
+        # Process timing data sent by workers:
+        if msg[0] == 'start_time':
+            rank, self.start_time = msg[1]
+            self.log_info('start time data: %s' % str(msg[1]))
+        elif msg[0] == 'stop_time':
+            rank, self.stop_time = msg[1]
+            self.log_info('stop time data: %s' % str(msg[1]))
+        elif msg[0] == 'sync_time':
+            rank, steps, start, stop, nbytes = msg[1]
+            self.log_info('sync time data: %s' % str(msg[1]))
+
+            # Collect timing data for each execution step:
+            if steps not in self.received_data:
+                self.received_data[steps] = {}                    
+            self.received_data[steps][rank] = (start, stop, nbytes)
+
+            # After adding the latest timing data for a specific step, check
+            # whether data from all modules has arrived for that step:
+            if set(self.received_data[steps].keys()) == set(self.rank_to_id.keys()):
+
+                # Exclude the very first step to avoid including delays due to
+                # PyCUDA kernel compilation:
+                if steps != 0:
+
+                    # The duration an execution is assumed to be the longest of
+                    # the received intervals:
+                    step_sync_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
+
+                    # Obtain the total number of bytes received by all of the
+                    # modules during the execution step:
+                    step_nbytes = sum([d[2] for d in self.received_data[steps].values()])
+
+                    self.total_sync_time += step_sync_time
+                    self.total_sync_nbytes += step_nbytes
+
+                    self.average_throughput = (self.average_throughput*self.counter+\
+                                              step_nbytes/step_sync_time)/(self.counter+1)
+                    self.average_step_sync_time = (self.average_step_sync_time*self.counter+\
+                                                   step_sync_time)/(self.counter+1)
+
+                    self.counter += 1
+                else:
+
+                    # To skip the first sync step, set the start time to the
+                    # latest stop time of the first step:
+                    self.start_time = max([d[1] for d in self.received_data[steps].values()])
+
+                # Clear the data for the processed execution step so that
+                # that the received_data dict doesn't consume unnecessary memory:
+                del self.received_data[steps]
+
+            # Compute throughput using accumulated timing data:
+            if self.total_sync_time > 0:
+                self.total_throughput = self.total_sync_nbytes/self.total_sync_time
+            else:
+                self.total_throughput = 0.0
+
+    def wait(self):
+        super(Manager, self).wait()
+        self.log_info('avg step sync time/avg per-step throughput' \
+                      '/total transm throughput/run loop duration:' \
+                      '%s, %s, %s, %s' % \
+                      (self.average_step_sync_time, self.average_throughput, 
+                       self.total_throughput, self.stop_time-self.start_time))
         
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
