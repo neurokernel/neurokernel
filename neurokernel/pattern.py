@@ -178,7 +178,7 @@ class Interface(object):
             s = [i for i in itertools.chain(*selector.expanded)]
         else:
             s = self.sel.pad_selector(selector.expanded,
-                                      len(self.index.levshape))
+                                      len(self.index.shape))
         for k, v in data.iteritems():
             self.data[k].ix[s] = v
         
