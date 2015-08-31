@@ -1,19 +1,15 @@
-.. -*- rst -*-
-
-Installation
-============
-
 Prerequisites
 -------------
 Neurokernel requires 
 
-* Linux (other operating systems may work, but have not been tested)
-* Python 2.7 (Python 3.0 is not guaranteed to work)
+* Linux (other operating systems may work, but have not been tested);
+* Python 2.7 (Python 3.0 is not guaranteed to work);
 * at least one NVIDIA GPU with `Fermi
   <http://www.nvidia.com/content/pdf/fermi_white_papers/nvidia_fermi_compute_architecture_whitepaper.pdf>`_
-  architecture
-* NVIDIA's `GPU drivers <http://www.nvidia.com/content/drivers/>`_
-* `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.
+  architecture or later;
+* NVIDIA's `GPU drivers <http://www.nvidia.com/content/drivers/>`_;
+* `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later;
+* `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled with CUDA support.
 
 To check what GPUs are in your system, you can use the `inxi 
 <https://code.google.com/p/inxi/>`_ command available on most Linux 
@@ -32,11 +28,8 @@ something like::
 
 as root.
 
-The `mpi <https://github.com/neurokernel/neurokernel/tree/mpi>`_ branch of
-Neurokernel also requires `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled 
-with CUDA support. See `this page 
-<https://www.open-mpi.org/faq/?category=building#easy-build>`_ for installation 
-information. *Note that OpenMPI 1.8* |openmpi_no_windows|_.
+See `this page <https://www.open-mpi.org/faq/?category=building#easy-build>`_
+for OpenMPI installation information. *Note that OpenMPI 1.8* |openmpi_no_windows|_.
 
 .. _openmpi_no_windows: https://www.open-mpi.org/software/ompi/v1.6/ms-windows.php
 .. |openmpi_no_windows| replace:: *cannot run on Windows*
@@ -122,7 +115,7 @@ Run the following to install the remaining Python package dependencies listed in
 
 Building the Documentation
 --------------------------
-To build the HTML documentation, you will need to install 
+To build Neurokerne's HTML documentation locally, you will need to install 
 
 * `mock <http://www.voidspace.org.uk/python/mock/>`_ 1.0 or later.
 * `sphinx <http://sphinx-doc.org>`_ 1.2 or later.
@@ -131,5 +124,5 @@ To build the HTML documentation, you will need to install
  
 Once these are installed, run the following: ::
 
-  cd neurokernel/docs
+  cd ~/neurokernel/docs
   make html
