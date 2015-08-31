@@ -13,12 +13,12 @@ import itertools
 
 import networkx as nx
 
-import neurokernel.core as core
-import neurokernel.base as base
-import neurokernel.tools.graph as graph_tools
-from neurokernel.tools.comm import get_random_port
+from neurokernel.tools.logging import setup_logger
+import neurokernel.core_gpu as core
 
 from neurokernel.LPU.LPU import LPU
+
+import neurokernel.mpi_relaunch
 
 dt = 1e-4
 dur = 1.0
@@ -47,24 +47,16 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name=file_name, screen=screen)
+logger = setup_logger(file_name=file_name, screen=screen)
 
-if args.port_data is None and args.port_ctrl is None:
-    port_data = get_random_port()
-    port_ctrl = get_random_port()
-else:
-    port_data = args.port_data
-    port_ctrl = args.port_ctrl
-
-man = core.Manager(port_data, port_ctrl)
-man.add_brok()
+man = core.Manager()
 
 (n_dict_lam, s_dict_lam) = LPU.lpu_parser('./data/lamina.gexf.gz')
-lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-              input_file='./data/vision_input.h5',
-              output_file='lamina_output.h5', port_ctrl=port_ctrl,
-              port_data=port_data, device=args.lam_dev, id='lamina')
-man.add_mod(lpu_lam)
+man.add(LPU, 'lpu_lam', dt, n_dict_lam, s_dict_lam,
+        input_file='./data/vision_input.h5',
+        output_file='lamina_output.h5', 
+        debug=args.debug, device=args.lam_dev)
 
+man.spawn()
 man.start(steps=args.steps)
-man.stop()
+man.wait()

@@ -5,6 +5,13 @@
 
 Package Description
 -------------------
+
+`Project Website <https://neurokernel.github.io>`_ | 
+`GitHub Repository <https://github.com/neurokernel/neurokernel>`_ |
+`Online Documentation <https://neurokernel.readthedocs.org>`_ |
+`Mailing List <https://lists.columbia.edu/mailman/listinfo/neurokernel-dev>`_ | 
+`Forum <http://neurokernel.67426.x6.nabble.com/>`_
+
 Neurokernel is a Python framework for developing models of 
 the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
@@ -16,13 +23,14 @@ Prerequisites
 -------------
 Neurokernel requires 
 
-* Linux (other operating systems may work, but have not been tested)
-* Python 2.7 (Python 3.0 is not guaranteed to work)
+* Linux (other operating systems may work, but have not been tested);
+* Python 2.7 (Python 3.0 is not guaranteed to work);
 * at least one NVIDIA GPU with `Fermi
   <http://www.nvidia.com/content/pdf/fermi_white_papers/nvidia_fermi_compute_architecture_whitepaper.pdf>`_
-  architecture
-* NVIDIA's `GPU drivers <http://www.nvidia.com/content/drivers/>`_
-* `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.
+  architecture or later;
+* NVIDIA's `GPU drivers <http://www.nvidia.com/content/drivers/>`_;
+* `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later;
+* `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled with CUDA support.
 
 To check what GPUs are in your system, you can use the `inxi 
 <https://code.google.com/p/inxi/>`_ command available on most Linux 
@@ -41,11 +49,8 @@ something like::
 
 as root.
 
-The `mpi <https://github.com/neurokernel/neurokernel/tree/mpi>`_ branch of
-Neurokernel also requires `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled 
-with CUDA support. See `this page 
-<https://www.open-mpi.org/faq/?category=building#easy-build>`_ for installation 
-information. *Note that OpenMPI 1.8* |openmpi_no_windows|_.
+See `this page <https://www.open-mpi.org/faq/?category=building#easy-build>`_
+for OpenMPI installation information. *Note that OpenMPI 1.8* |openmpi_no_windows|_.
 
 .. _openmpi_no_windows: https://www.open-mpi.org/software/ompi/v1.6/ms-windows.php
 .. |openmpi_no_windows| replace:: *cannot run on Windows*
@@ -133,6 +138,7 @@ Building the Documentation
 --------------------------
 To build Neurokerne's HTML documentation locally, you will need to install 
 
+* `mock <http://www.voidspace.org.uk/python/mock/>`_ 1.0 or later.
 * `sphinx <http://sphinx-doc.org>`_ 1.2 or later.
 * `sphinx_rtd_theme <https://github.com/snide/sphinx_rtd_theme>`_ 0.1.6 or 
   later.
@@ -142,22 +148,19 @@ Once these are installed, run the following: ::
   cd ~/neurokernel/docs
   make html
 
-More Information
-----------------
-More information about Neurokernel can be obtained from
-the project website at `<https://neurokernel.github.io>`_.
-
-Neurokernel's documentation is available at `<http://neurokernel.readthedocs.org>`_.
-
 Authors & Acknowledgements
 --------------------------
-See the included AUTHORS file for more information.
+See the included `AUTHORS`_ file for more information.
+
+.. _AUTHORS: AUTHORS.rst
 
 License
 -------
 This software is licensed under the `BSD License
 <http://www.opensource.org/licenses/bsd-license.php>`_.
-See the included LICENSE file for more information.
+See the included `LICENSE`_ file for more information.
+
+.. _LICENSE: LICENSE.rst
 
 Notes
 -----

@@ -8,15 +8,15 @@ import argparse
 import itertools
 import time
 
+from mpi4py import MPI
 import numpy as np
 import pycuda.driver as drv
+import pycuda.gpuarray as gpuarray
 
-from neurokernel.base import setup_logger
-from neurokernel.core import Manager, Module, PORT_DATA, PORT_CTRL, PORT_TIME
+from neurokernel.core_gpu import CTRL_TAG, GPOT_TAG, SPIKE_TAG, Manager, Module
 from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
-from neurokernel.tools.comm import get_random_port
-from neurokernel.pm_gpu import GPUPortMapper
+from neurokernel.tools.logging import setup_logger
 
 class MyModule(Module):
     """
@@ -27,36 +27,29 @@ class MyModule(Module):
     produce/consume data at every step.
     """
 
-    def __init__(self, sel,
-                 sel_in, sel_out,
-                 sel_gpot, sel_spike,
-                 data_gpot=None, data_spike=None,
+    def __init__(self, sel, sel_in, sel_out,
+                 sel_gpot, sel_spike, data_gpot, data_spike,
                  columns=['interface', 'io', 'type'],
-                 port_data=PORT_DATA, port_ctrl=PORT_CTRL, port_time=PORT_TIME,
-                 id=None, device=None, debug=False):
+                 ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG, spike_tag=SPIKE_TAG,
+                 id=None, device=None,
+                 routing_table = None, rank_to_id=None,
+                 debug=False, time_sync=False):
         if data_gpot is None:
             data_gpot = np.zeros(SelectorMethods.count_ports(sel_gpot), float)
         if data_spike is None:
             data_spike = np.zeros(SelectorMethods.count_ports(sel_spike), int)
         super(MyModule, self).__init__(sel, sel_in, sel_out,
-                                       sel_gpot, sel_spike,
-                                       data_gpot, data_spike,
-                                       columns, port_data, port_ctrl, port_time,
-                                       id, device, debug, True)
+                sel_gpot, sel_spike, data_gpot, data_spike,
+                columns, 
+                ctrl_tag, gpot_tag, spike_tag,
+                id, device, 
+                routing_table, rank_to_id,
+                debug, time_sync)
 
-        # Initialize GPU arrays associated with ports:
-        self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = 1.0
-        self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = 1
-
-    # Need to redefine run() method to perform GPU initialization:
-    def run(self):
-        self._init_gpu()
-
-        # Replace port mappers with GPUPortMapper instances:
-        self.pm['gpot'] = GPUPortMapper.from_pm(self.pm['gpot'])
-        self.pm['spike'] = GPUPortMapper.from_pm(self.pm['spike'])
-
-        super(MyModule, self).run()
+        self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = \
+            gpuarray.to_gpu(np.ones(len(self.interface.out_ports().gpot_ports()), np.double))
+        self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = \
+            gpuarray.to_gpu(np.ones(len(self.interface.out_ports().spike_ports()), np.int64))
 
 def gen_sels(n_lpu, n_spike, n_gpot):
     """
@@ -85,11 +78,11 @@ def gen_sels(n_lpu, n_spike, n_gpot):
         Ports in pattern interfaces; the keys are tuples containing the two
         module IDs connected by the pattern and the values are pairs of tuples
         containing the respective selectors for all source ports, all
-        destination ports, all input ports connected to the first module,
-        all output ports connected to the first module, all graded potential ports
+        destination ports, all input ports connected to the first module, 
+        all output ports connected to the first module, all graded potential ports 
         connected to the first module, all spiking ports connected to the first
-        module, all input ports connected to the second module,
-        all output ports connected to the second  module, all graded potential ports
+        module, all input ports connected to the second module, 
+        all output ports connected to the second  module, all graded potential ports 
         connected to the second module, and all spiking ports connected to the second
         module.
     """
@@ -168,11 +161,11 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         Number of LPUs. Must be at least 2 and no greater than the number of
         local GPUs.
     n_spike : int
-        Total number of input and output spiking ports any 
+        Total number of input and output spiking ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_spike*(n_lpu-1) total spiking ports.
     n_gpot : int
-        Total number of input and output graded potential ports any 
+        Total number of input and output graded potential ports any
         single LPU exposes to any other LPU. Each LPU will therefore
         have 2*n_gpot*(n_lpu-1) total graded potential ports.
     steps : int
@@ -194,9 +187,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     if n_lpu > drv.Device.count():
         raise RuntimeError('insufficient number of available GPUs.')
 
-    # Set up manager and broker:
-    man = Manager(get_random_port(), get_random_port(), get_random_port())
-    man.add_brok()
+    # Set up manager:
+    man = Manager()
 
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
@@ -205,12 +197,12 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     for i in xrange(n_lpu):
         lpu_i = 'lpu%s' % i
         sel, sel_in, sel_out, sel_gpot, sel_spike = mod_sels[lpu_i]
-        m = MyModule(sel, sel_in, sel_out,
-                     sel_gpot, sel_spike,
-                     port_data=man.port_data, port_ctrl=man.port_ctrl,
-                     port_time=man.port_time,
-                     id=lpu_i, device=i, debug=args.debug)
-        man.add_mod(m)
+        sel = Selector.union(sel_in, sel_out, sel_gpot, sel_spike)
+        man.add(MyModule, lpu_i, sel, sel_in, sel_out,
+                sel_gpot, sel_spike,
+                None, None, ['interface', 'io', 'type'],
+                CTRL_TAG, GPOT_TAG, SPIKE_TAG,
+                device=i, time_sync=True)
 
     # Set up connections between module pairs:
     for i, j in itertools.combinations(xrange(n_lpu), 2):
@@ -228,17 +220,19 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         pat.interface[sel_out_j, 'interface', 'io'] = [1, 'out']
         pat.interface[sel_gpot_j, 'interface', 'type'] = [1, 'gpot']
         pat.interface[sel_spike_j, 'interface', 'type'] = [1, 'spike']
-        man.connect(man.modules[lpu_i], man.modules[lpu_j], pat, 0, 1,
-                compat_check=False)
+        man.connect(lpu_i, lpu_j, pat, 0, 1, compat_check=False)
 
+    man.spawn()
     start_main = time.time()
-    man.start(steps=steps)
-    man.stop()
+    man.start(steps)
+    man.wait()
     stop_main = time.time()
-    t = man.get_throughput()
-    return t[0], (time.time()-start_all), (stop_main-start_main), t[3]
+    return man.average_step_sync_time, (time.time()-start_all), \
+        (stop_main-start_main), (man.stop_time-man.start_time)
 
 if __name__ == '__main__':
+    import neurokernel.mpi_relaunch
+
     num_lpus = 2
     num_gpot = 100
     num_spike = 100
@@ -266,6 +260,9 @@ if __name__ == '__main__':
         file_name = 'neurokernel.log'
     if args.log.lower() in ['screen', 'both']:
         screen = True
-    logger = setup_logger(file_name=file_name, screen=screen, multiline=True)
+    logger = setup_logger(file_name=file_name, screen=screen,
+                          mpi_comm=MPI.COMM_WORLD,
+                          multiline=True)
 
-    print emulate(args.num_lpus, args.num_spike, args.num_gpot, args.max_steps)
+    print list((args.num_lpus, args.num_spike)+\
+               emulate(args.num_lpus, args.num_spike, args.num_gpot, args.max_steps))

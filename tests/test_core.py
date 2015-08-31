@@ -5,20 +5,20 @@ from unittest import main, TestCase
 
 import numpy as np
 
-from neurokernel.plsel import Selector, SelectorMethods, PortMapper
+from neurokernel.plsel import Selector, SelectorMethods
 from neurokernel.pattern import Pattern
 from neurokernel.core import Manager, Module
 from neurokernel.tools.comm import get_random_port
 from neurokernel.tools.logging import setup_logger
 
 class TestModule(Module):
-    def __init__(self, sel, 
+    def __init__(self, sel,
                  sel_in_gpot, sel_in_spike,
                  sel_out_gpot, sel_out_spike,
-                 data_gpot, data_spike, 
+                 data_gpot, data_spike,
                  port_data, port_ctrl, port_time,
                  id):
-        super(TestModule, self).__init__(sel, 
+        super(TestModule, self).__init__(sel,
                                        Selector.add(sel_in_gpot, sel_out_gpot),
                                        Selector.add(sel_in_spike, sel_out_spike),
                                        data_gpot, data_spike,

@@ -13,37 +13,25 @@
 
 import sys, os, re
 
-# Prevent project dependencies from interfering with autodoc:
-class Mock(object):
-    __all__ = []
+import mock
+class Mock(mock.Mock):
+    def __add__(self, m):
+        return mock.Mock()
 
-    def __init__(self, *args, **kwargs):
+    def __or__(self, m):
+        return mock.Mock()
+
+    def __setitem__(self, k, v):
         pass
 
-    def __call__(self, *args, **kwargs):
-        return Mock()
-
-    @classmethod
-    def __getattr__(cls, name):
-        if name in ('__file__', '__path__'):
-            return '/dev/null'
-        elif name[0] == name[0].upper():
-            mockType = type(name, (), {})
-            mockType.__module__ = __name__
-            return mockType
-        else:
-            return Mock()
-
-    def __getitem__(self, v):
-        return Mock()
-
-MOCK_MODULES = ['bidict', 'chash', 'lxml', 'matplotlib', 'matplotlib.pyplot',
+MOCK_MODULES = ['bidict', 'chash', 'dill', 'lxml', 'matplotlib', 'matplotlib.pyplot',
+                'mpi4py', 'mpi4py.MPI', 'mpi4py.MPI',
                 'msgpack', 'msgpack_numpy', 'networkx', 'numpy', 'pandas',
                 'ply', 'ply.lex', 'ply.yacc',
                 'pycuda', 'pycuda.compiler', 'pycuda.driver',
                 'pycuda.elementwise', 'pycuda.gpuarray',
                 'pycuda.reduction', 'pycuda.scan', 'pycuda.tools', 'pytools',
-                'scipy', 'scipy.sparse', 'twiggy', 'xxh',
+                'scipy', 'scipy.sparse', 'tables', 'twiggy', 'xxh',
                 'zmq', 'zmq.eventloop',
                 'zmq.eventloop.ioloop', 'zmq.eventloop.zmqstream']
 for mod_name in MOCK_MODULES:
@@ -93,7 +81,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Neurokernel'
-copyright = u'2013-2014, Lev Givon'
+copyright = u'2013-2015, Lev Givon'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

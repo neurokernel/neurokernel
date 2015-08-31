@@ -935,6 +935,9 @@ class test_pattern(TestCase):
                                                  [0, 1, 1, 2]]))
 
     def test_from_concat(self):
+        self.assertRaises(ValueError, Pattern.from_concat, '', '/[baz,qux]',
+                          from_sel='', to_sel='/[baz,qux]', data=1)
+
         p = Pattern.from_concat('/[foo,bar]', '/[baz,qux]',
                                 from_sel='/[foo,bar]', to_sel='/[baz,qux]',
                                 data=1)

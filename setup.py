@@ -36,6 +36,10 @@ CLASSIFIERS = [
     'Topic :: Scientific/Engineering',
     'Topic :: Software Development']
 NAMESPACE_PACKAGES = ['neurokernel']
+
+# Explicitly switch to parent directory of setup.py in case it
+# is run from elsewhere:
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
 PACKAGES =           find_packages()
 
 if __name__ == "__main__":
@@ -66,23 +70,24 @@ if __name__ == "__main__":
         data_files = [('neurokernel', ['neurokernel/__init__.py'])],
         include_package_data = True,
         install_requires = [
-            'bidict >= 0.1.0',
-            'bottleneck >= 0.7.0',
-            'futures >= 2.1.5',
-            'h5py >= 2.2.1',
+            'bidict >= 0.3.1',
+            'dill >= 0.2.4',
+            'futures >= 3.0.0',
+            'h5py >= 2.5.0',
             'lxml >= 3.3.0',
-            'matplotlib >= 1.3.0',
-            'msgpack-numpy >= 0.3.1.1',
-            'networkx >= 1.9',
+            'markupsafe >= 0.23',
+            'matplotlib >= 1.4.3',
+            'mpi4py >= 1.3.1',
+            'networkx >= 1.9.1',
             'numexpr >= 2.3',
-            'numpy >= 1.2.0',
-            'pandas >= 0.15.0',
+            'numpy >= 1.9.2',
+            'pandas >= 0.16.0',
             'ply >= 3.4',
-            'pycuda >= 2014.1',
-            'pyzmq >= 13.0',
+            'psutil >= 2.2.1',
+            'pycuda >= 2015.1',
             'scipy >= 0.11.0',
-            'shutilwhich >= 1.0.1',
-            'tables >= 2.4.0',
+            'shutilwhich >= 1.1.0',
+            'tables >= 3.2.0',
             'twiggy >= 0.4.7',
         ],
         extras_require = {
