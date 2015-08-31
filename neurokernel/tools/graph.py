@@ -21,7 +21,6 @@ nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
 import pandas
 
-from .. import base
 from .. import core
 
 def graph_to_df(g):
