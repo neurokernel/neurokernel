@@ -26,6 +26,10 @@ for k in env.keys():
 script_name = inspect.stack()[1][1]
 parent_name = psutil.Process(os.getppid()).name()
 if not re.search('mpirun|mpiexec', parent_name):
+
+    # Retry without redirection if an IOError occurs, e.g., in an IPython
+    # notebook because the overriden iostreams don't have a file
+    # descriptor:
     try:
         subprocess.call(['mpiexec', '-np', '1',
                         sys.executable, script_name]+sys.argv[1:],
@@ -34,7 +38,14 @@ if not re.search('mpirun|mpiexec', parent_name):
                         stderr=sys.stderr,
                         stdin=sys.stdin)
     except IOError:
-        raise IOError('cannot execute mpiexec')
+        try:
+            subprocess.call(['mpiexec', '-np', '1',
+                            sys.executable, script_name]+sys.argv[1:],
+                            env=env)
+        except Exception as e:
+            raise RuntimeError('cannot execute mpiexec: %s' % str(e.message))
+        else:
+            sys.exit(0)
     else:
         sys.exit(0)
 
