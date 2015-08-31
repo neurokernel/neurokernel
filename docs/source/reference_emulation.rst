@@ -9,15 +9,18 @@ Construction and Execution
    :toctree: generated/
    :nosignatures:
 
-    neurokernel.base.BaseManager
-    neurokernel.base.Broker
-    neurokernel.core.Manager
+   neurokernel.base.Manager
+   neurokernel.base_gpu.Manager
+   neurokernel.core.Manager
+   neurokernel.core_gpu.Manager
 
 Support Classes
 ---------------
 .. autosummary::
    :toctree: generated/
    :nosignatures:
-
-    neurokernel.ctrl_proc.ControlledProcess
-    neurokernel.routing_table.RoutingTable
+   
+   neurokernel.routing_table.RoutingTable  
+   neurokernel.mpi.Worker
+   neurokernel.mpi.WorkerManager
+   

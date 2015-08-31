@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Run timing test (GPU) scaled over number of ports.
+Run timing test (GPU) scaled over number of LPUs.
 """
 
 import csv
@@ -23,9 +23,8 @@ except ImportError:
     DEVNULL = open(os.devnull, 'wb')
 
 out_file = sys.argv[1]
-script_name = 'timing_demo_gpu.py'
+script_name = 'timing_demo_gpu_slow.py'
 trials = 3
-lpus = 2
 
 def check_and_print_output(*args):
     for i in xrange(5):
@@ -41,30 +40,38 @@ def check_and_print_output(*args):
                     os.remove(ipc_file)
                 except:
                     pass
-
         try:
-            out = subprocess.check_output(*args, env=os.environ, stderr=DEVNULL)
+            out = subprocess.check_output(args[0], env=os.environ, stderr=DEVNULL)
         except Exception as e:
             out = e.output
-        if 'error' not in out:
+            if 'error' in out:
+                continue
+        else:
+            row = out.strip('[]\n\"').split(', ')
+            row[1] = str(args[1])
+            out = ','.join(row)
             break
-    print out,
+    print out
     return out
 
 pool = mp.Pool(1)
 results = []
-for spikes in np.linspace(50, 15000, 25, dtype=int):
-    for i in xrange(trials):
-        r = pool.apply_async(check_and_print_output, 
-                             [['srun', '-n', '1', '-c', str(lpus+2),
-                               '-p', 'huxley',
-                               '--gres=gpu:%s' % lpus,
-                               'python', script_name,
-                               '-u', str(lpus), '-s', str(spikes),
-                               '-g', '0', '-m', '50']])
-        results.append(r)
+for spikes in xrange(250, 7000, 250):
+    for lpus in xrange(2, 9):
+        for i in xrange(trials):
+            r = pool.apply_async(check_and_print_output,
+                                 [['srun', '-n', '1', '-c', str(lpus),
+                                   '--gres=gpu:%i' % lpus,
+                                   '-p', 'huxley',
+                                   'python', script_name,
+                                   '-u', str(lpus), '-s', str(spikes/(lpus-1)),
+                                   '-g', '0', '-m', '50'], spikes])
+            results.append(r)
 f = open(out_file, 'w', 0)
 w = csv.writer(f)
 for r in results:
-    w.writerow(r.get().strip('[]\n\"').split(', '))
+
+    # Include total number of spikes rather than per-LPU number of spikes in output:
+    row = r.get().strip('[]\n\"').split(',')
+    w.writerow(row)
 f.close()

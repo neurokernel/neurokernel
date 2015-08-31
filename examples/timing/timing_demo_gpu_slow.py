@@ -10,11 +10,13 @@ import time
 
 from mpi4py import MPI
 import numpy as np
+import pycuda.driver as drv
 
 from neurokernel.tools.logging import setup_logger
 from neurokernel.core import CTRL_TAG, GPOT_TAG, SPIKE_TAG, Manager, Module
 from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
+from neurokernel.pm_gpu import GPUPortMapper
 
 class MyModule(Module):
     """
@@ -46,6 +48,16 @@ class MyModule(Module):
 
         self.pm['gpot'][self.interface.out_ports().gpot_ports(tuples=True)] = 1.0
         self.pm['spike'][self.interface.out_ports().spike_ports(tuples=True)] = 1
+
+    # Need to redefine run() method to perform GPU initialization:
+    def run(self):
+        self._init_gpu()
+
+        # Replace port mappers with GPUPortMapper instances:
+        self.pm['gpot'] = GPUPortMapper.from_pm(self.pm['gpot'])
+        self.pm['spike'] = GPUPortMapper.from_pm(self.pm['spike'])
+
+        super(MyModule, self).run()
 
 def gen_sels(n_lpu, n_spike, n_gpot):
     """
@@ -178,8 +190,16 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     # Time everything starting with manager initialization:
     start_all = time.time()
 
+    # Check whether a sufficient number of GPUs are available:
+    drv.init()
+    if n_lpu > drv.Device.count():
+        raise RuntimeError('insufficient number of available GPUs.')
+    
     # Set up manager:
     man = Manager()
+
+    # Generate selectors for configuring modules and patterns:
+    mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
 
     # Generate selectors for configuring modules and patterns:
     mod_sels, pat_sels = gen_sels(n_lpu, n_spike, n_gpot)
@@ -190,7 +210,7 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
         sel, sel_in, sel_out, sel_gpot, sel_spike = mod_sels[lpu_i]
         man.add(MyModule, lpu_i, sel, sel_in, sel_out, sel_gpot, sel_spike,
                 None, None, ['interface', 'io', 'type'],
-                CTRL_TAG, GPOT_TAG, SPIKE_TAG, time_sync=True)
+                CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=i, time_sync=True)
 
     # Set up connections between module pairs:
     for i, j in itertools.combinations(xrange(n_lpu), 2):
@@ -215,8 +235,8 @@ def emulate(n_lpu, n_spike, n_gpot, steps):
     man.start(steps)
     man.wait()
     stop_main = time.time()
-    return man.average_step_sync_time, (time.time()-start_all), (stop_main-start_main), \
-        (man.stop_time-man.start_time)
+    return man.average_step_sync_time, (time.time()-start_all), \
+        (stop_main-start_main), (man.stop_time-man.start_time)
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

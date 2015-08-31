@@ -3,23 +3,25 @@
 import argparse
 import time
 
+import networkx as nx
 import matplotlib as mpl
 mpl.use('Agg')
 
-import neurokernel.core as core
-import neurokernel.base as base
+from neurokernel.tools.logging import setup_logger
+import neurokernel.core_gpu as core
+
 from neurokernel.LPU.LPU import LPU
-from neurokernel.tools.comm import get_random_port
 
 from data.eyeimpl import EyeGeomImpl
 
-import networkx as nx
 nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
                                        'true':True, 'True':True}
 import numpy as np
 import neurokernel.LPU.utils.visualizer as vis
 
 from matplotlib.colors import Normalize
+
+import neurokernel.mpi_relaunch
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--rec-micro', dest='record_microvilli',
@@ -35,10 +37,6 @@ parser.add_argument('-m', '--micro', dest='num_microvilli', type=int,
                     default=30000,
                     help='number of microvilli in each photoreceptor')
 
-parser.add_argument('-d', '--port_data', default=None, type=int,
-                    help='Data port [default: randomly selected]')
-parser.add_argument('-c', '--port_ctrl', default=None, type=int,
-                    help='Control port [default: randomly selected]')
 parser.add_argument('-a', '--ret_dev', default=0, type=int,
                     help='GPU for retina lobe [default: 0]')
 parser.add_argument('-b', '--lam_dev', default=1, type=int,
@@ -49,7 +47,7 @@ parser.add_argument('-e', '--med_dev', default=1, type=int,
 parser.add_argument('-i', '--input', action="store_true",
                     help='generates input if set')
 parser.add_argument('-g', '--gexf', action="store_true",
-                    help='generates gexf of LPU if set')
+                    help='generates LPU GEXF files if set')
 parser.add_argument('-o', '--output', action="store_true",
                     help='generates output if set')
 
@@ -78,7 +76,7 @@ if args.log.lower() in ['file', 'both']:
     file_name = 'neurokernel.log'
 if args.log.lower() in ['screen', 'both']:
     screen = True
-logger = base.setup_logger(file_name=file_name, screen=screen)
+logger = setup_logger(file_name=file_name, screen=screen)
 
 
 dt = 1e-4
@@ -133,62 +131,58 @@ if args.gexf:
     print('Writing medulla lpu')
     eyemodel.write_medulla(MED_GEXF_FILE)
 
-if args.port_data is None and args.port_ctrl is None:
-    port_data = get_random_port()
-    port_ctrl = get_random_port()
-else:
-    port_data = args.port_data
-    port_ctrl = args.port_ctrl
-
 if not args.suppress:
-    man = core.Manager(port_data, port_ctrl)
-    man.add_brok()
+    man = core.Manager()
 
     if 'r' in args.model:
         print('Parsing retina LPU data')
         n_dict_ret, s_dict_ret = LPU.lpu_parser(RET_GEXF_FILE)
         print('Initializing retina LPU')
-        lpu_ret = LPU(dt, n_dict_ret, s_dict_ret,
-                      input_file=RET_INPUT,
-                      output_file=RET_OUTPUT_FILE, port_ctrl=port_ctrl,
-                      port_data=port_data, device=args.ret_dev, id='retina',
-                      debug=True)
-        man.add_mod(lpu_ret)
+        ret_id = 'retina'
+        man.add(LPU, ret_id, dt, n_dict_ret, s_dict_ret,
+                input_file=RET_INPUT,
+                output_file=RET_OUTPUT_FILE,
+                device=args.ret_dev, debug=True)
 
     if 'l' in args.model:
         print('Parsing lamina LPU data')
         n_dict_lam, s_dict_lam = LPU.lpu_parser(LAM_GEXF_FILE)
         print('Initializing lamina LPU')
-        lpu_lam = LPU(dt, n_dict_lam, s_dict_lam,
-                      input_file=LAM_INPUT,
-                      output_file=LAM_OUTPUT_FILE, port_ctrl=port_ctrl,
-                      port_data=port_data, device=args.lam_dev, id='lamina',
-                      debug=True)
-        man.add_mod(lpu_lam)
+        lam_id = 'lamina'
+        man.add(LPU, lam_id, dt, n_dict_lam, s_dict_lam,
+                input_file=LAM_INPUT,
+                output_file=LAM_OUTPUT_FILE, 
+                device=args.lam_dev, debug=True)
 
     if 'm' in args.model:
         print('Parsing medulla LPU data')
         n_dict_med, s_dict_med = LPU.lpu_parser(MED_GEXF_FILE)
         print('Initializing medulla LPU')
-        lpu_med = LPU(dt, n_dict_med, s_dict_med,
-                      input_file=MED_INPUT,
-                      output_file=MED_OUTPUT_FILE, port_ctrl=port_ctrl,
-                      port_data=port_data, device=args.med_dev, id='medulla',
-                      debug=True)
-        man.add_mod(lpu_med)
+        med_id = 'medulla'
+        man.add(LPU, med_id, dt, n_dict_med, s_dict_med,
+                input_file=MED_INPUT,
+                output_file=MED_OUTPUT_FILE,
+                device=args.med_dev, debug=True)                      
 
-    # if gexf files are not written again, 
+    # If GEXF files are not written again, 
     # patterns are loaded from previous files too
     from_file = not args.gexf
-    print('Connecting retina and lamina')
-    eyemodel.connect_retina_lamina(man, lpu_ret, lpu_lam, from_file)
-    print('Connecting lamina and medulla')
-    eyemodel.connect_lamina_medulla(man, lpu_lam, lpu_med, from_file)
+    if 'r' in args.model and 'l' in args.model:
+        print('Connecting retina and lamina')
+        pat_ret_lam = eyemodel.gen_pat_retina_lamina(n_dict_ret, n_dict_lam,
+                                                     from_file)
+        man.connect(ret_id, lam_id, pat_ret_lam, 0, 1, compat_check=False)
+    if 'l' in args.model and 'm' in args.model:
+        print('Connecting lamina and medulla')
+        pat_lam_med = eyemodel.gen_pat_lamina_medulla(n_dict_lam, n_dict_med,
+                                                      from_file)
+        man.connect(lam_id, med_id, pat_lam_med, 0, 1, compat_check=False)
 
     print('Starting simulation')
+    man.spawn()
     start_time = time.time()
     man.start(steps=args.steps)
-    man.stop()
+    man.wait()
     
     print('Simulation complete: Duration {} seconds'.format(time.time() - 
                                                             start_time))
@@ -211,16 +205,15 @@ if args.output:
     V.add_LPU(RET_OUTPUT_GPOT,'retina.gexf.gz', LPU='Retina')
     V.add_plot(conf_R1, 'Retina', 'R1')
     
-    if not args.retina_only:
-        conf_L1 = {}
-        conf_L1['type'] = 'dome'
-        V.add_LPU(LAM_OUTPUT_GPOT, 'lamina.gexf.gz', LPU='Lamina')
-        V.add_plot(conf_L1, 'Lamina', 'L1')
+    conf_L1 = {}
+    conf_L1['type'] = 'dome'
+    V.add_LPU(LAM_OUTPUT_GPOT, 'lamina.gexf.gz', LPU='Lamina')
+    V.add_plot(conf_L1, 'Lamina', 'L1')
 
-        conf_T4a = {}
-        conf_T4a['type'] = 'dome'
-        V.add_LPU(MED_OUTPUT_GPOT, 'medulla.gexf.gz', LPU='Medulla')
-        V.add_plot(conf_T4a, 'Medulla', 'T4a')
+    conf_T4a = {}
+    conf_T4a['type'] = 'dome'
+    V.add_LPU(MED_OUTPUT_GPOT, 'medulla.gexf.gz', LPU='Medulla')
+    V.add_plot(conf_T4a, 'Medulla', 'T4a')
         
     V.fontsize = 22
     V.fps = 5
@@ -228,5 +221,5 @@ if args.output:
     V.out_filename = 'vision_output.mp4'
     V.codec = 'mpeg4'
     V.dt = 0.0001
-    #V.FFMpeg = True      # change to False to use LibAV fork instead( default on UBUNTU)
+    V.FFMpeg = False      # change to False to use LibAV fork instead( default on UBUNTU)
     V.run()

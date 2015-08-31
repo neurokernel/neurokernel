@@ -20,7 +20,7 @@ Neurokernel requires
 * Python 2.7 (Python 3.0 is not guaranteed to work)
 * at least one NVIDIA GPU with `Fermi
   <http://www.nvidia.com/content/pdf/fermi_white_papers/nvidia_fermi_compute_architecture_whitepaper.pdf>`_
-  architecture (or something more recent)
+  architecture
 * NVIDIA's `GPU drivers <http://www.nvidia.com/content/drivers/>`_
 * `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later.
 
@@ -92,7 +92,6 @@ Run the following to install the remaining Python package dependencies listed in
 
   cd ~/neurokernel
   ~/NK/bin/python setup.py develop
-
 Conda
 ^^^^^
 *Note that conda packages are currently only available for 64-bit Ubuntu Linux
@@ -114,7 +113,7 @@ following lines appear in your `~/.condarc` file so that conda can find the
 packages required by Neurokernel: ::
 
    channels:
-   - https://conda.anaconda.org/neurokernel/channel/ubuntu1404
+   - https://conda.binstar.org/neurokernel/channel/ubuntu1404
    - defaults
 
 Create a new conda environment containing the packages required by Neurokernel
@@ -133,6 +132,7 @@ Building the Documentation
 --------------------------
 To build Neurokerne's HTML documentation locally, you will need to install 
 
+* `mock <http://www.voidspace.org.uk/python/mock/>`_ 1.0 or later.
 * `sphinx <http://sphinx-doc.org>`_ 1.2 or later.
 * `sphinx_rtd_theme <https://github.com/snide/sphinx_rtd_theme>`_ 0.1.6 or 
   later.

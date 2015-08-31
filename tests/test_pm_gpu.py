@@ -18,7 +18,24 @@ class test_gpu_port_mapper(TestCase):
         res = pm['/foo[0:2]']
         assert_array_equal(data[0:2], res)
 
-    def test_set(self):
+    def test_set_scalar(self):
+        # Nonempty index array:
+        data = np.random.rand(3)
+        pm = GPUPortMapper('/foo[0:3]', data)
+        new_data = 1.0
+        ind = np.array([0, 1])
+        pm.set_by_inds(ind, new_data)
+        assert_array_equal(np.full(ind.shape, new_data, type(new_data)),
+                           pm.data.get()[0:2])
+
+        # Empty index array:
+        data = np.random.rand(3)
+        pm = GPUPortMapper('/foo[0:3]', data)
+        new_data = 1.0
+        pm.set_by_inds(np.array([], np.int64), new_data)
+        assert_array_equal(data[0:2], pm.data.get()[0:2])
+
+    def test_set_array(self):
         # Valid empty:
         pm = GPUPortMapper('/foo[0:3]')
         new_data = np.arange(2).astype(np.double)
@@ -33,17 +50,41 @@ class test_gpu_port_mapper(TestCase):
         assert_array_equal(new_data, pm.data.get()[0:2])
 
     def test_get_by_inds(self):
+        # Nonempty index array:
         data = np.random.rand(3)
         pm = GPUPortMapper('/foo[0:3]', data)
         res = pm.get_by_inds(np.array([0, 1]))
         assert_array_equal(data[0:2], res)
 
-    def test_set_by_inds(self):
+        # Empty index array:
+        res = pm.get_by_inds(np.array([], np.int64))
+        assert len(res) == 0
+
+    def test_set_by_inds_scalar(self):
+        # Nonempty index array:
+        pm = GPUPortMapper('/foo[0:3]', np.zeros(3, np.double))
+        pm.set_by_inds(np.array([0, 1]), 1.0)
+        assert_array_equal(np.ones(2, np.double), pm.data.get()[0:2])
+
+        # Empty index array:
+        pm = GPUPortMapper('/foo[0:3]', np.zeros(3, np.double))
+        pm.set_by_inds(np.array([]), 1.0)
+        assert_array_equal(np.zeros(2, np.double), pm.data.get()[0:2])
+
+    def test_set_by_inds_array(self):
+        # Nonempty index array:
         data = np.random.rand(3)
         pm = GPUPortMapper('/foo[0:3]', data)
         new_data = np.arange(2).astype(np.double)
         pm.set_by_inds(np.array([0, 1]), new_data)
         assert_array_equal(new_data, pm.data.get()[0:2])
+
+        # Empty index array:
+        data = np.random.rand(3)
+        pm = GPUPortMapper('/foo[0:3]', data)
+        new_data = np.arange(2).astype(np.double)
+        pm.set_by_inds(np.array([], np.int64), new_data)
+        assert_array_equal(data[0:2], pm.data.get()[0:2])
 
     def test_from_pm_nongpu(self):
         # Empty:

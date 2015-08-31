@@ -10,18 +10,21 @@ import time
 import bidict
 from mpi4py import MPI
 import numpy as np
+import pycuda.gpuarray as gpuarray
+from pycuda.tools import dtype_to_ctype
 import twiggy
 
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
-     ExceptionOnSignal, TryExceptionOnSignal
+    ExceptionOnSignal, TryExceptionOnSignal
 from mixins import LoggerMixin
 import mpi
+from tools.gpu import bufint, set_by_inds
 from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
 from tools.mpi import MPIOutput
 from pattern import Interface, Pattern
 from plsel import SelectorMethods
-from pm import BasePortMapper, PortMapper
+from pm_gpu import GPUPortMapper
 from routing_table import RoutingTable
 from uid import uid
 
@@ -81,7 +84,7 @@ class Module(mpi.Worker):
     interface : Interface
         Object containing information about a module's ports.
     pm : dict
-        `pm['gpot']` and `pm['spike']` are instances of neurokernel.pm.PortMapper that
+        `pm['gpot']` and `pm['spike']` are instances of neurokernel.pm_gpu.PortMapper that
         map a module's ports to the contents of the values in `data`.
     data : dict
         `data['gpot']` and `data['spike']` are arrays of data associated with 
@@ -112,6 +115,15 @@ class Module(mpi.Worker):
         if 'type' not in columns:
             raise ValueError('type column required')
 
+        # Initialize GPU here so as to be able to initialize a port mapper
+        # containing GPU memory:
+        self._init_gpu()
+
+        # This is needed to ensure that MPI_Finalize is called before PyCUDA
+        # attempts to clean up; see
+        # https://groups.google.com/forum/#!topic/mpi4py/by0Rd5q0Ayw
+        atexit.register(MPI.Finalize)
+
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
         # closed after MPI.Finalize() is called, an error will occur):
@@ -132,12 +144,12 @@ class Module(mpi.Worker):
         # Ensure that the graded potential and spiking port selectors
         # respectively select mutually exclusive subsets of the set of all ports
         # exposed by the module:
-        if not SelectorMethods.is_in(sel_gpot, sel):
-            raise ValueError('gpot port selector not in selector of all ports')
-        if not SelectorMethods.is_in(sel_spike, sel):
-            raise ValueError('spike port selector not in selector of all ports')
-        if not SelectorMethods.are_disjoint(sel_gpot, sel_spike):
-            raise ValueError('gpot and spike port selectors not disjoint')
+        if not SelectorMethods.is_in(sel_in, sel):
+            raise ValueError('input port selector not in selector of all ports')
+        if not SelectorMethods.is_in(sel_out, sel):
+            raise ValueError('output port selector not in selector of all ports')
+        if not SelectorMethods.are_disjoint(sel_in, sel_out):
+            raise ValueError('input and output port selectors not disjoint')
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -148,12 +160,13 @@ class Module(mpi.Worker):
             self.id = uid()
         else:
 
-            # If a unique ID was specified and the routing table is not empty 
-            # (i.e., there are connections between multiple modules),
-            # the id must be a node in the table:
+            # If a unique ID was specified and the routing table is not empty
+            # (i.e., there are connections between multiple modules), the id
+            # must be a node in the routing table:
             if routing_table is not None and len(routing_table.ids) and \
                     not routing_table.has_node(id):
-                raise ValueError('routing table must contain specified module ID')
+                raise ValueError('routing table must contain specified '
+                                 'module ID: {}'.format(id))
             self.id = id
 
         # Reformat logger name:
@@ -190,20 +203,18 @@ class Module(mpi.Worker):
         if len(data_spike) != len(self.spike_ports):
             raise ValueError('incompatible spike port data array length')
         self.data = {}
-        self.data['gpot'] = data_gpot
-        self.data['spike'] = data_spike
+        self.data['gpot'] = gpuarray.to_gpu(data_gpot)
+        self.data['spike'] = gpuarray.to_gpu(data_spike)
         self.pm = {}
-        self.pm['gpot'] = PortMapper(sel_gpot, self.data['gpot'])
-        self.pm['spike'] = PortMapper(sel_spike, self.data['spike'])
+        self.pm['gpot'] = GPUPortMapper(sel_gpot, self.data['gpot'], make_copy=False)
+        self.pm['spike'] = GPUPortMapper(sel_spike, self.data['spike'], make_copy=False)
+
+        # MPI Request object for resolving asynchronous transfers:
+        self.req = MPI.Request()
 
     def _init_gpu(self):
         """
         Initialize GPU device.
-
-        Notes
-        -----
-        Must be called from within the `run()` method, not from within
-        `__init__()`.
         """
 
         if self.device == None:
@@ -220,7 +231,7 @@ class Module(mpi.Worker):
                 self.log_info('_init_gpu exception: ' + e.message)
             else:
                 atexit.register(self.gpu_ctx.pop)
-                self.log_info('GPU initialized')
+                self.log_info('GPU %s initialized' % self.device)
 
     def _init_port_dicts(self):
         """
@@ -253,11 +264,11 @@ class Module(mpi.Worker):
             self._out_port_dict['gpot'][out_id] = \
                     pat.src_idx(int_0, int_1, 'gpot', 'gpot')
             self._out_port_dict_ids['gpot'][out_id] = \
-                    self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id])
+                    gpuarray.to_gpu(self.pm['gpot'].ports_to_inds(self._out_port_dict['gpot'][out_id]))
             self._out_port_dict['spike'][out_id] = \
                     pat.src_idx(int_0, int_1, 'spike', 'spike')
             self._out_port_dict_ids['spike'][out_id] = \
-                    self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id])
+                    gpuarray.to_gpu(self.pm['spike'].ports_to_inds(self._out_port_dict['spike'][out_id]))
            
         # Extract identifiers of destination ports in the current module's
         # interface for all modules sending input to the current module:
@@ -285,35 +296,72 @@ class Module(mpi.Worker):
             self._in_port_dict['gpot'][in_id] = \
                     pat.dest_idx(int_0, int_1, 'gpot', 'gpot')
             self._in_port_dict_ids['gpot'][in_id] = \
-                    self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id])
+                    gpuarray.to_gpu(self.pm['gpot'].ports_to_inds(self._in_port_dict['gpot'][in_id]))
             self._in_port_dict['spike'][in_id] = \
                     pat.dest_idx(int_0, int_1, 'spike', 'spike')
             self._in_port_dict_ids['spike'][in_id] = \
-                    self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id])
+                    gpuarray.to_gpu(self.pm['spike'].ports_to_inds(self._in_port_dict['spike'][in_id]))
 
-    def _init_data_in(self):
+    def _init_comm_bufs(self):
         """
-        Buffers for receiving data from other modules.
+        Buffers for sending/receiving data from other modules.
 
         Notes
         -----
         Must be executed after `_init_port_dicts()`.
         """
 
-        # Allocate arrays for receiving data transmitted to the module so that
-        # they don't have to be reallocated during every execution step
-        # synchronization:
-        self.data_in = {}
-        self.data_in['gpot'] = {}
-        self.data_in['spike'] = {}
+        # Buffers (and their interfaces and MPI types) for receiving data
+        # transmitted from source modules:
+        self._in_buf = {}
+        self._in_buf['gpot'] = {}
+        self._in_buf['spike'] = {}
+        self._in_buf_int = {}
+        self._in_buf_int['gpot'] = {}
+        self._in_buf_int['spike'] = {}        
+        self._in_buf_mtype = {}
+        self._in_buf_mtype['gpot'] = {}
+        self._in_buf_mtype['spike'] = {}        
         for in_id in self._in_ids:
-            self.data_in['gpot'][in_id] = \
-                np.empty(np.shape(self._in_port_dict['gpot'][in_id]), 
-                         self.pm['gpot'].dtype)
-            self.data_in['spike'][in_id] = \
-                np.empty(np.shape(self._in_port_dict['spike'][in_id]), 
-                         self.pm['spike'].dtype)
-            
+            self._in_buf['gpot'][in_id] = \
+                gpuarray.empty(len(self._in_port_dict_ids['gpot'][in_id]),
+                               self.pm['gpot'].dtype)
+            self._in_buf_int['gpot'][in_id] = bufint(self._in_buf['gpot'][in_id])
+            self._in_buf_mtype['gpot'][in_id] = \
+                dtype_to_mpi(self._in_buf['gpot'][in_id].dtype)
+            self._in_buf['spike'][in_id] = \
+                gpuarray.empty(len(self._in_port_dict_ids['spike'][in_id]),
+                               self.pm['spike'].dtype)
+            self._in_buf_int['spike'][in_id] = bufint(self._in_buf['spike'][in_id])
+            self._in_buf_mtype['spike'][in_id] = \
+                dtype_to_mpi(self._in_buf['spike'][in_id].dtype)
+
+        # Buffers (and their interfaces and MPI types) for transmitting data to
+        # destination modules:
+        self._out_buf = {}
+        self._out_buf['gpot'] = {}
+        self._out_buf['spike'] = {}
+        self._out_buf_int = {}
+        self._out_buf_int['gpot'] = {}
+        self._out_buf_int['spike'] = {}
+        self._out_buf_mtype = {}
+        self._out_buf_mtype['gpot'] = {}
+        self._out_buf_mtype['spike'] = {}
+        for out_id in self._out_ids:
+            self._out_buf['gpot'][out_id] = \
+                gpuarray.empty(len(self._out_port_dict_ids['gpot'][out_id]),
+                               self.pm['gpot'].dtype)
+            self._out_buf_int['gpot'][out_id] = bufint(self._out_buf['gpot'][out_id])
+            self._out_buf_mtype['gpot'][out_id] = \
+                dtype_to_mpi(self._out_buf['gpot'][out_id].dtype)
+
+            self._out_buf['spike'][out_id] = \
+                gpuarray.empty(len(self._out_port_dict_ids['spike'][out_id]),
+                               self.pm['spike'].dtype)
+            self._out_buf_int['spike'][out_id] = bufint(self._out_buf['spike'][out_id])
+            self._out_buf_mtype['spike'][out_id] = \
+                dtype_to_mpi(self._out_buf['spike'][out_id].dtype)
+
     def _sync(self):
         """
         Send output data and receive input data.
@@ -321,30 +369,32 @@ class Module(mpi.Worker):
 
         if self.time_sync:
             start = time.time()
-        req = MPI.Request()
         requests = []
 
         # For each destination module, extract elements from the current
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
         for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
-
-            # Get source ports in current module that are connected to the
-            # destination module:
-            data_gpot = self.pm['gpot'].get_by_inds(self._out_port_dict_ids['gpot'][dest_id])
-            data_spike = self.pm['spike'].get_by_inds(self._out_port_dict_ids['spike'][dest_id])
+            
+            # Copy data into destination buffer:
+            set_by_inds(self._out_buf['gpot'][dest_id],
+                        self._out_port_dict_ids['gpot'][dest_id],
+                        self.data['gpot'], 'src')
+            set_by_inds(self._out_buf['spike'][dest_id],
+                        self._out_port_dict_ids['spike'][dest_id],
+                        self.data['spike'], 'src')
 
             if not self.time_sync:
                 self.log_info('gpot data being sent to %s: %s' % \
-                              (dest_id, str(data_gpot)))
+                              (dest_id, str(self._out_buf['gpot'][dest_id])))
                 self.log_info('spike data being sent to %s: %s' % \
-                              (dest_id, str(data_spike)))
-            r = MPI.COMM_WORLD.Isend([data_gpot,
-                                      dtype_to_mpi(data_gpot.dtype)],
+                              (dest_id, str(self._out_buf['spike'][dest_id])))
+            r = MPI.COMM_WORLD.Isend([self._out_buf_int['gpot'][dest_id],
+                                      self._out_buf_mtype['gpot'][dest_id]],
                                      dest_rank, GPOT_TAG)
             requests.append(r)
-            r = MPI.COMM_WORLD.Isend([data_spike,
-                                      dtype_to_mpi(data_spike.dtype)],
+            r = MPI.COMM_WORLD.Isend([self._out_buf_int['spike'][dest_id],
+                                      self._out_buf_mtype['spike'][dest_id]],
                                      dest_rank, SPIKE_TAG)
             requests.append(r)
 
@@ -355,31 +405,27 @@ class Module(mpi.Worker):
 
         # For each source module, receive elements and copy them into the
         # current module's port data array:
-        received_gpot = []
-        received_spike = []
-        ind_in_gpot_list = []
-        ind_in_spike_list = []
         for src_id, src_rank in zip(self._in_ids, self._in_ranks):
-            r = MPI.COMM_WORLD.Irecv([self.data_in['gpot'][src_id],
-                                      dtype_to_mpi(data_gpot.dtype)],
+            r = MPI.COMM_WORLD.Irecv([self._in_buf_int['gpot'][src_id],
+                                      self._in_buf_mtype['gpot'][src_id]],
                                      source=src_rank, tag=GPOT_TAG)
             requests.append(r)
-            r = MPI.COMM_WORLD.Irecv([self.data_in['spike'][src_id],
-                                      dtype_to_mpi(data_spike.dtype)],
+            r = MPI.COMM_WORLD.Irecv([self._in_buf_int['spike'][src_id],
+                                      self._in_buf_mtype['spike'][src_id]],
                                      source=src_rank, tag=SPIKE_TAG)
             requests.append(r)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
-        req.Waitall(requests)
+        self.req.Waitall(requests)
         if not self.time_sync:
-            self.log_info('received all data received by %s' % self.id)            
+            self.log_info('received all data received by %s' % self.id)
 
         # Copy received elements into the current module's data array:
         for src_id in self._in_ids:
             ind_in_gpot = self._in_port_dict_ids['gpot'][src_id]
-            self.pm['gpot'].set_by_inds(ind_in_gpot, self.data_in['gpot'][src_id])
+            self.pm['gpot'].set_by_inds(ind_in_gpot, self._in_buf['gpot'][src_id])
             ind_in_spike = self._in_port_dict_ids['spike'][src_id]
-            self.pm['spike'].set_by_inds(ind_in_spike, self.data_in['spike'][src_id]) 
+            self.pm['spike'].set_by_inds(ind_in_spike, self._in_buf['spike'][src_id])
 
         # Save timing data:
         if self.time_sync:
@@ -387,8 +433,8 @@ class Module(mpi.Worker):
             n_gpot = 0
             n_spike = 0
             for src_id in self._in_ids:
-                n_gpot += len(self.data_in['gpot'][src_id])
-                n_spike += len(self.data_in['spike'][src_id])
+                n_gpot += len(self._in_buf['gpot'][src_id])
+                n_spike += len(self._in_buf['spike'][src_id])
             self.log_info('sent timing data to master')
             self.intercomm.isend(['sync_time',
                                   (self.rank, self.steps, start, stop,
@@ -397,18 +443,6 @@ class Module(mpi.Worker):
                                  dest=0, tag=self._ctrl_tag)
         else:
             self.log_info('saved all data received by %s' % self.id)
-
-    def run_step(self):
-        """
-        Module work method.
-
-        This method should be implemented to do something interesting with new
-        input port data in the module's `pm` attribute and update the attribute's
-        output port data if necessary. It should not interact with any other
-        class attributes.
-        """
-
-        self.log_info('running execution step')
 
     def pre_run(self):
         """
@@ -423,8 +457,8 @@ class Module(mpi.Worker):
         # Initialize _out_port_dict and _in_port_dict attributes:
         self._init_port_dicts()
 
-        # Initialize data_in attribute:
-        self._init_data_in()
+        # Initialize GPU transmission buffers:
+        self._init_comm_bufs()
 
         # Start timing the main loop:
         if self.time_sync:
@@ -452,6 +486,18 @@ class Module(mpi.Worker):
         # Send acknowledgment message:
         self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
         self.log_info('done message sent to manager')
+
+    def run_step(self):
+        """
+        Module work method.
+
+        This method should be implemented to do something interesting with new
+        input port data in the module's `pm` attribute and update the attribute's
+        output port data if necessary. It should not interact with any other
+        class attributes.
+        """
+
+        self.log_info('running execution step')
 
     def run(self):
         """
@@ -543,7 +589,7 @@ class Manager(mpi.WorkerManager):
         # Average step synchronization time:
         self._average_step_sync_time = 0.0
 
-        # Computed throughput (only updated after an emulation run):    
+        # Computed throughput (only updated after an emulation run):
         self._average_throughput = 0.0
         self._total_throughput = 0.0
         self.log_info('manager instantiated')
@@ -601,7 +647,7 @@ class Manager(mpi.WorkerManager):
             if required_arg not in arg_names:
                 return False
         return True
-
+ 
     def add(self, target, id, *args, **kwargs):
         """
         Add a module class to the emulation.
@@ -622,17 +668,16 @@ class Manager(mpi.WorkerManager):
         """
 
         if not issubclass(target, Module):
-            raise ValueError('target class is not a Module subclass')
-        argnames = mpi.getargnames(target.__init__)
+            raise ValueError('target is not a Module subclass')
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
         # XXX: keep this commented out for the time being because it interferes
-        # with instantiation of child classes (such as those in LPU.py):
+        # with instantiation of child classes (such as those in LPU.py): 
         # if not self.validate_args(target):
         #    raise ValueError('class constructor missing required args')
 
-        # Need to associate an ID and the routing table with each module class
+        # Need to associate an ID with each module class
         # to instantiate; because the routing table's can potentially occupy
         # lots of space, we don't add it to the argument dict here - it is
         # broadcast to all processes separately and then added to the argument
@@ -641,8 +686,31 @@ class Manager(mpi.WorkerManager):
         kwargs['rank_to_id'] = self.rank_to_id
         rank = super(Manager, self).add(target, *args, **kwargs)
         self.rank_to_id[rank] = id
- 
+
     def connect(self, id_0, id_1, pat, int_0=0, int_1=1, compat_check=True):
+        """
+        Specify connection between two module instances with a Pattern instance.
+
+        Parameters
+        ----------
+        id_0, id_1 : str
+            Identifiers of module instances to connect.
+        pat : Pattern
+            Pattern instance.
+        int_0, int_1 : int
+            Which of the pattern's interfaces to connect to `id_0` and `id_1`,
+            respectively.
+        compat_check : bool
+            Check whether the interfaces of the specified modules
+            are compatible with the specified pattern. This option is provided
+            because compatibility checking can be expensive.
+
+        Notes
+        -----
+        Assumes that the constructors of the module types contain a `sel`
+        parameter.
+        """
+
         if not isinstance(pat, Pattern):
             raise ValueError('pat is not a Pattern instance')
         if id_0 not in self.rank_to_id.values():
@@ -742,6 +810,7 @@ class Manager(mpi.WorkerManager):
 
                     self.counter += 1
                 else:
+
                     # To skip the first sync step, set the start time to the
                     # latest stop time of the first step:
                     self.start_time = max([d[1] for d in self.received_data[steps].values()])
@@ -783,12 +852,12 @@ if __name__ == '__main__':
             self.log_info('input spike port data: '+str(self.pm['spike'][self.in_spike_ports]))
 
             # Output random graded potential data:
-            out_gpot_data = np.random.rand(len(self.out_gpot_ports))
+            out_gpot_data = gpuarray.to_gpu(np.random.rand(len(self.out_gpot_ports)))
             self.pm['gpot'][self.out_gpot_ports] = out_gpot_data
             self.log_info('output gpot port data: '+str(out_gpot_data))
 
             # Randomly select output ports to emit spikes:
-            out_spike_data = np.random.randint(0, 2, len(self.out_spike_ports))
+            out_spike_data = gpuarray.to_gpu(np.random.randint(0, 2, len(self.out_spike_ports)))
             self.pm['spike'][self.out_spike_ports] = out_spike_data
             self.log_info('output spike port data: '+str(out_spike_data))
 
@@ -831,14 +900,14 @@ if __name__ == '__main__':
             np.zeros(N1_gpot, dtype=np.double),
             np.zeros(N1_spike, dtype=int),
             ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG, time_sync=True)
+            CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=0, time_sync=True)
     m2_id = 'm2   '
     man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
             m2_int_sel_gpot, m2_int_sel_spike,
             np.zeros(N2_gpot, dtype=np.double),
             np.zeros(N2_spike, dtype=int),
             ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG, time_sync=True)
+            CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=1, time_sync=True)
 
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:
@@ -866,5 +935,5 @@ if __name__ == '__main__':
     # steps, start it as follows and remove the sleep statement:
     # man.start(500)
     man.spawn()
-    man.start(20)
+    man.start(5)
     man.wait()

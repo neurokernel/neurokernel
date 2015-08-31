@@ -23,7 +23,9 @@ from scipy.interpolate import griddata
 from matplotlib.colors import Normalize
 
 import neurokernel.LPU.utils.simpleio as sio
+from neurokernel.LPU.LPU import LPU
 from neurokernel.pattern import Pattern
+import neurokernel.plsel as plsel
 
 from neurongeometry import NeuronGeometry
 from image2signal import Image2Signal
@@ -1112,25 +1114,29 @@ class EyeGeomImpl(NeuronGeometry):
         return ids
 
     # TODO KP is use of -1 and 1 consistent? use only one of them maybe?
-    def connect_retina_lamina(self, manager, ret_lpu, lam_lpu, from_file=False):
+    def gen_pat_retina_lamina(self, n_dict_ret, n_dict_lam, from_file=False):
         if self._first_lpu > self.LPU_ORDER['r'] or self._last_lpu < self.LPU_ORDER['l']:
             return
         if not from_file:
             #.values or .tolist()
             print('Initializing selectors')
             # some workarounds
-            ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-            lam_sel = ','.join(['/' + str(sel[0]) + '/' + str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
+            ret_sel = ','.join(['/retout/'+ str(sel[-1]) \
+                                for sel in plsel.Selector(LPU.extract_all(n_dict_ret)).expanded])
+            lam_sel = ','.join(['/' + str(sel[0]) + '/' + str(sel[1]) \
+                                for sel in plsel.Selector(LPU.extract_all(n_dict_lam)).expanded])
             
             print('Initializing pattern with selectors')
             pat = Pattern(ret_sel, lam_sel)
-            ret_sel = ','.join(['/retout/'+ str(sel[-1]) for sel in ret_lpu.interface.index.tolist()])
-            lam_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1])
-                                   for sel in lam_lpu.interface.index.tolist()
+            ret_sel = ','.join(['/retout/'+ str(sel[-1]) \
+                                for sel in plsel.Selector(LPU.extract_all(n_dict_ret)).expanded])
+            lam_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1]) \
+                            for sel in plsel.Selector(LPU.extract_all(n_dict_lam)).expanded \
                                    if str(sel[0])=='retin' or str(sel[0])=='medin'])
-            lam_sel_out = ','.join(['/lamout/' + str(sel[-1])
-                                    for sel in lam_lpu.interface.index.tolist()
-                                    if not str(sel[0]) == 'retin' and not str(sel[0])=='medin'])
+            lam_sel_out = ','.join(['/lamout/' + str(sel[-1]) \
+                            for sel in plsel.Selector(LPU.extract_all(n_dict_lam)).expanded \
+                                   if not str(sel[0]) == 'retin' and not str(sel[0])=='medin'])
+
             print('Setting selector attributes in pattern')
             pat.interface[ret_sel] = [0, 'in', 'gpot']
             pat.interface[lam_sel_in] = [1, 'out', 'gpot']
@@ -1147,36 +1153,35 @@ class EyeGeomImpl(NeuronGeometry):
             pat = pickle.load(pat_file)
             pat_file.close()
         
-        print('Connecting LPUs with the pattern')
         print(pat)
-        manager.connect(ret_lpu, lam_lpu, pat, 0, 1)
+        return pat
 
-    def connect_lamina_medulla(self, manager, lam_lpu, med_lpu, from_file=False):
+    def gen_pat_lamina_medulla(self, n_dict_lam, n_dict_med, from_file=False):
         if self._first_lpu > self.LPU_ORDER['l'] or self._last_lpu < self.LPU_ORDER['m']:
             return
         if not from_file:
             #.values or .tolist()
             print('Initializing selectors')
             # some workarounds
-            lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in lam_lpu.interface.index.tolist()])
-            med_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) for sel in med_lpu.interface.index.tolist()])
+            lam_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) \
+                                for sel in plsel.Selector(LPU.extract_all(n_dict_lam)).expanded])
+            med_sel = ','.join(['/' + str(sel[0]) + '/' +  str(sel[1]) \
+                                for sel in plsel.Selector(LPU.extract_all(n_dict_med)).expanded])
             
-            print('Initializing pattern with selectors')
-            
+            print('Initializing pattern with selectors')            
             pat = Pattern(lam_sel, med_sel)
-            lam_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1])
-                                   for sel in lam_lpu.interface.index.tolist()
+            lam_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1]) \
+                                   for sel in plsel.Selector(LPU.extract_all(n_dict_lam)).expanded \
                                    if str(sel[0])=='retin' or str(sel[0])=='medin'])
-            lam_sel_out = ','.join(['/lamout/' + str(sel[-1])
-                                    for sel in lam_lpu.interface.index.tolist()
+            lam_sel_out = ','.join(['/lamout/' + str(sel[-1]) \
+                                    for sel in plsel.Selector(LPU.extract_all(n_dict_lam)).expanded \
                                     if not str(sel[0]) == 'retin' and not str(sel[0])=='medin'])
-            med_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1])
-                                   for sel in med_lpu.interface.index.tolist()
+            med_sel_in = ','.join(['/' + str(sel[0]) + '/' + str(sel[-1]) \
+                                   for sel in plsel.Selector(LPU.extract_all(n_dict_med)).expanded \
                                    if str(sel[0])=='retin' or str(sel[0])=='lamin'])
-            med_sel_out = ','.join(['/medout/' + str(sel[-1])
-                                    for sel in med_lpu.interface.index.tolist()
+            med_sel_out = ','.join(['/medout/' + str(sel[-1]) \
+                                    for sel in plsel.Selector(LPU.extract_all(n_dict_med)).expanded \
                                     if not str(sel[0]) == 'retin' and not str(sel[0])=='lamin'])
-            
             
             print('Setting selector attributes in pattern')
             pat.interface[med_sel_out] = [1, 'in', 'gpot']
@@ -1200,11 +1205,9 @@ class EyeGeomImpl(NeuronGeometry):
             pat = pickle.load(pat_file)
             pat_file.close()
         
-        print('Connecting LPUs with the pattern')
         print(pat)
-        manager.connect(lam_lpu, med_lpu, pat, 0, 1)
+        return pat
 
-    
     def _generate_retina(self, retina_only=False):
         G = nx.DiGraph()
 

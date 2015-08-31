@@ -23,7 +23,7 @@ except ImportError:
     DEVNULL = open(os.devnull, 'wb')
 
 out_file = sys.argv[1]
-script_name = 'timing_demo_gpu.py'
+script_name = 'timing_demo_gpu_slow.py'
 trials = 3
 lpus = 2
 
@@ -41,7 +41,6 @@ def check_and_print_output(*args):
                     os.remove(ipc_file)
                 except:
                     pass
-
         try:
             out = subprocess.check_output(*args, env=os.environ, stderr=DEVNULL)
         except Exception as e:
