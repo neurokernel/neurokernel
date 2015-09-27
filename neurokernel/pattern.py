@@ -275,12 +275,13 @@ class Interface(object):
 
         Examples
         --------
-        >>> import plsel
+        >>> import plsel, pattern
         >>> import pandas
         >>> idx = plsel.SelectorMethods.make_index('/foo[0:2]')
         >>> data = [[0, 'in', 'spike'], [1, 'out', 'gpot']]
         >>> columns = ['interface', 'io', 'type']
         >>> df = pandas.DataFrame(data, index=idx, columns=columns)
+        >>> i = pattern.Interface.from_df(df)
 
         Parameters
         ----------
@@ -315,6 +316,27 @@ class Interface(object):
         i.data = df.copy()
         i.__validate_index__(i.index)
         return i
+
+    @classmethod
+    def from_csv(cls, file_name, **kwargs):
+        """
+        Create an Interface from a properly formatted CSV file.
+
+        Parameters
+        ----------
+        file_name : str
+            File name of CSV file containing interface data.
+        kwargs : dict
+            Options to pass to `DataFrame.from_csv()`
+
+        Returns
+        -------
+        i : Interface
+            Generated Interface instance.
+        """
+
+        df = pd.DataFrame.from_csv(file_name, **kwargs)
+        return cls.from_df(df)
 
     @classmethod
     def from_dict(cls, d):
