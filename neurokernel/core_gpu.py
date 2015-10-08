@@ -23,7 +23,7 @@ from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
 from tools.mpi import MPIOutput
 from pattern import Interface, Pattern
-from plsel import SelectorMethods
+from plsel import Selector, SelectorMethods
 from pm_gpu import GPUPortMapper
 from routing_table import RoutingTable
 from uid import uid
@@ -866,29 +866,29 @@ if __name__ == '__main__':
 
     man = Manager()
 
-    m1_int_sel_in_gpot = '/a/in/gpot0,/a/in/gpot1'
-    m1_int_sel_out_gpot = '/a/out/gpot0,/a/out/gpot1'
-    m1_int_sel_in_spike = '/a/in/spike0,/a/in/spike1'
-    m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
-    m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
-                           m1_int_sel_in_spike, m1_int_sel_out_spike])
-    m1_int_sel_in = ','.join((m1_int_sel_in_gpot, m1_int_sel_in_spike))
-    m1_int_sel_out = ','.join((m1_int_sel_out_gpot, m1_int_sel_out_spike))
-    m1_int_sel_gpot = ','.join((m1_int_sel_in_gpot, m1_int_sel_out_gpot))
-    m1_int_sel_spike = ','.join((m1_int_sel_in_spike, m1_int_sel_out_spike))
+    m1_int_sel_in_gpot = Selector('/a/in/gpot[0:2]')
+    m1_int_sel_out_gpot = Selector('/a/out/gpot[0:2]')
+    m1_int_sel_in_spike = Selector('/a/in/spike[0:2]')
+    m1_int_sel_out_spike = Selector('/a/out/spike[0:2]')
+    m1_int_sel = m1_int_sel_in_gpot+m1_int_sel_out_gpot+\
+                 m1_int_sel_in_spike+m1_int_sel_out_spike
+    m1_int_sel_in = m1_int_sel_in_gpot+m1_int_sel_in_spike
+    m1_int_sel_out = m1_int_sel_out_gpot+m1_int_sel_out_spike
+    m1_int_sel_gpot = m1_int_sel_in_gpot+m1_int_sel_out_gpot
+    m1_int_sel_spike = m1_int_sel_in_spike+m1_int_sel_out_spike
     N1_gpot = SelectorMethods.count_ports(m1_int_sel_gpot)
     N1_spike = SelectorMethods.count_ports(m1_int_sel_spike)
 
-    m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
-    m2_int_sel_out_gpot = '/b/out/gpot0,/b/out/gpot1'
-    m2_int_sel_in_spike = '/b/in/spike0,/b/in/spike1'
-    m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
-    m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
-                           m2_int_sel_in_spike, m2_int_sel_out_spike])
-    m2_int_sel_in = ','.join((m2_int_sel_in_gpot, m2_int_sel_in_spike))
-    m2_int_sel_out = ','.join((m2_int_sel_out_gpot, m2_int_sel_out_spike))
-    m2_int_sel_gpot = ','.join((m2_int_sel_in_gpot, m2_int_sel_out_gpot))
-    m2_int_sel_spike = ','.join((m2_int_sel_in_spike, m2_int_sel_out_spike))
+    m2_int_sel_in_gpot = Selector('/b/in/gpot[0:2]')
+    m2_int_sel_out_gpot = Selector('/b/out/gpot[0:2]')
+    m2_int_sel_in_spike = Selector('/b/in/spike[0:2]')
+    m2_int_sel_out_spike = Selector('/b/out/spike[0:2]')
+    m2_int_sel = m2_int_sel_in_gpot+m2_int_sel_out_gpot+\
+                 m2_int_sel_in_spike+m2_int_sel_out_spike
+    m2_int_sel_in = m2_int_sel_in_gpot+m2_int_sel_in_spike
+    m2_int_sel_out = m2_int_sel_out_gpot+m2_int_sel_out_spike
+    m2_int_sel_gpot = m2_int_sel_in_gpot+m2_int_sel_out_gpot
+    m2_int_sel_spike = m2_int_sel_in_spike+m2_int_sel_out_spike
     N2_gpot = SelectorMethods.count_ports(m2_int_sel_gpot)
     N2_spike = SelectorMethods.count_ports(m2_int_sel_spike)
 
@@ -899,15 +899,13 @@ if __name__ == '__main__':
             m1_int_sel_gpot, m1_int_sel_spike,
             np.zeros(N1_gpot, dtype=np.double),
             np.zeros(N1_spike, dtype=int),
-            ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=0, time_sync=True)
+            device=0, time_sync=True)
     m2_id = 'm2   '
     man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
             m2_int_sel_gpot, m2_int_sel_spike,
             np.zeros(N2_gpot, dtype=np.double),
             np.zeros(N2_spike, dtype=int),
-            ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=1, time_sync=True)
+            device=1, time_sync=True)
 
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:
@@ -920,14 +918,14 @@ if __name__ == '__main__':
     pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
     pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
     pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-    pat12['/a/out/gpot0', '/b/in/gpot0'] = 1
-    pat12['/a/out/gpot1', '/b/in/gpot1'] = 1
-    pat12['/b/out/gpot0', '/a/in/gpot0'] = 1
-    pat12['/b/out/gpot1', '/a/in/gpot1'] = 1
-    pat12['/a/out/spike0', '/b/in/spike0'] = 1
-    pat12['/a/out/spike1', '/b/in/spike1'] = 1
-    pat12['/b/out/spike0', '/a/in/spike0'] = 1
-    pat12['/b/out/spike1', '/a/in/spike1'] = 1
+    pat12['/a/out/gpot[0]', '/b/in/gpot[0]'] = 1
+    pat12['/a/out/gpot[1]', '/b/in/gpot[1]'] = 1
+    pat12['/b/out/gpot[0]', '/a/in/gpot[0]'] = 1
+    pat12['/b/out/gpot[1]', '/a/in/gpot[1]'] = 1
+    pat12['/a/out/spike[0]', '/b/in/spike[0]'] = 1
+    pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
+    pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
+    pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
     man.connect(m1_id, m2_id, pat12, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting
