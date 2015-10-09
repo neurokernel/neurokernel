@@ -22,6 +22,13 @@ for k in env.keys():
     if k.startswith('SLURM'):
         del env[k]
 
+# Additional options to pass to mpiexec for debugging purposes; some
+# useful flags for debugging CUDA issues are
+# MPIEXEC_EXTRA_OPTS = ['--mca', 'mpi_common_cuda_verbose', '200', 
+#                       '--mca', 'mpool_rgpusm_verbose', '100',
+#                       '--mca', 'mpi_common_cuda_gpu_mem_check_workaround', '0']
+MPIEXEC_EXTRA_OPTS = []
+
 # Get name of the file in which this module is imported:
 script_name = inspect.stack()[1][1]
 parent_name = psutil.Process(os.getppid()).name()
@@ -31,8 +38,8 @@ if not re.search('mpirun|mpiexec', parent_name):
     # notebook because the overriden iostreams don't have a file
     # descriptor:
     try:
-        subprocess.call(['mpiexec', '-np', '1',
-                        sys.executable, script_name]+sys.argv[1:],
+        subprocess.call(['mpiexec', '-np', '1']+MPIEXEC_EXTRA_OPTS+\
+                        [sys.executable, script_name]+sys.argv[1:],
                         env=env,
                         stdout=sys.stdout,
                         stderr=sys.stderr,
