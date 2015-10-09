@@ -507,10 +507,11 @@ def emulate(conn_mat, scaling, n_gpus, steps, use_mps, cache_file='cache.db'):
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
+    import get_index_order
 
     conn_mat_file = 's2.xlsx'
     scaling = 1
-    max_steps = 50
+    max_steps = 500
     n_gpus = 4
     use_mps = False
 
@@ -526,6 +527,8 @@ if __name__ == '__main__':
                         help='Connection number scaling factor [default: %s]' % scaling)
     parser.add_argument('-m', '--max_steps', default=max_steps, type=int,
                         help='Maximum number of steps [default: %s]' % max_steps)
+    parser.add_argument('-u', '--lpus', default=n_gpus, type=int,
+                        help='Number of LPUs [default: %s]' % n_gpus)
     parser.add_argument('-g', '--gpus', default=n_gpus, type=int,
                         help='Number of GPUs [default: %s]' % n_gpus)
     parser.add_argument('-p', '--use_mps', action='store_true',
@@ -542,7 +545,27 @@ if __name__ == '__main__':
                           mpi_comm=MPI.COMM_WORLD,
                           multiline=True)
 
-    conn_mat = pd.read_excel('s2.xlsx',
-                             sheetname='Connectivity Matrix').astype(int).as_matrix()
+    df = pd.read_excel('s2.xlsx',
+                       sheetname='Connectivity Matrix')
 
-    print (args.gpus,)+emulate(conn_mat, args.scaling, args.gpus, args.max_steps, args.use_mps)
+    # Select only main LPUs in olfaction, vision, and central complex systems:
+    lpu_list = ['AL', 'al', 'MB', 'mb', 'LH', 'lh', 'MED', 'med', 'LOB', 'lob',
+                'LOP', 'lop', 'OG', 'og', 'EB', 'FB', 'NOD', 'nod', 'PCB']
+    conn_mat = df.ix[lpu_list][lpu_list].astype(int).as_matrix()
+
+    # Get order in which LPUs (denoted by index into `conn_mat`) should be added
+    # to maximize added number of ports for each additional LPU:
+    ind_order = get_index_order.get_index_order(conn_mat)
+    
+    # Make sure specified number of LPUs to partition over GPUs is at least as
+    # large as the number of GPUs and no larger than the list of allowed LPUs
+    # above:
+    assert args.lpus >= args.gpus
+    assert args.lpus <= len(lpu_list)
+
+    # Select which LPUs to partition over GPUs:
+    conn_mat_sub = conn_mat[ind_order[:args.lpus, None], ind_order[:args.lpus]]
+    
+    print (args.gpus, args.lpus)+emulate(conn_mat_sub, args.scaling,
+                                         args.gpus, args.max_steps,
+                                         args.use_mps)
