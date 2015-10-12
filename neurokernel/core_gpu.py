@@ -11,7 +11,6 @@ import bidict
 from mpi4py import MPI
 import numpy as np
 import pycuda.gpuarray as gpuarray
-from pycuda.tools import dtype_to_ctype
 import twiggy
 
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
