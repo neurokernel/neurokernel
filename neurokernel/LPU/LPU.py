@@ -577,8 +577,10 @@ class LPU(Module):
         if self.debug:
             # for file in self.in_gpot_files.itervalues():
             #     file.close()
-            self.gpot_buffer_file.close()
-            self.synapse_state_file.close()
+            if self.my_num_gpot_neurons > 0:
+                self.gpot_buffer_file.close()
+            if self.total_synapses + len(self.input_neuron_list) > 0:
+                self.synapse_state_file.close()
 
         for neuron in self.neurons:
             neuron.post_run()
@@ -611,11 +613,14 @@ class LPU(Module):
             self.first_step = False
 
         if self.debug:
-            self.gpot_buffer_file.root.array.append(
-                self.buffer.gpot_buffer.get()
-                    .reshape(1, self.gpot_delay_steps, -1))
-            self.synapse_state_file.root.array.append(
-                self.synapse_state.get().reshape(1, -1))
+            if self.my_num_gpot_neurons > 0:
+                self.gpot_buffer_file.root.array.append(
+                    self.buffer.gpot_buffer.get()
+                        .reshape(1, self.gpot_delay_steps, -1))
+            
+            if self.total_synapses + len(self.input_neuron_list) > 0:
+                self.synapse_state_file.root.array.append(
+                    self.synapse_state.get().reshape(1, -1))
 
         self._extract_output()
 
@@ -681,18 +686,20 @@ class LPU(Module):
                                                         tables.Float64Atom(), (0, num))
 
             '''
-            self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
-            self.gpot_buffer_file.createEArray(
-                "/", "array",
-                tables.Float64Atom(), 
-                (0, self.gpot_delay_steps, self.my_num_gpot_neurons))
+            if self.my_num_gpot_neurons > 0:
+                self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
+                self.gpot_buffer_file.createEArray(
+                    "/", "array",
+                    tables.Float64Atom(), 
+                    (0, self.gpot_delay_steps, self.my_num_gpot_neurons))
 
-            self.synapse_state_file = tables.openFile(self.id + '_synapses.h5',
-                                                      'w')
-            self.synapse_state_file.createEArray(
-                "/", "array",
-                tables.Float64Atom(), 
-                (0, self.total_synapses + len(self.input_neuron_list)))
+            if self.total_synapses + len(self.input_neuron_list) > 0:
+                self.synapse_state_file = tables.openFile(self.id + '_synapses.h5',
+                                                          'w')
+                self.synapse_state_file.createEArray(
+                    "/", "array",
+                    tables.Float64Atom(), 
+                    (0, self.total_synapses + len(self.input_neuron_list)))
 
     def _initialize_gpu_ds(self):
         """
