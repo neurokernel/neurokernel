@@ -27,6 +27,9 @@ for k in env.keys():
 # MPIEXEC_EXTRA_OPTS = ['--mca', 'mpi_common_cuda_verbose', '200', 
 #                       '--mca', 'mpool_rgpusm_verbose', '100',
 #                       '--mca', 'mpi_common_cuda_gpu_mem_check_workaround', '0']
+# To prevent OpenMPI from being confused by virtual interfaces, one can
+# explicitly specify which interfaces to use (e.g., eth0) using 
+# MPIEXEC_EXTRA_OPTS = ['--mca', 'btl_tcp_if_include', 'eth0']
 MPIEXEC_EXTRA_OPTS = []
 
 # Get name of the file in which this module is imported:
