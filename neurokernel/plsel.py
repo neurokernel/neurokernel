@@ -7,6 +7,7 @@ Path-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 import copy
 import itertools
 import re
+import sys
 
 import numpy as np
 import pandas as pd
@@ -34,7 +35,10 @@ def _decode(obj):
 try:
     import msgpack
 except ImportError:
-    import cPickle as pickle
+    if sys.version_info.major == 2:
+        import cPickle as pickle
+    else:
+        import pickle
     _packb = pickle.dumps
     _unpackb = pickle.loads
 else:

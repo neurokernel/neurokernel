@@ -5,6 +5,7 @@ How to find globals accessed by a Python object.
 """
 
 import inspect
+import sys
 
 import numpy as np
 
@@ -20,7 +21,13 @@ def all_global_vars(x):
         # Get locals of scope in which allglobalvars() was invoked; the
         # following code ensures that the `locals_dict` contains the locals from
         # the top scope regardless of the recursion level:
-        local_dict = inspect.currentframe(level+2).f_locals
+        if sys.version_info.major == 2:
+            local_dict = inspect.currentframe(level+2).f_locals
+        else:
+            f = inspect.currentframe()
+            for i in range(level+2):
+                f = f.f_back
+            local_dict = f.f_locals
         level += 1
 
         results = {}
@@ -30,14 +37,24 @@ def all_global_vars(x):
 
             # Get symbols and globals accessed by function or method; we need to
             # check co_freevars for defined symbols that are not in co_names:
-            if inspect.isfunction(x):
-                name_list = x.func_code.co_names+x.func_code.co_freevars
-                global_dict = x.func_globals
-            elif inspect.ismethod(x):
-                name_list = x.im_func.func_code.co_names+x.im_func.func_code.co_freevars
-                global_dict = x.im_func.func_globals
+            if sys.version_info == 2:
+                if inspect.isfunction(x):
+                    name_list = x.func_code.co_names+x.func_code.co_freevars
+                    global_dict = x.func_globals
+                elif inspect.ismethod(x):
+                    name_list = x.im_func.func_code.co_names+x.im_func.func_code.co_freevars
+                    global_dict = x.im_func.func_globals
+                else:
+                    raise ValueError('invalid input')
             else:
-                raise ValueError('invalid input')
+                if inspect.isfunction(x):
+                    name_list = x.__code__.co_names+x.__code__.co_freevars
+                    global_dict = x.__globals__
+                elif inspect.ismethod(x):
+                    name_list = x.__func__.__code__.co_names+x.__func__.__code__.co_freevars
+                    global_dict = x.__func__.__globals__
+                else:
+                    raise ValueError('invalid input')
 
             for name in name_list:
                 if name in seen:
@@ -93,13 +110,13 @@ if __name__ == '__main__':
         def bar(self, x):
             return np.linalg.svd(x)
 
-    print all_global_vars(Foo)
-    print '---'
+    print(all_global_vars(Foo))
+    print('---')
 
     import math
     f = lambda x: math.lgamma(x)
-    print all_global_vars(f)
+    print(all_global_vars(f))
 
-    print '---'
+    print('---')
     import pandas
-    print all_global_vars(pandas.DataFrame)
+    print(all_global_vars(pandas.DataFrame))

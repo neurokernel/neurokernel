@@ -65,13 +65,13 @@ if __name__ == '__main__':
     # This example should quit when Ctrl-C is pressed:
     import time
     def handler(signum, frame):
-        print 'caught'
+        print('caught')
         handler.done = True
     handler.done = False
 
     with OnKeyboardInterrupt(handler):
         while True:
-            print 'waiting'
+            print('waiting')
             time.sleep(1)
             if handler.done:
                 break
