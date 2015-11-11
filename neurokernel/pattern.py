@@ -1559,7 +1559,7 @@ class Pattern(object):
             # data attribute:
             self.__validate_index__(new_data.index)
             self.data = new_data
-            self.data.sort(inplace=True)
+            self.data.sort_index(inplace=True)
 
         # Update the `io` attributes of the pattern's interfaces:
         self.interface[key[0], 'io'] = 'in'

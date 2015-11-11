@@ -13,7 +13,6 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 import pycuda.elementwise as elementwise
 
-
 import numpy as np
 import networkx as nx
 
@@ -27,7 +26,6 @@ nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
 from neurokernel.mixins import LoggerMixin
 from neurokernel.core_gpu import Module, CTRL_TAG, GPOT_TAG, SPIKE_TAG
-from neurokernel.tools.zmq import get_random_port
 
 from types import *
 from collections import Counter
