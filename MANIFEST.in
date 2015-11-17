@@ -1,4 +1,14 @@
-include ez_setup.py
 include *.rst
-recursive-include docs *
+
+recursive-include neurokernel *.py
+recursive-include tests *.py
+recursive-include examples *.py
+recursive-include examples/vision *.csv
+
+include docs/source/*.rst
+include docs/Makefile
+include docs/source/conf.py
+include docs/source/_static/*
+include docs/source/_templates/*.html
+
 exclude MANIFEST.in
