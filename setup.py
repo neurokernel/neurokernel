@@ -10,7 +10,6 @@ except ImportError:
     from ez_setup import use_setuptools
     use_setuptools()
 
-from distutils.command.install import INSTALL_SCHEMES
 from distutils.command.install_headers import install_headers
 from setuptools import find_packages
 from setuptools import setup
@@ -35,7 +34,6 @@ CLASSIFIERS = [
     'Programming Language :: Python',
     'Topic :: Scientific/Engineering',
     'Topic :: Software Development']
-NAMESPACE_PACKAGES = ['neurokernel']
 
 # Explicitly switch to parent directory of setup.py in case it
 # is run from elsewhere:
@@ -45,11 +43,6 @@ PACKAGES =           find_packages()
 if __name__ == "__main__":
     if os.path.exists('MANIFEST'):
         os.remove('MANIFEST')
-
-    # This enables the installation of neurokernel/__init__.py as a data
-    # file:
-    for scheme in INSTALL_SCHEMES.values():
-        scheme['data'] = scheme['purelib']
 
     setup(
         name = NAME,
@@ -63,11 +56,7 @@ if __name__ == "__main__":
         url = URL,
         maintainer = MAINTAINER,
         maintainer_email = MAINTAINER_EMAIL,
-        namespace_packages = NAMESPACE_PACKAGES,
         packages = PACKAGES,
-
-        # Force installation of __init__.py in namespace package:
-        data_files = [('neurokernel', ['neurokernel/__init__.py'])],
         include_package_data = True,
         install_requires = [
             'bidict >= 0.3.1',

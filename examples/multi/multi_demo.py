@@ -180,5 +180,5 @@ for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
     man.connect(id_0, id_1, pat, 0, 1, compat_check=False)
 
 man.spawn()
-man.start(steps=steps)
+man.start(steps=args.steps)
 man.wait()

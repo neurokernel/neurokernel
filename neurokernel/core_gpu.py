@@ -11,7 +11,6 @@ import bidict
 from mpi4py import MPI
 import numpy as np
 import pycuda.gpuarray as gpuarray
-from pycuda.tools import dtype_to_ctype
 import twiggy
 
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
@@ -23,7 +22,7 @@ from tools.logging import setup_logger
 from tools.misc import catch_exception, dtype_to_mpi
 from tools.mpi import MPIOutput
 from pattern import Interface, Pattern
-from plsel import SelectorMethods
+from plsel import Selector, SelectorMethods
 from pm_gpu import GPUPortMapper
 from routing_table import RoutingTable
 from uid import uid
@@ -323,18 +322,27 @@ class Module(mpi.Worker):
         self._in_buf_mtype['gpot'] = {}
         self._in_buf_mtype['spike'] = {}        
         for in_id in self._in_ids:
-            self._in_buf['gpot'][in_id] = \
-                gpuarray.empty(len(self._in_port_dict_ids['gpot'][in_id]),
-                               self.pm['gpot'].dtype)
-            self._in_buf_int['gpot'][in_id] = bufint(self._in_buf['gpot'][in_id])
-            self._in_buf_mtype['gpot'][in_id] = \
-                dtype_to_mpi(self._in_buf['gpot'][in_id].dtype)
-            self._in_buf['spike'][in_id] = \
-                gpuarray.empty(len(self._in_port_dict_ids['spike'][in_id]),
-                               self.pm['spike'].dtype)
-            self._in_buf_int['spike'][in_id] = bufint(self._in_buf['spike'][in_id])
-            self._in_buf_mtype['spike'][in_id] = \
-                dtype_to_mpi(self._in_buf['spike'][in_id].dtype)
+            n_gpot = len(self._in_port_dict_ids['gpot'][in_id])
+            if n_gpot:
+                self._in_buf['gpot'][in_id] = \
+                    gpuarray.empty(n_gpot, self.pm['gpot'].dtype)
+                self._in_buf_int['gpot'][in_id] = \
+                    bufint(self._in_buf['gpot'][in_id])
+                self._in_buf_mtype['gpot'][in_id] = \
+                    dtype_to_mpi(self._in_buf['gpot'][in_id].dtype)
+            else:
+                self._in_buf['gpot'][in_id] = None
+
+            n_spike = len(self._in_port_dict_ids['spike'][in_id])
+            if n_spike:
+                self._in_buf['spike'][in_id] = \
+                    gpuarray.empty(n_spike, self.pm['spike'].dtype)
+                self._in_buf_int['spike'][in_id] = \
+                    bufint(self._in_buf['spike'][in_id])
+                self._in_buf_mtype['spike'][in_id] = \
+                    dtype_to_mpi(self._in_buf['spike'][in_id].dtype)
+            else:
+                self._in_buf['spike'][in_id] = None
 
         # Buffers (and their interfaces and MPI types) for transmitting data to
         # destination modules:
@@ -348,19 +356,27 @@ class Module(mpi.Worker):
         self._out_buf_mtype['gpot'] = {}
         self._out_buf_mtype['spike'] = {}
         for out_id in self._out_ids:
-            self._out_buf['gpot'][out_id] = \
-                gpuarray.empty(len(self._out_port_dict_ids['gpot'][out_id]),
-                               self.pm['gpot'].dtype)
-            self._out_buf_int['gpot'][out_id] = bufint(self._out_buf['gpot'][out_id])
-            self._out_buf_mtype['gpot'][out_id] = \
-                dtype_to_mpi(self._out_buf['gpot'][out_id].dtype)
+            n_gpot = len(self._out_port_dict_ids['gpot'][out_id])
+            if n_gpot:
+                self._out_buf['gpot'][out_id] = \
+                    gpuarray.empty(n_gpot, self.pm['gpot'].dtype)
+                self._out_buf_int['gpot'][out_id] = \
+                    bufint(self._out_buf['gpot'][out_id])
+                self._out_buf_mtype['gpot'][out_id] = \
+                    dtype_to_mpi(self._out_buf['gpot'][out_id].dtype)
+            else:
+                self._out_buf['gpot'][out_id] = None
 
-            self._out_buf['spike'][out_id] = \
-                gpuarray.empty(len(self._out_port_dict_ids['spike'][out_id]),
-                               self.pm['spike'].dtype)
-            self._out_buf_int['spike'][out_id] = bufint(self._out_buf['spike'][out_id])
-            self._out_buf_mtype['spike'][out_id] = \
-                dtype_to_mpi(self._out_buf['spike'][out_id].dtype)
+            n_spike = len(self._out_port_dict_ids['spike'][out_id])
+            if n_spike:
+                self._out_buf['spike'][out_id] = \
+                    gpuarray.empty(n_spike, self.pm['spike'].dtype)
+                self._out_buf_int['spike'][out_id] = \
+                    bufint(self._out_buf['spike'][out_id])
+                self._out_buf_mtype['spike'][out_id] = \
+                    dtype_to_mpi(self._out_buf['spike'][out_id].dtype)
+            else:
+                self._out_buf['spike'][out_id] = None
 
     def _sync(self):
         """
@@ -377,27 +393,28 @@ class Module(mpi.Worker):
         for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
             
             # Copy data into destination buffer:
-            set_by_inds(self._out_buf['gpot'][dest_id],
-                        self._out_port_dict_ids['gpot'][dest_id],
-                        self.data['gpot'], 'src')
-            set_by_inds(self._out_buf['spike'][dest_id],
-                        self._out_port_dict_ids['spike'][dest_id],
-                        self.data['spike'], 'src')
-
-            if not self.time_sync:
-                self.log_info('gpot data being sent to %s: %s' % \
-                              (dest_id, str(self._out_buf['gpot'][dest_id])))
-                self.log_info('spike data being sent to %s: %s' % \
-                              (dest_id, str(self._out_buf['spike'][dest_id])))
-            r = MPI.COMM_WORLD.Isend([self._out_buf_int['gpot'][dest_id],
-                                      self._out_buf_mtype['gpot'][dest_id]],
-                                     dest_rank, GPOT_TAG)
-            requests.append(r)
-            r = MPI.COMM_WORLD.Isend([self._out_buf_int['spike'][dest_id],
-                                      self._out_buf_mtype['spike'][dest_id]],
-                                     dest_rank, SPIKE_TAG)
-            requests.append(r)
-
+            if self._out_buf['gpot'][dest_id] is not None:
+                set_by_inds(self._out_buf['gpot'][dest_id],
+                            self._out_port_dict_ids['gpot'][dest_id],
+                            self.data['gpot'], 'src')
+                if not self.time_sync:
+                    self.log_info('gpot data being sent to %s: %s' % \
+                                  (dest_id, str(self._out_buf['gpot'][dest_id])))
+                r = MPI.COMM_WORLD.Isend([self._out_buf_int['gpot'][dest_id],
+                                          self._out_buf_mtype['gpot'][dest_id]],
+                                         dest_rank, GPOT_TAG)
+                requests.append(r)
+            if self._out_buf['spike'][dest_id] is not None:
+                set_by_inds(self._out_buf['spike'][dest_id],
+                            self._out_port_dict_ids['spike'][dest_id],
+                            self.data['spike'], 'src')
+                if not self.time_sync:
+                    self.log_info('spike data being sent to %s: %s' % \
+                                  (dest_id, str(self._out_buf['spike'][dest_id])))
+                r = MPI.COMM_WORLD.Isend([self._out_buf_int['spike'][dest_id],
+                                          self._out_buf_mtype['spike'][dest_id]],
+                                         dest_rank, SPIKE_TAG)
+                requests.append(r)
             if not self.time_sync:
                 self.log_info('sending to %s' % dest_id)
         if not self.time_sync:
@@ -406,17 +423,20 @@ class Module(mpi.Worker):
         # For each source module, receive elements and copy them into the
         # current module's port data array:
         for src_id, src_rank in zip(self._in_ids, self._in_ranks):
-            r = MPI.COMM_WORLD.Irecv([self._in_buf_int['gpot'][src_id],
-                                      self._in_buf_mtype['gpot'][src_id]],
-                                     source=src_rank, tag=GPOT_TAG)
-            requests.append(r)
-            r = MPI.COMM_WORLD.Irecv([self._in_buf_int['spike'][src_id],
-                                      self._in_buf_mtype['spike'][src_id]],
-                                     source=src_rank, tag=SPIKE_TAG)
-            requests.append(r)
+            if self._in_buf['gpot'][src_id] is not None:
+                r = MPI.COMM_WORLD.Irecv([self._in_buf_int['gpot'][src_id],
+                                          self._in_buf_mtype['gpot'][src_id]],
+                                         source=src_rank, tag=GPOT_TAG)
+                requests.append(r)
+            if self._in_buf['spike'][src_id] is not None:
+                r = MPI.COMM_WORLD.Irecv([self._in_buf_int['spike'][src_id],
+                                          self._in_buf_mtype['spike'][src_id]],
+                                         source=src_rank, tag=SPIKE_TAG)
+                requests.append(r)
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
-        self.req.Waitall(requests)
+        if requests:
+            self.req.Waitall(requests)
         if not self.time_sync:
             self.log_info('received all data received by %s' % self.id)
 
@@ -866,29 +886,29 @@ if __name__ == '__main__':
 
     man = Manager()
 
-    m1_int_sel_in_gpot = '/a/in/gpot0,/a/in/gpot1'
-    m1_int_sel_out_gpot = '/a/out/gpot0,/a/out/gpot1'
-    m1_int_sel_in_spike = '/a/in/spike0,/a/in/spike1'
-    m1_int_sel_out_spike = '/a/out/spike0,/a/out/spike1'
-    m1_int_sel = ','.join([m1_int_sel_in_gpot, m1_int_sel_out_gpot,
-                           m1_int_sel_in_spike, m1_int_sel_out_spike])
-    m1_int_sel_in = ','.join((m1_int_sel_in_gpot, m1_int_sel_in_spike))
-    m1_int_sel_out = ','.join((m1_int_sel_out_gpot, m1_int_sel_out_spike))
-    m1_int_sel_gpot = ','.join((m1_int_sel_in_gpot, m1_int_sel_out_gpot))
-    m1_int_sel_spike = ','.join((m1_int_sel_in_spike, m1_int_sel_out_spike))
+    m1_int_sel_in_gpot = Selector('/a/in/gpot[0:2]')
+    m1_int_sel_out_gpot = Selector('/a/out/gpot[0:2]')
+    m1_int_sel_in_spike = Selector('/a/in/spike[0:2]')
+    m1_int_sel_out_spike = Selector('/a/out/spike[0:2]')
+    m1_int_sel = m1_int_sel_in_gpot+m1_int_sel_out_gpot+\
+                 m1_int_sel_in_spike+m1_int_sel_out_spike
+    m1_int_sel_in = m1_int_sel_in_gpot+m1_int_sel_in_spike
+    m1_int_sel_out = m1_int_sel_out_gpot+m1_int_sel_out_spike
+    m1_int_sel_gpot = m1_int_sel_in_gpot+m1_int_sel_out_gpot
+    m1_int_sel_spike = m1_int_sel_in_spike+m1_int_sel_out_spike
     N1_gpot = SelectorMethods.count_ports(m1_int_sel_gpot)
     N1_spike = SelectorMethods.count_ports(m1_int_sel_spike)
 
-    m2_int_sel_in_gpot = '/b/in/gpot0,/b/in/gpot1'
-    m2_int_sel_out_gpot = '/b/out/gpot0,/b/out/gpot1'
-    m2_int_sel_in_spike = '/b/in/spike0,/b/in/spike1'
-    m2_int_sel_out_spike = '/b/out/spike0,/b/out/spike1'
-    m2_int_sel = ','.join([m2_int_sel_in_gpot, m2_int_sel_out_gpot,
-                           m2_int_sel_in_spike, m2_int_sel_out_spike])
-    m2_int_sel_in = ','.join((m2_int_sel_in_gpot, m2_int_sel_in_spike))
-    m2_int_sel_out = ','.join((m2_int_sel_out_gpot, m2_int_sel_out_spike))
-    m2_int_sel_gpot = ','.join((m2_int_sel_in_gpot, m2_int_sel_out_gpot))
-    m2_int_sel_spike = ','.join((m2_int_sel_in_spike, m2_int_sel_out_spike))
+    m2_int_sel_in_gpot = Selector('/b/in/gpot[0:2]')
+    m2_int_sel_out_gpot = Selector('/b/out/gpot[0:2]')
+    m2_int_sel_in_spike = Selector('/b/in/spike[0:2]')
+    m2_int_sel_out_spike = Selector('/b/out/spike[0:2]')
+    m2_int_sel = m2_int_sel_in_gpot+m2_int_sel_out_gpot+\
+                 m2_int_sel_in_spike+m2_int_sel_out_spike
+    m2_int_sel_in = m2_int_sel_in_gpot+m2_int_sel_in_spike
+    m2_int_sel_out = m2_int_sel_out_gpot+m2_int_sel_out_spike
+    m2_int_sel_gpot = m2_int_sel_in_gpot+m2_int_sel_out_gpot
+    m2_int_sel_spike = m2_int_sel_in_spike+m2_int_sel_out_spike
     N2_gpot = SelectorMethods.count_ports(m2_int_sel_gpot)
     N2_spike = SelectorMethods.count_ports(m2_int_sel_spike)
 
@@ -899,15 +919,13 @@ if __name__ == '__main__':
             m1_int_sel_gpot, m1_int_sel_spike,
             np.zeros(N1_gpot, dtype=np.double),
             np.zeros(N1_spike, dtype=int),
-            ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=0, time_sync=True)
+            device=0, time_sync=True)
     m2_id = 'm2   '
     man.add(MyModule, m2_id, m2_int_sel, m2_int_sel_in, m2_int_sel_out,
             m2_int_sel_gpot, m2_int_sel_spike,
             np.zeros(N2_gpot, dtype=np.double),
             np.zeros(N2_spike, dtype=int),
-            ['interface', 'io', 'type'],
-            CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=1, time_sync=True)
+            device=1, time_sync=True)
 
     # Make sure that all ports in the patterns' interfaces are set so 
     # that they match those of the modules:
@@ -920,14 +938,14 @@ if __name__ == '__main__':
     pat12.interface[m2_int_sel_out_gpot] = [1, 'in', 'gpot']
     pat12.interface[m2_int_sel_in_spike] = [1, 'out', 'spike']
     pat12.interface[m2_int_sel_out_spike] = [1, 'in', 'spike']
-    pat12['/a/out/gpot0', '/b/in/gpot0'] = 1
-    pat12['/a/out/gpot1', '/b/in/gpot1'] = 1
-    pat12['/b/out/gpot0', '/a/in/gpot0'] = 1
-    pat12['/b/out/gpot1', '/a/in/gpot1'] = 1
-    pat12['/a/out/spike0', '/b/in/spike0'] = 1
-    pat12['/a/out/spike1', '/b/in/spike1'] = 1
-    pat12['/b/out/spike0', '/a/in/spike0'] = 1
-    pat12['/b/out/spike1', '/a/in/spike1'] = 1
+    pat12['/a/out/gpot[0]', '/b/in/gpot[0]'] = 1
+    pat12['/a/out/gpot[1]', '/b/in/gpot[1]'] = 1
+    pat12['/b/out/gpot[0]', '/a/in/gpot[0]'] = 1
+    pat12['/b/out/gpot[1]', '/a/in/gpot[1]'] = 1
+    pat12['/a/out/spike[0]', '/b/in/spike[0]'] = 1
+    pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
+    pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
+    pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
     man.connect(m1_id, m2_id, pat12, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting

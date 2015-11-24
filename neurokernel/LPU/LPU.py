@@ -13,7 +13,6 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 import pycuda.elementwise as elementwise
 
-
 import numpy as np
 import networkx as nx
 
@@ -27,7 +26,6 @@ nx.readwrite.gexf.GEXF.convert_bool['True'] = True
 
 from neurokernel.mixins import LoggerMixin
 from neurokernel.core_gpu import Module, CTRL_TAG, GPOT_TAG, SPIKE_TAG
-from neurokernel.tools.zmq import get_random_port
 
 from types import *
 from collections import Counter
@@ -75,27 +73,22 @@ class LPU(Module):
     """
 
     @staticmethod
-    def lpu_parser(filename):
+    def graph_to_dicts(graph):
         """
-        GEXF LPU specification parser.
-
-        Extract LPU specification data from a GEXF file and store it
-        in a list of dictionaries. All nodes in the GEXF file are assumed to
-        correspond to neuron model instances while all edges are assumed to
-        correspond to synapse model instances.
+        Convert graph of LPU neuron/synapse data to Python data structures.
 
         Parameters
         ----------
-        filename : str
-            GEXF filename.
+        graph : networkx.MultiDiGraph
+            NetworkX graph containing LPU data.
 
         Returns
         -------
-        n_dict : dict of dict of neuron
+        n_dict : dict of dict of list
             Each key of `n_dict` is the name of a neuron model; the values
             are dicts that map each attribute name to a list that contains the
-            attribute values for each neuron.
-        s_dict : dict of dict of synapse
+            attribute values for each neuron class.
+        s_dict : dict of dict of list
             Each key of `s_dict` is the name of a synapse model; the values are
             dicts that map each attribute name to a list that contains the
             attribute values for each each neuron.
@@ -136,9 +129,6 @@ class LPU(Module):
         ----
         Input data should be validated.
         """
-
-        # parse the GEXF file using networkX
-        graph = nx.read_gexf(filename)
 
         # parse neuron data
         n_dict = {}
@@ -204,6 +194,36 @@ class LPU(Module):
         if not s_dict:
             s_dict = {}
         return n_dict, s_dict
+
+    @staticmethod
+    def lpu_parser(filename):
+        """
+        GEXF LPU specification parser.
+
+        Extract LPU specification data from a GEXF file and store it in
+        Python data structures. All nodes in the GEXF file are assumed to
+        correspond to neuron model instances while all edges are assumed to
+        correspond to synapse model instances.
+
+        Parameters
+        ----------
+        filename : str
+            GEXF filename.
+
+        Returns
+        -------
+        n_dict : dict of dict of list
+            Each key of `n_dict` is the name of a neuron model; the values
+            are dicts that map each attribute name to a list that contains the
+            attribute values for each neuron class.
+        s_dict : dict of dict of list
+            Each key of `s_dict` is the name of a synapse model; the values are
+            dicts that map each attribute name to a list that contains the
+            attribute values for each each neuron.        
+        """
+
+        graph = nx.read_gexf(filename)
+        return LPU.graph_to_dicts(graph)
 
     @classmethod
     def extract_in_gpot(cls, n_dict):
@@ -601,7 +621,6 @@ class LPU(Module):
 
     def pre_run(self):
         super(LPU, self).pre_run()
-        self._init_gpu()
         self._initialize_gpu_ds()
         self._init_objects()
         self.first_step = True
@@ -616,8 +635,10 @@ class LPU(Module):
         if self.debug:
             # for file in self.in_gpot_files.itervalues():
             #     file.close()
-            self.gpot_buffer_file.close()
-            self.synapse_state_file.close()
+            if self.my_num_gpot_neurons > 0:
+                self.gpot_buffer_file.close()
+            if self.total_synapses + len(self.input_neuron_list) > 0:
+                self.synapse_state_file.close()
 
         for neuron in self.neurons:
             neuron.post_run()
@@ -652,11 +673,14 @@ class LPU(Module):
             self.first_step = False
 
         if self.debug:
-            self.gpot_buffer_file.root.array.append(
-                self.buffer.gpot_buffer.get()
-                    .reshape(1, self.gpot_delay_steps, -1))
-            self.synapse_state_file.root.array.append(
-                self.synapse_state.get().reshape(1, -1))
+            if self.my_num_gpot_neurons > 0:
+                self.gpot_buffer_file.root.array.append(
+                    self.buffer.gpot_buffer.get()
+                        .reshape(1, self.gpot_delay_steps, -1))
+            
+            if self.total_synapses + len(self.input_neuron_list) > 0:
+                self.synapse_state_file.root.array.append(
+                    self.synapse_state.get().reshape(1, -1))
 
         self._extract_output()
 
@@ -722,18 +746,20 @@ class LPU(Module):
                                                         tables.Float64Atom(), (0, num))
 
             '''
-            self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
-            self.gpot_buffer_file.createEArray(
-                "/", "array",
-                tables.Float64Atom(),
-                (0, self.gpot_delay_steps, self.total_num_gpot_neurons))
+            if self.my_num_gpot_neurons > 0:
+                self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
+                self.gpot_buffer_file.createEArray(
+                    "/", "array",
+                    tables.Float64Atom(), 
+                    (0, self.gpot_delay_steps, self.my_num_gpot_neurons))
 
-            self.synapse_state_file = tables.openFile(self.id + '_synapses.h5',
-                                                      'w')
-            self.synapse_state_file.createEArray(
-                "/", "array",
-                tables.Float64Atom(),
-                (0, self.total_synapses + len(self.input_neuron_list)))
+            if self.total_synapses + len(self.input_neuron_list) > 0:
+                self.synapse_state_file = tables.openFile(self.id + '_synapses.h5',
+                                                          'w')
+                self.synapse_state_file.createEArray(
+                    "/", "array",
+                    tables.Float64Atom(), 
+                    (0, self.total_synapses + len(self.input_neuron_list)))
 
     def _initialize_gpu_ds(self):
         """

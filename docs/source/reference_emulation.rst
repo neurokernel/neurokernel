@@ -9,8 +9,6 @@ Construction and Execution
    :toctree: generated/
    :nosignatures:
 
-   neurokernel.base.Manager
-   neurokernel.base_gpu.Manager
    neurokernel.core.Manager
    neurokernel.core_gpu.Manager
 
