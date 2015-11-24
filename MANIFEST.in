@@ -3,7 +3,6 @@ include *.rst
 recursive-include neurokernel *.py
 recursive-include tests *.py
 recursive-include examples *.py
-recursive-include examples/vision *.csv
 
 include docs/source/*.rst
 include docs/Makefile
