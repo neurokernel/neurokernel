@@ -635,7 +635,7 @@ class LPU(Module):
         if self.debug:
             # for file in self.in_gpot_files.itervalues():
             #     file.close()
-            if self.my_num_gpot_neurons > 0:
+            if self.total_num_gpot_neurons > 0:
                 self.gpot_buffer_file.close()
             if self.total_synapses + len(self.input_neuron_list) > 0:
                 self.synapse_state_file.close()
@@ -673,7 +673,7 @@ class LPU(Module):
             self.first_step = False
 
         if self.debug:
-            if self.my_num_gpot_neurons > 0:
+            if self.total_num_gpot_neurons > 0:
                 self.gpot_buffer_file.root.array.append(
                     self.buffer.gpot_buffer.get()
                         .reshape(1, self.gpot_delay_steps, -1))
@@ -746,12 +746,12 @@ class LPU(Module):
                                                         tables.Float64Atom(), (0, num))
 
             '''
-            if self.my_num_gpot_neurons > 0:
+            if self.total_num_gpot_neurons > 0:
                 self.gpot_buffer_file = tables.openFile(self.id + '_buffer.h5','w')
                 self.gpot_buffer_file.createEArray(
                     "/", "array",
                     tables.Float64Atom(), 
-                    (0, self.gpot_delay_steps, self.my_num_gpot_neurons))
+                    (0, self.gpot_delay_steps, self.total_num_gpot_neurons))
 
             if self.total_synapses + len(self.input_neuron_list) > 0:
                 self.synapse_state_file = tables.openFile(self.id + '_synapses.h5',
