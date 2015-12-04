@@ -1313,10 +1313,15 @@ class Pattern(object):
             pattern. These selectors must be disjoint, i.e., no identifier comprised
             by one selector may be in any other selector.   
         from_sel, to_sel : str
-            Selectors that describe the pattern's initial index.
+            Selectors that describe the pattern's initial index. If specified,
+            both selectors must be set; the 'io' attribute of the ports
+            comprised by these selectors is respectively set to 'out' and
+            'in'. If no selectors are set, the index is initially empty.
         gpot_sel, spike_sel : str
             Selectors that describe the graded potential and spiking ports in a 
-            pattern's initial index.
+            pattern's initial index. If specified, the 'type' attribute of the
+            ports comprised by these selectors is respectively set to 'gpot'
+            and 'spike'. 
         data : numpy.ndarray, dict, or pandas.DataFrame
             Data to load store in class instance.
         columns : sequence of str
@@ -1428,11 +1433,14 @@ class Pattern(object):
             Data to load store in class instance.
         from_sel, to_sel : str
             Selectors that describe the pattern's initial index. If specified,
-            both selectors must be set. If no selectors are set, the index is
-            initially empty.
+            both selectors must be set; the 'io' attribute of the ports
+            comprised by these selectors is respectively set to 'out' and
+            'in'. If no selectors are set, the index is initially empty.
         gpot_sel, spike_sel : str
             Selectors that describe the graded potential and spiking ports in a 
-            pattern's initial index.
+            pattern's initial index. If specified, the 'type' attribute of the
+            ports comprised by these selectors is respectively set to 'gpot'
+            and 'spike'. 
         columns : sequence of str
             Data column names.
         validate : bool
