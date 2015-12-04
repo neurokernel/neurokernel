@@ -959,6 +959,27 @@ class test_pattern(TestCase):
                     columns=['conn'])
         assert_frame_equal(p.data, df)
 
+        p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
+                                from_sel='/foo[0:2]', to_sel='/bar[0:2]',
+                                gpot_sel='/foo[0],/bar[0]',
+                                spike_sel='/foo[1:2],/bar/[1:2]',
+                                data=1)
+        df_int = pd.DataFrame({'interface': [0, 0, 1, 1],
+                               'io': ['in', 'in', 'out', 'out'],
+                               'type': ['gpot', 'spike', 'gpot', 'spike']},
+                              index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
+                                                  labels=[[1, 1, 0, 0], [0, 1, 0, 1]],
+                                                  names=[u'0', u'1']),
+                              dtype=object)
+        df = pd.DataFrame(data=[1, 1],
+                index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
+                                    labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
+                                    names=['from_0', 'from_1', 'to_0', 'to_1'], 
+                                    dtype=object),
+                    columns=['conn'])
+        assert_frame_equal(p.data, df)
+        assert_frame_equal(p.interface.data, df_int)
+
     def test_from_df(self):
         p = Pattern('/[aaa,bbb]/0', '/[ccc,ddd]/0')
         p['/aaa/0', '/ccc/0'] = 1
