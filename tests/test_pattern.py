@@ -600,7 +600,7 @@ class test_pattern(TestCase):
         self.df_p.set_index('from_1', append=True, inplace=True)
         self.df_p.set_index('to_0', append=True, inplace=True)
         self.df_p.set_index('to_1', append=True, inplace=True)
-        self.df_p.sort(inplace=True)
+        self.df_p.sort_index(inplace=True)
 
         self.df_i = \
             pd.DataFrame(data={'interface': np.array([0, 0, 0, 0, 0, 
@@ -942,21 +942,21 @@ class test_pattern(TestCase):
                                 from_sel='/[foo,bar]', to_sel='/[baz,qux]',
                                 data=1)
         df = pd.DataFrame(data=[1, 1],
-                    index=pd.MultiIndex(levels=[['bar', 'foo'], ['baz', 'qux']],
-                                        labels=[[1, 0], [0, 1]],
-                                        names=['from_0', 'to_0'], dtype=object),
-                    columns=['conn'])
+                          index=pd.MultiIndex(levels=[['bar', 'foo'], ['baz', 'qux']],
+                                              labels=[[1, 0], [0, 1]],
+                                              names=['from_0', 'to_0'], dtype=object),
+                          columns=['conn'], dtype=object)
         assert_frame_equal(p.data, df)
 
         p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
                                 from_sel='/foo[0:2]', to_sel='/bar[0:2]',
                                 data=1)
         df = pd.DataFrame(data=[1, 1],
-                index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
-                                    labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
-                                    names=['from_0', 'from_1', 'to_0', 'to_1'], 
-                                    dtype=object),
-                    columns=['conn'])
+                          index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
+                                              labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
+                                              names=['from_0', 'from_1', 'to_0', 'to_1'], 
+                                              dtype=object),
+                          columns=['conn'], dtype=object)
         assert_frame_equal(p.data, df)
 
         p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
@@ -969,14 +969,16 @@ class test_pattern(TestCase):
                                'type': ['gpot', 'spike', 'gpot', 'spike']},
                               index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
                                                   labels=[[1, 1, 0, 0], [0, 1, 0, 1]],
-                                                  names=[u'0', u'1']),
+                                                  names=[u'0', u'1'],
+                                                  dtype=object),
                               dtype=object)
         df = pd.DataFrame(data=[1, 1],
-                index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
-                                    labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
-                                    names=['from_0', 'from_1', 'to_0', 'to_1'], 
-                                    dtype=object),
-                    columns=['conn'])
+                          index=pd.MultiIndex(levels=[['foo'], [0, 1], ['bar'], [0, 1]],
+                                              labels=[[0, 0], [0, 1], [0, 0], [0, 1]],
+                                              names=['from_0', 'from_1', 'to_0', 'to_1'], 
+                                              dtype=object),
+                          columns=['conn'],
+                          dtype=object)
         assert_frame_equal(p.data, df)
         assert_frame_equal(p.interface.data, df_int)
 
@@ -1053,8 +1055,8 @@ class test_pattern(TestCase):
         g.add_edge('/bar[3]', '/foo[3]')
 
         pg = Pattern.from_graph(g)
-        assert_frame_equal(pg.data.sort(), p.data.sort())
-        assert_frame_equal(pg.interface.data.sort(), p.interface.data.sort())
+        assert_frame_equal(pg.data.sort_index(), p.data.sort_index())
+        assert_frame_equal(pg.interface.data.sort_index(), p.interface.data.sort_index())
 
     def test_gpot_ports(self):
         p = Pattern('/foo[0:3]', '/bar[0:3]')
