@@ -1164,6 +1164,9 @@ class Pattern(object):
             Selectors that describe the pattern's initial index. If specified, 
             both selectors must be set. If no selectors are set, the index is
             initially empty.
+        gpot_sel, spike_sel : str
+            Selectors that describe the graded potential and spiking ports in a 
+            pattern's initial index.
         data : numpy.ndarray, dict, or pandas.DataFrame
             Data to load store in class instance.
         columns : sequence of str
@@ -1182,6 +1185,8 @@ class Pattern(object):
 
         from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
         to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
+        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
+        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         comb_op = kwargs['comb_op'] if kwargs.has_key('comb_op') else '+'
@@ -1218,6 +1223,11 @@ class Pattern(object):
         p.interface[from_sel, 'io'] = 'in'
         p.interface[to_sel, 'io'] = 'out'
 
+        # Update the `type` attributes of the pattern's interface:
+        if gpot_sel is not None:
+            p.interface[gpot_sel, 'type'] = 'gpot'
+            p.interface[spike_sel, 'type'] = 'spike'
+
         return p
 
     def clear(self):
@@ -1228,7 +1238,6 @@ class Pattern(object):
         self.interface.clear()
         self.data.drop(self.data.index, inplace=True)
 
-    @classmethod
     def from_df(cls, df_int, df_pat):
         """
         Create a Pattern from properly formatted DataFrames.
@@ -1304,7 +1313,15 @@ class Pattern(object):
             pattern. These selectors must be disjoint, i.e., no identifier comprised
             by one selector may be in any other selector.   
         from_sel, to_sel : str
-            Selectors that describe the pattern's initial index.
+            Selectors that describe the pattern's initial index. If specified,
+            both selectors must be set; the 'io' attribute of the ports
+            comprised by these selectors is respectively set to 'out' and
+            'in'. If no selectors are set, the index is initially empty.
+        gpot_sel, spike_sel : str
+            Selectors that describe the graded potential and spiking ports in a 
+            pattern's initial index. If specified, the 'type' attribute of the
+            ports comprised by these selectors is respectively set to 'gpot'
+            and 'spike'. 
         data : numpy.ndarray, dict, or pandas.DataFrame
             Data to load store in class instance.
         columns : sequence of str
@@ -1320,10 +1337,13 @@ class Pattern(object):
 
         from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
         to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
+        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
+        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         validate = kwargs['validate'] if kwargs.has_key('validate') else True
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
+                                gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='+', validate=validate)
 
     def gpot_ports(self, i=None, tuples=False):
@@ -1413,8 +1433,14 @@ class Pattern(object):
             Data to load store in class instance.
         from_sel, to_sel : str
             Selectors that describe the pattern's initial index. If specified,
-            both selectors must be set. If no selectors are set, the index is
-            initially empty.
+            both selectors must be set; the 'io' attribute of the ports
+            comprised by these selectors is respectively set to 'out' and
+            'in'. If no selectors are set, the index is initially empty.
+        gpot_sel, spike_sel : str
+            Selectors that describe the graded potential and spiking ports in a 
+            pattern's initial index. If specified, the 'type' attribute of the
+            ports comprised by these selectors is respectively set to 'gpot'
+            and 'spike'. 
         columns : sequence of str
             Data column names.
         validate : bool
@@ -1428,10 +1454,13 @@ class Pattern(object):
 
         from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
         to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
+        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
+        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         validate = kwargs['validate'] if kwargs.has_key('validate') else True
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
+                                gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='.+', validate=validate)
 
     def __validate_index__(self, idx):
