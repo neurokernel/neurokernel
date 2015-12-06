@@ -1238,6 +1238,7 @@ class Pattern(object):
         self.interface.clear()
         self.data.drop(self.data.index, inplace=True)
 
+    @classmethod
     def from_df(cls, df_int, df_pat):
         """
         Create a Pattern from properly formatted DataFrames.
