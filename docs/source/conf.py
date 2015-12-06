@@ -45,7 +45,6 @@ pkg_resources.require = Mock()
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.append(os.path.abspath('../sphinxext'))
 sys.path.append(os.path.abspath('../../neurokernel'))
 sys.path.append(os.path.abspath('../../neurokernel/neuroml'))
 sys.path.append(os.path.abspath('../../'))
@@ -62,7 +61,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.intersphinx',
               'sphinx.ext.pngmath',
               'sphinx.ext.viewcode',
-              'numpydoc']
+              'sphinx.ext.napoleon']
 
 # Generate autosummary stubs:
 autosummary_generate = True
