@@ -1217,7 +1217,7 @@ class Pattern(object):
             p.__validate_index__(idx)
 
         # Replace the pattern's DataFrame:
-        p.data = pd.DataFrame(data=data, index=idx, columns=columns)
+        p.data = pd.DataFrame(data=data, index=idx, columns=columns, dtype=object)
 
         # Update the `io` attributes of the pattern's interfaces:
         p.interface[from_sel, 'io'] = 'in'
@@ -1838,8 +1838,7 @@ class Pattern(object):
 
     @classmethod
     def from_graph(cls, g):
-        """
-        Convert a NetworkX directed graph into a Pattern instance.
+        """Convert a NetworkX directed graph into a Pattern instance.
 
         Parameters
         ----------
@@ -1854,29 +1853,51 @@ class Pattern(object):
         Notes
         -----
         The nodes in the specified graph must contain an 'interface' attribute.
+
+        Port attributes other than 'interface', 'io', and 'type' are not stored
+        in the created Pattern instance's interface.
         """
 
         assert type(g) == nx.DiGraph
 
-        # Group ports by interface number:
+        # Group port identifiers by interface number and whether the ports are
+        # graded potential, or spiking:
         ports_by_int = {}
+        ports_gpot = []
+        ports_spike = []
+        ports_from = []
+        ports_to = []
         for n, data in g.nodes(data=True):
             assert SelectorMethods.is_identifier(n)
             assert data.has_key('interface')
             if not ports_by_int.has_key(data['interface']):
-                ports_by_int[data['interface']] = {}
-            ports_by_int[data['interface']][n] = data
+                ports_by_int[data['interface']] = []
+            ports_by_int[data['interface']].append(n)
+
+            if data.has_key('type'):
+                if data['type'] == 'gpot':
+                    ports_gpot.append(n)
+                elif data['type'] == 'spike':
+                    ports_spike.append(n)
+
+        # Use connection direction to determine whether ports are source or
+        # destination (XXX should this check whether the io attributes are
+        # consistent with the connection directions?):
+        for f, t in g.edges():
+            ports_from.append(f)
+            ports_to.append(t)
 
         # Create selectors for each interface number:
         selector_list = []
         for interface in sorted(ports_by_int.keys()):
-            selector_list.append(','.join(ports_by_int[interface].keys()))
+            selector_list.append(','.join(ports_by_int[interface]))
 
-        p = cls(*selector_list)
-        for n, data in g.nodes(data=True):
-            p.interface[n] = data
-        for c in g.edges():
-            p[c[0], c[1]] = 1
+        p = cls.from_concat(*selector_list,
+                            from_sel=','.join(ports_from),
+                            to_sel=','.join(ports_to),
+                            gpot_sel=','.join(ports_gpot),
+                            spike_sel=','.join(ports_spike),
+                            data=1)
 
         p.data.sort_index(inplace=True)
         p.interface.data.sort_index(inplace=True)
