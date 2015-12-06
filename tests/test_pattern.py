@@ -1031,6 +1031,26 @@ class test_pattern(TestCase):
                                ('/bar/3', '/foo/2', {}),
                                ('/bar/3', '/foo/3', {})])
 
+        p.interface['/foo[0]','type'] = 'gpot'
+        p.interface['/foo[1]','type'] = 'gpot'
+        p.interface['/bar[0]','type'] = 'gpot'
+        p.interface['/bar[1]','type'] = 'gpot'
+        p.interface['/bar[2]','type'] = 'gpot'
+        p.interface['/bar[3]','type'] = 'spike'
+        p.interface['/foo[2]','type'] = 'spike'
+        p.interface['/foo[3]','type'] = 'spike'
+        g = p.to_graph()
+
+        self.assertItemsEqual(g.nodes(data=True), 
+                              [('/bar/0', {'interface': 1, 'io': 'out', 'type': 'gpot'}),
+                               ('/bar/1', {'interface': 1, 'io': 'out', 'type': 'gpot'}),
+                               ('/bar/2', {'interface': 1, 'io': 'out', 'type': 'gpot'}),
+                               ('/bar/3', {'interface': 1, 'io': 'in', 'type': 'spike'}),
+                               ('/foo/0', {'interface': 0, 'io': 'in', 'type': 'gpot'}),
+                               ('/foo/1', {'interface': 0, 'io': 'in', 'type': 'gpot'}),
+                               ('/foo/2', {'interface': 0, 'io': 'out', 'type': 'spike'}),
+                               ('/foo/3', {'interface': 0, 'io': 'out', 'type': 'spike'})])
+
     def test_from_graph(self):
         p = Pattern('/foo[0:4]', '/bar[0:4]')
         p['/foo[0]', '/bar[0]'] = 1
