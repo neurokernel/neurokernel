@@ -13,6 +13,7 @@ import matplotlib
 from matplotlib import cm
 from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
+plt.ioff() # interactive mode can interfere with frame updates
 from matplotlib.animation import FFMpegFileWriter, AVConvFileWriter
 from matplotlib.colors import hsv_to_rgb
 import networkx as nx
