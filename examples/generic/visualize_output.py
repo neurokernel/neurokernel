@@ -20,9 +20,11 @@ import networkx as nx
 nx.readwrite.gexf.GEXF.convert_bool = {'false':False, 'False':False,
                                        'true':True, 'True':True}
 
-# Select IDs of projection neurons:
+# Select IDs of spiking projection neurons:
 G = nx.read_gexf('./data/generic_lpu.gexf.gz')
-neu_proj = sorted([int(k) for k, n in G.node.items() if n['name'][:4] == 'proj'])
+neu_proj = sorted([int(k) for k, n in G.node.items() if \
+                   n['name'][:4] == 'proj' and \
+                   n['spiking']])
 
 V = vis.visualizer()
 V.add_LPU('./data/generic_input.h5', LPU='Sensory')

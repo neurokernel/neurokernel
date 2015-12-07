@@ -53,7 +53,7 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
             name = t+"_"+str(i)
             
             # All local neurons are graded potential only:
-            if t != 'local' or np.random.rand() < 0.5:
+            if t != 'local' and np.random.rand() < 0.5:
                 G.node[idx] = {
                     'model': 'LeakyIAF',
                     'name': name+'_s',
@@ -93,7 +93,7 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                 # ports (which are not represented as separate nodes):
                 if t == 'proj':
                     G.node[idx]['selector'] = '/%s/out/gpot/%s' % (lpu_name, str(gpot_out_id))
-                    gpot_out_id = 1
+                    gpot_out_id += 1
                     
             idx += 1
 
