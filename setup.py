@@ -80,6 +80,7 @@ if __name__ == "__main__":
             'twiggy >= 0.4.7',
         ],
         extras_require = {
+            'sphinx': ['sphinx >= 1.3'],
             'sphinx_rtd_theme': ['sphinx_rtd_theme >= 0.1.6'],
             }
         )

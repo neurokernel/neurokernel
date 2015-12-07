@@ -135,6 +135,10 @@ class Selector(object):
         result : Selector
             Selector containing all of the port identifiers comprised by all of the 
             arguments.
+
+        Notes
+        -----
+        Duplicate identifiers are not omitted.
         """
 
         out = cls('')
@@ -186,6 +190,21 @@ class Selector(object):
     def prod(cls, *sels):
         """
         Compute the product of identifiers in multiple selectors.
+
+        Parameters
+        ----------
+        sels : Selector
+            Selector instances.
+
+        Returns
+        -------
+        result : Selector
+            Selector containing all of the port identifiers comprised by the
+            product of all of the arguments.
+
+        Notes
+        -----
+        Duplicate identifiers are not omitted.
         """
 
         out = cls('')

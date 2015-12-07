@@ -10,7 +10,7 @@ Computation <http://www.bionet.ee.columbia.edu/courses/EEBM_E9070/2012>`_. The
 Neurokernel Development Team currently comprises the 
 following `Bionet Group <http://www.bionet.ee.columbia.edu/>`_ researchers:
 
-* `Lev Givon <http://www.columbia.edu/~lev/>`_
+* `Lev Givon <http://lebedov.github.io>`_
 * `Konstantinos Psychas <http://gr.linkedin.com/in/kpsychas>`_
 * `Nikul H. Ukani <http://www.linkedin.com/pub/nikul-ukani/16/737/990>`_
 * `Chung-Heng Yeh <http://www.linkedin.com/pub/chung-heng-yeh/5a/7a6/a>`_

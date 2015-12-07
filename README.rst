@@ -139,7 +139,7 @@ Building the Documentation
 To build Neurokerne's HTML documentation locally, you will need to install 
 
 * `mock <http://www.voidspace.org.uk/python/mock/>`_ 1.0 or later.
-* `sphinx <http://sphinx-doc.org>`_ 1.2 or later.
+* `sphinx <http://sphinx-doc.org>`_ 1.3 or later.
 * `sphinx_rtd_theme <https://github.com/snide/sphinx_rtd_theme>`_ 0.1.6 or 
   later.
  
