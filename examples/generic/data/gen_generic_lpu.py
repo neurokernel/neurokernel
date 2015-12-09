@@ -23,7 +23,7 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
     Morris-Lecar model is used for the latter (i.e., the neuron's membrane
     potential is deemed to be its output rather than the time when it emits an
     action potential). Synapses use either the alpha function model or a
-    conductance-based model. 
+    conductance-based model.
 
     Parameters
     ----------
@@ -36,7 +36,7 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
     N_proj : int
         Number of project neurons.
     """
-    
+
     # Set numbers of neurons:
     neu_type = ('sensory', 'local', 'proj')
     neu_num = (N_sensory, N_local, N_proj)
@@ -51,7 +51,7 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
     for (t, n) in zip(neu_type, neu_num):
         for i in range(n):
             name = t+"_"+str(i)
-            
+
             # All local neurons are graded potential only:
             if t != 'local' and np.random.rand() < 0.5:
                 G.node[idx] = {
@@ -70,8 +70,10 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                 # ports (which are not represented as separate nodes):
                 if t == 'proj':
                     G.node[idx]['selector'] = '/%s/out/spk/%s' % (lpu_name, str(spk_out_id))
+                    G.node[idx]['circuit'] = 'proj'
                     spk_out_id += 1
-
+                else:
+                    G.node[idx]['circuit'] = 'local'
             else:
                 G.node[idx] = {
                     'model': "MorrisLecar",
@@ -86,15 +88,17 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'phi': 0.025,
                     'offset': 0,
                     'initV': -0.05214,
-                    'initn': 0.02, 
+                    'initn': 0.02,
                 }
 
                 # Projection neurons are all assumed to be attached to output
                 # ports (which are not represented as separate nodes):
                 if t == 'proj':
                     G.node[idx]['selector'] = '/%s/out/gpot/%s' % (lpu_name, str(gpot_out_id))
+                    G.node[idx]['circuit'] = 'proj'
                     gpot_out_id += 1
-                    
+                else:
+                    G.node[idx]['circuit'] = 'local'
             idx += 1
 
     # An input port node is created for and attached to each non-projection
@@ -110,10 +114,11 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                 G.add_node(idx, {
                     'name': 'port_in_spk_%s' % spk_in_id,
                     'model': 'port_in_spk',
-                    'selector': '/%s/in/spk/%s' % (lpu_name, idx), 
+                    'selector': '/%s/in/spk/%s' % (lpu_name, idx),
                     'spiking': True,
                     'public': False,
-                    'extern': False
+                    'extern': False,
+                    'circuit': G.node[i]['circuit']
                 })
                 spk_in_id += 1
                 G.add_edge(idx, i, type='directed', attr_dict={
@@ -124,7 +129,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'ad': 0.19*1000,
                     'ar': 1.1*100,
                     'gmax': 0.003,
-                    'reverse': 0.065})
+                    'reverse': 0.065,
+                    'circuit': G.node[i]['circuit']})
             else:
                 G.add_node(idx, {
                     'name': 'port_in_gpot_%s' % i,
@@ -132,7 +138,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'selector': '/%s/in/gpot/%s' % (lpu_name, idx),
                     'spiking': False,
                     'public': False,
-                    'extern': False
+                    'extern': False,
+                    'circuit': G.node[i]['circuit']
                 })
                 gpot_in_id += 1
                 G.add_edge(idx, i, type='directed', attr_dict={
@@ -145,7 +152,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'saturation': 0.03,
                     'power': 1.0,
                     'delay': 1.0,
-                    'threshold': -0.05})
+                    'threshold': -0.05,
+                    'circuit': G.node[i]['circuit']})
 
         idx += 1
 
@@ -174,7 +182,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'ad'          : 1.9*1e3,
                     'reverse'     : 65*1e-3 if G.node[tar]['spiking'] else 0.01,
                     'gmax'        : 3*1e-3 if G.node[tar]['spiking'] else 3.1e-4,
-                    'conductance' : True})
+                    'conductance' : True,
+                    'circuit'     : G.node[src]['circuit']})
             else:
                 G.add_edge(src,tar,type='directed',attr_dict={
                     'model'       : 'power_gpot_gpot',
@@ -186,7 +195,8 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'saturation'  : 0.03,
                     'delay'       : 1.0,
                     'reverse'     : -0.1,
-                    'conductance' : True})
+                    'conductance' : True,
+                    'circuit'     : G.node[src]['circuit']})
 
     nx.write_gexf(G, file_name)
 
