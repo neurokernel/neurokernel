@@ -10,7 +10,7 @@ Generate demo output by running
 python integration_demo.py
 """
 
-import futures
+import concurrent.futures
 
 import numpy as np
 import matplotlib as mpl
@@ -56,12 +56,12 @@ def run(out_name):
     V.run()
 
 # Run the visualizations in parallel:
-with futures.ProcessPoolExecutor() as executor:
+with concurrent.futures.ProcessPoolExecutor() as executor:
     fs_dict = {}
     for out_name in ['un', 'co']:
         res = executor.submit(run, out_name)
         fs_dict[out_name] = res
-    futures.wait(fs_dict.values())
+    concurrent.futures.wait(fs_dict.values())
 
     # Report any exceptions that may have occurred:
     for k in fs_dict:

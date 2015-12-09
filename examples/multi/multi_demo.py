@@ -46,7 +46,7 @@ parser.add_argument('-s', '--steps', default=steps, type=int,
 parser.add_argument('-r', '--time_sync', default=False, action='store_true',
                     help='Time data reception throughput [default: False]')
 parser.add_argument('-y', '--num_sensory', default=N_sensory, type=int,
-                    help='Number of sensory neurons associated with LPU 0 [default: %s]' % N_sensory)
+                    help='Number of sensory neurons associated with each LPU [default: %s]' % N_sensory)
 parser.add_argument('-n', '--num_local', default=N_local, type=int,
                     help='Number of local neurons in each LPU [default: %s]' % N_local)
 parser.add_argument('-o', '--num_output', default=N_output, type=int,
@@ -130,7 +130,7 @@ for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
     in_ports_gpot_0 = plsel.Selector(LPU.extract_in_gpot(n_dict_0))
 
     in_ports_spk_1 = plsel.Selector(LPU.extract_in_spk(n_dict_1))
-    in_ports_gpot_1 = plsel.Selector(LPU.extract_in_gpot(n_dict_1)) 
+    in_ports_gpot_1 = plsel.Selector(LPU.extract_in_gpot(n_dict_1))
 
     out_ports_0 = plsel.Selector.union(out_ports_spk_0, out_ports_gpot_0)
     out_ports_1 = plsel.Selector.union(out_ports_spk_1, out_ports_gpot_1)
@@ -149,7 +149,7 @@ for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
     N_conn_spk_0_1 = min(len(out_ports_spk_0), len(in_ports_spk_1))
     N_conn_gpot_0_1 = min(len(out_ports_gpot_0), len(in_ports_gpot_1))
     for src, dest in zip(random.sample(out_ports_spk_0.identifiers,
-                                       N_conn_spk_0_1), 
+                                       N_conn_spk_0_1),
                          random.sample(in_ports_spk_1.identifiers,
                                        N_conn_spk_0_1)):
         pat[src, dest] = 1
@@ -166,7 +166,7 @@ for id_0, id_1 in itertools.combinations(lpu_dict.keys(), 2):
     # Next, define connections from LPU1 to LPU0:
     N_conn_spk_1_0 = min(len(out_ports_spk_1), len(in_ports_spk_0))
     N_conn_gpot_1_0 = min(len(out_ports_gpot_1), len(in_ports_gpot_0))
-    for src, dest in zip(random.sample(out_ports_spk_1, N_conn_spk_1_0), 
+    for src, dest in zip(random.sample(out_ports_spk_1, N_conn_spk_1_0),
                          random.sample(in_ports_spk_0, N_conn_spk_1_0)):
         pat[src, dest] = 1
         pat.interface[src, 'type'] = 'spike'
