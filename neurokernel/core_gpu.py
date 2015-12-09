@@ -438,7 +438,7 @@ class Module(mpi.Worker):
         if requests:
             self.req.Waitall(requests)
         if not self.time_sync:
-            self.log_info('received all data received by %s' % self.id)
+            self.log_info('all data were received by %s' % self.id)
 
         # Copy received elements into the current module's data array:
         for src_id in self._in_ids:
