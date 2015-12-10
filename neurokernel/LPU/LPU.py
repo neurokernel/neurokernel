@@ -107,7 +107,8 @@ class LPU(Module):
         1. spiking - True if the neuron emits spikes, False if it emits graded
            potentials.
         2. model - model identifier string, e.g., 'LeakyIAF', 'MorrisLecar'
-        3. public - True if the neuron emits output exposed to other LPUS.
+        3. public - True if the neuron emits output exposed to other LPUS. If 
+           True, the neuron must also have an attribute called selector.
         4. extern - True if the neuron can receive external input from a file.
 
         All synapses must have the following attributes:
@@ -115,10 +116,10 @@ class LPU(Module):
         1. class - int indicating connection class of synapse; it may assume the
            following values:
 
-            0. spike to spike synapse
-            1. spike to graded potential synapse
-            2. graded potential to spike synapse
-            3. graded potential to graded potential synapse
+           0. spike to spike synapse
+           1. spike to graded potential synapse
+           2. graded potential to spike synapse
+           3. graded potential to graded potential synapse
         2. model - model identifier string, e.g., 'AlphaSynapse'
         3. conductance - True if the synapse emits conductance values, False if
            it emits current values.
@@ -174,17 +175,24 @@ class LPU(Module):
         synapses = graph.edges(data=True)
         s_dict = {}
         synapses.sort(cmp=synapse_cmp)
-        for syn in synapses:
+        for id, syn in enumerate(synapses):
             # syn[0/1]: pre-/post-neu id; syn[2]: dict of synaptic data
             model = syn[2]['model']
-            syn[2]['id'] = int( syn[2]['id'] )
-            # if the synapse model does not appear before, add it into s_dict
+
+            # Assign the synapse edge an ID if none exists (e.g., because the
+            # graph was never stored/read to/from GEXF):
+            if syn[2].has_key('id'):
+                syn[2]['id'] = int(syn[2]['id'])
+            else:
+                syn[2]['id'] = id
+
+            # If the synapse model has not appeared yet, add it to s_dict:
             if model not in s_dict:
                 s_dict[model] = {k:[] for k in syn[2].keys() + ['pre', 'post']}
 
-            # synapses of the same model should have the same attributes
+            # Synapses of the same model must have the same attributes:
             assert(set(s_dict[model].keys()) == set(syn[2].keys() + ['pre', 'post']))
-            # add synaptic data into the subdictionary of s_dict
+            # Add synaptic data to dictionaries within s_dict:
             for key in syn[2].iterkeys():
                 s_dict[model][key].append(syn[2][key])
             s_dict[model]['pre'].append(syn[0])
