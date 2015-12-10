@@ -1076,7 +1076,38 @@ class test_pattern(TestCase):
 
         pg = Pattern.from_graph(g)
         assert_frame_equal(pg.data.sort_index(), p.data.sort_index())
-        assert_frame_equal(pg.interface.data.sort_index(), p.interface.data.sort_index())
+        assert_frame_equal(pg.interface.data.sort_index(),
+                           p.interface.data.sort_index())
+
+        p.interface['/foo[0]', 'type'] = 'gpot'
+        p.interface['/bar[0]', 'type'] = 'gpot'
+        p.interface['/bar[1]', 'type'] = 'gpot'
+        p.interface['/foo[1]', 'type'] = 'gpot'
+        p.interface['/bar[2]', 'type'] = 'gpot'
+        p.interface['/bar[3]', 'type'] = 'spike'
+        p.interface['/foo[2]', 'type'] = 'spike'
+        p.interface['/bar[3]', 'type'] = 'spike'
+        p.interface['/foo[3]', 'type'] = 'spike'
+
+        g = nx.DiGraph()
+        g.add_node('/bar[0]', interface=1, io='out', type='gpot')
+        g.add_node('/bar[1]', interface=1, io='out', type='gpot')
+        g.add_node('/bar[2]', interface=1, io='out', type='gpot')
+        g.add_node('/bar[3]', interface=1, io='in', type='spike')
+        g.add_node('/foo[0]', interface=0, io='in', type='gpot')
+        g.add_node('/foo[1]', interface=0, io='in', type='gpot')
+        g.add_node('/foo[2]', interface=0, io='out', type='spike')
+        g.add_node('/foo[3]', interface=0, io='out', type='spike')
+        g.add_edge('/foo[0]', '/bar[0]')
+        g.add_edge('/foo[0]', '/bar[1]')
+        g.add_edge('/foo[1]', '/bar[2]')
+        g.add_edge('/bar[3]', '/foo[2]')
+        g.add_edge('/bar[3]', '/foo[3]')
+
+        pg = Pattern.from_graph(g)
+        assert_frame_equal(pg.data.sort_index(), p.data.sort_index())
+        assert_frame_equal(pg.interface.data.sort_index(),
+                           p.interface.data.sort_index())
 
     def test_gpot_ports(self):
         p = Pattern('/foo[0:3]', '/bar[0:3]')
