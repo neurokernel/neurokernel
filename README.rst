@@ -49,7 +49,9 @@ something like::
 
 as root.
 
-See `this page <https://www.open-mpi.org/faq/?category=building#easy-build>`_
+If you install Neurokernel in a virtualenv environment, you will need to
+install OpenMPI. See `this page 
+<https://www.open-mpi.org/faq/?category=building#easy-build>`_
 for OpenMPI installation information. *Note that OpenMPI 1.8* |openmpi_no_windows|_.
 
 .. _openmpi_no_windows: https://www.open-mpi.org/software/ompi/v1.6/ms-windows.php
@@ -109,7 +111,9 @@ request to the* |nk_developers|_.
 
 First, install the ``libibverbs1``, ``libnuma1``, ``libpmi0``, ``libslurm26``, and
 ``libtorque2`` packages; these are required by the conda OpenMPI packages prepared
-for Neurokernel. You also need to ensure that CUDA has been installed in
+for Neurokernel. Ensure that the stock Ubuntu OpenMPI packages are not installed 
+because they may interfere with the ones that will be installed by conda. You 
+also need to ensure that CUDA has been installed in
 ``/usr/local/cuda``.
 
 Install conda by either installing `Anaconda
