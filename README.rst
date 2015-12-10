@@ -49,6 +49,12 @@ something like::
 
 as root.
 
+Although some Linux distributions do include CUDA in their stock package
+repositories, you are encouraged to use those distributed by NVIDIA because they
+often are more up-to-date and include more recent releases of the GPU drivers.
+See `this page <https://developer.nvidia.com/cuda-downloads>`_ for download
+information.
+
 If you install Neurokernel in a virtualenv environment, you will need to
 install OpenMPI. See `this page 
 <https://www.open-mpi.org/faq/?category=building#easy-build>`_
