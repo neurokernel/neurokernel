@@ -137,8 +137,16 @@ by running the following command: ::
 
    conda create -n NK neurokernel_deps
 
-Run the following to install the remaining Python package dependencies listed in 
-``setup.py``: ::
+PyCUDA packages compiled against several versions of CUDA are available. If you
+need one compiled against a specific version that differs from the one
+automatically installed by the above command, you will need to manually install
+it afterwards as follows (replace ``cuda75`` with the appropriate version): ::
+
+  source activate NK
+  conda install pycuda=2015.1.3=np110py27_cuda75_0
+  source deactivate
+
+Activate the new environment and install Neurokernel in it as follows: ::
 
   source activate NK
   cd ~/neurokernel
