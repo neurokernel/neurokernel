@@ -573,7 +573,11 @@ class LPU(Module):
             n['num_dendrites_cond'] = Counter(n['cond_post'])
             n['num_dendrites_I'] = Counter(n['I_post'])
 
-        s_id = np.concatenate([s['id'] for _, s in self.s_list]).astype(np.int32)
+        if len(self.s_list) > 0:
+            s_id = np.concatenate([s['id'] for _, s in self.s_list]).astype(np.int32)
+        else:
+            s_id = np.empty(0, dtype = np.int32)
+        
         s_order = np.arange(self.total_synapses)[s_id]
         idx = np.where(cond_post >= self.nid_max)[0]
         cond_post_syn = s_order[cond_post[idx] - self.nid_max]
@@ -775,7 +779,7 @@ class LPU(Module):
         """
 
         self.synapse_state = garray.zeros(
-            int(self.total_synapses) + len(self.input_neuron_list),
+            max(int(self.total_synapses) + len(self.input_neuron_list), 1),
             np.float64)
 
         if self.total_num_gpot_neurons > 0:
