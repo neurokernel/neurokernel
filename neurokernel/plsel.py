@@ -123,11 +123,11 @@ class Selector(object):
     @classmethod
     def add(cls, *sels):
         """
-        Combine the identifiers in multiple selectors into a single selector
+        Combine the identifiers in multiple selectors into a single selector.
 
         Parameters
         ----------
-        sels : Selector
+        sels : iterable of Selector
             Selector instances.
 
         Returns
@@ -152,13 +152,21 @@ class Selector(object):
         return out
 
     @classmethod
+    def add_str(cls, *s):
+        """
+        Combine the identifiers in multiple selector strings into a single selector.
+        """
+
+        return cls.add(*map(cls, s))
+
+    @classmethod
     def concat(cls, *sels):
         """
         Concatenate the identifiers in multiple selectors elementwise.
 
         Parameters
         ----------
-        sels : Selector
+        sels : iterable of Selector
             Selector instances.
 
         Returns
@@ -193,7 +201,7 @@ class Selector(object):
 
         Parameters
         ----------
-        sels : Selector
+        sels : iterable of Selector
             Selector instances.
 
         Returns
@@ -217,6 +225,17 @@ class Selector(object):
     def union(cls, *sels):
         """
         Compute the union of the identifiers in multiple selectors.
+
+        Parameters
+        ----------
+        sels : iterable of Selector
+            Selector instances.
+
+        Returns
+        -------
+        result : Selector
+            Selector containing all of the port identifiers comprised by the
+            union of all of the arguments.
         """
 
         out = cls('')

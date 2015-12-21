@@ -74,6 +74,14 @@ class test_selector_class(TestCase):
         assert s.max_levels == 0
         assert s.str == ''
 
+    def test_selector_add_str(self):
+        s = Selector.add_str('/foo[0]', '/bar[0]')
+        assert len(s) == 2
+        assert s.nonempty
+        assert s.expanded == (('foo', 0), ('bar', 0))
+        assert s.max_levels == 2
+        assert s.str == '/foo/0,/bar/0'
+
     def test_selector_concat_empty(self):
         s = Selector.concat(Selector(''), Selector(''))
         assert len(s) == 0
