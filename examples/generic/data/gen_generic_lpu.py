@@ -11,13 +11,13 @@ import numpy as np
 import h5py
 import networkx as nx
 
-def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
+def create_lpu_graph(lpu_name, N_sensory, N_local, N_proj):
     """
-    Create a generic LPU.
+    Create a generic LPU graph.
 
-    Creates a GEXF file containing the neuron and synapse parameters for an LPU
-    containing the specified number of local and projection neurons. The GEXF
-    file also contains the parameters for a set of sensory neurons that accept
+    Creates a graph containing the neuron and synapse parameters for an LPU
+    containing the specified number of local and projection neurons. The graph
+    also contains the parameters for a set of sensory neurons that accept
     external input. All neurons are either spiking or graded potential neurons;
     the Leaky Integrate-and-Fire model is used for the former, while the
     Morris-Lecar model is used for the latter (i.e., the neuron's membrane
@@ -27,14 +27,19 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
 
     Parameters
     ----------
-    file_name : str
-        Output GEXF file name.
+    lpu_name : str
+        Name of LPU. Used in port identifiers.
     N_sensory : int
         Number of sensory neurons.
     N_local : int
         Number of local neurons.
     N_proj : int
         Number of project neurons.
+
+    Returns
+    -------
+    g : networkx.MultiDiGraph
+        Generated graph.
     """
 
     # Set numbers of neurons:
@@ -198,7 +203,43 @@ def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
                     'conductance' : True,
                     'circuit'     : G.node[src]['circuit']})
 
-    nx.write_gexf(G, file_name)
+    return G
+
+def create_lpu(file_name, lpu_name, N_sensory, N_local, N_proj):
+    """
+    Create a generic LPU graph.
+
+    Creates a GEXF file containing the neuron and synapse parameters for an LPU
+    containing the specified number of local and projection neurons. The GEXF
+    file also contains the parameters for a set of sensory neurons that accept
+    external input. All neurons are either spiking or graded potential neurons;
+    the Leaky Integrate-and-Fire model is used for the former, while the
+    Morris-Lecar model is used for the latter (i.e., the neuron's membrane
+    potential is deemed to be its output rather than the time when it emits an
+    action potential). Synapses use either the alpha function model or a
+    conductance-based model.
+
+    Parameters
+    ----------
+    file_name : str
+        Output GEXF file name.
+    lpu_name : str
+        Name of LPU. Used in port identifiers.
+    N_sensory : int
+        Number of sensory neurons.
+    N_local : int
+        Number of local neurons.
+    N_proj : int
+        Number of project neurons.
+
+    Returns
+    -------
+    g : networkx.MultiDiGraph
+        Generated graph.
+    """
+
+    g = create_lpu_graph(lpu_name, N_sensory, N_local, N_proj)
+    nx.write_gexf(g, file_name)
 
 def create_input(file_name, N_sensory, dt=1e-4, dur=1.0, start=0.3, stop=0.6, I_max=0.6):
     """
