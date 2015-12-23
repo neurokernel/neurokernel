@@ -133,7 +133,11 @@ class LPU(Module):
 
         # parse neuron data
         n_dict = {}
-        neurons = [x for x in graph.node.items() if 'synapse' not in x[0]]
+
+        # Cast node IDs to str in case they are ints so that the conditional
+        # below doesn't fail:
+        neurons = [x for x in graph.node.items() if 'synapse' not in str(x[0])]
+
         # sort based on id (id is first converted to an integer)
         # this is done so that consecutive neurons of the same type
         # in the constructed LPU is the same in neurokernel
@@ -1048,8 +1052,10 @@ def synapse_cmp(x, y):
     """
     post-synaptic cite might be another synapse, with convention 'synapse-id'.
     """
-    pre_x = 'synapse' in x[1]
-    pre_y = 'synapse' in y[1]
+
+    # Cast x[1] and y[1] to str in case they are ints:
+    pre_x = 'synapse' in str(x[1])
+    pre_y = 'synapse' in str(y[1])
     int_x = int(x[1]) if not pre_x else int(x[1][8:])
     int_y = int(y[1]) if not pre_y else int(y[1][8:])
     if pre_x and not pre_y:
