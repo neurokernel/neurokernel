@@ -38,7 +38,7 @@ rand_setup(curandStateXORWOW_t* state, int size, unsigned long long seed)
     """
     mod = SourceModule(code, no_extern_c = True)
     func = mod.get_function("rand_setup")
-    func.prepare([np.intp, np.int32, np.uint64])
+    func.prepare('PiL')#[np.intp, np.int32, np.uint64])
     return func
     
     

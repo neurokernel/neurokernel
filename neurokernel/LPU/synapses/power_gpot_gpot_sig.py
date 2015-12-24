@@ -70,7 +70,9 @@ class power_gpot_gpot_sig(BaseSynapse):
         #Used 14 registers, 64 bytes cmem[0], 4 bytes cmem[16]
         mod = SourceModule(template % {"n_synapse": self.num_synapse}, options = ["--ptxas-options=-v"])
         func = mod.get_function("update_gpot_terminal_synapse")
-        func.prepare([np.intp, np.int32, np.int32, np.int32, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
+        func.prepare('PiiiPPPPPPP')
+        #[np.intp, np.int32, np.int32, np.int32, np.intp, np.intp,
+        # np.intp, np.intp, np.intp, np.intp, np.intp])
         self.block = (256,1,1)
         self.grid = (min(6 * cuda.Context.get_device().MULTIPROCESSOR_COUNT, (self.num_synapse-1) / 256 + 1), 1)
         return func

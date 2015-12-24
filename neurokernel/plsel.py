@@ -787,7 +787,7 @@ class SelectorMethods(SelectorParser):
                     if not (token_types.issubset([str, unicode]) or \
                             token_types == set([int])):
                         return False
-                elif type(token) not in [slice, str, unicode, int]:
+                elif type(token) not in [slice, str, unicode, int, long]:
                     return False
 
         # All tokens are valid:
@@ -918,7 +918,8 @@ class SelectorMethods(SelectorParser):
                 # itertools.product() can iterate over them:
                 if type(t[j]) in [int, str, unicode]:
                     t[j] = [t[j]]
-
+                elif type(t[j]) is long:
+                    t[j] = [int(t[j])]
                 # Expand slices into ranges:
                 elif type(t[j]) == slice:
                     t[j] = range(t[j].start, t[j].stop)

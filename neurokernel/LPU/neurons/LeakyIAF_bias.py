@@ -125,16 +125,17 @@ class LeakyIAF_bias(BaseNeuron):
                             "nneu": self.gpu_block[0] },\
                 options=["--ptxas-options=-v"])
         func = mod.get_function("leaky_iaf")
-        func.prepare( [ np.int32,   # neu_num
-                        np.float64, # dt
-                        np.intp,    # spk array
-                        np.intp,    # V array
-                        np.intp,    # I array
-                        np.intp,    # Vt array
-                        np.intp,    # Vr array
-                        np.intp,    # R array
-                        np.intp,    # C array
-                        np.intp])   # b array
+        func.prepare('idPPPPPPPP')
+#                     [  np.int32,   # neu_num
+#                        np.float64, # dt
+#                        np.intp,    # spk array
+#                        np.intp,    # V array
+#                        np.intp,    # I array
+#                        np.intp,    # Vt array
+#                        np.intp,    # Vr array
+#                        np.intp,    # R array
+#                        np.intp,    # C array
+#                        np.intp])   # b array
 
         return func
 
@@ -251,7 +252,8 @@ class LeakyIAF_bias(BaseNeuron):
         """
         mod = SourceModule(template % {"num_neurons": self.num_neurons}, options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
-        func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
+        func.prepare('PPPPPPP')
+        #[np.intp, np.intp, np.intp, np.intp, np.intp, np.intp, np.intp])
         self._block_get_input = (32,32,1)
         self._grid_get_input = ((self.num_neurons - 1) / 32 + 1, 1)
         return func
@@ -344,5 +346,5 @@ class LeakyIAF_bias(BaseNeuron):
         """
         mod = SourceModule(template % {"num_neurons": self.num_neurons}, options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
-        func.prepare([np.intp, np.intp, np.intp, np.intp, np.intp])
+        func.prepare('PPPPP')#[np.intp, np.intp, np.intp, np.intp, np.intp])
         return func

@@ -970,7 +970,7 @@ class LPU(Module):
             template % {"type": dtype_to_ctype(state_var.dtype)},
             options=self.compile_options)
         func = mod.get_function("extract_projection")
-        func.prepare([np.intp, np.intp, np.intp, np.intp, np.int32])
+        func.prepare('PPPPi')#[np.intp, np.intp, np.intp, np.intp, np.int32])
 
         return func
 

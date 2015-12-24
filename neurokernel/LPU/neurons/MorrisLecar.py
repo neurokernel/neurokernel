@@ -127,9 +127,10 @@ class MorrisLecar(BaseNeuron):
         func = mod.get_function("hhn_euler_multiple")
 
 
-        func.prepare([np.intp, np.intp, np.int32, np.intp, scalartype, 
-                      np.int32, np.intp, np.intp, np.intp, 
-                      np.intp, np.intp, np.intp])
+        func.prepare('PPiP'+np.dtype(scalartype).char+'iPPPPPP')
+        #[np.intp, np.intp, np.int32, np.intp, scalartype,
+        # np.int32, np.intp, np.intp, np.intp,
+        # np.intp, np.intp, np.intp])
 
 
         return func
