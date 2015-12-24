@@ -129,9 +129,12 @@ class test_port_mapper(TestCase):
 
     def test_create(self):
 
-        # Empty selector, empty data:
+        # Empty selector, empty data (force index dtype of ground truth to
+        # object because neurokernel.plsel.SelectorMethods.make_index() creates
+        # indexes with dtype=object):
         pm = PortMapper('')
-        assert_series_equal(pm.portmap, pd.Series([], dtype=np.int_))
+        assert_series_equal(pm.portmap,
+            pd.Series([], dtype=np.int_, index=pd.Index([], object)))
         assert_array_equal(pm.data, np.array([]))
 
         # Non-empty selector, empty data:
