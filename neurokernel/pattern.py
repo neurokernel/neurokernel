@@ -1950,6 +1950,9 @@ class Pattern(object):
 
         # Add all of the ports as nodes:
         for t in self.interface.data.index:    
+            if not isinstance(self.interface.data.index,
+                              pd.MultiIndex):
+                t = (t,)
             id = self.sel.tokens_to_str(t)
 
             # Replace NaNs with empty strings:

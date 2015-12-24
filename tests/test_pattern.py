@@ -1007,6 +1007,13 @@ class test_pattern(TestCase):
         assert_frame_equal(p.interface.data, q.interface.data)
 
     def test_to_graph(self):
+        p = Pattern('/foo', '/bar')
+        p['/foo', '/bar'] = 1
+        g = p.to_graph()
+        self.assertItemsEqual(g.nodes(data=True),
+                              [('/foo', {'interface': 0, 'io': 'in', 'type': ''}),
+                               ('/bar', {'interface': 1, 'io': 'out', 'type': ''})])
+
         p = Pattern('/foo[0:4]', '/bar[0:4]')
         p['/foo[0]', '/bar[0]'] = 1
         p['/foo[0]', '/bar[1]'] = 1
