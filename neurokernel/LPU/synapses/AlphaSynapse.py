@@ -101,15 +101,16 @@ class AlphaSynapse(BaseSynapse):
                 cuda_src % {"type": dtype_to_ctype(np.float64)},\
                 options=["--ptxas-options=-v"])
         func = mod.get_function("alpha_synapse")
-        func.prepare( [ np.int32,   # syn_num
-                        np.float64, # dt
-                        np.intp,    # spike list
-                        np.intp,    # pre-synaptic neuron list
-                        np.intp,    # ar array
-                        np.intp,    # ad array
-                        np.intp,    # gmax array
-                        np.intp,    # a0 array
-                        np.intp,    # a1 array
-                        np.intp,    # a2 array
-                        np.intp ] ) # cond array
+        func.prepare('idPPPPPPPPP')
+#                     [  np.int32,   # syn_num
+#                        np.float64, # dt
+#                        np.intp,    # spike list
+#                        np.intp,    # pre-synaptic neuron list
+#                        np.intp,    # ar array
+#                        np.intp,    # ad array
+#                        np.intp,    # gmax array
+#                        np.intp,    # a0 array
+#                        np.intp,    # a1 array
+#                        np.intp,    # a2 array
+#                        np.intp ] ) # cond array
         return func

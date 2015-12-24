@@ -77,12 +77,13 @@ class DummySynapse(BaseSynapse):
                 cuda_src % {"type": dtype_to_ctype(np.float64)},\
                 options=["--ptxas-options=-v"])
         func = mod.get_function("dummy_synapse")
-        func.prepare( [ np.intp,    # neuron state buffer
-                        np.int32,   # buffer width
-                        np.int32,   # buffer position
-                        np.int32,   # buffer delay steps
-                        np.int32,   # syn_num
-                        np.intp,    # pre-synaptic neuron list
-                        np.intp,    # delay step
-                        np.intp ] ) # cond array
+        func.prepare('PiiiiPPP')
+#                     [  np.intp,    # neuron state buffer
+#                        np.int32,   # buffer width
+#                        np.int32,   # buffer position
+#                        np.int32,   # buffer delay steps
+#                        np.int32,   # syn_num
+#                        np.intp,    # pre-synaptic neuron list
+#                        np.intp,    # delay step
+#                        np.intp ] ) # cond array
         return func

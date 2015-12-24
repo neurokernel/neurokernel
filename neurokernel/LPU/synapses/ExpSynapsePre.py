@@ -214,15 +214,16 @@ class ExpSynapse(BaseSynapse):
                 cuda_src_synapse_kernel % {"type": dtype_to_ctype(np.float64)},\
                 options=["--ptxas-options=-v"])
         func = mod.get_function("exponential_synapse")
-        func.prepare( [ np.int32,   # syn_num
-                        np.float64, # dt
-                        np.intp,    # spike list
-                        np.intp,    # pre-synaptic neuron list
-                        np.intp,    # tau; time constant
-                        np.intp,    # a; bump size
-                        np.intp,    # gmax array
-                        np.intp,    # eff; efficacy
-                        np.intp ] ) # cond array
+        func.prepare('idPPPPPPP')
+#                     [  np.int32,   # syn_num
+#                        np.float64, # dt
+#                        np.intp,    # spike list
+#                        np.intp,    # pre-synaptic neuron list
+#                        np.intp,    # tau; time constant
+#                        np.intp,    # a; bump size
+#                        np.intp,    # gmax array
+#                        np.intp,    # eff; efficacy
+#                        np.intp ] ) # cond array
         return func
 
     def _get_update_I_non_cond_func(self):
@@ -230,11 +231,12 @@ class ExpSynapse(BaseSynapse):
                 cuda_src_synapse_update_I % {"num": self.num},
                 options = ["--ptxas-options=-v"])
         func = mod.get_function("get_input")
-        func.prepare([np.intp,  # synapse state
-                      np.intp,  # cumulative dendrites number
-                      np.intp,  # dendrites number
-                      np.intp,  # pre-synaptic number ID
-                      np.intp]) # output
+        func.prepare('PPPPP')
+#                     [np.intp,  # synapse state
+#                      np.intp,  # cumulative dendrites number
+#                      np.intp,  # dendrites number
+#                      np.intp,  # pre-synaptic number ID
+#                      np.intp]) # output
 
         self._block_get_input = (32,32,1)
         self._grid_get_input = ((self.num - 1) / 32 + 1, 1)

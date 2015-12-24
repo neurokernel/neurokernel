@@ -93,13 +93,14 @@ class ExpSynapse(BaseSynapse):
                 cuda_src % {"type": dtype_to_ctype(np.float64)},\
                 options=["--ptxas-options=-v"])
         func = mod.get_function("exponential_synapse")
-        func.prepare( [ np.int32,   # syn_num
-                        np.float64, # dt
-                        np.intp,    # spike list
-                        np.intp,    # pre-synaptic neuron list
-                        np.intp,    # tau; time constant
-                        np.intp,    # a; bump size
-                        np.intp,    # gmax array
-                        np.intp,    # eff; efficacy
-                        np.intp ] ) # cond array
+        func.prepare('idPPPPPPP')
+#                     [  np.int32,   # syn_num
+#                        np.float64, # dt
+#                        np.intp,    # spike list
+#                        np.intp,    # pre-synaptic neuron list
+#                        np.intp,    # tau; time constant
+#                        np.intp,    # a; bump size
+#                        np.intp,    # gmax array
+#                        np.intp,    # eff; efficacy
+#                        np.intp ] ) # cond array
         return func
