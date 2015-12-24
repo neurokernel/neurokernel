@@ -53,76 +53,76 @@ df_single.set_index(0, append=False, inplace=True)
 class test_selector_class(TestCase):
     def test_selector_add_empty(self):
         s = Selector('')+Selector('')
-        assert len(s) == 0
-        assert not s.nonempty
-        assert s.expanded == ((),)
-        assert s.max_levels == 0
-        assert s.str == ''
+        self.assertEqual(len(s), 0)
+        self.assertTrue(not s.nonempty)
+        self.assertEqual(s.expanded, ((),))
+        self.assertEqual(s.max_levels, 0)
+        self.assertEqual(s.str, '')
 
     def test_selector_add_nonempty(self):
         s = Selector('/foo[0]')+Selector('/bar[0]')
-        assert len(s) == 2
-        assert s.nonempty
-        assert s.expanded == (('foo', 0), ('bar', 0))
-        assert s.max_levels == 2
-        assert s.str == '/foo/0,/bar/0'
+        self.assertEqual(len(s), 2)
+        self.assertTrue(s.nonempty)
+        self.assertEqual(s.expanded, (('foo', 0), ('bar', 0)))
+        self.assertEqual(s.max_levels, 2)
+        self.assertEqual(s.str, '/foo/0,/bar/0')
 
         s = Selector('')+Selector('/foo[0:0]')
-        assert len(s) == 0
-        assert not s.nonempty
-        assert s.expanded == ((),)
-        assert s.max_levels == 0
-        assert s.str == ''
+        self.assertEqual(len(s), 0)
+        self.assertTrue(not s.nonempty)
+        self.assertEqual(s.expanded, ((),))
+        self.assertEqual(s.max_levels, 0)
+        self.assertEqual(s.str, '')
 
     def test_selector_add_str(self):
         s = Selector.add_str('/foo[0]', '/bar[0]')
-        assert len(s) == 2
-        assert s.nonempty
-        assert s.expanded == (('foo', 0), ('bar', 0))
-        assert s.max_levels == 2
-        assert s.str == '/foo/0,/bar/0'
+        self.assertEqual(len(s), 2)
+        self.assertTrue(s.nonempty)
+        self.assertEqual(s.expanded, (('foo', 0), ('bar', 0)))
+        self.assertEqual(s.max_levels, 2)
+        self.assertEqual(s.str, '/foo/0,/bar/0')
 
     def test_selector_concat_empty(self):
         s = Selector.concat(Selector(''), Selector(''))
-        assert len(s) == 0
-        assert not s.nonempty
-        assert s.expanded == ((),)
-        assert s.max_levels == 0
-        assert s.str == ''
+        self.assertEqual(len(s), 0)
+        self.assertTrue(not s.nonempty)
+        self.assertEqual(s.expanded, ((),))
+        self.assertEqual(s.max_levels, 0)
+        self.assertEqual(s.str, '')
 
     def test_selector_concat_nonempty(self):
         s = Selector.concat(Selector('[x,y]'), Selector('[0,1]'))
-        assert len(s) == 2
-        assert s.nonempty
-        assert s.expanded == (('x', 0), ('y', 1))
-        assert s.max_levels == 2
-        assert s.str == '/x/0,/y/1'
+        self.assertEqual(len(s), 2)
+        self.assertTrue(s.nonempty)
+        self.assertEqual(s.expanded, (('x', 0), ('y', 1)))
+        self.assertEqual(s.max_levels, 2)
+        self.assertEqual(s.str, '/x/0,/y/1')
 
         self.assertRaises(Exception, Selector.concat, Selector('[x,y]'),
                           Selector('[0:3]'))
 
     def test_selector_prod_empty(self):
         s = Selector.prod(Selector(''), Selector(''))
-        assert len(s) == 0
-        assert not s.nonempty
-        assert s.expanded == ((),)
-        assert s.max_levels == 0
-        assert s.str == ''
+        self.assertEqual(len(s), 0)
+        self.assertTrue(not s.nonempty)
+        self.assertEqual(s.expanded, ((),))
+        self.assertEqual(s.max_levels, 0)
+        self.assertEqual(s.str, '')
 
     def test_selector_prod_nonempty(self):
         s = Selector.prod(Selector('/x'), Selector('[0,1]'))
-        assert len(s) == 2
-        assert s.nonempty
-        assert s.expanded == (('x', 0), ('x', 1))
-        assert s.max_levels == 2
-        assert s.str == '/x/0,/x/1'
+        self.assertEqual(len(s), 2)
+        self.assertTrue(s.nonempty)
+        self.assertEqual(s.expanded, (('x', 0), ('x', 1)))
+        self.assertEqual(s.max_levels, 2)
+        self.assertEqual(s.str, '/x/0,/x/1')
 
         s = Selector.prod(Selector('/x[0:2]'), Selector('[a,b,c]'))
-        assert len(s) == 6
-        assert s.nonempty
-        assert s.expanded == (('x', 0, 'a'), ('x', 0, 'b'), ('x', 0, 'c'),
-                              ('x', 1, 'a'), ('x', 1, 'b'), ('x', 1, 'c'))
-        assert s.str == '/x/0/a,/x/0/b,/x/0/c,/x/1/a,/x/1/b,/x/1/c'
+        self.assertEqual(len(s), 6)
+        self.assertTrue(s.nonempty)
+        self.assertEqual(s.expanded, (('x', 0, 'a'), ('x', 0, 'b'), ('x', 0, 'c'),
+                              ('x', 1, 'a'), ('x', 1, 'b'), ('x', 1, 'c')))
+        self.assertEqual(s.str, '/x/0/a,/x/0/b,/x/0/c,/x/1/a,/x/1/b,/x/1/c')
 
     def test_selector_iter(self):
         sel = Selector('/x[0:3]')
@@ -138,32 +138,32 @@ class test_selector_class(TestCase):
         a = Selector('')
         b = Selector('')
         c = Selector.union(a, b)
-        assert len(c) == 0
-        assert c.expanded == ((),)
-        assert c.max_levels == 0
-        assert c.str == ''
+        self.assertEqual(len(c), 0)
+        self.assertEqual(c.expanded, ((),))
+        self.assertEqual(c.max_levels, 0)
+        self.assertEqual(c.str, '')
 
     def test_selector_union_nonempty(self):
         a = Selector('/x[0:3]')
         b = Selector('/x[2:5]')
         c = Selector.union(a, b)
-        assert len(c) == 5
-        assert c.expanded == (('x', 0), ('x', 1), ('x', 2), ('x', 3), ('x', 4))
-        assert c.max_levels == 2
-        assert c.str == '/x/0,/x/1,/x/2,/x/3,/x/4'
+        self.assertEqual(len(c), 5)
+        self.assertEqual(c.expanded, (('x', 0), ('x', 1), ('x', 2), ('x', 3), ('x', 4)))
+        self.assertEqual(c.max_levels, 2)
+        self.assertEqual(c.str, '/x/0,/x/1,/x/2,/x/3,/x/4')
 
     def test_selector_union_empty_nonempty(self):
         a = Selector('')
         b = Selector('/x[0:3]')
         c = Selector.union(a, b)
-        assert len(c) == 3
-        assert c.expanded == (('x', 0), ('x', 1), ('x', 2))
-        assert c.max_levels == 2
-        assert c.str == '/x/0,/x/1,/x/2'
+        self.assertEqual(len(c), 3)
+        self.assertEqual(c.expanded, (('x', 0), ('x', 1), ('x', 2)))
+        self.assertEqual(c.max_levels, 2)
+        self.assertEqual(c.str, '/x/0,/x/1,/x/2')
 
     def test_selector_identifiers(self):
         a = Selector('/x[0:3]')
-        assert a.identifiers == ['/x/0', '/x/1', '/x/2']
+        self.assertEqual(a.identifiers, ['/x/0', '/x/1', '/x/2'])
 
 class test_path_like_selector(TestCase):
     def setUp(self):
@@ -303,44 +303,37 @@ class test_path_like_selector(TestCase):
                            data[[2, 1, 0]])
 
     def test_are_disjoint(self):
-        assert self.sel.are_disjoint('/foo[0:10]/baz',
-                                     '/bar[10:20]/qux') == True
-        assert self.sel.are_disjoint('/foo[0:10]/baz',
-                                     '/foo[5:15]/[baz,qux]') == False
+        self.assertTrue(self.sel.are_disjoint('/foo[0:10]/baz',
+                                              '/bar[10:20]/qux'))
+        self.assertFalse(self.sel.are_disjoint('/foo[0:10]/baz',
+                                               '/foo[5:15]/[baz,qux]'))
 
-        assert self.sel.are_disjoint('/foo', '') == True
-        assert self.sel.are_disjoint('', '') == True
-        assert self.sel.are_disjoint('/foo', '/foo', '') == False
+        self.assertTrue(self.sel.are_disjoint('/foo', ''))
+        self.assertTrue(self.sel.are_disjoint('', ''))
+        self.assertFalse(self.sel.are_disjoint('/foo', '/foo', ''))
 
-        result = self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
-                                       [['bar', slice(10, 20), 'qux']])
-        assert result == True
-        result = self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
-                                       [['foo', slice(5, 15), ['baz','qux']]])
-        assert result == False
+        self.assertTrue(self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
+                                              [['bar', slice(10, 20), 'qux']]))
+        self.assertFalse(self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
+                                               [['foo', slice(5, 15), ['baz','qux']]]))
 
     def test_count_ports(self):
-        result = self.sel.count_ports('/foo/bar[0:2],/moo/[qux,baz]')
-        assert result == 4
-        result = self.sel.count_ports('')
-        assert result == 0
+        self.assertEqual(self.sel.count_ports('/foo/bar[0:2],/moo/[qux,baz]'), 4)
+        self.assertEqual(self.sel.count_ports(''), 0)
 
         # XXX Should this be allowed? [] isn't a valid selector:
-        result = self.sel.count_ports([])
-        assert result == 0
+        self.assertEqual(self.sel.count_ports([]), 0)
 
     def test_expand_str(self):
-        result = self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]')
-        self.assertSequenceEqual(result,
+        self.assertSequenceEqual(self.sel.expand('/foo/bar[0:2],/moo/[qux,baz]'),
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
                                   ('moo', 'qux'),
                                   ('moo', 'baz')])
 
     def test_expand_list(self):
-        result = self.sel.expand([['foo', 'bar', slice(0, 2)],
-                                  ['moo', ['qux', 'baz']]])
-        self.assertSequenceEqual(result,
+        self.assertSequenceEqual(self.sel.expand([['foo', 'bar', slice(0, 2)],
+                                                  ['moo', ['qux', 'baz']]]),
                                  [('foo', 'bar', 0),
                                   ('foo', 'bar', 1),
                                   ('moo', 'qux'),
@@ -422,32 +415,33 @@ class test_path_like_selector(TestCase):
         self.assertSequenceEqual(result, [])
 
     def test_is_ambiguous_str(self):
-        assert self.sel.is_ambiguous('/foo/*') == True
-        assert self.sel.is_ambiguous('/foo/[5:]') == True
-        assert self.sel.is_ambiguous('/foo/[:10]') == False
-        assert self.sel.is_ambiguous('/foo/[5:10]') == False
+        self.assertTrue(self.sel.is_ambiguous('/foo/*'))
+        self.assertTrue(self.sel.is_ambiguous('/foo/[5:]'))
+        self.assertFalse(self.sel.is_ambiguous('/foo/[:10]'))
+        self.assertFalse(self.sel.is_ambiguous('/foo/[5:10]'))
 
     def test_is_ambiguous_list(self):
-        assert self.sel.is_ambiguous([['foo', '*']]) == True
-        assert self.sel.is_ambiguous([['foo', slice(5, None)]]) == True
-        assert self.sel.is_ambiguous([['foo', slice(0, 10)]]) == False
-        assert self.sel.is_ambiguous([['foo', slice(5, 10)]]) == False
+        self.assertTrue(self.sel.is_ambiguous([['foo', '*']]))
+        self.assertTrue(self.sel.is_ambiguous([['foo', slice(5, None)]]))
+        self.assertFalse(self.sel.is_ambiguous([['foo', slice(0, 10)]]))
+        self.assertFalse(self.sel.is_ambiguous([['foo', slice(5, 10)]]))
 
     def test_is_identifier(self):
-        assert self.sel.is_identifier('/foo/bar') == True
-        assert self.sel.is_identifier(0) == False
-        assert self.sel.is_identifier('foo') == False
-        #assert self.sel.is_identifier('0') == False # this doesn't work
-        assert self.sel.is_identifier(['foo', 'bar']) == True
-        assert self.sel.is_identifier(['foo', 0]) == True
-        assert self.sel.is_identifier(['foo', [0, 1]]) == False
-        assert self.sel.is_identifier([['foo', 'bar']]) == True
-        assert self.sel.is_identifier([['foo', 'bar'], ['baz']]) == False
-        assert self.sel.is_identifier([['foo', 0]]) == True
+        self.assertTrue(self.sel.is_identifier('/foo/bar'))
+        self.assertFalse(self.sel.is_identifier(0))
+        self.assertFalse(self.sel.is_identifier('foo'))
+        #self.assertFalse(self.sel.is_identifier('0')) # this doesn't work
+        self.assertTrue(self.sel.is_identifier(['foo', 'bar']))
+        self.assertTrue(self.sel.is_identifier(['foo', 0]))
+        self.assertFalse(self.sel.is_identifier(['foo', [0, 1]]))
+        self.assertTrue(self.sel.is_identifier([['foo', 'bar']]))
+        self.assertFalse(self.sel.is_identifier([['foo', 'bar'], ['baz']]))
+        self.assertTrue(self.sel.is_identifier([['foo', 0]]))
 
     def test_to_identifier(self):
-        assert self.sel.to_identifier(['foo']) == '/foo'
-        assert self.sel.to_identifier(['foo', 0]) == '/foo[0]'
+        self.assertEqual(self.sel.to_identifier(['foo']), '/foo')
+        self.assertEqual(self.sel.to_identifier(['foo', 0]), '/foo[0]')
+        self.assertEqual(self.sel.to_identifier(['foo', 0L]), '/foo[0]')
         self.assertRaises(Exception, self.sel.to_identifier, 'foo')
         self.assertRaises(Exception, self.sel.to_identifier, 
                           [['foo', ['a', 'b']]])
@@ -463,85 +457,89 @@ class test_path_like_selector(TestCase):
                                  [('foo', 0), ('foo', 1)])
 
     def test_is_expandable(self):
-        assert self.sel.is_expandable('') == False
+        self.assertFalse(self.sel.is_expandable(''))
 
-        assert self.sel.is_expandable('/foo') == False
-        assert self.sel.is_expandable('/foo/bar') == False
-        assert self.sel.is_expandable('/foo/*') == False
+        self.assertFalse(self.sel.is_expandable('/foo'))
+        self.assertFalse(self.sel.is_expandable('/foo/bar'))
+        self.assertFalse(self.sel.is_expandable('/foo/*'))
 
-        assert self.sel.is_expandable([['foo']]) == False
-        assert self.sel.is_expandable([['foo', 'bar']]) == False
+        self.assertFalse(self.sel.is_expandable([['foo']]))
+        self.assertFalse(self.sel.is_expandable([['foo', 'bar']]))
 
-        assert self.sel.is_expandable('/foo[0:2]') == True
-        assert self.sel.is_expandable('/foo[0,1,2]') == True
-        assert self.sel.is_expandable('[0:2]') == True
+        self.assertTrue(self.sel.is_expandable('/foo[0:2]'))
+        self.assertTrue(self.sel.is_expandable('/foo[0,1,2]'))
+        self.assertTrue(self.sel.is_expandable('[0:2]'))
 
-        assert self.sel.is_expandable([['foo', [0, 1]]]) == True
-        assert self.sel.is_expandable([['foo', 0],
-                                       ['foo', 1]]) == True
-        assert self.sel.is_expandable([[[0, 1]]]) == True
+        self.assertTrue(self.sel.is_expandable([['foo', [0, 1]]]))
+        self.assertTrue(self.sel.is_expandable([['foo', [0L, 1L]]]))
+        self.assertTrue(self.sel.is_expandable([['foo', 0],
+                                                ['foo', 1]]))
+        self.assertTrue(self.sel.is_expandable([[[0, 1]]]))
 
     def test_is_in_str(self):
-        assert self.sel.is_in('', '/foo[0:5]') == True
-        assert self.sel.is_in('/foo/bar[5]', '/[foo,baz]/bar[0:10]') == True
-        assert self.sel.is_in('/qux/bar[5]', '/[foo,baz]/bar[0:10]') == False
+        self.assertTrue(self.sel.is_in('', '/foo[0:5]'))
+        self.assertTrue(self.sel.is_in('/foo/bar[5]', '/[foo,baz]/bar[0:10]'))
+        self.assertFalse(self.sel.is_in('/qux/bar[5]', '/[foo,baz]/bar[0:10]'))
 
     def test_is_in_list(self):
-        assert self.sel.is_in([()], [('foo', 0), ('foo', 1)])
-        assert self.sel.is_in([['foo', 'bar', [5]]],
-                               [[['foo', 'baz'], 'bar', slice(0, 10)]]) == True
-        assert self.sel.is_in([['qux', 'bar', [5]]],
-                               [[['foo', 'baz'], 'bar', slice(0, 10)]]) == False
+        self.assertTrue(self.sel.is_in([()], [('foo', 0), ('foo', 1)]))
+        self.assertTrue(self.sel.is_in([['foo', 'bar', [5]]],
+                                       [[['foo', 'baz'], 'bar', slice(0, 10)]]))
+        self.assertFalse(self.sel.is_in([['qux', 'bar', [5]]],
+                                        [[['foo', 'baz'], 'bar', slice(0, 10)]]))
 
     def test_is_selector_empty(self):
-        assert self.sel.is_selector_empty('') == True            
-        assert self.sel.is_selector_empty([[]]) == True
-        assert self.sel.is_selector_empty([()]) == True
-        assert self.sel.is_selector_empty(((),)) == True
-        assert self.sel.is_selector_empty([[], []]) == True
-        assert self.sel.is_selector_empty([(), []]) == True
-        assert self.sel.is_selector_empty(((), [])) == True
+        self.assertEqual(self.sel.is_selector_empty(''), True)
+        self.assertEqual(self.sel.is_selector_empty([[]]), True)
+        self.assertEqual(self.sel.is_selector_empty([()]), True)
+        self.assertEqual(self.sel.is_selector_empty(((),)), True)
+        self.assertEqual(self.sel.is_selector_empty([[], []]), True)
+        self.assertEqual(self.sel.is_selector_empty([(), []]), True)
+        self.assertEqual(self.sel.is_selector_empty(((), [])), True)
 
-        assert self.sel.is_selector_empty('/foo') == False
-        assert self.sel.is_selector_empty('/foo/*') == False
-        assert self.sel.is_selector_empty([['foo']]) == False
-        assert self.sel.is_selector_empty([['foo', 'bar']]) == False
-        assert self.sel.is_selector_empty([['']]) == False # is this correct?
+        self.assertEqual(self.sel.is_selector_empty('/foo'), False)
+        self.assertEqual(self.sel.is_selector_empty('/foo/*'), False)
+        self.assertEqual(self.sel.is_selector_empty([['foo']]), False)
+        self.assertEqual(self.sel.is_selector_empty([['foo', 'bar']]), False)
+        self.assertEqual(self.sel.is_selector_empty([['']]), False) # is this correct?
 
     def test_is_selector_str(self):
-        assert self.sel.is_selector('') == True
-        assert self.sel.is_selector('/foo') == True
-        assert self.sel.is_selector('/foo/bar') == True
-        assert self.sel.is_selector('/foo!?') == True
-        assert self.sel.is_selector('/foo[0]') == True
-        assert self.sel.is_selector('/foo[0:2]') == True
-        assert self.sel.is_selector('/foo[0:]') == True
-        assert self.sel.is_selector('/foo[:2]') == True
-        assert self.sel.is_selector('/foo/*') == True
-        assert self.sel.is_selector('/foo,/bar') == True
-        assert self.sel.is_selector('/foo+/bar') == True
-        assert self.sel.is_selector('/foo[0:2].+/bar[0:2]') == True
+        self.assertEqual(self.sel.is_selector(''), True)
+        self.assertEqual(self.sel.is_selector('/foo'), True)
+        self.assertEqual(self.sel.is_selector('/foo/bar'), True)
+        self.assertEqual(self.sel.is_selector('/foo!?'), True)
+        self.assertEqual(self.sel.is_selector('/foo[0]'), True)
+        self.assertEqual(self.sel.is_selector('/foo[0:2]'), True)
+        self.assertEqual(self.sel.is_selector('/foo[0:]'), True)
+        self.assertEqual(self.sel.is_selector('/foo[:2]'), True)
+        self.assertEqual(self.sel.is_selector('/foo/*'), True)
+        self.assertEqual(self.sel.is_selector('/foo,/bar'), True)
+        self.assertEqual(self.sel.is_selector('/foo+/bar'), True)
+        self.assertEqual(self.sel.is_selector('/foo[0:2].+/bar[0:2]'), True)
 
-        assert self.sel.is_selector('/foo[') == False
-        assert self.sel.is_selector('foo[0]') == False
+        self.assertEqual(self.sel.is_selector('/foo['), False)
+        self.assertEqual(self.sel.is_selector('foo[0]'), False)
 
     def test_is_selector_list(self):
-        assert self.sel.is_selector([[]]) == True
-        assert self.sel.is_selector([['foo', 'bar']]) == True
-        assert self.sel.is_selector([('foo', 'bar')]) == True
-        assert self.sel.is_selector([('foo', '*')]) == True
-        assert self.sel.is_selector([('foo', 'bar'), ('bar', 'qux')]) == True
-        assert self.sel.is_selector([('foo', 0)]) == True
-        assert self.sel.is_selector([('foo', slice(0, 2))]) == True
-        assert self.sel.is_selector([('foo', slice(0, None))]) == True
-        assert self.sel.is_selector([('foo', [0, 1])]) == True
-        assert self.sel.is_selector([('foo', ['a', 'b'])]) == True
+        self.assertEqual(self.sel.is_selector([[]]), True)
+        self.assertEqual(self.sel.is_selector([['foo', 'bar']]), True)
+        self.assertEqual(self.sel.is_selector([('foo', 'bar')]), True)
+        self.assertEqual(self.sel.is_selector([('foo', '*')]), True)
+        self.assertEqual(self.sel.is_selector([('foo', 'bar'), ('bar', 'qux')]), True)        
+        self.assertEqual(self.sel.is_selector([('foo', 0)]), True)
+        self.assertEqual(self.sel.is_selector([('foo', 0L)]), True)
+        self.assertEqual(self.sel.is_selector([('foo', slice(0, 2))]), True)
+        self.assertEqual(self.sel.is_selector([('foo', slice(0L, 2L))]), True)
+        self.assertEqual(self.sel.is_selector([('foo', slice(0, None))]), True)
+        self.assertEqual(self.sel.is_selector([('foo', [0, 1])]), True)
+        self.assertEqual(self.sel.is_selector([('foo', [0L, 1L])]), True)
+        self.assertEqual(self.sel.is_selector([('foo', ['a', 'b'])]), True)
+        self.assertEqual(self.sel.is_selector([('foo', ['a', 0])]), True)
 
         # XXX These are not correct:
-        assert self.sel.is_selector([('foo', (0, 1, 2))]) == False
-        assert self.sel.is_selector([('foo', 'bar'),
-                                     ((0, 1, 2), 0)]) == False
-        assert self.sel.is_selector([('foo', ['a', 0])]) == False
+        self.assertEqual(self.sel.is_selector([('foo', (0, 1, 2))]), False)
+        self.assertEqual(self.sel.is_selector([('foo', 'bar'),
+                                               ((0, 1, 2), 0)]), False)
 
     def test_make_index_empty(self):
         idx = self.sel.make_index('')
@@ -594,13 +592,13 @@ class test_path_like_selector(TestCase):
         self.assertRaises(Exception, self.sel.make_index, 'foo/bar[')
 
     def test_max_levels_str(self):
-        assert self.sel.max_levels('/foo/bar[0:10]') == 3
-        assert self.sel.max_levels('/foo/bar[0:10],/baz/qux') == 3
+        self.assertEqual(self.sel.max_levels('/foo/bar[0:10]'), 3)
+        self.assertEqual(self.sel.max_levels('/foo/bar[0:10],/baz/qux'), 3)
 
     def test_max_levels_list(self):
-        assert self.sel.max_levels([['foo', 'bar', slice(0, 10)]]) == 3
-        assert self.sel.max_levels([['foo', 'bar', slice(0, 10)],
-                                    ['baz', 'qux']]) == 3
+        self.assertEqual(self.sel.max_levels([['foo', 'bar', slice(0, 10)]]), 3)
+        self.assertEqual(self.sel.max_levels([['foo', 'bar', slice(0, 10)],
+                                              ['baz', 'qux']]), 3)
 
     def test_pad_tuple_list(self):
         x = [('a', 'b'), ('c', 'd')]
@@ -618,42 +616,45 @@ class test_path_like_selector(TestCase):
         sel_padded = self.sel.pad_parsed(sel, float('inf'))
         self.assertSequenceEqual(sel_padded,
                                  [['x', 'y', ''], ['a', 'b', 'c']])
-        assert sel_id == id(sel_padded)
+        self.assertEqual(sel_id, id(sel_padded))
 
         sel = [['x', 'y'], ['a', 'b', 'c']]
         sel_id = id(sel)
         sel_padded = self.sel.pad_parsed(sel, 4)
         self.assertSequenceEqual(sel_padded,
                                  [['x', 'y', '', ''], ['a', 'b', 'c', '']])
-        assert sel_id == id(sel_padded)
+        self.assertEqual(sel_id, id(sel_padded))
         
         sel = [['x', 'y'], ['a', 'b', 'c']]
         sel_id = id(sel)
         sel_padded = self.sel.pad_parsed(sel, float('inf'), False)
         self.assertSequenceEqual(sel_padded,
                                  [['x', 'y', ''], ['a', 'b', 'c']])
-        assert sel_id != id(sel_padded)
+        self.assertNotEqual(sel_id, id(sel_padded))
 
     def test_tokens_to_str(self):
-        assert self.sel.tokens_to_str([]) == ''
-        assert self.sel.tokens_to_str(['a']) == '/a'
-        assert self.sel.tokens_to_str(['a', 0]) == '/a/0'
-        assert self.sel.tokens_to_str(('a', 0)) == '/a/0'
-        assert self.sel.tokens_to_str(['a', '*']) == '/a/*'
-        assert self.sel.tokens_to_str(['a', 'b', 0]) == '/a/b/0'
-        assert self.sel.tokens_to_str(['a', 'b', [0, 1]]) == '/a/b[0,1]'
-        assert self.sel.tokens_to_str(['a', 'b', (0, 1)]) == '/a/b[0,1]'
-        assert self.sel.tokens_to_str(['a', 'b', slice(0, 5)]) == '/a/b[0:5]'
-        assert self.sel.tokens_to_str(['a', 'b', slice(None, 5)]) == '/a/b[:5]'
+        self.assertEqual(self.sel.tokens_to_str([]), '')
+        self.assertEqual(self.sel.tokens_to_str(['a']), '/a')
+        self.assertEqual(self.sel.tokens_to_str(['a', 0]), '/a/0')
+        self.assertEqual(self.sel.tokens_to_str(('a', 0)), '/a/0')
+        self.assertEqual(self.sel.tokens_to_str(('a', 0L)), '/a/0')
+        self.assertEqual(self.sel.tokens_to_str(['a', '*']), '/a/*')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', 0]), '/a/b/0')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', [0, 1]]), '/a/b[0,1]')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', (0, 1)]), '/a/b[0,1]')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(0, 5)]), '/a/b[0:5]')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(0L, 5L)]), '/a/b[0:5]')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(None, 5)]), '/a/b[:5]')
 
     def test_collapse(self):
-        assert self.sel.collapse([]) == ''
-        assert self.sel.collapse([['a']]) == '/a'
-        assert self.sel.collapse([['a', 0]]) == '/a/0'
-        assert self.sel.collapse([('a', 0)]) == '/a/0'
-        assert self.sel.collapse([['a', 'b', 0]]) == '/a/b/0'
-        assert self.sel.collapse([['a', 0], ['b', 0]]) == '/a/0,/b/0'
-        assert self.sel.collapse([['a', 'b', (0, 1)], ['c', 'd']]) == '/a/b[0,1],/c/d'
+        self.assertEqual(self.sel.collapse([]), '')
+        self.assertEqual(self.sel.collapse([['a']]), '/a')
+        self.assertEqual(self.sel.collapse([['a', 0]]), '/a/0')
+        self.assertEqual(self.sel.collapse([['a', 0L]]), '/a/0')
+        self.assertEqual(self.sel.collapse([('a', 0)]), '/a/0')
+        self.assertEqual(self.sel.collapse([['a', 'b', 0]]), '/a/b/0')
+        self.assertEqual(self.sel.collapse([['a', 0], ['b', 0]]), '/a/0,/b/0')
+        self.assertEqual(self.sel.collapse([['a', 'b', (0, 1)], ['c', 'd']]), '/a/b[0,1],/c/d')
         
 if __name__ == '__main__':
     main()

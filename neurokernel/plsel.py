@@ -663,7 +663,7 @@ class SelectorMethods(SelectorParser):
         """
 
         assert type(s) in [list, tuple]
-        if set(map(type, s)).issubset([int, str, unicode]):
+        if set(map(type, s)).issubset([int, long, str, unicode]):
             tokens = s
         else:
             assert len(s) == 1
@@ -673,7 +673,7 @@ class SelectorMethods(SelectorParser):
         for t in tokens:
             if type(t) == str:
                 result += '/'+t
-            elif type(t) == int:
+            elif type(t) in [int, long]:
                 result += '[%s]' % t
             else:
                 raise ValueError('Cannot convert to single port identifier.')
@@ -784,8 +784,7 @@ class SelectorMethods(SelectorParser):
             for token in tokens:
                 if type(token) == list:
                     token_types = set(map(type, token))
-                    if not (token_types.issubset([str, unicode]) or \
-                            token_types == set([int])):
+                    if not (token_types.issubset([str, unicode, int, long])):
                         return False
                 elif type(token) not in [slice, str, unicode, int, long]:
                     return False
@@ -916,10 +915,9 @@ class SelectorMethods(SelectorParser):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
-                if type(t[j]) in [int, str, unicode]:
+                if type(t[j]) in [int, long, str, unicode]:
                     t[j] = [t[j]]
-                elif type(t[j]) is long:
-                    t[j] = [int(t[j])]
+
                 # Expand slices into ranges:
                 elif type(t[j]) == slice:
                     t[j] = range(t[j].start, t[j].stop)
@@ -971,7 +969,7 @@ class SelectorMethods(SelectorParser):
             raise ValueError('invalid selector type')
         for i in xrange(len(p)):
             for j in xrange(len(p[i])):
-                if type(p[i][j]) in [int, str, unicode]:
+                if type(p[i][j]) in [int, long, str, unicode]:
                     p[i][j] = [p[i][j]]
 
                 elif type(p[i][j]) == slice:
@@ -1037,7 +1035,7 @@ class SelectorMethods(SelectorParser):
         assert np.iterable(tokens)
         result = []
         for t in tokens:
-            if type(t) in [str, unicode, int]:
+            if type(t) in [str, unicode, int, long]:
                 result.append('/'+str(t))
             elif type(t) == slice:
                 start = str(t.start) if t.start is not None else ''
@@ -1121,7 +1119,7 @@ class SelectorMethods(SelectorParser):
             """
 
             type_set = set(map(type, level))
-            if type_set == set([int]):
+            if type_set in set([int, long]):
 
                 # If a level only contains consecutive integers, convert it into an
                 # interval:
@@ -1139,13 +1137,12 @@ class SelectorMethods(SelectorParser):
                 else:
                     return ['['+','.join([s for s in level])+']']
             else:
-                level_int = sorted([x for x in level if type(x) == int])
+                level_int = sorted([x for x in level if type(x) in [int, long]])
                 level_str = sorted([x for x in level if type(x) in [str, unicode]])
                 return collapse_level(level_int)+collapse_level(level_str)
 
         # If a level contains multiple string AND integer tokens, convert it to
         # a list:
-
         collapsed_list = []
         for level in levels:
             collapsed_list.append(collapse_level(sorted(level)))
@@ -1332,7 +1329,7 @@ class SelectorMethods(SelectorParser):
                     continue
 
                 # Integers and strings must match exactly:
-                elif type(token) in [int, str, unicode]:
+                elif type(token) in [int, long, str, unicode]:
                     if row_sub[i] != token:
                         break
 
@@ -1389,7 +1386,7 @@ class SelectorMethods(SelectorParser):
                 raise ValueError('index row only is scalar')
             if tokens[0] == '*':
                 return True
-            elif type(tokens[0]) in [int, str, unicode]:
+            elif type(tokens[0]) in [int, long, str, unicode]:
                 if row == tokens[0]:
                     return True
             elif type(tokens[0]) == list:
