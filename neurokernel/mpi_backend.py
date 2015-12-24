@@ -10,6 +10,16 @@ import importlib
 # possibilities than possible with pickle:
 import dill
 
+# XXX This is a Neuroarch-related workaround required to compensate for dill's
+# inability to serialize namedtuple within a module:
+try:
+    import pyorient.ogm.graph
+except ImportError:
+    pass
+else:
+    setattr(pyorient.ogm.graph, 'orientdb_version',
+            pyorient.ogm.graph.ServerVersion)
+
 # Fix for bug https://github.com/uqfoundation/dill/issues/81
 @dill.register(property)
 def save_property(pickler, obj):
