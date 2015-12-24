@@ -481,8 +481,8 @@ class LPU(Module):
             # For synapses whose post-synaptic site is another synapse, we set
             # its post-id to be max_neuron_id + synapse_id. By doing so, we
             # won't confuse synapse ID's with neurons ID's.
-            s_neu_post = [self.order[int(nid)] for nid in s['post'] if 'synapse' not in nid]
-            s_syn_post = [int(nid[8:])+self.nid_max for nid in s['post'] if 'synapse' in nid]
+            s_neu_post = [self.order[int(nid)] for nid in s['post'] if 'synapse' not in str(nid)]
+            s_syn_post = [int(nid[8:])+self.nid_max for nid in s['post'] if 'synapse' in str(nid)]
             s['post'] = s_neu_post + s_syn_post
 
             order = np.argsort(s['post']).astype(np.int32)
