@@ -32,7 +32,7 @@ class test_gpu_port_mapper(TestCase):
         data = np.random.rand(3)
         pm = GPUPortMapper('/foo[0:3]', data)
         new_data = 1.0
-        pm.set_by_inds(np.array([], np.int64), new_data)
+        pm.set_by_inds(np.array([], np.int_), new_data)
         assert_array_equal(data[0:2], pm.data.get()[0:2])
 
     def test_set_array(self):
@@ -57,7 +57,7 @@ class test_gpu_port_mapper(TestCase):
         assert_array_equal(data[0:2], res)
 
         # Empty index array:
-        res = pm.get_by_inds(np.array([], np.int64))
+        res = pm.get_by_inds(np.array([], np.int_))
         assert len(res) == 0
 
     def test_set_by_inds_scalar(self):
@@ -83,7 +83,7 @@ class test_gpu_port_mapper(TestCase):
         data = np.random.rand(3)
         pm = GPUPortMapper('/foo[0:3]', data)
         new_data = np.arange(2).astype(np.double)
-        pm.set_by_inds(np.array([], np.int64), new_data)
+        pm.set_by_inds(np.array([], np.int_), new_data)
         assert_array_equal(data[0:2], pm.data.get()[0:2])
 
     def test_from_pm_nongpu(self):

@@ -101,14 +101,14 @@ class test_base_port_mapper(TestCase):
 
         # Nonexistent ports should return an empty index array:
         i = pm.ports_to_inds('/baz')
-        assert len(i) == 0 and i.dtype == np.int64
+        assert len(i) == 0 and i.dtype == np.int_
 
         # With a specified port map:
         pm = BasePortMapper('/foo[0:5],/bar[0:5]', range(10, 20))
         np.allclose(pm.ports_to_inds('/foo[4],/bar[0]'), [14, 15])
 
         i = pm.ports_to_inds('/baz')
-        assert len(i) == 0 and i.dtype == np.int64
+        assert len(i) == 0 and i.dtype == np.int_
 
     def test_get_map(self):
         # Try to get selector that is in the mapper:
@@ -131,7 +131,7 @@ class test_port_mapper(TestCase):
 
         # Empty selector, empty data:
         pm = PortMapper('')
-        assert_series_equal(pm.portmap, pd.Series([], dtype=np.int64))
+        assert_series_equal(pm.portmap, pd.Series([], dtype=np.int_))
         assert_array_equal(pm.data, np.array([]))
 
         # Non-empty selector, empty data:
