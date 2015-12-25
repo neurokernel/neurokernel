@@ -1,13 +1,7 @@
 #!/usr/bin/env python
 
 """
-Visualize demo of generic LPU integration output.
-
-Notes
------
-Generate demo output by running
-
-python integration_demo.py
+Visualize output of intro demo.
 """
 
 import concurrent.futures
