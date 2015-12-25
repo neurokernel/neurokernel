@@ -88,7 +88,7 @@ def nml_pattern_to_graph(pattern):
 
     assert isinstance(pattern, Pattern)
 
-    g = nx.Diraph()
+    g = nx.DiGraph()
     for p in pattern.interface.ports:
         g.add_node(p.identifier)
         g.node[p.identifier] = {
@@ -98,7 +98,7 @@ def nml_pattern_to_graph(pattern):
             }
 
     for c in pattern.connections:
-        g.add_edge(c.from_, c.to, type='directed')
+        g.add_edge(c.from_, c.to)
 
     return g
 
@@ -166,7 +166,7 @@ def nml_module_to_graph(module):
     assert len(set([s.id for s in module.pgg_synapses])) == \
         len(module.pgg_synapses)
 
-    g = nx.DiGraph()    
+    g = nx.DiGraph()
     for n in module.ml_neurons:
         g.add_node(n.id)
         g.node[n.id] = {
