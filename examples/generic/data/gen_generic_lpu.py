@@ -126,7 +126,7 @@ def create_lpu_graph(lpu_name, N_sensory, N_local, N_proj):
                     'circuit': G.node[i]['circuit']
                 })
                 spk_in_id += 1
-                G.add_edge(idx, i, type='directed', attr_dict={
+                G.add_edge(idx, i, attr_dict={
                     'name': G.node[idx]['name']+'-'+G.node[i]['name'],
                     'model': 'AlphaSynapse',
                     'class': 0,
@@ -147,7 +147,7 @@ def create_lpu_graph(lpu_name, N_sensory, N_local, N_proj):
                     'circuit': G.node[i]['circuit']
                 })
                 gpot_in_id += 1
-                G.add_edge(idx, i, type='directed', attr_dict={
+                G.add_edge(idx, i, attr_dict={
                     'name': G.node[idx]['name']+'-'+G.node[i]['name'],
                     'model': 'power_gpot_gpot',
                     'class': 3,
@@ -179,7 +179,7 @@ def create_lpu_graph(lpu_name, N_sensory, N_local, N_proj):
             # all other connections use the power_gpot_gpot model:
             name = G.node[src]['name'] + '-' + G.node[tar]['name']
             if G.node[src]['spiking'] is True:
-                G.add_edge(src,tar,type='directed',attr_dict={
+                G.add_edge(src, tar, attr_dict={
                     'model'       : 'AlphaSynapse',
                     'name'        : name,
                     'class'       : 0 if G.node[tar]['spiking'] is True else 1,
@@ -190,7 +190,7 @@ def create_lpu_graph(lpu_name, N_sensory, N_local, N_proj):
                     'conductance' : True,
                     'circuit'     : G.node[src]['circuit']})
             else:
-                G.add_edge(src,tar,type='directed',attr_dict={
+                G.add_edge(src, tar, attr_dict={
                     'model'       : 'power_gpot_gpot',
                     'name'        : name,
                     'class'       : 2 if G.node[tar]['spiking'] is True else 3,
