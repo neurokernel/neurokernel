@@ -935,9 +935,11 @@ class test_pattern(TestCase):
                                                  [0, 1, 1, 2]]))
 
     def test_from_concat(self):
+        # Need to specify selectors for both interfaces in pattern:
         self.assertRaises(ValueError, Pattern.from_concat, '', '/[baz,qux]',
                           from_sel='', to_sel='/[baz,qux]', data=1)
 
+        # Patterns with interfaces using selectors with 1 level:
         p = Pattern.from_concat('/[foo,bar]', '/[baz,qux]',
                                 from_sel='/[foo,bar]', to_sel='/[baz,qux]',
                                 data=1)
@@ -948,6 +950,7 @@ class test_pattern(TestCase):
                           columns=['conn'], dtype=object)
         assert_frame_equal(p.data, df)
 
+        # Patterns with interfaces using selectors with more than 1 level:
         p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
                                 from_sel='/foo[0:2]', to_sel='/bar[0:2]',
                                 data=1)
@@ -959,6 +962,7 @@ class test_pattern(TestCase):
                           columns=['conn'], dtype=object)
         assert_frame_equal(p.data, df)
 
+        # Patterns where port types are specified:
         p = Pattern.from_concat('/foo[0:2]', '/bar[0:2]',
                                 from_sel='/foo[0:2]', to_sel='/bar[0:2]',
                                 gpot_sel='/foo[0],/bar[0]',

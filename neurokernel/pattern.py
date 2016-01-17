@@ -1226,6 +1226,7 @@ class Pattern(object):
         # Update the `type` attributes of the pattern's interface:
         if gpot_sel is not None:
             p.interface[gpot_sel, 'type'] = 'gpot'
+        if spike_sel is not None:
             p.interface[spike_sel, 'type'] = 'spike'
 
         return p
