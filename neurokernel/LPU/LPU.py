@@ -182,7 +182,13 @@ class LPU(Module):
         for id, syn in enumerate(synapses):
             # syn[0/1]: pre-/post-neu id; syn[2]: dict of synaptic data
             model = syn[2]['model']
+            
+            if 'conductance' not in syn[2]: syn[2]['conductance'] = True
+            if 'reverse' not in syn[2] and 'reversal_pot' in syn[2]:
+                syn[2]['reverse'] = syn[2]['reversal_pot']
+                del syn[2]['reversal_pot']
 
+            
             # Assign the synapse edge an ID if none exists (e.g., because the
             # graph was never stored/read to/from GEXF):
             if syn[2].has_key('id'):
@@ -307,7 +313,25 @@ class LPU(Module):
 
         return ','.join(filter(None,
                                [cls.extract_in(n_dict), cls.extract_out(n_dict)]))
+        
+    def order(self,ind):
+        try:
+            return self.order_dict[ind]
+        except:
+            return np.asarray([self.order_dict[i] for i in ind],np.int32)
+            
+    def spike_order(self,ind):
+        try:
+            return self.spike_order_dict[ind]
+        except:
+            return np.asarray([self.spike_order_dict[i] for i in ind],np.int32)
 
+    def gpot_order(self,ind):
+        try:
+            return self.gpot_order_dict[ind]
+        except:
+            return np.asarray([self.gpot_order_dict[i] for i in ind],np.int32)
+            
     def __init__(self, dt, n_dict, s_dict, input_file=None, output_file=None,
                  device=0, ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG,
                  spike_tag=SPIKE_TAG, rank_to_id=None, routing_table=None,
@@ -315,8 +339,7 @@ class LPU(Module):
                  cuda_verbose=False, time_sync=False):
 
         LoggerMixin.__init__(self, 'mod {}'.format(id))
-        self.log_info('Test')
-
+        
         assert('io' in columns)
         assert('type' in columns)
         assert('interface' in columns)
@@ -335,11 +358,11 @@ class LPU(Module):
         self.input_file = input_file
         self.input_eof = False if input_file else True
 
-        # Load neurons and synapse data:
+        # Load neurons and synapse classes:
         self._load_neurons()
         self._load_synapses()
 
-        # Set default one time import:
+        # Set default one time import for reading from input files:
         self._one_time_import = 10
 
         # Save neuron data in the form
@@ -352,36 +375,39 @@ class LPU(Module):
 
         # Number of neurons of each model:
         n_model_num = [ len(n['id']) for _, n in self.n_list ]
-
+        
+        
         # Concatenate lists of integers corresponding to neuron positions in LPU
         # graph for all of the models into a single list:
         n_id = np.array(sum( [ n['id'] for _, n in self.n_list ], []),
                         dtype=np.int32)
-
+        
         # Concatenate lists of common attributes in model dictionaries into
         # single lists:
         n_is_spk = np.array(sum( [ n['spiking'] for _, n in self.n_list ], []))
         n_is_pub = np.array(sum( [ n['public'] for _, n in self.n_list ], []))
         n_has_in = np.array(sum( [ n['extern'] for _, n in self.n_list ], []))
 
+        
+        
+        
         # Get selectors and positions of input ports:
         try:
             sel_in_gpot = self.extract_in_gpot(n_dict)
-            in_ports_ids_gpot = np.array(n_dict[PORT_IN_GPOT]['id'])
+            num_in_ports_gpot = len(n_dict[PORT_IN_GPOT]['id'])
             self.ports_in_gpot_mem_ind = zip(*self.n_list)[0].index(PORT_IN_GPOT)
         except KeyError:
             sel_in_gpot = ''
-            in_ports_ids_gpot = np.array([], dtype=np.int32)
+            num_in_ports_gpot = 0
             self.ports_in_gpot_mem_ind = None
 
         try:
             sel_in_spk = self.extract_in_spk(n_dict)
-            in_ports_ids_spk = np.array(n_dict[PORT_IN_SPK]['id'],
-                                        dtype=np.int32)
+            num_in_ports_spk = len(n_dict[PORT_IN_SPK]['id'])
             self.ports_in_spk_mem_ind = zip(*self.n_list)[0].index(PORT_IN_SPK)
         except KeyError:
             sel_in_spk = ''
-            in_ports_ids_spk = np.array([], dtype=np.int32)
+            num_in_ports_spk = 0
             self.ports_in_spk_mem_ind = None
 
         sel_in = ','.join(filter(None, [sel_in_gpot, sel_in_spk]))
@@ -405,7 +431,8 @@ class LPU(Module):
         self.sel_out_spk = sel_out_spk
         self.sel_in_gpot = sel_in_gpot
         self.sel_out_gpot = sel_out_gpot
-
+        
+        # TODO: Update the following comment
         # The following code creates a mapping for each neuron from its "id" to
         # its position on the gpu array. The gpu array is arranged as follows,
         #
@@ -437,28 +464,42 @@ class LPU(Module):
 
         gpot_idx = n_id[ ~n_is_spk ]
         spike_idx = n_id[ n_is_spk ]
-        self.order = np.argsort(
+        idx = np.concatenate((gpot_idx, spike_idx))
+        order = np.argsort(
             np.concatenate((gpot_idx, spike_idx))).astype(np.int32)
-        self.gpot_order = np.argsort(gpot_idx).astype(np.int32)
-        self.spike_order = np.argsort(spike_idx).astype(np.int32)
+        self.order_dict = {}
+        for i,id in enumerate(idx):
+            self.order_dict[id] = i
+
+        gpot_order = np.argsort(gpot_idx).astype(np.int32)
+        self.gpot_order_l = gpot_order
+        self.gpot_order_dict = {}
+        for i,id in enumerate(gpot_idx):
+            self.gpot_order_dict[id] = i
+        
+        spike_order = np.argsort(spike_idx).astype(np.int32)
+        self.spike_order_l = spike_order
+        self.spike_order_dict= {}
+        for i,id in enumerate(spike_idx):
+            self.spike_order_dict[id] = i
+        
         self.spike_shift = self.total_num_gpot_neurons
         in_id = n_id[n_has_in]
         in_id.sort()
-        pub_spk_id = n_id[ n_is_pub & n_is_spk ]
-        pub_spk_id.sort()
-        pub_gpot_id = n_id[ n_is_pub & ~n_is_spk ]
-        pub_gpot_id.sort()
-        self.input_neuron_list = self.order[in_id]
-        public_spike_list = self.order[pub_spk_id]
-        public_gpot_list = self.order[pub_gpot_id]
-        self.num_public_gpot = len( public_gpot_list )
-        self.num_public_spike = len( public_spike_list )
+        #pub_spk_id = n_id[ n_is_pub & n_is_spk ]
+        #pub_spk_id.sort()
+        #pub_gpot_id = n_id[ n_is_pub & ~n_is_spk ]
+        #pub_gpot_id.sort()
+        self.input_neuron_list = self.order(in_id)
+        #public_spike_list = self.order(pub_spk_id)
+        #public_gpot_list = self.order(pub_gpot_id)
+        self.num_public_gpot = len( self.out_ports_ids_gpot )
+        self.num_public_spike = len( self.out_ports_ids_spk )
         self.num_input = len( self.input_neuron_list )
-        in_ports_ids_gpot = self.order[in_ports_ids_gpot]
-        in_ports_ids_spk = self.order[in_ports_ids_spk]
-        self.out_ports_ids_gpot = self.order[self.out_ports_ids_gpot]
-        self.out_ports_ids_spk = self.order[self.out_ports_ids_spk]
-
+        #in_ports_ids_gpot = self.order(in_ports_ids_gpot)
+        #in_ports_ids_spk = self.order(in_ports_ids_spk)
+        self.out_ports_ids_gpot = self.gpot_order(self.out_ports_ids_gpot)
+        self.out_ports_ids_spk = self.spike_order(self.out_ports_ids_spk)
         gpot_delay_steps = 0
         spike_delay_steps = 0
 
@@ -475,13 +516,14 @@ class LPU(Module):
         self.nid_max = np.max(n_id) + 1
         num_synapses = [ len(s['id']) for _, s in self.s_list ]
         for (_, s) in self.s_list:
-            shift = self.spike_shift if s['class'][0] <= 1 else 0
-            s['pre'] = [ self.order[int(nid)] - shift for nid in s['pre'] ]
+            cls = s['class'][0]
+            s['pre'] = [ self.spike_order(int(nid)) if cls <= 1 else self.gpot_order(int(nid)) 
+                         for nid in s['pre'] ]
             # why don't why need shift for post neuron?
             # For synapses whose post-synaptic site is another synapse, we set
             # its post-id to be max_neuron_id + synapse_id. By doing so, we
             # won't confuse synapse ID's with neurons ID's.
-            s_neu_post = [self.order[int(nid)] for nid in s['post'] if 'synapse' not in str(nid)]
+            s_neu_post = [self.order(int(nid)) for nid in s['post'] if 'synapse' not in str(nid)]
             s_syn_post = [int(nid[8:])+self.nid_max for nid in s['post'] if 'synapse' in str(nid)]
             s['post'] = s_neu_post + s_syn_post
 
@@ -614,9 +656,9 @@ class LPU(Module):
         self.gpot_delay_steps = int(round(gpot_delay_steps*1e-3/self.dt)) + 1
         self.spike_delay_steps = int(round(spike_delay_steps*1e-3/self.dt)) + 1
 
-        data_gpot = np.zeros(self.num_public_gpot + len(in_ports_ids_gpot),
+        data_gpot = np.zeros(self.num_public_gpot + num_in_ports_gpot,
                              np.double)
-        data_spike = np.zeros(self.num_public_spike + len(in_ports_ids_spk),
+        data_spike = np.zeros(self.num_public_spike + num_in_ports_spk,
                               np.int32)
         super(LPU, self).__init__(sel=sel, sel_in=sel_in, sel_out=sel_out,
                                   sel_gpot=sel_gpot, sel_spike=sel_spk,
@@ -786,8 +828,10 @@ class LPU(Module):
             max(int(self.total_synapses) + len(self.input_neuron_list), 1),
             np.float64)
 
-        if self.total_num_gpot_neurons > 0:
-            self.V = garray.zeros(int(self.total_num_gpot_neurons), np.float64)
+        if self.total_num_gpot_neurons>0:
+            self.V = garray.zeros(
+                int(self.total_num_gpot_neurons),
+                np.float64)
         else:
             self.V = None
 
@@ -804,7 +848,7 @@ class LPU(Module):
 
         if len(self.out_ports_ids_spk) > 0:
             self.out_ports_ids_spk_g = garray.to_gpu(
-                (self.out_ports_ids_spk - self.spike_shift).astype(np.int32))
+                (self.out_ports_ids_spk).astype(np.int32))
             self.sel_out_spk_ids_g = garray.to_gpu(self.sel_out_spk_ids)
 
             self._extract_spike = self._extract_projection_spike_func()
@@ -874,10 +918,10 @@ class LPU(Module):
 
         if self.total_num_gpot_neurons > 0:
             self.output_gpot_file.root.array.append(
-                self.V.get()[self.gpot_order].reshape((1, -1)))
+                self.V.get()[self.gpot_order_l].reshape((1, -1)))
         if self.total_num_spike_neurons > 0:
             self.output_spike_file.root.array.append(
-                self.spike_state.get()[self.spike_order].reshape((1, -1)))
+                self.spike_state.get()[self.spike_order_l].reshape((1, -1)))
 
     def _read_external_input(self):
         # if eof not reached or there are frames in buffer not read
@@ -924,7 +968,7 @@ class LPU(Module):
             cuda.memcpy_dtod(int(self.buffer.gpot_buffer.gpudata) +
                 self.buffer.gpot_current*self.buffer.gpot_buffer.ld*
                 self.buffer.gpot_buffer.dtype.itemsize,
-                self.V.gpudata, self.V.nbytes)
+                self.V.gpudata, self.V.dtype.itemsize*self.total_num_gpot_neurons)
         if self.total_num_spike_neurons>0:
             cuda.memcpy_dtod(int(self.buffer.spike_buffer.gpudata) +
                 self.buffer.spike_current*self.buffer.spike_buffer.ld*
@@ -1041,13 +1085,21 @@ class LPU(Module):
         self._one_time_import = value
 
 def neuron_cmp(x, y):
-    if int(x[0]) < int(y[0]):
-        return -1
-    elif int(x[0]) > int(y[0]):
-        return 1
-    else:
-        return 0
-
+    try:
+        if int(x[0]) < int(y[0]):
+            return -1
+        elif int(x[0]) > int(y[0]):
+            return 1
+        else:
+            return 0
+    except:
+        if x[0] < y[0]:
+            return -1
+        elif x[0] > y[0]:
+            return 1
+        else:
+            return 0
+        
 def synapse_cmp(x, y):
     """
     post-synaptic cite might be another synapse, with convention 'synapse-id'.
@@ -1093,7 +1145,7 @@ class CircularArray:
                 cuda.memcpy_dtod(
                     int(self.gpot_buffer.gpudata) +
                     self.gpot_buffer.ld * i * self.gpot_buffer.dtype.itemsize,
-                    rest.gpudata, rest.nbytes)
+                    rest.gpudata, rest.dtype.itemsize*num_gpot_neurons)
 
         self.num_spike_neurons = num_spike_neurons
         if num_spike_neurons > 0:
