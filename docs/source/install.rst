@@ -134,9 +134,23 @@ Activate the new environment and install Neurokernel in it as follows: ::
   cd ~/neurokernel
   python setup.py develop
 
+Examples
+--------
+Introductory examples of how to use Neurokernel to build and integrate models of different
+parts of the fly brain are available in the `Neurodriver
+<https://github.com/neurokernel/neurodriver`_ package. To install it run the
+following: ::
+
+  git clone https://github.com/neurokernel/neurodriver
+  cd ~/neurodriver
+  python setup.py develop
+
+Other models built using Neurokernel are available on
+`GitHub <https://github.com/neurokernel/>`_.
+
 Building the Documentation
 --------------------------
-To build Neurokerne's HTML documentation locally, you will need to install 
+To build Neurokernel's HTML documentation locally, you will need to install 
 
 * `mock <http://www.voidspace.org.uk/python/mock/>`_ 1.0 or later.
 * `sphinx <http://sphinx-doc.org>`_ 1.3 or later.
