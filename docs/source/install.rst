@@ -138,7 +138,7 @@ Examples
 --------
 Introductory examples of how to use Neurokernel to build and integrate models of different
 parts of the fly brain are available in the `Neurodriver
-<https://github.com/neurokernel/neurodriver`_ package. To install it run the
+<https://github.com/neurokernel/neurodriver>`_ package. To install it run the
 following: ::
 
   git clone https://github.com/neurokernel/neurodriver
