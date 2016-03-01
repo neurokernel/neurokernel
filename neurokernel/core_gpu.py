@@ -790,11 +790,17 @@ class Manager(mpi.WorkerManager):
 
         # Process timing data sent by workers:
         if msg[0] == 'start_time':
-            rank, self.start_time = msg[1]
+            rank, start_time = msg[1]
             self.log_info('start time data: %s' % str(msg[1]))
+            if start_time < self.start_time or self.start_time == 0.0:
+                self.start_time = start_time
+                self.log_info('setting earliest start time: %s' % start_time)
         elif msg[0] == 'stop_time':
-            rank, self.stop_time = msg[1]
+            rank, stop_time = msg[1]
             self.log_info('stop time data: %s' % str(msg[1]))
+            if stop_time > self.stop_time or self.stop_time == 0.0:
+                self.stop_time = stop_time
+                self.log_info('setting latest stop time: %s' % stop_time)
         elif msg[0] == 'sync_time':
             rank, steps, start, stop, nbytes = msg[1]
             self.log_info('sync time data: %s' % str(msg[1]))
@@ -812,8 +818,8 @@ class Manager(mpi.WorkerManager):
                 # PyCUDA kernel compilation:
                 if steps != 0:
 
-                    # The duration an execution is assumed to be the longest of
-                    # the received intervals:
+                    # The duration of an execution step is assumed to be the
+                    # longest of the received intervals:
                     step_sync_time = max([(d[1]-d[0]) for d in self.received_data[steps].values()])
 
                     # Obtain the total number of bytes received by all of the
@@ -831,9 +837,10 @@ class Manager(mpi.WorkerManager):
                     self.counter += 1
                 else:
 
-                    # To skip the first sync step, set the start time to the
-                    # latest stop time of the first step:
+                    # To exclude the time taken by the first step, set the start
+                    # time to the latest stop time of the first step:
                     self.start_time = max([d[1] for d in self.received_data[steps].values()])
+                    self.log_info('setting start time to skip first step: %s' % self.start_time)
 
                 # Clear the data for the processed execution step so that
                 # that the received_data dict doesn't consume unnecessary memory:
