@@ -76,7 +76,6 @@ if __name__ == "__main__":
             'pycuda >= 2015.1',
             'scipy >= 0.11.0',
             'shutilwhich >= 1.1.0',
-            'tables >= 3.2.0',
             'twiggy >= 0.4.7',
         ],
         extras_require = {
