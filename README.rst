@@ -86,7 +86,7 @@ Create a new virtualenv environment and install several required dependencies: :
 
   cd ~/
   virtualenv NK
-  ~/NK/bin/pip install numpy cython numexpr tables pycuda
+  ~/NK/bin/pip install numpy cython numexpr pycuda
 
 If installation of PyCUDA fails because some of the CUDA development files or 
 libraries are not found, you may need to specify where they are explicitly. For 
