@@ -6,13 +6,13 @@
 Package Description
 -------------------
 
-`Project Website <https://neurokernel.github.io>`_ | 
+`Project Website <https://neurokernel.github.io>`_ |
 `GitHub Repository <https://github.com/neurokernel/neurokernel>`_ |
 `Online Documentation <https://neurokernel.readthedocs.org>`_ |
-`Mailing List <https://lists.columbia.edu/mailman/listinfo/neurokernel-dev>`_ | 
+`Mailing List <https://lists.columbia.edu/mailman/listinfo/neurokernel-dev>`_ |
 `Forum <http://neurokernel.67426.x6.nabble.com/>`_
 
-Neurokernel is a Python framework for developing models of 
+Neurokernel is a Python framework for developing models of
 the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
 .. image:: http://prime4commit.com/projects/98.svg
@@ -21,7 +21,7 @@ the fruit fly brain and executing them on multiple NVIDIA GPUs.
 
 Prerequisites
 -------------
-Neurokernel requires 
+Neurokernel requires
 
 * Linux (other operating systems may work, but have not been tested);
 * Python 2.7 (Python 3.0 is not guaranteed to work);
@@ -32,8 +32,8 @@ Neurokernel requires
 * `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ 5.0 or later;
 * `OpenMPI <http://www.open-mpi.org>`_ 1.8.4 or later compiled with CUDA support.
 
-To check what GPUs are in your system, you can use the `inxi 
-<https://code.google.com/p/inxi/>`_ command available on most Linux 
+To check what GPUs are in your system, you can use the `inxi
+<https://code.google.com/p/inxi/>`_ command available on most Linux
 distributions::
 
   inxi -G
@@ -42,7 +42,7 @@ You can verify that the drivers are loaded as follows::
 
   lsmod | grep nvidia
 
-If no drivers are present, you may have to manually load them by running 
+If no drivers are present, you may have to manually load them by running
 something like::
 
   modprobe nvidia
@@ -56,15 +56,15 @@ See `this page <https://developer.nvidia.com/cuda-downloads>`_ for download
 information.
 
 If you install Neurokernel in a virtualenv environment, you will need to
-install OpenMPI. See `this page 
+install OpenMPI. See `this page
 <https://www.open-mpi.org/faq/?category=building#easy-build>`_
 for OpenMPI installation information. *Note that OpenMPI 1.8* |openmpi_no_windows|_.
 
 .. _openmpi_no_windows: https://www.open-mpi.org/software/ompi/v1.6/ms-windows.php
 .. |openmpi_no_windows| replace:: *cannot run on Windows*
 
-Some of Neurokernel's demos require either `ffmpeg <http://www.fmpeg.org>`_ or `libav 
-<http://libav.org>`_ installed to generate visualizations.
+Some of Neurokernel's demos require either `ffmpeg <http://www.fmpeg.org>`_ or `libav
+<http://libav.org>`_ installed to generate visualizations (see `Examples`_).
 
 Installation
 ------------
@@ -88,19 +88,19 @@ Create a new virtualenv environment and install several required dependencies: :
   virtualenv NK
   ~/NK/bin/pip install numpy cython numexpr pycuda
 
-If installation of PyCUDA fails because some of the CUDA development files or 
-libraries are not found, you may need to specify where they are explicitly. For 
+If installation of PyCUDA fails because some of the CUDA development files or
+libraries are not found, you may need to specify where they are explicitly. For
 example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA
 as follows::
 
   CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
   LDFLAGS=-L${CUDA_ROOT}/lib64 ~/NK/bin/pip install pycuda
 
-Replace ``${CUDA_ROOT}/lib`` with ``${CUDA_ROOT}/lib64`` if your system is 
-running 64-bit Linux. If you continue to encounter installation problems, see 
+Replace ``${CUDA_ROOT}/lib`` with ``${CUDA_ROOT}/lib64`` if your system is
+running 64-bit Linux. If you continue to encounter installation problems, see
 the `PyCUDA Wiki <http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
 
-Run the following to install the remaining Python package dependencies listed in 
+Run the following to install the remaining Python package dependencies listed in
 `setup.py`: ::
 
   cd ~/neurokernel
@@ -117,8 +117,8 @@ request to the* |nk_developers|_.
 
 First, install the ``libibverbs1``, ``libnuma1``, ``libpmi0``, ``libslurm26``, and
 ``libtorque2`` packages; these are required by the conda OpenMPI packages prepared
-for Neurokernel. Ensure that the stock Ubuntu OpenMPI packages are not installed 
-because they may interfere with the ones that will be installed by conda. You 
+for Neurokernel. Ensure that the stock Ubuntu OpenMPI packages are not installed
+because they may interfere with the ones that will be installed by conda. You
 also need to ensure that CUDA has been installed in
 ``/usr/local/cuda``.
 
@@ -168,13 +168,13 @@ Other models built using Neurokernel are available on
 
 Building the Documentation
 --------------------------
-To build Neurokernel's HTML documentation locally, you will need to install 
+To build Neurokernel's HTML documentation locally, you will need to install
 
 * `mock <http://www.voidspace.org.uk/python/mock/>`_ 1.0 or later.
 * `sphinx <http://sphinx-doc.org>`_ 1.3 or later.
-* `sphinx_rtd_theme <https://github.com/snide/sphinx_rtd_theme>`_ 0.1.6 or 
+* `sphinx_rtd_theme <https://github.com/snide/sphinx_rtd_theme>`_ 0.1.6 or
   later.
- 
+
 Once these are installed, run the following: ::
 
   cd ~/neurokernel/docs
@@ -196,5 +196,5 @@ See the included `LICENSE`_ file for more information.
 
 Notes
 -----
-The Neurokernel Project is independent of the NeuroKernel Operating System 
+The Neurokernel Project is independent of the NeuroKernel Operating System
 developed by `NeuroDNA Computer <http://www.neurokernel.com>`_.
