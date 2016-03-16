@@ -92,6 +92,34 @@ def bufint(a):
     else:
         return None
 
+def get_by_inds(src_gpu, ind):
+    """
+    Get values in a GPUArray by index.
+
+    Parameters
+    ----------
+    src_gpu : pycuda.gpuarray.GPUArray
+        GPUArray instance from which to get values.
+    ind : pycuda.gpuarray.GPUArray or numpy.ndarray
+        1D array of element indices to set. Must have an integer dtype.
+
+    Returns
+    -------
+    result : numpy.ndarray
+        Extracted data.
+
+    Notes
+    -----
+    Only supports 1D index arrays.
+
+    May not be efficient for certain index patterns because of lack of inability
+    to coalesce memory operations.
+    """
+
+    dest_gpu = gpuarray.empty(ind.shape, src_gpu.dtype)
+    set_by_inds(dest_gpu, ind, src_gpu, 'src')
+    return dest_gpu.get()
+
 def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     """
     Set values in a GPUArray by index.
