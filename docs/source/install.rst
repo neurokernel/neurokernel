@@ -98,10 +98,18 @@ request to the* |nk_developers|_.
 .. _nk_developers: http://github.com/neurokernel/neurokernel/issues
 .. |nk_developers| replace:: *Neurokernel developers*
 
-First, install the ``libibverbs1``, ``libnuma1``, ``libpmi0``, ``libslurm26``, and
-``libtorque2`` packages; these are required by the conda OpenMPI packages prepared
+First, install the following Ubuntu packages:
+
+* ``libibverbs1``
+* ``libnuma1``
+* ``libpmi0``
+* ``libslurm26``
+* ``libtorque2``
+  
+Tthese are required by the conda OpenMPI packages prepared
 for Neurokernel. Ensure that the stock Ubuntu OpenMPI packages are not installed
-because they may interfere with the ones that will be installed by conda. You also need to ensure that CUDA has been installed in
+because they may interfere with the ones that will be installed by conda. You 
+also need to ensure that CUDA has been installed in
 ``/usr/local/cuda``.
 
 Install conda by either installing `Anaconda

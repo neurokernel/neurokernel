@@ -115,7 +115,7 @@ request to the* |nk_developers|_.
 .. _nk_developers: http://github.com/neurokernel/neurokernel/issues
 .. |nk_developers| replace:: *Neurokernel developers*
 
-First, install the following packages,
+First, install the following Ubuntu packages:
 
 *  ``libibverbs1``
 *  ``libnuma1``
