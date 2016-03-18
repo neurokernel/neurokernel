@@ -239,8 +239,8 @@ class BasePortMapper(object):
         """
 
         assert isinstance(pm, BasePortMapper)
-        pm0 = self.portmap.order()
-        pm1 = pm.portmap.order()
+        pm0 = self.portmap.sort_values()
+        pm1 = pm.portmap.sort_values()
         if np.array_equal(pm0.values, pm1.values) and \
            pm0.index.equals(pm1.index):
             return True
