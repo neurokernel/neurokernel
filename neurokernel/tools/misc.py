@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from functools import wraps
+import itertools
 import numbers
 import re
 import subprocess
@@ -219,3 +220,37 @@ def openmpi_cuda_support(path='ompi_info'):
                     return False
         return False
     
+def renumber_in_order(arr):
+    """
+    Map unique array elements to in-order integers.
+
+    Maps an array of elements that may contain duplicates and might not be
+    monotonically ordered to an array of equivalent length where the unique elements
+    are respectively replaced by 0, 1, etc.
+
+    Parameters
+    ----------
+    arr : array_like
+        1D array of elements.
+
+    Returns
+    -------
+    result : list
+        Array of mapped integers.
+
+    Examples
+    --------
+    >>> arr = np.array([0, 2, 2, 3, 5, 5])
+    >>> result = renumber_in_order(arr)
+    >>> np.allclose(arr, [0, 1, 1, 2, 3, 3])
+    True
+    """
+
+    c = itertools.count()
+    result = []
+    already_seen = {}
+    for e in arr:
+        if e not in already_seen:
+            already_seen[e] = c.next()
+        result.append(already_seen[e])
+    return result
