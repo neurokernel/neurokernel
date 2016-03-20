@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-"""
-"""
-
 import neurokernel.mpi_relaunch
 
 import cPickle as pickle
