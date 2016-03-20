@@ -144,12 +144,12 @@ class Module(mpi.Worker):
         # Ensure that the graded potential and spiking port selectors
         # respectively select mutually exclusive subsets of the set of all ports
         # exposed by the module:
-        if not SelectorMethods.is_in(sel_in, sel):
-            raise ValueError('input port selector not in selector of all ports')
-        if not SelectorMethods.is_in(sel_out, sel):
-            raise ValueError('output port selector not in selector of all ports')
-        if not SelectorMethods.are_disjoint(sel_in, sel_out):
-            raise ValueError('input and output port selectors not disjoint')
+        if not SelectorMethods.is_in(sel_gpot, sel):
+            raise ValueError('gpot port selector not in selector of all ports')
+        if not SelectorMethods.is_in(sel_spike, sel):
+            raise ValueError('spike port selector not in selector of all ports')
+        if not SelectorMethods.are_disjoint(sel_gpot, sel_spike):
+            raise ValueError('gpot and spike port selectors not disjoint')
 
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
@@ -215,6 +215,11 @@ class Module(mpi.Worker):
     def _init_gpu(self):
         """
         Initialize GPU device.
+
+        Notes
+        -----
+        Must be called from within the `run()` method, not from within
+        `__init__()`.
         """
 
         if self.device == None:
@@ -300,17 +305,17 @@ class Module(mpi.Worker):
             self._in_port_dict_ids['spike'][in_id] = \
                 gpuarray.to_gpu(self.pm['spike'].ports_to_inds(pat.dest_idx(int_0, int_1, 'spike', 'spike')))
 
-            # Get the integer indices associated with the connected source ports
+			# Get the integer indices associated with the connected source ports
             # in the pattern interface connected to the source module `in_d`;
             # these are needed to copy received buffer contents into the current
             # module's port map data array:
             self._in_port_dict_buf_ids['gpot'][in_id] = \
                 np.array(renumber_in_order(BasePortMapper(pat.gpot_ports(int_0).to_tuples()).
-                        ports_to_inds(pat.src_idx(int_0, int_1, 'gpot', 'gpot', duplicates=True))))            
+                        ports_to_inds(pat.src_idx(int_0, int_1, 'gpot', 'gpot', duplicates=True))))
             self._in_port_dict_buf_ids['spike'][in_id] = \
                 np.array(renumber_in_order(BasePortMapper(pat.spike_ports(int_0).to_tuples()).
                         ports_to_inds(pat.src_idx(int_0, int_1, 'spike', 'spike', duplicates=True))))
-            
+
             # The size of the input buffer to the current module must be the
             # same length as the output buffer of module `in_id`:
             self._in_buf_len['gpot'][in_id] = len(pat.src_idx(int_0, int_1, 'gpot', 'gpot'))
@@ -332,10 +337,10 @@ class Module(mpi.Worker):
         self._in_buf['spike'] = {}
         self._in_buf_int = {}
         self._in_buf_int['gpot'] = {}
-        self._in_buf_int['spike'] = {}        
+        self._in_buf_int['spike'] = {}
         self._in_buf_mtype = {}
         self._in_buf_mtype['gpot'] = {}
-        self._in_buf_mtype['spike'] = {}        
+        self._in_buf_mtype['spike'] = {}
         for in_id in self._in_ids:
             n_gpot = self._in_buf_len['gpot'][in_id]
             if n_gpot:
@@ -406,7 +411,7 @@ class Module(mpi.Worker):
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
         for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
-            
+
             # Copy data into destination buffer:
             if self._out_buf['gpot'][dest_id] is not None:
                 set_by_inds(self._out_buf['gpot'][dest_id],
@@ -504,7 +509,7 @@ class Module(mpi.Worker):
         # Initialize _out_port_dict and _in_port_dict attributes:
         self._init_port_dicts()
 
-        # Initialize GPU transmission buffers:
+        # Initialize transmission buffers:
         self._init_comm_bufs()
 
         # Start timing the main loop:
@@ -694,7 +699,7 @@ class Manager(mpi.WorkerManager):
             if required_arg not in arg_names:
                 return False
         return True
- 
+
     def add(self, target, id, *args, **kwargs):
         """
         Add a module class to the emulation.
@@ -720,7 +725,7 @@ class Manager(mpi.WorkerManager):
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
         # XXX: keep this commented out for the time being because it interferes
-        # with instantiation of child classes (such as those in LPU.py): 
+        # with instantiation of child classes (such as those in LPU.py):
         # if not self.validate_args(target):
         #    raise ValueError('class constructor missing required args')
 
