@@ -35,6 +35,14 @@ class test_gpu(TestCase):
         gpu.set_by_inds(dest_gpu, ind, src_gpu, 'src')
         assert np.allclose(dest_gpu.get(), np.array([0, 2, 4], dtype=np.float32))
 
+    def test_set_by_inds_from_inds(self):
+        dest_gpu = gpuarray.to_gpu(np.zeros(5, dtype=np.float32))
+        ind_dest = gpuarray.to_gpu(np.array([0, 2, 4]))
+        src_gpu =  gpuarray.to_gpu(np.arange(5, 10, dtype=np.float32))
+        ind_src =  gpuarray.to_gpu(np.array([2, 3, 4]))
+        gpu.set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src)
+        assert np.allclose(dest_gpu.get(), np.array([7, 0, 8, 0, 9], dtype=np.float32))
+
 if __name__ == '__main__':
     main()
 

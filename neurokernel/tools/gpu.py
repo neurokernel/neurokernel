@@ -219,18 +219,34 @@ def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
         GPUArray instance from which to set values.
     ind_src : pycuda.gpuarray.GPUArray or numpy.ndarray
         1D array of element indices in `src_gpu` to copy. Must have an integer dtype.
+
+    Examples
+    --------
+    >>> import pycuda.gpuarray as gpuarray
+    >>> import pycuda.autoinit
+    >>> import numpy as np
+    >>> from nk.tools.gpu import set_by_inds_from_inds
+    >>> dest_gpu = gpuarray.to_gpu(np.zeros(5, dtype=np.float32))
+    >>> ind_dest = gpuarray.to_gpu(np.array([0, 2, 4]))
+    >>> src_gpu =  gpuarray.to_gpu(np.arange(5, 10, dtype=np.float32))
+    >>> ind_src =  gpuarray.to_gpu(np.array([2, 3, 4]))
+    >>> gpu.set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src)
+    >>> assert np.allclose(dest_gpu.get(), np.array([7, 0, 8, 0, 9], dtype=np.float32))
+    True
     """
 
-    assert len(np.shape(ind_dest)) == 1
-    assert len(np.shape(ind_src)) == 1
+    if len(np.shape(ind_dest)) > 1:
+        raise ValueError('destination index array must be 1D')
+    if len(np.shape(ind_src)) > 1:
+        raise ValueError('source index array must be 1D')
     assert dest_gpu.dtype == src_gpu.dtype
     assert ind_dest.dtype == ind_src.dtype
     assert issubclass(ind_dest.dtype.type, numbers.Integral)
     assert issubclass(ind_src.dtype.type, numbers.Integral)
-    N = len(ind_src)
 
     # Manually handle empty index array because it will cause the kernel to
     # fail if processed:
+    N = len(ind_src)
     if N == 0:
         return
     assert N == len(ind_dest)
