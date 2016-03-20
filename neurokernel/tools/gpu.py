@@ -28,7 +28,7 @@ def set_realloc(x_gpu, data):
     the array has a different type or dimensions than the instance,
     the GPU memory used by the instance is reallocated and the
     instance updated appropriately.
-    
+
     Parameters
     ----------
     x_gpu : pycuda.gpuarray.GPUArray
@@ -48,37 +48,36 @@ def set_realloc(x_gpu, data):
     >>> set_realloc(x_gpu, x)
     >>> np.allclose(x, x_gpu.get())
     True
-    
     """
 
     # Only reallocate if absolutely necessary:
     if x_gpu.shape != data.shape or x_gpu.size != data.size or \
         x_gpu.strides != data.strides or x_gpu.dtype != data.dtype:
-        
+
         # Free old memory:
         x_gpu.gpudata.free()
 
         # Allocate new memory:
         nbytes = num_nbytes[data.dtype]
         x_gpu.gpudata = drv.mem_alloc(nbytes*data.size)
-    
+
         # Set array attributes:
         x_gpu.shape = data.shape
         x_gpu.size = data.size
         x_gpu.strides = data.strides
         x_gpu.dtype = data.dtype
-        
+
     # Update the GPU memory:
     x_gpu.set(data)
 
 def bufint(a):
     """
-    Return buffer interface to GPU array.
+    Return buffer interface to GPU or numpy array.
 
     Parameters
     ----------
-    a : pycuda.gpuarray.GPUArray
-        GPU array.
+    a : pycuda.gpuarray.GPUArray or numpy.ndarray
+        GPU or numpy array.
 
     Returns
     -------
@@ -86,11 +85,15 @@ def bufint(a):
         Buffer interface to array. Returns None if `a` has a length of 0.
     """
 
-    assert isinstance(a, gpuarray.GPUArray)
-    if a.size:
-        return a.gpudata.as_buffer(a.nbytes)
-    else:
+    if not a.size:
         return None
+    else:
+        if isinstance(a, gpuarray.GPUArray):
+            return a.gpudata.as_buffer(a.nbytes)
+        elif isinstance(a, np.ndarray):
+            return a.data
+        else:
+            raise TypeError('argument must be a GPU or numpy array')
 
 def get_by_inds(src_gpu, ind):
     """
