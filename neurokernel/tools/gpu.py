@@ -218,7 +218,8 @@ def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
     src_gpu : pycuda.gpuarray.GPUArray
         GPUArray instance from which to set values.
     ind_src : pycuda.gpuarray.GPUArray or numpy.ndarray
-        1D array of element indices in `src_gpu` to copy. Must have an integer dtype.
+        1D array of element indices in `src_gpu` to copy. Must have an integer
+        dtype and be the same length as `ind_dest`.
 
     Examples
     --------
@@ -260,7 +261,7 @@ def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
         data_ctype = dtype_to_ctype(dest_gpu.dtype)
         ind_ctype = dtype_to_ctype(ind_dest.dtype)        
         v = "{data_ctype} *dest, {ind_ctype} *ind_dest,"\
-            "{data_ctype} *src, {ind_ctype} *ind_src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)        
+            "{data_ctype} *src, {ind_ctype} *ind_src".format(data_ctype=data_ctype, ind_ctype=ind_ctype) 
         func = elementwise.ElementwiseKernel(v,
                 "dest[ind_dest[i]] = src[ind_src[i]]")
         set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)] = func
