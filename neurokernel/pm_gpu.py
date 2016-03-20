@@ -235,7 +235,7 @@ class GPUPortMapper(PortMapper):
         if not issubclass(inds.dtype.type, numbers.Integral):
             raise ValueError('index array must contain integers')
         if N != len(data):
-            raise ValueError('data and index arrays must have equal lengths')
+            raise ValueError('len(inds) = %s != %s = len(data)' % (N, len(data)))
 
         if not isinstance(data, gpuarray.GPUArray):
             data = gpuarray.to_gpu(data)
