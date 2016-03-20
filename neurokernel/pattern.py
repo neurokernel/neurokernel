@@ -1602,12 +1602,12 @@ class Pattern(object):
         sel_1 = self.sel.expand(key[1])
         selector = [f+t for f, t in itertools.product(sel_0, sel_1)]
         if len(key) > 2:
-            return self.sel.select(self.data[list(key[2:])], selector=selector)                                             
+            return self.sel.select(self.data[list(key[2:])], selector=selector)
         else:
             return self.sel.select(self.data, selector=selector)
 
     def src_idx(self, src_int, dest_int, 
-                src_type=None, dest_type=None, dest_ports=None):                
+                src_type=None, dest_type=None, dest_ports=None, duplicates=False):
         """
         Retrieve source ports connected to the specified destination ports.
 
@@ -1632,6 +1632,8 @@ class Pattern(object):
             Path-like selector corresponding to ports in destination 
             interface. If not specified, all ports in the destination 
             interface are considered.
+        duplicates : bool
+            If True, include duplicate ports in output.
 
         Returns
         -------
@@ -1679,9 +1681,13 @@ class Pattern(object):
                 f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice][0] in to_idx
         idx = self.data.select(f).index
                 
-        # Remove duplicate tuples from output without perturbing the order
-        # of the remaining tuples:
-        return OrderedDict.fromkeys([x[self.from_slice] for x in idx]).keys()
+        if not duplicates:
+
+            # Remove duplicate tuples from output without perturbing the order
+            # of the remaining tuples:
+            return OrderedDict.fromkeys([x[self.from_slice] for x in idx]).keys()
+        else:
+            return [x[self.from_slice] for x in idx]
 
     def dest_idx(self, src_int, dest_int, 
                  src_type=None, dest_type=None, src_ports=None):
@@ -1714,6 +1720,11 @@ class Pattern(object):
         -------
         idx : list of tuple
             Destination ports connected to the specified source ports.
+
+        Notes
+        -----
+        No `duplicates` parameter is provided because fan-in from multiple
+        source ports to a single destination port is not permitted.
         """
 
         assert src_int != dest_int

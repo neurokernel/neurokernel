@@ -744,6 +744,19 @@ class test_pattern(TestCase):
                               [('aaa',)])
         self.assertItemsEqual(q.src_idx(0, 1, dest_type='gpot'), [])
 
+    def test_src_idx_duplicates(self):
+        p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
+        p['/aaa[0]', '/yyy[0]'] = 1
+        p['/aaa[0]', '/yyy[1]'] = 1
+        p['/aaa[0]', '/yyy[2]'] = 1
+        p['/xxx[0]', '/bbb[0]'] = 1
+        p['/xxx[0]', '/bbb[1]'] = 1
+        p['/xxx[1]', '/bbb[2]'] = 1
+        self.assertItemsEqual(p.src_idx(0, 1, duplicates=True),
+                              [('aaa', 0), ('aaa', 0), ('aaa', 0)])
+        self.assertItemsEqual(p.src_idx(1, 0, duplicates=True),
+                              [('xxx', 0), ('xxx', 0), ('xxx', 1)])
+
     def test_dest_idx(self):
         p = Pattern('/[aaa,bbb][0:3]', '/[xxx,yyy][0:3]')
         p['/aaa[0]', '/yyy[0]'] = 1
