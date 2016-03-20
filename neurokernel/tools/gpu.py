@@ -144,17 +144,17 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     >>> import pycuda.gpuarray as gpuarray
     >>> import pycuda.autoinit
     >>> import numpy as np
-    >>> import misc
+    >>> from nk.tools.gpu import set_by_inds
     >>> dest_gpu = gpuarray.to_gpu(np.arange(5, dtype=np.float32))
     >>> ind = gpuarray.to_gpu(np.array([0, 2, 4]))
     >>> src_gpu = gpuarray.to_gpu(np.array([1, 1, 1], dtype=np.float32))
-    >>> misc.set_by_inds(dest_gpu, ind, src_gpu, 'dest')
+    >>> set_by_inds(dest_gpu, ind, src_gpu, 'dest')
     >>> np.allclose(dest_gpu.get(), np.array([1, 1, 1, 3, 1], dtype=np.float32))
     True
     >>> dest_gpu = gpuarray.to_gpu(np.zeros(3, dtype=np.float32))
     >>> ind = gpuarray.to_gpu(np.array([0, 2, 4]))
     >>> src_gpu = gpuarray.to_gpu(np.arange(5, dtype=np.float32))
-    >>> misc.set_by_inds(dest_gpu, ind, src_gpu)
+    >>> set_by_inds(dest_gpu, ind, src_gpu, 'src')
     >>> np.allclose(dest_gpu.get(), np.array([0, 2, 4], dtype=np.float32))
     True
 
@@ -166,16 +166,22 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
     to coalesce memory operations.
     """
 
-    # Only support 1D index arrays:
-    assert len(np.shape(ind)) == 1
-    assert dest_gpu.dtype == src_gpu.dtype
-    assert issubclass(ind.dtype.type, numbers.Integral)
-    N = len(ind)
+    if np.isscalar(src_gpu) or np.isscalar(dest_gpu):
+        raise ValueError('data must be array-like')
+    if len(np.shape(ind)) > 1:
+        raise ValueError('index array must be 1D')
 
     # Manually handle empty index array because it will cause the kernel to
     # fail if processed:
+    N = len(ind)
     if N == 0:
         return
+
+    if not issubclass(ind.dtype.type, numbers.Integral):
+        raise ValueError('index array must contain integers')
+    if not dest_gpu.dtype == src_gpu.dtype:
+        raise ValueError('dest_gpu.dtype != src_gpu.dtype')
+
     if ind_which == 'dest':
         assert N == len(src_gpu)
     elif ind_which == 'src':
