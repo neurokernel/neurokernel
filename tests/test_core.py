@@ -8,11 +8,10 @@ import tempfile
 
 from mpi4py import MPI
 import numpy as np
-import pycuda.gpuarray as gpuarray
 
 from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
-from neurokernel.core_gpu import Module, Manager, CTRL_TAG, GPOT_TAG, SPIKE_TAG
+from neurokernel.core import Module, Manager, CTRL_TAG, GPOT_TAG, SPIKE_TAG
 import neurokernel.mpi as mpi
 
 class MyModule1(Module):
@@ -42,10 +41,8 @@ class MyModule1(Module):
         # Emit data by setting elements in port map data array corresponding to
         # output ports:
         if self.out_spike_data:
-            out_spike_data_gpu = gpuarray.to_gpu(np.asarray(self.out_spike_data,
-                                                        self.data['spike'].dtype))
-            self.pm['spike'][self.out_spike_ports] = out_spike_data_gpu
-            self.log_info('output spike port data: '+str(out_spike_data_gpu))
+            self.pm['spike'][self.out_spike_ports] = self.out_spike_data
+            self.log_info('output spike port data: '+str(self.out_spike_data))
 
 class MyModule2(Module):
     """
