@@ -195,8 +195,8 @@ class Module(mpi.Worker):
         self.data['gpot'] = data_gpot
         self.data['spike'] = data_spike
         self.pm = {}
-        self.pm['gpot'] = PortMapper(sel_gpot, self.data['gpot'])
-        self.pm['spike'] = PortMapper(sel_spike, self.data['spike'])
+        self.pm['gpot'] = PortMapper(sel_gpot, self.data['gpot'], make_copy=False)
+        self.pm['spike'] = PortMapper(sel_spike, self.data['spike'], make_copy=False)
 
         # MPI Request object for resolving asynchronous transfers:
         self.req = MPI.Request()
@@ -403,7 +403,7 @@ class Module(mpi.Worker):
 
             # Copy data into destination buffer:
             if self._out_buf['gpot'][dest_id] is not None:
-                self._out_buf['gpot'][dest_id] = \
+                self._out_buf['gpot'][dest_id][:] = \
                     self.data['gpot'][self._out_port_dict_ids['gpot'][dest_id]]
                 if not self.time_sync:
                     self.log_info('gpot data sent to %s: %s' % \
@@ -413,7 +413,7 @@ class Module(mpi.Worker):
                                          dest_rank, GPOT_TAG)
                 requests.append(r)
             if self._out_buf['spike'][dest_id] is not None:
-                self._out_buf['spike'][dest_id] = \
+                self._out_buf['spike'][dest_id][:] = \
                     self.data['spike'][self._out_port_dict_ids['spike'][dest_id]]
                 if not self.time_sync:
                     self.log_info('spike data sent to %s: %s' % \
