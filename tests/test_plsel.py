@@ -200,9 +200,9 @@ class test_path_like_selector(TestCase):
 
     def test_select_comma(self):
         result = self.sel.select(self.df, '/foo/qux,/baz/mof')
-        idx = pd.MultiIndex.from_tuples([('foo','qux',0),
-                                         ('foo','qux',1),
-                                         ('baz','mof',0)], names=[0, 1, 2])
+        idx = pd.MultiIndex.from_tuples([('foo','qux', 0),
+                                         ('foo','qux', 1),
+                                         ('baz','mof', 0)], names=[0, 1, 2])
         assert_frame_equal(result, self.df.ix[idx])
 
     def test_select_plus(self):

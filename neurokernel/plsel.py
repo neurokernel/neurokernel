@@ -1867,9 +1867,9 @@ class SelectorMethods(SelectorParser):
         ----------
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
-        selector : str, unicode, or sequence
-            Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).
+        selector : Selector, str, unicode, or sequence
+            Selector class instance, string (e.g., '/foo[0:2]') or
+            sequence of token sequences (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
 
@@ -1880,7 +1880,15 @@ class SelectorMethods(SelectorParser):
         """
 
         assert cls.is_selector(selector)
-        if type(selector) in [str, unicode]:
+        if isinstance(selector, Selector):
+            if len(df.index.names[start:stop])>1:
+                try:
+                    tks = list(selector.expanded)
+                    return df[tks]
+                except:
+                    pass
+            parse_list = list(selector.expanded)
+        elif type(selector) in [str, unicode]:
             if len(df.index.names[start:stop])>1:
                 try:
                     tks = cls.expand(selector)
