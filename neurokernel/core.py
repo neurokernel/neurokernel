@@ -722,7 +722,7 @@ class Manager(mpi.WorkerManager):
         rank = super(Manager, self).add(target, *args, **kwargs)
         self.rank_to_id[rank] = id
 
-    def connect(self, id_0, id_1, pat, int_0=0, int_1=1, compat_check=True):
+    def connect(self, id_0, id_1, pat, int_0=0, int_1=1):
         """
         Specify connection between two module instances with a Pattern instance.
 
@@ -735,15 +735,6 @@ class Manager(mpi.WorkerManager):
         int_0, int_1 : int
             Which of the pattern's interfaces to connect to `id_0` and `id_1`,
             respectively.
-        compat_check : bool
-            Check whether the interfaces of the specified modules
-            are compatible with the specified pattern. This option is provided
-            because compatibility checking can be expensive.
-
-        Notes
-        -----
-        Assumes that the constructors of the module types contain a `sel`
-        parameter.
         """
 
         if not isinstance(pat, Pattern):
@@ -756,37 +747,6 @@ class Manager(mpi.WorkerManager):
             raise ValueError('unrecognized pattern interface identifiers')
         self.log_info('connecting modules {0} and {1}'
                       .format(id_0, id_1))
-
-        # Check compatibility of the interfaces exposed by the modules and the
-        # pattern; since the manager only contains module classes and not class
-        # instances, we need to create Interface instances from the selectors
-        # associated with the modules in order to test their compatibility:
-        if compat_check:
-            rank_0 = self.rank_to_id.inv[id_0]
-            rank_1 = self.rank_to_id.inv[id_1]
-
-            self.log_info('checking compatibility of modules {0} and {1} and'
-                             ' assigned pattern'.format(id_0, id_1))
-            mod_int_0 = Interface(self._kwargs[rank_0]['sel'])
-            mod_int_0[self._kwargs[rank_0]['sel']] = 0
-            mod_int_1 = Interface(self._kwargs[rank_1]['sel'])
-            mod_int_1[self._kwargs[rank_1]['sel']] = 0
-
-            mod_int_0[self._kwargs[rank_0]['sel_in'], 'io'] = 'in'
-            mod_int_0[self._kwargs[rank_0]['sel_out'], 'io'] = 'out'
-            mod_int_0[self._kwargs[rank_0]['sel_gpot'], 'type'] = 'gpot'
-            mod_int_0[self._kwargs[rank_0]['sel_spike'], 'type'] = 'spike'
-            mod_int_1[self._kwargs[rank_1]['sel_in'], 'io'] = 'in'
-            mod_int_1[self._kwargs[rank_1]['sel_out'], 'io'] = 'out'
-            mod_int_1[self._kwargs[rank_1]['sel_gpot'], 'type'] = 'gpot'
-            mod_int_1[self._kwargs[rank_1]['sel_spike'], 'type'] = 'spike'
-
-            if not mod_int_0.is_compatible(0, pat.interface, int_0, True):
-                raise ValueError('module %s interface incompatible '
-                                 'with pattern interface %s' % (id_0, int_0))
-            if not mod_int_1.is_compatible(0, pat.interface, int_1, True):
-                raise ValueError('module %s interface incompatible '
-                                 'with pattern interface %s' % (id_1, int_1))
 
         # XXX Need to check for fan-in XXX
 
@@ -974,6 +934,15 @@ if __name__ == '__main__':
     pat12['/a/out/spike[1]', '/b/in/spike[1]'] = 1
     pat12['/b/out/spike[0]', '/a/in/spike[0]'] = 1
     pat12['/b/out/spike[1]', '/a/in/spike[1]'] = 1
+
+    check_compatible = True
+    if check_compatible:
+        m1_int = Interface.from_selectors(m1_sel, m1_sel_in, m1_sel_out,
+                                          m1_sel_spike, m1_sel_gpot, m1_sel)
+        m2_int = Interface.from_selectors(m2_sel, m2_sel_in, m2_sel_out,
+                                          m2_sel_spike, m2_sel_gpot, m2_sel)
+        assert m1_int.is_compatible(0, pat12.interface, 0, True)
+        assert m2_int.is_compatible(0, pat12.interface, 1, True)
     man.connect(m1_id, m2_id, pat12, 0, 1)
 
     # Start emulation and allow it to run for a little while before shutting
