@@ -192,6 +192,12 @@ class test_path_like_selector(TestCase):
                                          ('foo','mof',2)], names=[0, 1, 2])
         assert_frame_equal(result, self.df.ix[idx])
 
+    def test_select_Selector(self):
+        result = self.sel.select(self.df, Selector('/foo/qux[0:2]'))
+        idx = pd.MultiIndex.from_tuples([('foo','qux',0),
+                                         ('foo','qux',1)], names=[0, 1, 2])
+        assert_frame_equal(result, self.df.ix[idx])
+
     def test_select_comma(self):
         result = self.sel.select(self.df, '/foo/qux,/baz/mof')
         idx = pd.MultiIndex.from_tuples([('foo','qux',0),
@@ -550,43 +556,47 @@ class test_path_like_selector(TestCase):
 
     def test_make_index_str_single_level(self):
         idx = self.sel.make_index('/foo')
-        assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
+        assert_index_equal(idx, pd.Index(['foo'], name=0, dtype='object'))
         idx = self.sel.make_index('/foo,/bar')
-        assert_index_equal(idx, pd.Index(['foo', 'bar'], dtype='object'))
+        assert_index_equal(idx, pd.Index(['foo', 'bar'], name=0, dtype='object'))
 
     def test_make_index_str_multiple_levels(self):
         idx = self.sel.make_index('/[foo,bar]/[0:3]')
         assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                       [0, 1, 2]],
                                               labels=[[1, 1, 1, 0, 0, 0],
-                                                      [0, 1, 2, 0, 1, 2]]))
+                                                      [0, 1, 2, 0, 1, 2]],
+                                              names=[0, 1]))
 
     def test_make_index_str_multiple_different_levels(self):
         idx = self.sel.make_index('/foo[0:3],/bar')
         assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                       [0, 1, 2, '']],
                                               labels=[[1, 1, 1, 0],
-                                                      [0, 1, 2, 3]]))
+                                                      [0, 1, 2, 3]],
+                                              names=[0, 1]))
 
     def test_make_index_list_single_level(self):
         idx = self.sel.make_index([['foo']])
-        assert_index_equal(idx, pd.Index(['foo'], dtype='object'))
+        assert_index_equal(idx, pd.Index(['foo'], name=0, dtype='object'))
         idx = self.sel.make_index([['foo'], ['bar']])
-        assert_index_equal(idx, pd.Index(['foo', 'bar'], dtype='object'))
+        assert_index_equal(idx, pd.Index(['foo', 'bar'], name=0, dtype='object'))
 
     def test_make_index_list_multiple_levels(self):
         idx = self.sel.make_index([[['foo', 'bar'], slice(0, 3)]])
         assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                       [0, 1, 2]],
                                               labels=[[1, 1, 1, 0, 0, 0],
-                                                      [0, 1, 2, 0, 1, 2]]))
+                                                      [0, 1, 2, 0, 1, 2]],
+                                              names=[0, 1]))
 
     def test_make_index_list_multiple_different_levels(self):
         idx = self.sel.make_index([['foo', [0, 1, 2]], ['bar']])
         assert_index_equal(idx, pd.MultiIndex(levels=[['bar', 'foo'],
                                                       [0, 1, 2, '']],
                                               labels=[[1, 1, 1, 0],
-                                                      [0, 1, 2, 3]]))
+                                                      [0, 1, 2, 3]],
+                                              names=[0, 1]))
 
     def test_make_index_invalid(self):
         self.assertRaises(Exception, self.sel.make_index, 'foo/bar[')
