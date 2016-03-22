@@ -71,7 +71,7 @@ class Interface(object):
         self.sel = SelectorMethods()
         assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
-        names = [str(i) for i in xrange(self.num_levels)]
+        names = [i for i in xrange(self.num_levels)]
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
@@ -1990,3 +1990,45 @@ class Pattern(object):
             g.add_edge(id_from, id_to, d)
 
         return g
+
+def are_compatible(sel_in_0, sel_out_0, sel_spike_0, sel_gpot_0, 
+                   sel_in_1, sel_out_1, sel_spike_1, sel_gpot_1,
+                   allow_subsets=False):
+    """
+    Check whether two interfaces specified as selectors can be connected.
+
+    Parameters
+    ----------
+    sel_in_0, sel_out_0, sel_spike_0, sel_gpot_0 : Selector, str, unicode
+        Input, output, spiking, and graded potential ports in first interface.
+    sel_in_0, sel_out_0, sel_spike_0, sel_gpot_0 : Selector, str, unicode
+        Input, output, spiking, and graded potential ports in second interface.
+    allow_subsets : bool
+        If True, interfaces that contain a compatible subset of ports are
+        deemed to be compatible; otherwise, all ports in the two interfaces
+        must be compatible.
+
+    Results
+    -------
+    result : bool
+        True if interfaces are compatible, False otherwise.
+    """
+
+    sel_in_0 = Selector(sel_in_0)
+    sel_out_0 = Selector(sel_out_0)
+    sel_spike_0 = Selector(sel_spike_0)
+    sel_gpot_0 = Selector(sel_gpot_0)
+    sel_0 = Selector.union(sel_in_0, sel_out_0, sel_spike_0, sel_gpot_0)
+
+    sel_in_1 = Selector(sel_in_1)
+    sel_out_1 = Selector(sel_out_1)
+    sel_spike_1 = Selector(sel_spike_1)
+    sel_gpot_1 = Selector(sel_gpot_1)
+    sel_1 = Selector.union(sel_in_1, sel_out_1, sel_spike_1, sel_gpot_1)
+
+    int_0 = Interface.from_selectors(sel_0, sel_in_0, sel_out_0,
+                                     sel_spike_0, sel_gpot_0, sel_0)
+    int_1 = Interface.from_selectors(sel_1, sel_in_1, sel_out_1,
+                                     sel_spike_1, sel_gpot_1, sel_1)
+
+    return int_0.is_compatible(0, int_1, 0)

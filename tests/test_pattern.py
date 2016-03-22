@@ -8,7 +8,7 @@ import networkx as nx
 from pandas.util.testing import assert_frame_equal, assert_index_equal, \
     assert_series_equal
 
-from neurokernel.pattern import Interface, Pattern
+from neurokernel.pattern import Interface, Pattern, are_compatible
 
 class test_interface(TestCase):
     def setUp(self):
@@ -179,7 +179,8 @@ class test_interface(TestCase):
         j = i.data_select(lambda x: x['io'] != 'in')
         assert_index_equal(j.data.index,
                            pd.MultiIndex.from_tuples([('foo', 1),
-                                                      ('foo', 2)]))
+                                                      ('foo', 2)],
+                                                     names=[0, 1]))
 
         # Selector with single level:
         i = Interface('/[foo,bar,baz]')
@@ -187,14 +188,15 @@ class test_interface(TestCase):
         i['/baz', 'interface', 'io'] = [0, 'out']
         j = i.data_select(lambda x: x['io'] != 'in')
         assert_index_equal(j.data.index,
-                           pd.Index(['baz']))
+                           pd.Index(['baz'], name=0))
 
         # Selectors with different numbers of levels:
         i = Interface('/a/b/c,/x/y')
         i['/a/b/c', 'interface', 'io'] = [0, 'in']
         j = i.data_select(lambda x: x['io'] != 'in')
         assert_index_equal(j.data.index,
-                           pd.MultiIndex.from_tuples([('x', 'y', '')]))
+                           pd.MultiIndex.from_tuples([('x', 'y', '')],
+                                                     names=[0, 1, 2]))
 
     def test_from_df_index(self):
         idx = pd.Index(['foo', 'bar', 'baz'])
@@ -255,7 +257,8 @@ class test_interface(TestCase):
         assert_index_equal(i.data.index,
                            pd.MultiIndex.from_tuples([('foo', 0),
                                                       ('foo', 1),
-                                                      ('foo', 2)]))
+                                                      ('foo', 2)],
+                                                     names=[0, 1]))
 
     def test_from_graph(self):
         i = Interface('/foo[0:3]')
@@ -301,7 +304,7 @@ class test_interface(TestCase):
         i['/foo[1]'] = [1, 'out', 'spike']
         df = pd.DataFrame([(0, 'in', 'spike')],
                           pd.MultiIndex.from_tuples([('foo', 0)],
-                                                    names=['0', '1']),
+                                                    names=[0, 1]),
                           ['interface', 'io', 'type'],
                           dtype=object)
 
@@ -317,7 +320,7 @@ class test_interface(TestCase):
         i['/bar'] = [1, 'out', 'spike']
         df = pd.DataFrame([(0, 'in', 'spike')],
                           pd.MultiIndex.from_tuples([('foo',)],
-                                                    names=['0']),
+                                                    names=[0]),
                           ['interface', 'io', 'type'],
                           dtype=object)
 
@@ -361,7 +364,7 @@ class test_interface(TestCase):
         i['/foo[1]'] = [1, 'out', 'spike']
         df = pd.DataFrame([(1, 'out', 'spike')],
                           pd.MultiIndex.from_tuples([('foo', 1)],
-                                                    names=['0', '1']),
+                                                    names=[0, 1]),
                           ['interface', 'io', 'type'],
                           dtype=object)
 
@@ -377,7 +380,7 @@ class test_interface(TestCase):
         i['/bar'] = [1, 'out', 'spike']
         df = pd.DataFrame([(1, 'out', 'spike')],
                           pd.MultiIndex.from_tuples([('bar',)],
-                                                    names=['0']),
+                                                    names=[0]),
                           ['interface', 'io', 'type'],
                           dtype=object)
 
@@ -425,13 +428,14 @@ class test_interface(TestCase):
         i = self.interface.port_select(lambda x: x[1] >= 1)
         assert_index_equal(i.data.index,
                            pd.MultiIndex.from_tuples([('foo', 1),
-                                                      ('foo', 2)]))
+                                                      ('foo', 2)],
+                                                     names=[0, 1]))
 
     def test_index(self):
         assert_index_equal(self.interface.index,
                            pd.MultiIndex(levels=[['foo'], [0, 1, 2]],
                                          labels=[[0, 0, 0], [0, 1, 2]],
-                                         names=['0', '1']))
+                                         names=[0, 1]))
 
     def test_interface_ids(self):
         i = Interface('/foo[0:4]')
@@ -576,6 +580,10 @@ class test_interface(TestCase):
         assert i.is_compatible(0, j, 1, True)
         assert i.is_compatible(0, k, 1, True) == False
 
+    def test_are_compatible(self):
+        assert are_compatible('/foo[2:4]', '/foo[0:2]', '/foo[2:4]', '/foo[0:2]',
+                              '/foo[0:2]', '/foo[2:4]', '/foo[2:4]', '/foo[0:2]')
+
     def test_which_int_unset(self):
         i = Interface('/foo[0:4]')
         assert i.which_int('/foo[0:2]') == set()
@@ -609,11 +617,11 @@ class test_pattern(TestCase):
                                       'out', 'out', 'out', 'in', 'in'],
                                'type': ['spike', 'spike', 'gpot', 'gpot', 'gpot',
                                         'spike', 'spike', np.nan, 'gpot', 'gpot'],
-                               '0': ['foo', 'foo', 'foo', 'foo', 'foo',
+                               0: ['foo', 'foo', 'foo', 'foo', 'foo',
                                    'bar', 'bar', 'bar', 'bar', 'bar'],
-                               '1': [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]})
-        self.df_i.set_index('0', append=False, inplace=True)
-        self.df_i.set_index('1', append=True, inplace=True)
+                               1: [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]})
+        self.df_i.set_index(0, append=False, inplace=True)
+        self.df_i.set_index(1, append=True, inplace=True)
 
     def test_create(self):
         p = Pattern('/foo[0:5]', '/bar[0:5]')
@@ -986,7 +994,7 @@ class test_pattern(TestCase):
                                'type': ['gpot', 'spike', 'gpot', 'spike']},
                               index=pd.MultiIndex(levels=[['bar', 'foo'], [0, 1]],
                                                   labels=[[1, 1, 0, 0], [0, 1, 0, 1]],
-                                                  names=[u'0', u'1'],
+                                                  names=[0, 1],
                                                   dtype=object),
                               dtype=object)
         df = pd.DataFrame(data=[1, 1],
@@ -1010,7 +1018,7 @@ class test_pattern(TestCase):
                                     (1, 'out', np.nan)],
                 index=pd.MultiIndex(levels=[['aaa', 'bbb', 'ccc', 'ddd'], [0]], 
                                     labels=[[0, 1, 2, 3], [0, 0, 0, 0]],
-                                    names=['0', '1']),
+                                    names=[0, 1]),
                               columns=['interface', 'io', 'type'],
                               dtype=object)
         df_pat = pd.DataFrame(data=[(1,), (1,)],
