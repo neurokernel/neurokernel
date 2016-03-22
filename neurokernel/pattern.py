@@ -1856,7 +1856,7 @@ class Pattern(object):
         Parameters
         ----------
         g : networkx.DiGraph
-            Graph to convert.
+            Graph to convert. The node identifiers must be port identifiers.
 
         Returns
         -------
