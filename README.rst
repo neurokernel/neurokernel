@@ -8,7 +8,7 @@ Package Description
 
 `Project Website <https://neurokernel.github.io>`_ |
 `GitHub Repository <https://github.com/neurokernel/neurokernel>`_ |
-`Online Documentation <https://neurokernel.readthedocs.org>`_ |
+`Online Documentation <https://neurokernel.readthedocs.io>`_ |
 `Mailing List <https://lists.columbia.edu/mailman/listinfo/neurokernel-dev>`_ |
 `Forum <http://neurokernel.67426.x6.nabble.com/>`_
 
