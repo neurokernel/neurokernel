@@ -1850,7 +1850,7 @@ class Pattern(object):
         self.data.index.names = index_names
 
     @classmethod
-    def from_graph(cls, g):
+    def from_graph(cls, g, return_key_order = True):
         """Convert a NetworkX directed graph into a Pattern instance.
 
         Parameters
@@ -1858,10 +1858,16 @@ class Pattern(object):
         g : networkx.DiGraph
             Graph to convert. The node identifiers must be port identifiers.
 
+        return_key_order : bool
+            Whether to return the keys of all identifiers
+        
         Returns
         -------
         p : Pattern
             Pattern instance.
+        key : List
+              A list of keys of identifier, of which the order determines
+              the numbering of interfaces
 
         Notes
         -----
@@ -1902,7 +1908,8 @@ class Pattern(object):
 
         # Create selectors for each interface number:
         selector_list = []
-        for interface in sorted(ports_by_int.keys()):
+        key_order = sorted(ports_by_int.keys())
+        for interface in key_order:
             selector_list.append(','.join(ports_by_int[interface]))
 
         p = cls.from_concat(*selector_list,
@@ -1914,7 +1921,11 @@ class Pattern(object):
 
         p.data.sort_index(inplace=True)
         p.interface.data.sort_index(inplace=True)
-        return p
+        
+        if return_key_order:
+            return p, key_order
+        else:
+            return p
 
     @classmethod
     def split_multiindex(cls, idx, a, b):
