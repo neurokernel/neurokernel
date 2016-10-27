@@ -134,23 +134,18 @@ class Module(mpi.Worker):
         # Ensure that the input and output port selectors respectively
         # select mutually exclusive subsets of the set of all ports exposed by
         # the module:
-        if not SelectorMethods.is_in(sel_in, sel):
-            raise ValueError('input port selector not in selector of all ports')
-        if not SelectorMethods.is_in(sel_out, sel):
-            raise ValueError('output port selector not in selector of all ports')
-        if not SelectorMethods.are_disjoint(sel_in, sel_out):
-            raise ValueError('input and output port selectors not disjoint')
 
+        #assert(SelectorMethods.is_in(sel_in, sel))
+        #assert(SelectorMethods.is_in(sel_out, sel))
+        #assert(SelectorMethods.are_disjoint(sel_in, sel_out))
+        
         # Ensure that the graded potential and spiking port selectors
         # respectively select mutually exclusive subsets of the set of all ports
         # exposed by the module:
-        if not SelectorMethods.is_in(sel_gpot, sel):
-            raise ValueError('gpot port selector not in selector of all ports')
-        if not SelectorMethods.is_in(sel_spike, sel):
-            raise ValueError('spike port selector not in selector of all ports')
-        if not SelectorMethods.are_disjoint(sel_gpot, sel_spike):
-            raise ValueError('gpot and spike port selectors not disjoint')
-
+        #assert(SelectorMethods.is_in(sel_gpot, sel))
+        #assert(SelectorMethods.is_in(sel_spike, sel))
+        #assert(SelectorMethods.are_disjoint(sel_gpot, sel_spike))
+        
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
         self.rank_to_id = rank_to_id

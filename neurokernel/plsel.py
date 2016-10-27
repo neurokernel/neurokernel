@@ -889,8 +889,8 @@ class SelectorMethods(SelectorParser):
                 return [tuple(x)+('',)*(pad_len-len(x)) \
                         for x in selector.expanded]
 
-        assert cls.is_selector(selector)
-        assert not cls.is_ambiguous(selector)
+        #assert cls.is_selector(selector)
+        #assert not cls.is_ambiguous(selector)
 
         if type(selector) in [str, unicode]:
             p = cls.parse(selector)
@@ -1421,8 +1421,8 @@ class SelectorMethods(SelectorParser):
             is an empty selector, this method always returns True.
         """
 
-        assert cls.is_selector(s)
-        assert cls.is_selector(t)
+        #assert cls.is_selector(s)
+        #assert cls.is_selector(t)
 
         s_exp = set(cls.expand(s))
         if s_exp == set([()]):
