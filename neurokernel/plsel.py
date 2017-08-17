@@ -109,7 +109,7 @@ class Selector(object):
         """
         List of individual identifiers in selector.
         """
-        
+
         return [SelectorMethods.collapse((i,)) for i in self._expanded]
 
     @property
@@ -133,7 +133,7 @@ class Selector(object):
         Returns
         -------
         result : Selector
-            Selector containing all of the port identifiers comprised by all of the 
+            Selector containing all of the port identifiers comprised by all of the
             arguments.
 
         Notes
@@ -172,7 +172,7 @@ class Selector(object):
         Returns
         -------
         result : Selector
-            Each port identifier in the returned Selector is equivalent to 
+            Each port identifier in the returned Selector is equivalent to
             the elementwise concatenation of the identifiers in the listed
             Selector instances.
         """
@@ -279,13 +279,13 @@ class Selector(object):
 class SelectorParser(object):
     """
     This class implements a parser for path-like selectors that can
-    be associated with elements in a sequential data structure such as a 
+    be associated with elements in a sequential data structure such as a
     Pandas DataFrame; in the latter case, each level of the selector corresponds
     to a level of a Pandas MultiIndex. An index level may either be a
     denoted by a string label (e.g., 'foo') or a numerical index (e.g., 0, 1,
     2); a selector level may additionally be a list of strings (e.g.,
-    '[foo,bar]') or integers (e.g., '[0,2,4]') or continuous intervals 
-    (e.g., '[0:5]'). The '*' symbol matches any value in a level, while a 
+    '[foo,bar]') or integers (e.g., '[0,2,4]') or continuous intervals
+    (e.g., '[0:5]'). The '*' symbol matches any value in a level, while a
     range with an open upper bound (e.g., '[5:]') will match all integers
     greater than or equal to the lower bound.
 
@@ -428,8 +428,8 @@ class SelectorParser(object):
     def p_selector_dotplus_selector(cls, p):
         'selector : selector DOTPLUS selector'
         # Expand ranges and wrap strings with lists in each selector:
-        for i in xrange(len(p[1])): 
-            for j in xrange(len(p[1][i])): 
+        for i in xrange(len(p[1])):
+            for j in xrange(len(p[1][i])):
                 if type(p[1][i][j]) in [int, str, unicode]:
                     p[1][i][j] = [p[1][i][j]]
                 elif type(p[1][i][j]) == slice:
@@ -440,13 +440,13 @@ class SelectorParser(object):
                     p[3][i][j] = [p[3][i][j]]
                 elif type(p[3][i][j]) == slice:
                     p[3][i][j] = range(p[3][i][j].start, p[3][i][j].stop)
-                    
+
         # Fully expand both selectors into individual identifiers
         ids_1 = [list(x) for y in p[1] for x in itertools.product(*y)]
         ids_3 = [list(x) for y in p[3] for x in itertools.product(*y)]
-        
+
         # The expanded selectors must comprise the same number of identifiers:
-        assert len(ids_1) == len(ids_3)        
+        assert len(ids_1) == len(ids_3)
         p[0] = [a+b for (a, b) in zip(ids_1, ids_3)]
 
     @classmethod
@@ -573,7 +573,7 @@ class SelectorMethods(SelectorParser):
     """
     Class for manipulating and using path-like selectors.
 
-    Contains class methods for expanding selectors, selecting rows from a 
+    Contains class methods for expanding selectors, selecting rows from a
     Pandas DataFrame using a selector, etc.
 
     The class can also be used to create new MultiIndex instances from selectors
@@ -589,15 +589,15 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         s : Selector, str, unicode, or sequence
-            Selector class instance, raw selector string (e.g., '/foo[0:2]'), 
+            Selector class instance, raw selector string (e.g., '/foo[0:2]'),
             sequence of token sequences (e.g., [['foo', (0, 2)]]), or sequence
             of tokens (e.g., ['foo', 0]).
-        
+
         Returns
         -------
         result : bool
             True for a sequence containing only strings and/or integers
-            (e.g., ['foo', 0]) or a selector string that expands into a 
+            (e.g., ['foo', 0]) or a selector string that expands into a
             single sequence of strings and/or integers (e.g., [['foo', 0]]).
 
         Notes
@@ -610,7 +610,7 @@ class SelectorMethods(SelectorParser):
             return len(s) == 1
 
         if np.iterable(s):
-            
+
             # Try to expand string:
             if type(s) in [str, unicode]:
                 try:
@@ -631,7 +631,7 @@ class SelectorMethods(SelectorParser):
                     return False
 
             # A sequence of integers and/or strings is a valid port identifier:
-            elif set(map(type, s)).issubset([int, str, unicode]):               
+            elif set(map(type, s)).issubset([int, str, unicode]):
                 return True
             else:
                 return False
@@ -648,7 +648,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         s : sequence
-            Expanded selector (i.e., a sequence of sequences) or a sequence of 
+            Expanded selector (i.e., a sequence of sequences) or a sequence of
             string or integer tokens.
 
         Returns
@@ -658,7 +658,7 @@ class SelectorMethods(SelectorParser):
 
         Notes
         -----
-        Accepts sequences of tokens as well as expanded selectors (even though 
+        Accepts sequences of tokens as well as expanded selectors (even though
         a sequence of tokens is not a valid selector).
         """
 
@@ -690,7 +690,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : Selector, str, unicode or sequence
-            Selector class instance, selector string (e.g., '/foo[0:2]'), 
+            Selector class instance, selector string (e.g., '/foo[0:2]'),
             or sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
@@ -727,7 +727,7 @@ class SelectorMethods(SelectorParser):
         ----------
         s : str, unicode, or sequence
             String or sequence to test.
-        
+
         Returns
         -------
         result : bool
@@ -739,7 +739,7 @@ class SelectorMethods(SelectorParser):
         Ambiguous selectors are not deemed to be empty.
         """
 
-        if isinstance(selector, Selector): 
+        if isinstance(selector, Selector):
             return len(selector) == 0
 
         if type(selector) in [str, unicode] and \
@@ -791,7 +791,7 @@ class SelectorMethods(SelectorParser):
 
         # All tokens are valid:
         return True
-        
+
     @classmethod
     def is_selector_str(cls, s):
         """
@@ -805,7 +805,7 @@ class SelectorMethods(SelectorParser):
         Returns
         -------
         result : bool
-            True if the specified selector is a parseable string 
+            True if the specified selector is a parseable string
             (e.g., '/foo[0:2]'), False otherwise.
         """
 
@@ -863,7 +863,7 @@ class SelectorMethods(SelectorParser):
         -------
         result : list
             List of identifiers. If the number of levels in the selector is 1,
-            each is a string or integer token; otherwise, each identifier is 
+            each is a string or integer token; otherwise, each identifier is
             a tuple of identifier is a tuple of tokens.
 
         Examples
@@ -890,12 +890,15 @@ class SelectorMethods(SelectorParser):
                         for x in selector.expanded]
 
         #assert cls.is_selector(selector)
-        #assert not cls.is_ambiguous(selector)
+        assert not cls.is_ambiguous(selector)
 
         if type(selector) in [str, unicode]:
-            p = cls.parse(selector)
+            try:
+                p = cls.parse(selector)
+            except:
+                raise ValueError('invalid selector')
         elif np.iterable(selector):
-
+            assert cls.is_selector(selector)
             # Assume empty iterables are empty selectors:
             if not selector:
                 selector = [()]
@@ -945,7 +948,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : Selector, str, unicode, or sequence
-            Selector class instance, string (e.g., '/foo[0:2]'), or 
+            Selector class instance, string (e.g., '/foo[0:2]'), or
             sequence of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
@@ -977,7 +980,7 @@ class SelectorMethods(SelectorParser):
 
                     # The presence of a range containing more than 1 element
                     # implies expandability:
-                    if len(p[i][j]) > 1: return True                        
+                    if len(p[i][j]) > 1: return True
                 elif type(p[i][j]) == list:
 
                     # The presence of a list containing more than 1 unique
@@ -990,7 +993,7 @@ class SelectorMethods(SelectorParser):
             return True
         else:
             return False
-        
+
     @staticmethod
     def are_consecutive(int_list):
         """
@@ -1005,7 +1008,7 @@ class SelectorMethods(SelectorParser):
         -------
         result : bool
             True if the integers are consecutive, false otherwise.
-        
+
         Notes
         -----
         Does not assume that the list is sorted.
@@ -1025,7 +1028,7 @@ class SelectorMethods(SelectorParser):
         ----------
         s : sequence
             Sequence of expanded selector tokens.
-        
+
         Returns
         -------
         result : str
@@ -1059,7 +1062,7 @@ class SelectorMethods(SelectorParser):
         selector : iterable
             Expanded selector. If the selector is a string, it is returned
             unchanged.
-        
+
         Returns
         -------
         s : str
@@ -1301,12 +1304,12 @@ class SelectorMethods(SelectorParser):
             List of lists of token values extracted by ply.
         start, stop : int
             Start and end indices in `row` over which to test entries. If
-            the 
+            the
 
         Returns
         -------
         result : bool
-            True of all entries in specified subinterval of row match, 
+            True of all entries in specified subinterval of row match,
             False otherwise.
         """
 
@@ -1373,7 +1376,7 @@ class SelectorMethods(SelectorParser):
         Returns
         -------
         result : bool
-            True of all entries in specified subinterval of row match, 
+            True of all entries in specified subinterval of row match,
             False otherwise.
         """
 
@@ -1411,7 +1414,7 @@ class SelectorMethods(SelectorParser):
         ----------
         s, t : Selector, str, unicode, or sequence
             Check whether selector `s` is in `t`. Each selector is either a
-            Selector class instance, a string (e.g., '/foo[0:2]'), or a sequence 
+            Selector class instance, a string (e.g., '/foo[0:2]'), or a sequence
             of token sequences (e.g., [['foo', (0, 2)]]).
 
         Returns
@@ -1421,8 +1424,8 @@ class SelectorMethods(SelectorParser):
             is an empty selector, this method always returns True.
         """
 
-        #assert cls.is_selector(s)
-        #assert cls.is_selector(t)
+        assert cls.is_selector(s)
+        assert cls.is_selector(t)
 
         s_exp = set(cls.expand(s))
         if s_exp == set([()]):
@@ -1443,7 +1446,7 @@ class SelectorMethods(SelectorParser):
         df : pandas.DataFrame
             DataFrame instance on which to apply the selector.
         selector : Selector, str, unicode, or sequence
-            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence
             of token sequences (e.g., [['foo', (0, 2)]]).
         start, stop : int
             Start and end indices in `row` over which to test entries.
@@ -1452,7 +1455,7 @@ class SelectorMethods(SelectorParser):
         Returns
         -------
         result : list
-            List of tuples containing index labels for selected rows. If 
+            List of tuples containing index labels for selected rows. If
             `df.index` is an Index, the result is a list of labels.
         """
 
@@ -1468,7 +1471,7 @@ class SelectorMethods(SelectorParser):
         elif type(selector) in [list, tuple]:
             parse_list = selector
         else:
-            raise ValueError('invalid selector type')        
+            raise ValueError('invalid selector type')
 
         # The maximum number of tokens must not exceed the number of levels in the
         # DataFrame's MultiIndex:
@@ -1538,7 +1541,7 @@ class SelectorMethods(SelectorParser):
         ----------
         idx : pandas.Index or pandas.MultiIndex
             Index containing port identifiers.
-        
+
         Returns
         -------
         selector : list of tuple
@@ -1581,7 +1584,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : Selector, str, unicode, or sequence
-            Selector class instance, string (e.g., '/foo[0:2]'), or sequence 
+            Selector class instance, string (e.g., '/foo[0:2]'), or sequence
             of token sequences (e.g., [['foo', slice(0, 2)]]).
         pad_len : int
             Length to which expanded token sequences should be padded with blanks.
@@ -1616,7 +1619,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         sel_0, sel_1 : str or sequence
-            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            Selector strings (e.g., '/foo[0:2]') or sequence of token
             sequences (e.g., [['foo', (0, 2)]]). Both of the selectors must
             comprise the same number of port identifiers.
         names : list
@@ -1679,7 +1682,7 @@ class SelectorMethods(SelectorParser):
         levels = [sorted(set(level)) for level in levels]
 
         # Start with at least one label so that a valid Index will be returned
-        # if the selector is empty:        
+        # if the selector is empty:
         labels = [[]]
 
         # Construct label indices:
@@ -1688,7 +1691,7 @@ class SelectorMethods(SelectorParser):
                 if len(labels) < j+1:
                     labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
-                    
+
         if not names:
             names = range(len(levels))
         return pd.MultiIndex(levels=levels, labels=labels, names=names)
@@ -1701,7 +1704,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         sel_0, sel_1 : str or sequence
-            Selector strings (e.g., '/foo[0:2]') or sequence of token 
+            Selector strings (e.g., '/foo[0:2]') or sequence of token
             sequences (e.g., [['foo', (0, 2)]]).
         names : list
             Names of levels to use in generated MultiIndex. If no names are
@@ -1763,7 +1766,7 @@ class SelectorMethods(SelectorParser):
         levels = [sorted(set(level)) for level in levels]
 
         # Start with at least one label so that a valid Index will be returned
-        # if the selector is empty:        
+        # if the selector is empty:
         labels = [[]]
 
         # Construct label indices:
@@ -1786,7 +1789,7 @@ class SelectorMethods(SelectorParser):
         Parameters
         ----------
         selector : Selector, str, unicode, or sequence
-            Selector class instance, string (e.g., '/foo[0:2]'), or 
+            Selector class instance, string (e.g., '/foo[0:2]'), or
             sequence of token sequences (e.g., [['foo', (0, 2)]]).
         names : list
             Names of levels to use in generated MultiIndex. If no names are
@@ -1816,8 +1819,8 @@ class SelectorMethods(SelectorParser):
             return pd.MultiIndex.from_tuples(selector.expanded,
                                              names=names)
 
-        # XXX It might be preferable to make expand() 
-        # convert all output to a tuple rather than just doing so here: 
+        # XXX It might be preferable to make expand()
+        # convert all output to a tuple rather than just doing so here:
         selectors = tuple(cls.expand(selector))
 
         N_sel = len(selectors)
