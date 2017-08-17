@@ -120,7 +120,7 @@ First, install the following Ubuntu packages:
 *  ``libibverbs1``
 *  ``libnuma1``
 *  ``libpmi0``
-*  ``libslurm26``
+*  ``libslurm26`` (``libslurm29`` for Ubuntu 16.04)
 *  ``libtorque2``
 
 These are required by the conda OpenMPI packages prepared
