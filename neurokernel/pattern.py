@@ -1645,7 +1645,6 @@ class Pattern(object):
         assert src_int in self.interface.interface_ids and \
             dest_int in self.interface.interface_ids
 
-        start = time.time()
         # Filter destination ports by specified type:
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
@@ -1764,7 +1763,7 @@ class Pattern(object):
             else:
                 to_f = lambda x: x['type'] == dest_type
                 to_int = self.interface.interface_ports(dest_int).data_select(to_f)
-                
+
         to_idx = set(to_int.index)
 
         idx = []
