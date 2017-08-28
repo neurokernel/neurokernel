@@ -78,7 +78,7 @@ class Interface(object):
 
         # Dictionary containing mappers for different port types:
         self.pm = {}
-        
+
     def __validate_index__(self, idx):
         """
         Raise an exception if the specified index will result in an invalid interface.
@@ -144,7 +144,7 @@ class Interface(object):
             return
         else:
             selector = Selector(selector)
-        
+
         # Don't waste time trying to do anything if the selector is empty:
         if not selector.nonempty:
             return
@@ -178,10 +178,10 @@ class Interface(object):
             s = [i for i in itertools.chain(*selector.expanded)]
         else:
             s = self.sel.pad_selector(selector.expanded,
-                                      len(self.index.shape))
+                                      len(self.index.levshape))
         for k, v in data.iteritems():
             self.data[k].ix[s] = v
-        
+
     @property
     def index(self):
         """
@@ -347,7 +347,7 @@ class Interface(object):
         --------
         >>> d = {'/foo[0]': [0, 'in', 'gpot'], '/foo[1]': [1, 'in', 'gpot']}
         >>> i = Interface.from_dict(d)
-        
+
         Parameters
         ----------
         d : dict
@@ -355,7 +355,7 @@ class Interface(object):
             with the corresponding ports. If a scalar, the data is assigned to
             the first attribute; if an iterable, the data is assigned to the
             attributes in order.
-        
+
         Returns
         -------
         i : Interface
@@ -380,13 +380,13 @@ class Interface(object):
         >>> g.add_node('/foo[0]', interface=0, io='in', type='gpot')
         >>> g.add_node('/foo[1]', interface=0, io='in', type='gpot')
         >>> i = Interface.from_graph(g)
-        
+
         Parameters
         ----------
         g : networkx.Graph
             Graph whose node IDs are path-like port identifiers. The node attributes
             are assigned to the ports.
-        
+
         Returns
         -------
         i : Interface
@@ -448,7 +448,7 @@ class Interface(object):
         Returns
         -------
         interface : Interface or list of tuples
-            Either an Interface instance containing all graded potential ports and 
+            Either an Interface instance containing all graded potential ports and
             their attributes in the specified interface, or a list of tuples
             corresponding to the expanded ports.
         """
@@ -490,7 +490,7 @@ class Interface(object):
         Returns
         -------
         interface : Interface or list of tuples
-            Either an Interface instance containing all input ports and 
+            Either an Interface instance containing all input ports and
             their attributes in the specified interface, or a list of tuples
             corresponding to the expanded ports.
         """
@@ -532,7 +532,7 @@ class Interface(object):
         Returns
         -------
         interface : Interface
-            Either an Interface instance containing all ports and 
+            Either an Interface instance containing all ports and
             their attributes in the specified interface, or a list of tuples
             corresponding to the expanded ports.
         """
@@ -577,7 +577,7 @@ class Interface(object):
         n_left_names = len(self.data.index.names)
         n_right_names = len(i.data.index.names)
 
-        # Pandas' merge mechanism fails if the number of levels in each of the 
+        # Pandas' merge mechanism fails if the number of levels in each of the
         # merged MultiIndex indices differs and there is overlap of more than
         # one level; we therefore pad the index with the smaller number of
         # levels before attempting the merge:
@@ -591,7 +591,7 @@ class Interface(object):
                 new_col = str(n)
                 df_left[new_col] = ''
                 df_left.set_index(new_col, append=True, inplace=True)
-        return pd.merge(df_left, df_right,                            
+        return pd.merge(df_left, df_right,
                         left_index=True,
                         right_index=True)
 
@@ -614,7 +614,7 @@ class Interface(object):
         Returns
         -------
         result : list of tuple
-            Expanded port identifiers shared by the two specified Interface 
+            Expanded port identifiers shared by the two specified Interface
             instances.
 
         Notes
@@ -643,7 +643,7 @@ class Interface(object):
             y_list = [(a,) for a in y.index]
 
         return list(set(x_list).intersection(y_list))
-        
+
     def is_compatible(self, a, i, b, allow_subsets=False):
         """
         Check whether two interfaces can be connected.
@@ -669,8 +669,8 @@ class Interface(object):
         result : bool
             True if both interfaces comprise the same identifiers, the set 'type'
             attributes for each matching pair of identifiers in the two
-            interfaces match, and each identifier with an 'io' attribute set 
-            to 'out' in one interface has its 'io' attribute set to 'in' in the 
+            interfaces match, and each identifier with an 'io' attribute set
+            to 'out' in one interface has its 'io' attribute set to 'in' in the
             other interface.
 
         Notes
@@ -678,7 +678,7 @@ class Interface(object):
         Assumes that the port identifiers in both interfaces are sorted in the
         same order.
         """
-        
+
         # Merge the interface data on their indices (i.e., their port identifiers):
         data_merged = self._merge_on_interfaces(a, i, b)
 
@@ -705,7 +705,7 @@ class Interface(object):
 
         # Require that all ports in the two interfaces be compatible:
         else:
-            
+
             # If one interface contains identifiers not in the other, they are
             # incompatible:
             if len(data_merged) < max(len(self.data[self.data['interface'] == a]),
@@ -730,7 +730,7 @@ class Interface(object):
     def is_in_interfaces(self, s):
         """
         Check whether ports comprised by a selector are in the stored interfaces.
-        
+
         Parameters
         ----------
         s : str or unicode
@@ -744,7 +744,7 @@ class Interface(object):
 
         try:
             # Pad the expanded selector with blanks to prevent pandas from
-            # spurious matches such as mistakenly validating '/foo' as being in 
+            # spurious matches such as mistakenly validating '/foo' as being in
             # an Interface that only contains the ports '/foo[0:2]':
             idx = self.sel.expand(s, self.idx_levels)
             if not isinstance(self.data.index, pd.MultiIndex):
@@ -775,7 +775,7 @@ class Interface(object):
         Returns
         -------
         interface : Interface or list of tuples
-            Either an Interface instance containing all output ports and 
+            Either an Interface instance containing all output ports and
             their attributes in the specified interface, or a list of tuples
             corresponding to the expanded ports.
         """
@@ -840,13 +840,13 @@ class Interface(object):
         i : int
             Interface identifier. If None, return all spiking ports.
         tuples : bool
-            If True, return a list of tuples; if False, return an 
+            If True, return a list of tuples; if False, return an
             Interface instance.
 
         Returns
         -------
         interface : Interface or list of tuples
-            Either an Interface instance containing all spiking ports and 
+            Either an Interface instance containing all spiking ports and
             their attributes in the specified interface, or a list of tuples
             corresponding to the expanded ports.
         """
@@ -927,7 +927,7 @@ class Interface(object):
                 return [(t,) for t in self.data[self.data['interface'] == i].index]
         except:
             return []
-    
+
     def which_int(self, s):
         """
         Return the interface containing the identifiers comprised by a selector.
@@ -986,7 +986,7 @@ class Interface(object):
         # Ensure that the ports in the specified port mapper are a subset of
         # those in the interface associated with the specified type:
         assert isinstance(pm, BasePortMapper)
-        if not self.sel.is_in(pm.index.tolist(), 
+        if not self.sel.is_in(pm.index.tolist(),
                               self.pm[t].index.tolist()):
             raise ValueError('cannot set mapper using undefined selectors')
         self.pm[t] = pm.copy()
@@ -1007,7 +1007,7 @@ class Interface(object):
 
         Notes
         -----
-        Interfaces containing the same rows in different orders are not 
+        Interfaces containing the same rows in different orders are not
         regarded as equivalent.
         """
 
@@ -1024,20 +1024,20 @@ class Pattern(object):
     """
     Connectivity pattern linking sets of interface ports.
 
-    This class represents connection mappings between interfaces comprising 
-    sets of ports. Ports are represented using path-like identifiers; 
-    the presence of a row linking the two identifiers in the class' internal 
-    index indicates the presence of a connection. A single data attribute 
-    ('conn') associated with defined connections is created by default. 
-    Specific attributes may be accessed by specifying their names after the 
-    port identifiers; if a nonexistent attribute is specified when a sequential 
-    value is assigned, a new column for that attribute is automatically 
+    This class represents connection mappings between interfaces comprising
+    sets of ports. Ports are represented using path-like identifiers;
+    the presence of a row linking the two identifiers in the class' internal
+    index indicates the presence of a connection. A single data attribute
+    ('conn') associated with defined connections is created by default.
+    Specific attributes may be accessed by specifying their names after the
+    port identifiers; if a nonexistent attribute is specified when a sequential
+    value is assigned, a new column for that attribute is automatically
     created: ::
 
         p['/x[0]', '/y[0]', 'conn', 'x'] = [1, 'foo']
 
-    The direction of connections between ports in a class instance determines 
-    whether they are input or output ports. Ports may not both receive input or 
+    The direction of connections between ports in a class instance determines
+    whether they are input or output ports. Ports may not both receive input or
     emit output. Patterns may contain fan-out connections, i.e., one source port
     connected to multiple destination ports, but not fan-in connections, i.e.,
     multiple source ports connected to a single destination port.
@@ -1061,8 +1061,8 @@ class Pattern(object):
     Parameters
     ----------
     sel0, sel1, ...: str, unicode, or sequence
-        Selectors defining the sets of ports potentially connected by the 
-        pattern. These selectors must be disjoint, i.e., no identifier 
+        Selectors defining the sets of ports potentially connected by the
+        pattern. These selectors must be disjoint, i.e., no identifier
         comprised by one selector may be in any other selector.
     columns : sequence of str
         Data column names.
@@ -1112,7 +1112,7 @@ class Pattern(object):
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
 
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
-        
+
     @property
     def from_slice(self):
         """
@@ -1127,7 +1127,7 @@ class Pattern(object):
         Slice of pattern index row corresponding to destination port(s).
         """
 
-        return slice(self.num_levels['from'],        
+        return slice(self.num_levels['from'],
                      self.num_levels['from']+self.num_levels['to'])
 
     @property
@@ -1157,15 +1157,15 @@ class Pattern(object):
         Parameters
         ----------
         sel0, sel1, ...: str
-            Selectors defining the sets of ports potentially connected by the 
+            Selectors defining the sets of ports potentially connected by the
             pattern. These selectors must be disjoint, i.e., no identifier comprised
             by one selector may be in any other selector, and non-empty.
         from_sel, to_sel : str
-            Selectors that describe the pattern's initial index. If specified, 
+            Selectors that describe the pattern's initial index. If specified,
             both selectors must be set. If no selectors are set, the index is
             initially empty.
         gpot_sel, spike_sel : str
-            Selectors that describe the graded potential and spiking ports in a 
+            Selectors that describe the graded potential and spiking ports in a
             pattern's initial index.
         data : numpy.ndarray, dict, or pandas.DataFrame
             Data to load store in class instance.
@@ -1247,7 +1247,7 @@ class Pattern(object):
         Parameters
         ----------
         df_int : pandas.DataFrame
-            DataFrame with a MultiIndex and data columns 'interface', 
+            DataFrame with a MultiIndex and data columns 'interface',
             'io', and 'type' (additional columns may also be present) that
             describes the pattern's interfaces. The index's rows must correspond
             to individual port identifiers.
@@ -1255,7 +1255,7 @@ class Pattern(object):
             DataFrame with a MultiIndex and a data column 'conn' (additional
             columns may also be present) that describes the connections between
             ports in the pattern's interfaces. The index's level names must be
-            'from_0'..'from_N', 'to_0'..'to_M', where N and M are the maximum 
+            'from_0'..'from_N', 'to_0'..'to_M', where N and M are the maximum
             number of levels in the pattern's two interfaces.
         """
 
@@ -1311,19 +1311,19 @@ class Pattern(object):
         Parameters
         ----------
         sel0, sel1, ...: str
-            Selectors defining the sets of ports potentially connected by the 
+            Selectors defining the sets of ports potentially connected by the
             pattern. These selectors must be disjoint, i.e., no identifier comprised
-            by one selector may be in any other selector.   
+            by one selector may be in any other selector.
         from_sel, to_sel : str
             Selectors that describe the pattern's initial index. If specified,
             both selectors must be set; the 'io' attribute of the ports
             comprised by these selectors is respectively set to 'out' and
             'in'. If no selectors are set, the index is initially empty.
         gpot_sel, spike_sel : str
-            Selectors that describe the graded potential and spiking ports in a 
+            Selectors that describe the graded potential and spiking ports in a
             pattern's initial index. If specified, the 'type' attribute of the
             ports comprised by these selectors is respectively set to 'gpot'
-            and 'spike'. 
+            and 'spike'.
         data : numpy.ndarray, dict, or pandas.DataFrame
             Data to load store in class instance.
         columns : sequence of str
@@ -1344,7 +1344,7 @@ class Pattern(object):
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         validate = kwargs['validate'] if kwargs.has_key('validate') else True
-        return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
+        return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel,
                                 gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='+', validate=validate)
 
@@ -1371,7 +1371,7 @@ class Pattern(object):
     def connected_ports(self, i=None, tuples=False):
         """
         Return ports that are connected by the pattern.
-        
+
         Parameters
         ----------
         i : int
@@ -1383,7 +1383,7 @@ class Pattern(object):
         Returns
         -------
         interface : Interface
-            Either an Interface instance containing all connected ports and 
+            Either an Interface instance containing all connected ports and
             their attributes in the specified interface, or a list of tuples
             corresponding to the expanded ports.
 
@@ -1400,7 +1400,7 @@ class Pattern(object):
             ports.add(t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']])
 
         # Sort the expanded ports so that the results are returned in
-        # lexicographic order:        
+        # lexicographic order:
         df = self.interface.data.ix[sorted(ports)]
         if i is None:
             if tuples:
@@ -1439,10 +1439,10 @@ class Pattern(object):
             comprised by these selectors is respectively set to 'out' and
             'in'. If no selectors are set, the index is initially empty.
         gpot_sel, spike_sel : str
-            Selectors that describe the graded potential and spiking ports in a 
+            Selectors that describe the graded potential and spiking ports in a
             pattern's initial index. If specified, the 'type' attribute of the
             ports comprised by these selectors is respectively set to 'gpot'
-            and 'spike'. 
+            and 'spike'.
         columns : sequence of str
             Data column names.
         validate : bool
@@ -1461,7 +1461,7 @@ class Pattern(object):
         data = kwargs['data'] if kwargs.has_key('data') else None
         columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
         validate = kwargs['validate'] if kwargs.has_key('validate') else True
-        return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel, 
+        return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel,
                                 gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='.+', validate=validate)
 
@@ -1502,7 +1502,7 @@ class Pattern(object):
     def connected_port_pairs(self, as_str=False):
         """
         Return connections as pairs of port identifiers.
-        
+
         Parameters
         ----------
         as_str : bool
@@ -1575,7 +1575,7 @@ class Pattern(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        # If the specified selectors correspond to existing entries, 
+        # If the specified selectors correspond to existing entries,
         # set their attributes:
         if found:
             for k, v in data.iteritems():
@@ -1606,7 +1606,7 @@ class Pattern(object):
         else:
             return self.sel.select(self.data, selector=selector)
 
-    def src_idx(self, src_int, dest_int, 
+    def src_idx(self, src_int, dest_int,
                 src_type=None, dest_type=None, dest_ports=None, duplicates=False):
         """
         Retrieve source ports connected to the specified destination ports.
@@ -1626,11 +1626,11 @@ class Pattern(object):
         src_int, dest_int : int
             Source and destination interface identifiers.
         src_type, dest_type : str
-            Types of source and destination ports as listed in their respective 
+            Types of source and destination ports as listed in their respective
             interfaces.
         dest_ports : str
-            Path-like selector corresponding to ports in destination 
-            interface. If not specified, all ports in the destination 
+            Path-like selector corresponding to ports in destination
+            interface. If not specified, all ports in the destination
             interface are considered.
         duplicates : bool
             If True, include duplicate ports in output.
@@ -1644,7 +1644,7 @@ class Pattern(object):
         assert src_int != dest_int
         assert src_int in self.interface.interface_ids and \
             dest_int in self.interface.interface_ids
-        
+
         # Filter destination ports by specified type:
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
@@ -1680,7 +1680,7 @@ class Pattern(object):
             else:
                 f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice][0] in to_idx
         idx = self.data.select(f).index
-                
+
         if not duplicates:
 
             # Remove duplicate tuples from output without perturbing the order
@@ -1689,7 +1689,7 @@ class Pattern(object):
         else:
             return [x[self.from_slice] for x in idx]
 
-    def dest_idx(self, src_int, dest_int, 
+    def dest_idx(self, src_int, dest_int,
                  src_type=None, dest_type=None, src_ports=None):
         """
         Retrieve destination ports connected to the specified source ports.
@@ -1709,7 +1709,7 @@ class Pattern(object):
         src_int, dest_int : int
             Source and destination interface identifiers.
         src_type, dest_type : str
-            Types of source and destination ports as listed in their respective 
+            Types of source and destination ports as listed in their respective
             interfaces.
         src_ports : str
             Path-like selector corresponding to ports in source
@@ -1740,10 +1740,10 @@ class Pattern(object):
 
         # Filter source ports by specified ports:
         if src_ports is None:
-            from_idx = from_int.index    
+            from_idx = from_int.index
         else:
             from_idx = from_int[src_ports].index
-            
+
         # Filter destination ports by specified type:
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
@@ -1789,7 +1789,7 @@ class Pattern(object):
         Returns
         -------
         result : bool
-            True if at least one connection from a port identifier in interface 
+            True if at least one connection from a port identifier in interface
             `from_int` to a port identifier in interface `to_int` exists.
         """
 
@@ -1805,7 +1805,7 @@ class Pattern(object):
         # Get index of all defined connections:
         idx = self.data[self.data['conn'] != 0].index
         for t in idx:
-            
+
             # Split tuple into 'from' and 'to' identifiers; since the interface
             # index for a 'from' or 'to' identifier is an Index rather than a
             # MultiIndex, we need to extract a scalar rather than a tuple in the
@@ -1819,7 +1819,7 @@ class Pattern(object):
             else:
                 to_id = t[self.num_levels['from']:self.num_levels['from']+self.num_levels['to']]
 
-            # Check whether port identifiers are in the interface indices [*]:                
+            # Check whether port identifiers are in the interface indices [*]:
             if from_id in from_idx and to_id in to_idx:
                 return True
         return False
@@ -1828,7 +1828,7 @@ class Pattern(object):
         """
         Read connectivity data from CSV file.
 
-        Given N 'from' levels and M 'to' levels in the internal index, 
+        Given N 'from' levels and M 'to' levels in the internal index,
         the method assumes that the first N+M columns in the file specify
         the index levels.
 
@@ -1942,11 +1942,11 @@ class Pattern(object):
     def to_graph(self):
         """
         Convert the pattern to a networkx directed graph.
-        
+
         Returns
         -------
         g : networkx.DiGraph
-            Graph whose nodes are the pattern's ports 
+            Graph whose nodes are the pattern's ports
             and whose edges are the pattern's connections.
 
         Notes
@@ -1954,14 +1954,14 @@ class Pattern(object):
         The 'conn' attribute of the connections is not transferred to the graph
         edges.
 
-        This method relies upon the assumption that the sets of 
+        This method relies upon the assumption that the sets of
         port identifiers comprised by the pattern's interfaces are disjoint.
         """
 
         g = nx.DiGraph()
 
         # Add all of the ports as nodes:
-        for t in self.interface.data.index:    
+        for t in self.interface.data.index:
             if not isinstance(self.interface.data.index,
                               pd.MultiIndex):
                 t = (t,)
@@ -1991,7 +1991,7 @@ class Pattern(object):
 
         return g
 
-def are_compatible(sel_in_0, sel_out_0, sel_spike_0, sel_gpot_0, 
+def are_compatible(sel_in_0, sel_out_0, sel_spike_0, sel_gpot_0,
                    sel_in_1, sel_out_1, sel_spike_1, sel_gpot_1,
                    allow_subsets=False):
     """
