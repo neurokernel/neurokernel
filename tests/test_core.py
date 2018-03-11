@@ -77,10 +77,10 @@ class MyModule2(Module):
         self.out_buf.append(in_spike_data)
 
     def post_run(self):
-        super(MyModule2, self).post_run()
         if self.out_file_name:
             with open(self.out_file_name, 'w') as f:
                 pickle.dump(self.out_buf[1], f)
+        super(MyModule2, self).post_run()
 
 def make_sels(sel_in_gpot, sel_out_gpot, sel_in_spike, sel_out_spike):
     sel_in_gpot = Selector(sel_in_gpot)

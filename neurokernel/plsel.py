@@ -1831,7 +1831,7 @@ class SelectorMethods(SelectorParser):
                 names = range(max_levels)
 
             if selectors == ((),):
-                return pd.MultiIndex(levels=[[]], labels=[[]], names=names)
+                return pd.MultiIndex(levels=[[]], labels=[[]], names=[0])
             else:
                 return pd.MultiIndex.from_tuples(selectors, names=names)
 
