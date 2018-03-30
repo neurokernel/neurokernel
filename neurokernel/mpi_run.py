@@ -20,9 +20,20 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=True,
 
     Parameters
     ----------
-    func : function
+    func : function or str
         Function to be executed with mpiexec. All imports and variables used
         must be imported or defined within the function.
+    targets : list
+        Dependencies of the manager, such as child classes of the Module class
+        from neurokernel.core_gpu or neurokernel.core.
+    delete_tempfile : bool
+        Whether or not to delete temporary file once func is executed.
+    log : boolean
+        Whether or not to connect to logger for func if logger exists.
+    log_screen : bool
+        Whether or not to send log messages to the screen.
+    log_file_name : str
+        File to send log messages to.
     
     Returns
     -------
@@ -31,9 +42,6 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=True,
 
     Usage
     -----
-    This will only work when the target class is in a library (like LPU),
-        if the source for the class is in the source file it will not work. This
-        can be extended to be more general if anyone has a use for it.
     Does not seem to work with openmpi version 2
     func should not import neurokernel.mpi_relaunch
     All modules and variables used must be imported or defined within func
@@ -112,6 +120,44 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=True,
                     log_screen=True, log_file_name='neurokernel.log'):
     """
     Run the manager with mpiexec.
+    
+    Implemented as a fix to 'import neurokernel.mpi_relaunch', which does not work
+    in notebooks. Serializes the manager and sends it to a temporary file, then
+    sends a function to mpi_run, which loads the manager in an mpiexec process and
+    runs it using the common set of commands:
+        man.spawn()
+        man.start(steps = {Number of steps})
+        man.wait()
+    Returns the stdout of from the manager along with a string indicating whether
+    or not the manager ran properly.
+    
+    Parameters
+    ----------
+    man : neurokernel.core_gpu.Manager or neurokernel.core.Manager
+        The Neurokernel manager to be run.
+    steps : int
+        Number of steps to run the manager for.
+    targets : list
+        Dependencies of the manager, such as child classes of the Module class
+        from neurokernel.core_gpu or neurokernel.core.
+    delete_tempfile : bool
+        Whether or not to delete temporary file once the manager is executed.
+    log : boolean
+        Whether or not to connect to logger for manager if logger exists.
+    log_screen : bool
+        Whether or not to send log messages to the screen.
+    log_file_name : str
+        File to send log messages to.
+    
+    Returns
+    -------
+    output : str
+        The stdout from the manager run with mpiexec cast to a string.
+    
+    Usage
+    -----
+    Does not seem to work with openmpi version 2
+    Returns the stdout from the manager run under 'mpiexec -np 1 python {tmp_file_name}'
     """
 
     l = LoggerMixin("mpi_run_manager()",log_on=log)
