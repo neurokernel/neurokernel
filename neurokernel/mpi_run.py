@@ -7,8 +7,8 @@ import re
 
 from neurokernel.mixins import LoggerMixin
 
-def mpi_run(func, targets=None, delete_tempfile=True, log=True,
-            log_screen=True, log_file_name='neurokernel.log'):
+def mpi_run(func, targets=None, delete_tempfile=True, log=False,
+            log_screen=False, log_file_name='neurokernel.log'):
     """
     Run a function with mpiexec.
     
@@ -22,7 +22,8 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=True,
     ----------
     func : function or str
         Function to be executed with mpiexec. All imports and variables used
-        must be imported or defined within the function.
+        must be imported or defined within the function. func can either be a callable
+        function or code that represents a valid function.
     targets : list
         Dependencies of the manager, such as child classes of the Module class
         from neurokernel.core_gpu or neurokernel.core.
@@ -88,6 +89,7 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=True,
     main_code += "\n"
 
     try:
+        from mpi4py import MPI
         #Write code for the function to a temp file
         temp = tempfile.NamedTemporaryFile(delete = delete_tempfile)
         temp.write(target_text)
@@ -96,8 +98,15 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=True,
         temp.flush()
         
         #Execute the code
+        #There's a bug in Open MPI v2 that prevents running this with mpiexec. Running 'from mpi4py import MPI' 
+        #does a basic mpi_relaunch which will work for the notebook code, but you give up some of the features 
+        #of mpiexec.
+        if MPI.Get_library_version().startswith("Open MPI v2"):
+            command = ["python", temp.name]
+        else:
+            command = ["mpiexec", "-np", "1", "python", temp.name]
+
         env = os.environ.copy()
-        command = ["mpiexec", "-np", "1", "python", temp.name]
         l.log_info("Calling: " + " ".join(command))
         out = subprocess.check_output(command, env = env)
 
@@ -116,8 +125,8 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=True,
     return str(out)
 
 
-def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=True,
-                    log_screen=True, log_file_name='neurokernel.log'):
+def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
+                    log_screen=False, log_file_name='neurokernel.log'):
     """
     Run the manager with mpiexec.
     
@@ -156,8 +165,7 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=True,
     
     Usage
     -----
-    Does not seem to work with openmpi version 2
-    Returns the stdout from the manager run under 'mpiexec -np 1 python {tmp_file_name}'
+    Returns the stdout from the manager 
     """
 
     l = LoggerMixin("mpi_run_manager()",log_on=log)
