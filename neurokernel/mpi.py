@@ -320,7 +320,7 @@ if __name__ == '__main__':
     # Define a class whose constructor takes arguments so as to test
     # instantiation of the class by the manager:
     class MyWorker(Worker):
-        def __init__(self, x, y, z=None):
+        def __init__(self, x, y, z=None, routing_table=None):
             super(MyWorker, self).__init__()
             name = MPI.Get_processor_name()
             self.log_info('I am process %d of %d on %s.' % (self.rank,

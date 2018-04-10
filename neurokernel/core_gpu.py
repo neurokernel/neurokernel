@@ -12,6 +12,7 @@ from mpi4py import MPI
 import numpy as np
 import pycuda.gpuarray as gpuarray
 import twiggy
+from random import randint
 
 from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
@@ -205,6 +206,7 @@ class Module(mpi.Worker):
         self.data = {}
         self.data['gpot'] = gpuarray.to_gpu(data_gpot)
         self.data['spike'] = gpuarray.to_gpu(data_spike)
+
         self.pm = {}
         self.pm['gpot'] = GPUPortMapper(sel_gpot, self.data['gpot'], make_copy=False)
         self.pm['spike'] = GPUPortMapper(sel_spike, self.data['spike'], make_copy=False)
@@ -230,6 +232,14 @@ class Module(mpi.Worker):
             # subclassing of Module to create pure Python LPUs that don't use GPUs:
             import pycuda.driver as drv
             drv.init()
+
+            N_gpu = drv.Device.count()
+            if not self.device < N_gpu:
+                new_device = randint(0,N_gpu - 1)
+                self.log_warning("GPU device device %d not in GPU devices %s" % (self.device, str(range(0,N_gpu))))
+                self.log_warning("Setting device = %d" % new_device)
+                self.device = new_device
+
             try:
                 self.gpu_ctx = drv.Device(self.device).make_context()
             except Exception as e:
