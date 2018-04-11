@@ -1828,7 +1828,10 @@ class SelectorMethods(SelectorParser):
         # only if all selectors have same levels.
         if len(set(sel_lens)) == 1:
             if not names:
-                names = range(max_levels)
+                if max_levels:
+                    names = range(max_levels)
+                else:
+                    names = [0]
 
             if selectors == ((),):
                 return pd.MultiIndex(levels=[[] for _ in range(len(names))],
