@@ -11,7 +11,7 @@ import pycuda.gpuarray as gpuarray
 import pycuda.elementwise as elementwise
 import pycuda.tools as tools
 
-from pm import PortMapper
+from .pm import PortMapper
 
 class GPUPortMapper(PortMapper):
     """
@@ -40,17 +40,17 @@ class GPUPortMapper(PortMapper):
             return False
         else:
             return True
-    
+
     @property
     def data(self):
         """
         Data associated with ports.
         """
-        
+
         return self._data
 
     @data.setter
-    def data(self, x):        
+    def data(self, x):
         if self._validate_data(x):
             if x is None:
                 self._data = None
@@ -84,7 +84,7 @@ class GPUPortMapper(PortMapper):
         """
         C type corresponding to type of data array.
         """
-        
+
         if hasattr(self.data, 'dtype'):
             return tools.dtype_to_ctype(self.data.dtype)
         else:
@@ -98,7 +98,7 @@ class GPUPortMapper(PortMapper):
         Parameters
         ----------
         pm : neurokernel.plsel.PortMapper
-            Existing port mapper instance. If `pm` is not a GPUPortMapper, 
+            Existing port mapper instance. If `pm` is not a GPUPortMapper,
 
         Returns
         -------
@@ -133,12 +133,12 @@ class GPUPortMapper(PortMapper):
     def get_by_inds(self, inds):
         """
         Retrieve mapped data specified by integer index.
-        
+
         Parameters
         ----------
         inds : sequence of int
             Integer indices of data elements to return.
-        
+
         Returns
         -------
         result : numpy.ndarray
@@ -204,7 +204,7 @@ class GPUPortMapper(PortMapper):
             func = self.set_by_inds_scalar.cache[(inds.dtype, self.data.dtype)]
         except KeyError:
             inds_ctype = tools.dtype_to_ctype(inds.dtype)
-            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)        
+            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)
             func = elementwise.ElementwiseKernel(v, "dest[inds[i]] = src")
             self.set_by_inds_scalar.cache[(inds.dtype, self.data.dtype)] = func
         func(self.data, inds, data, range=slice(0, N, 1))
@@ -249,7 +249,7 @@ class GPUPortMapper(PortMapper):
             func = self.set_by_inds_array.cache[(inds.dtype, self.data.dtype)]
         except KeyError:
             inds_ctype = tools.dtype_to_ctype(inds.dtype)
-            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)        
+            v = "{data_ctype} *dest, {inds_ctype} *inds, {data_ctype} *src".format(data_ctype=self.data_ctype, inds_ctype=inds_ctype)
             func = elementwise.ElementwiseKernel(v, "dest[inds[i]] = src[i]")
             self.set_by_inds_array.cache[(inds.dtype, self.data.dtype)] = func
         func(self.data, inds, data, range=slice(0, N, 1))

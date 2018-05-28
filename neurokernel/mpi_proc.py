@@ -7,7 +7,7 @@ Classes for managing MPI-based processes.
 import inspect
 import os
 import sys
-from routing_table import RoutingTable
+from .routing_table import RoutingTable
 
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
@@ -35,10 +35,10 @@ except AttributeError:
         MPI._p_pickle.dumps = dill.dumps
         MPI._p_pickle.loads = dill.loads
 
-from mixins import LoggerMixin
-from tools.logging import set_excepthook
-from tools.misc import memoized_property
-from all_global_vars import all_global_vars
+from .mixins import LoggerMixin
+from .tools.logging import set_excepthook
+from .tools.misc import memoized_property
+from .all_global_vars import all_global_vars
 
 def getargnames(f):
     """
@@ -101,7 +101,7 @@ class Process(LoggerMixin):
     Process class.
     """
 
-    def __init__(self, *args, **kwargs):        
+    def __init__(self, *args, **kwargs):
         LoggerMixin.__init__(self, 'prc %s' % MPI.COMM_WORLD.Get_rank())
         set_excepthook(self.logger, True)
 
@@ -206,7 +206,7 @@ class ProcessManager(LoggerMixin):
         Parameters
         ----------
         target : Process
-            Class instantiate and run in MPI process. 
+            Class instantiate and run in MPI process.
         args : sequence
             Sequential arguments to pass to target class constructor.
         kwargs : dict
@@ -312,11 +312,11 @@ if __name__ == '__main__':
                           (MPI.COMM_WORLD.Get_rank(),
                            MPI.COMM_WORLD.Get_size(),
                            MPI.COMM_WORLD.Get_name()))
-        
+
     from tools.logging import setup_logger
 
     setup_logger(screen=True, multiline=True)
-    
+
     man = ProcessManager()
     man.add(MyProcess, 1, 2, a=3)
     man.add(MyProcess, 4, b=5, c=6)
