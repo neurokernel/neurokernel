@@ -99,7 +99,7 @@ class RoutingTable(object):
         # attributes if it already exists:
         if self.data.has_edge(key[0], key[1]):
             self.data.remove_edge(key[0], key[1])
-        self.data.add_edge(key[0], key[1], data)
+        self.data.add_edge(key[0], key[1], **data)
 
     def __getitem__(self, key):
         assert type(key) == tuple
