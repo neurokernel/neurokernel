@@ -12,19 +12,19 @@ from mpi4py import MPI
 import numpy as np
 import twiggy
 
-from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+from .ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
      ExceptionOnSignal, TryExceptionOnSignal
-from mixins import LoggerMixin
+from .mixins import LoggerMixin
 import mpi
-from tools.gpu import bufint
-from tools.logging import setup_logger
-from tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
-from tools.mpi import MPIOutput
-from pattern import Interface, Pattern
-from plsel import Selector, SelectorMethods
-from pm import BasePortMapper, PortMapper
-from routing_table import RoutingTable
-from uid import uid
+from .tools.gpu import bufint
+from .tools.logging import setup_logger
+from .tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
+from .tools.mpi import MPIOutput
+from .pattern import Interface, Pattern
+from .plsel import Selector, SelectorMethods
+from .pm import BasePortMapper, PortMapper
+from .routing_table import RoutingTable
+from .uid import uid
 
 CTRL_TAG = 1
 
@@ -56,7 +56,7 @@ class Module(mpi.Worker):
         Network port for controlling the module instance.
     ctrl_tag, gpot_tag, spike_tag : int
         MPI tags that respectively identify messages containing control data,
-        graded potential port values, and spiking port values transmitted to 
+        graded potential port values, and spiking port values transmitted to
         worker nodes.
     id : str
         Module identifier. If no identifier is specified, a unique
@@ -85,7 +85,7 @@ class Module(mpi.Worker):
         `pm['gpot']` and `pm['spike']` are instances of neurokernel.pm.PortMapper that
         map a module's ports to the contents of the values in `data`.
     data : dict
-        `data['gpot']` and `data['spike']` are arrays of data associated with 
+        `data['gpot']` and `data['spike']` are arrays of data associated with
         a module's graded potential and spiking ports.
     """
 
@@ -117,7 +117,7 @@ class Module(mpi.Worker):
         # so that it is called by atexit before MPI.Finalize() (if the file is
         # closed after MPI.Finalize() is called, an error will occur):
         for k, v in twiggy.emitters.iteritems():
-             if isinstance(v._output, MPIOutput):       
+             if isinstance(v._output, MPIOutput):
                  atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
@@ -271,7 +271,7 @@ class Module(mpi.Worker):
         self._in_port_dict_buf_ids['spike'] = {}
 
         # Lengths of input buffers:
-        self._in_buf_len = {} 
+        self._in_buf_len = {}
         self._in_buf_len['gpot'] = {}
         self._in_buf_len['spike'] = {}
 
@@ -300,11 +300,11 @@ class Module(mpi.Worker):
             # module's port map data array:
             self._in_port_dict_buf_ids['gpot'][in_id] = \
                 np.array(renumber_in_order(BasePortMapper(pat.gpot_ports(int_0).to_tuples()).
-                        ports_to_inds(pat.src_idx(int_0, int_1, 'gpot', 'gpot', duplicates=True))))            
+                        ports_to_inds(pat.src_idx(int_0, int_1, 'gpot', 'gpot', duplicates=True))))
             self._in_port_dict_buf_ids['spike'][in_id] = \
                 np.array(renumber_in_order(BasePortMapper(pat.spike_ports(int_0).to_tuples()).
                         ports_to_inds(pat.src_idx(int_0, int_1, 'spike', 'spike', duplicates=True))))
-            
+
             # The size of the input buffer to the current module must be the
             # same length as the output buffer of module `in_id`:
             self._in_buf_len['gpot'][in_id] = len(pat.src_idx(int_0, int_1, 'gpot', 'gpot'))
@@ -498,7 +498,7 @@ class Module(mpi.Worker):
         # Start timing the main loop:
         if self.time_sync:
             self.intercomm.isend(['start_time', (self.rank, time.time())],
-                                 dest=0, tag=self._ctrl_tag)                
+                                 dest=0, tag=self._ctrl_tag)
             self.log_info('sent start time to manager')
 
     def post_run(self):
@@ -670,7 +670,7 @@ class Manager(mpi.WorkerManager):
         ----------
         target : Module
             Module class to instantiate and run.
-        
+
         Returns
         -------
         result : bool
@@ -782,7 +782,7 @@ class Manager(mpi.WorkerManager):
 
             # Collect timing data for each execution step:
             if steps not in self.received_data:
-                self.received_data[steps] = {}                    
+                self.received_data[steps] = {}
             self.received_data[steps][rank] = (start, stop, nbytes)
 
             # After adding the latest timing data for a specific step, check
@@ -832,9 +832,9 @@ class Manager(mpi.WorkerManager):
         self.log_info('avg step sync time/avg per-step throughput' \
                       '/total transm throughput/run loop duration:' \
                       '%s, %s, %s, %s' % \
-                      (self.average_step_sync_time, self.average_throughput, 
+                      (self.average_step_sync_time, self.average_throughput,
                        self.total_throughput, self.stop_time-self.start_time))
-        
+
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
 
@@ -915,7 +915,7 @@ if __name__ == '__main__':
             np.zeros(N2_spike, dtype=int),
             time_sync=True)
 
-    # Make sure that all ports in the patterns' interfaces are set so 
+    # Make sure that all ports in the patterns' interfaces are set so
     # that they match those of the modules:
     pat12 = Pattern(m1_sel, m2_sel)
     pat12.interface[m1_sel_out_gpot] = [0, 'in', 'gpot']

@@ -87,7 +87,12 @@ def args_to_dict(f, *args, **kwargs):
     d = {}
 
     arg_names = getargnames(f)
-    assert len(arg_names) <= args
+    print(len(args))
+    print(len(arg_names))
+    print(len(kwargs))
+    print(args)
+    print(arg_names)
+    assert len(arg_names) <= len(args)
     for arg, val in zip(arg_names, args):
         d[arg] = val
     for arg, val in kwargs.iteritems():
