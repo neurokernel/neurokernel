@@ -7,7 +7,7 @@ Port mapper classes.
 import numpy as np
 import pandas as pd
 
-from plsel import SelectorMethods
+from .plsel import SelectorMethods
 
 class BasePortMapper(object):
     """
@@ -41,7 +41,7 @@ class BasePortMapper(object):
     Notes
     -----
     The selectors may not contain any '*' or '[:]' characters.
-    A single port identifier may be mapped to multiple integer indices, 
+    A single port identifier may be mapped to multiple integer indices,
     but not vice-versa.
     """
 
@@ -90,7 +90,7 @@ class BasePortMapper(object):
 
         Notes
         -----
-        If specified, the portmap sequence is copied into the new mapper to avoid 
+        If specified, the portmap sequence is copied into the new mapper to avoid
         side effects associated with modifying the specified sequence after
         mapper instantiation.
         """
@@ -130,7 +130,7 @@ class BasePortMapper(object):
         """
         Port mapper index.
         """
-        
+
         return self.portmap.index
     @index.setter
     def index(self, i):
@@ -177,7 +177,7 @@ class BasePortMapper(object):
         Returns
         -------
         inds : numpy.ndarray of int
-            Integer indices of ports comprised by selector. 
+            Integer indices of ports comprised by selector.
         """
 
         return self.sel.select(self.portmap,
@@ -209,11 +209,11 @@ class BasePortMapper(object):
         ----------
         selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).            
+            (e.g., [['foo', (0, 2)]]).
         portmap : sequence of int
             Integer indices to map to port identifiers.
         """
-        
+
         self.portmap[self.sel.get_index(self.portmap, selector)] = portmap
 
     def equals(self, pm):
@@ -273,14 +273,14 @@ class PortMapper(BasePortMapper):
         (e.g., [['foo', (0, 2)]]) to map to `data`.
     data : numpy.ndarray
         1D data array to map to ports. If no data array is specified, port
-        identifiers will still be mapped to their sequential indices but 
+        identifiers will still be mapped to their sequential indices but
         __getitem__() and __setitem__() will raise exceptions if invoked.
     portmap : sequence of int
         Integer indices to map to port identifiers. If no map is specified,
         it is assumed to be an array of consecutive integers from 0
         through one less than the number of ports.
     make_copy : bool
-        If True, map a copy of the specified data array to the specified 
+        If True, map a copy of the specified data array to the specified
         port identifiers.
 
     Attributes
@@ -342,11 +342,11 @@ class PortMapper(BasePortMapper):
         """
         Data associated with ports.
         """
-        
+
         return self._data
 
     @data.setter
-    def data(self, x):        
+    def data(self, x):
         if self._validate_data(x):
             if x is None:
                 self._data = None
@@ -402,13 +402,13 @@ class PortMapper(BasePortMapper):
         r.portmap = pm.portmap.copy()
         r.data = pm.data.copy()
         return r
-        
+
     @property
     def dtype(self):
         """
         Port mapper data type.
         """
-        
+
         return self.data.dtype
     @dtype.setter
     def dtype(self, d):
@@ -437,12 +437,12 @@ class PortMapper(BasePortMapper):
     def get_by_inds(self, inds):
         """
         Retrieve mapped data specified by integer index.
-        
+
         Parameters
         ----------
         inds : sequence of int
             Integer indices of data elements to return.
-        
+
         Returns
         -------
         result : numpy.ndarray
@@ -460,10 +460,10 @@ class PortMapper(BasePortMapper):
         Parameters
         ----------
         f : callable or sequence
-            If callable, treat as elementwise selection function to apply to 
+            If callable, treat as elementwise selection function to apply to
             the mapped data array. If a sequence, treat as an index into the
             mapped data array.
-        
+
         Returns
         -------
         s : list of tuple
@@ -481,7 +481,7 @@ class PortMapper(BasePortMapper):
     def get_inds_nonzero(self):
         """
         Select indices of ports with nonzero data.
-        
+
         Returns
         -------
         inds : numpy.ndarray
@@ -504,7 +504,7 @@ class PortMapper(BasePortMapper):
     def get_ports_as_inds(self, f):
         """
         Select integer indices corresponding to ports in map.
-        
+
         Examples
         --------
         >>> import numpy as np
@@ -515,14 +515,14 @@ class PortMapper(BasePortMapper):
         Parameters
         ----------
         f : callable or sequence
-            If callable, treat as elementwise selection function to apply to 
+            If callable, treat as elementwise selection function to apply to
             the mapped data array. If a sequence, treat as an index into the
             mapped data array.
 
         Returns
         -------
         inds : numpy.ndarray of int
-            Integer indices of selected ports. 
+            Integer indices of selected ports.
         """
 
         assert callable(f) or (np.iterable(f) and len(f) == len(self.data))
@@ -540,7 +540,7 @@ class PortMapper(BasePortMapper):
         ----------
         selector : str, unicode, or sequence
             Selector string (e.g., '/foo[0:2]') or sequence of token sequences
-            (e.g., [['foo', (0, 2)]]).            
+            (e.g., [['foo', (0, 2)]]).
         data : numpy.ndarray
             Array of data to save.
         """
@@ -586,7 +586,7 @@ class PortMapper(BasePortMapper):
 
         Notes
         -----
-        Mappers containing the same rows in different orders are not 
+        Mappers containing the same rows in different orders are not
         regarded as equivalent.
         """
 

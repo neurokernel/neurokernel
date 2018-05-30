@@ -12,8 +12,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import Selector, SelectorMethods
-from pm import BasePortMapper
+from .plsel import Selector, SelectorMethods
+from .pm import BasePortMapper
 
 class Interface(object):
     """

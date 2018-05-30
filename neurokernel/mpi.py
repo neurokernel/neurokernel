@@ -12,10 +12,10 @@ import sys
 
 from mpi4py import MPI
 
-from mpi_proc import getargnames, Process, ProcessManager
-from mixins import LoggerMixin
-from tools.logging import setup_logger, set_excepthook
-from tools.misc import memoized_property
+from .mpi_proc import getargnames, Process, ProcessManager
+from .mixins import LoggerMixin
+from .tools.logging import setup_logger, set_excepthook
+from .tools.misc import memoized_property
 
 class Worker(Process):
     """
@@ -160,7 +160,7 @@ class Worker(Process):
             # Execute work method; the work method may send data back to the master
             # as a serialized control message containing two elements, e.g.,
             # self.intercomm.isend(['foo', str(self.rank)],
-            #                      dest=0, tag=self._ctrl_tag)            
+            #                      dest=0, tag=self._ctrl_tag)
             if running:
                 self.do_work()
                 self.steps += 1
@@ -204,7 +204,7 @@ class WorkerManager(ProcessManager):
         super(WorkerManager, self).__init__()
 
         # Validate control tag.
-        assert ctrl_tag != MPI.ANY_TAG                           
+        assert ctrl_tag != MPI.ANY_TAG
 
         # Tag used to distinguish MPI control messages:
         self._ctrl_tag = ctrl_tag
@@ -231,7 +231,7 @@ class WorkerManager(ProcessManager):
         """
         Process the specified deserialized message from a worker.
         """
-        
+
         self.log_info('got ctrl msg: %s' % str(msg))
 
     def wait(self):
@@ -333,7 +333,7 @@ if __name__ == '__main__':
     man.add(MyWorker, 6, 7, 8)
     man.spawn()
 
-    # To run for a specific number of steps, run 
+    # To run for a specific number of steps, run
     # man.start(number_of_steps)
     man.start(100)
     man.wait()

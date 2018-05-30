@@ -16,20 +16,20 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 from random import randint
 
-from ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+from .ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
-from mixins import LoggerMixin
-import mpi
-from tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
-from tools.logging import setup_logger
-from tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
-from tools.mpi import MPIOutput
-from pattern import Interface, Pattern
-from plsel import Selector, SelectorMethods
-from pm import BasePortMapper
-from pm_gpu import GPUPortMapper
-from routing_table import RoutingTable
-from uid import uid
+from .mixins import LoggerMixin
+import .mpi
+from .tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
+from .tools.logging import setup_logger
+from .tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
+from .tools.mpi import MPIOutput
+from .pattern import Interface, Pattern
+from .plsel import Selector, SelectorMethods
+from .pm import BasePortMapper
+from .pm_gpu import GPUPortMapper
+from .routing_table import RoutingTable
+from .uid import uid
 
 CTRL_TAG = 1
 
