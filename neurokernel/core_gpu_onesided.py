@@ -10,20 +10,20 @@ import pycuda.gpuarray as gpuarray
 from pycuda.tools import dtype_to_ctype
 import twiggy
 
-from base_gpu_onesided import BaseModule, CTRL_TAG
-import base_gpu_onesided
+from .base_gpu_onesided import BaseModule, CTRL_TAG
+from . import base_gpu_onesided
 # from ctx_managers import (IgnoreKeyboardInterrupt, OnKeyboardInterrupt,
 #                           ExceptionOnSignal, TryExceptionOnSignal)
-from mixins import LoggerMixin
-import mpi
-from tools.mpi import MPIOutput
-from tools.gpu import bufint, set_by_inds_from_inds
-from tools.logging import setup_logger
-from tools.misc import catch_exception, dtype_to_mpi
-from uid import uid
-from pattern import Interface, Pattern
-from plsel import SelectorMethods, BasePortMapper
-from pm_gpu import GPUPortMapper
+from .mixins import LoggerMixin
+from . import mpi
+from .tools.mpi import MPIOutput
+from .tools.gpu import bufint, set_by_inds_from_inds
+from .tools.logging import setup_logger
+from .tools.misc import catch_exception, dtype_to_mpi
+from .uid import uid
+from .pattern import Interface, Pattern
+from .plsel import SelectorMethods, BasePortMapper
+from .pm_gpu import GPUPortMapper
 
 # MPI tags for distinguishing messages associated with different port types:
 GPOT_TAG = CTRL_TAG+1
@@ -63,8 +63,8 @@ class Module(BaseModule):
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
         # closed after MPI.Finalize() is called, an error will occur):
-        for k, v in twiggy.emitters.iteritems():
-             if isinstance(v._output, MPIOutput):       
+        for k, v in twiggy.emitters.items():
+             if isinstance(v._output, MPIOutput):
                  atexit.register(v._output.close)
 
         # Ensure that the input and output port selectors respectively
@@ -145,7 +145,7 @@ class Module(BaseModule):
         # Extract identifiers of source ports in all modules sending input to
         # the current module's ports and of destination ports in the current
         # module's interface for all modules sending input to the current
-        # module:           
+        # module:
         self._in_port_dict = {}
         self._in_port_dict['gpot'] = {}
         self._in_port_dict['spike'] = {}
@@ -206,7 +206,7 @@ class Module(BaseModule):
         self._data_int = {}
         self._data_int['gpot'] = bufint(self.data['gpot'])
         self._data_int['spike'] = bufint(self.data['spike'])
-        self._data_mtype = {}        
+        self._data_mtype = {}
         self._data_mtype['gpot'] = dtype_to_mpi(self.data['gpot'].dtype)
         self._data_mtype['spike'] = dtype_to_mpi(self.data['spike'].dtype)
 
@@ -217,10 +217,10 @@ class Module(BaseModule):
         self._in_buf['spike'] = {}
         self._in_buf_int = {}
         self._in_buf_int['gpot'] = {}
-        self._in_buf_int['spike'] = {}        
+        self._in_buf_int['spike'] = {}
         self._in_buf_mtype = {}
         self._in_buf_mtype['gpot'] = {}
-        self._in_buf_mtype['spike'] = {}        
+        self._in_buf_mtype['spike'] = {}
         for in_id in self._in_ids:
 
             # Get interfaces of pattern connecting the current module to
@@ -234,7 +234,7 @@ class Module(BaseModule):
             # modules from which they received data:
             self._in_buf['gpot'][in_id] = \
                 gpuarray.empty(len(self.pm_all['gpot'][in_id]),
-                               self.pm['gpot'].dtype)                               
+                               self.pm['gpot'].dtype)
             self._in_buf_int['gpot'][in_id] = bufint(self._in_buf['gpot'][in_id])
             self._in_buf_mtype['gpot'][in_id] = \
                 dtype_to_mpi(self._in_buf['gpot'][in_id])
@@ -258,7 +258,7 @@ class Module(BaseModule):
 
         # Transmit the entire port data array to each destination module:
         dest_ids = self.routing_table.dest_ids(self.id)
-        for dest_id in dest_ids:            
+        for dest_id in dest_ids:
             dest_rank = self.rank_to_id[:dest_id]
             r = MPI.COMM_WORLD.Isend([self._data_int['gpot'],
                                       self._data_mtype['gpot']],
@@ -330,7 +330,8 @@ class Manager(base_gpu_onesided.Manager):
 
     def add(self, target, id, *args, **kwargs):
         assert issubclass(target, Module)
-        argnames = mpi.getargnames(target.__init__)
+        tmp = mpi.getargnames(target.__init__)
+        argnames = tmp['args'] + tmp['kwargs']
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:
@@ -350,7 +351,7 @@ class Manager(base_gpu_onesided.Manager):
         # integer indices:
         self.pm_all['gpot'][id] = BasePortMapper(self._kwargs[rank]['sel_gpot'])
         self.pm_all['spike'][id] = BasePortMapper(self._kwargs[rank]['sel_spike'])
-        
+
     def connect(self, id_0, id_1, pat, int_0=0, int_1=1):
         assert isinstance(pat, Pattern)
 
@@ -399,7 +400,7 @@ class Manager(base_gpu_onesided.Manager):
                                               'int_0': int_1, 'int_1': int_0}
 
         self.log_info('connected modules {0} and {1}'.format(id_0, id_1))
-        
+
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
 
@@ -476,7 +477,7 @@ if __name__ == '__main__':
             ['interface', 'io', 'type'],
             CTRL_TAG, GPOT_TAG, SPIKE_TAG, device=1, time_sync=True)
 
-    # Make sure that all ports in the patterns' interfaces are set so 
+    # Make sure that all ports in the patterns' interfaces are set so
     # that they match those of the modules:
     pat12 = Pattern(m1_int_sel, m2_int_sel)
     pat12.interface[m1_int_sel_out_gpot] = [0, 'in', 'gpot']

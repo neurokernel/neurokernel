@@ -60,10 +60,12 @@ def getargnames(f):
     """
 
     spec = inspect.getargspec(f)
-    if inspect.ismethod(f):
-        return spec.args[1:]
-    else:
-        return spec.args
+    args = spec.args[1:] if inspect.ismethod(f) or 'self' in spec.args else spec.args
+
+    kwargs_len = len(spec.defaults)
+    args_len = len(args) - kwargs_len
+    return {'args': args[:args_len], 'kwargs': args[args_len:]}
+
 
 def args_to_dict(f, *args, **kwargs):
     """
@@ -87,10 +89,10 @@ def args_to_dict(f, *args, **kwargs):
     d = {}
 
     arg_names = getargnames(f)
-    assert len(arg_names) <= args
-    for arg, val in zip(arg_names, args):
+    assert len(arg_names['args']) <= len(args)
+    for arg, val in zip(arg_names['args'], args):
         d[arg] = val
-    for arg, val in kwargs.iteritems():
+    for arg, val in kwargs.items():
         if arg in d:
             raise ValueError('\'%s\' already specified in positional args' % arg)
         d[arg] = val
@@ -255,7 +257,7 @@ class ProcessManager(LoggerMixin):
 
             # First, transmit twiggy logging emitters to spawned processes so
             # that they can configure their logging facilities:
-            for i in self._targets.keys():
+            for i in self._targets:
                 self._intercomm.send(twiggy.emitters, i)
 
             # Next, serialize the routing table ONCE and then transmit it to all
@@ -273,7 +275,7 @@ class ProcessManager(LoggerMixin):
             # them and then start running the targets on the appropriate nodes.
             req = MPI.Request()
             r_list = []
-            for i in self._targets.keys():
+            for i in self._targets:
                 target_globals = all_global_vars(self._targets[i])
 
                 # Serializing atexit with dill appears to fail in virtualenvs

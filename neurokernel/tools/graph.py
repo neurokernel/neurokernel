@@ -11,7 +11,7 @@ import re
 
 import networkx as nx
 
-# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF 
+# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF
 # files with boolean attributes that contain the strings 'True' or 'False'
 # (bug already observed in https://github.com/networkx/networkx/pull/971)
 nx.readwrite.gexf.GEXF.convert_bool['false'] = False
@@ -27,7 +27,7 @@ def graph_to_df(g):
     """
     Convert a directed multigraph into pandas DataFrames.
 
-    Constructs two pandas DataFrame instances that respectively contain the 
+    Constructs two pandas DataFrame instances that respectively contain the
     specified graph's node and edge attributes.
 
     Parameters
@@ -44,7 +44,7 @@ def graph_to_df(g):
         access to the edges by origin node, destination node, and edge number
         (i.e., for multigraphs in which nodes connected by more than one
         edge with the same direction).
-        
+
     """
 
     nx_major_version = nx.__version__.split('.')[0]
@@ -55,17 +55,17 @@ def graph_to_df(g):
     else:
         nodes = g.nodes
         edges = g.edges
-        
+
     # Extract the node/edge data:
     try:
-        node_data = {int(k): v for k, v in nodes.iteritems()}
+        node_data = {int(k): v for k, v in nodes.items()}
     except:
-        node_data = {k: v for k, v in nodes.iteritems()}
+        node_data = {k: v for k, v in nodes.items()}
 
     try:
-        edge_data = {(int(k1[0]), int(k1[1])): k2 for k1, k2 in edges.iteritems()}
+        edge_data = {(int(k1[0]), int(k1[1])): k2 for k1, k2 in edges.items()}
     except:
-        edge_data = {k1: k2 for k1, k2 in edges.iteritems()}
+        edge_data = {k1: k2 for k1, k2 in edges.items()}
 
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data).T
@@ -76,4 +76,3 @@ def graph_to_df(g):
     df_edge.index = pandas.MultiIndex.from_tuples(df_edge.index)
 
     return df_node, df_edge
-

@@ -70,7 +70,7 @@ class Selector(object):
         if isinstance(s, Selector):
             self._expanded = copy.copy(s._expanded)
             self._max_levels = copy.copy(s._max_levels)
-        elif isinstance(s, basestring): # python2 dependency
+        elif isinstance(s, str): # python2 dependency
 
             # Save expanded selector as tuple because it shouldn't need to be
             # modified after expansion:
@@ -383,7 +383,7 @@ class SelectorParser(object):
     @classmethod
     def t_INTEGER_SET(cls, t):
         r'/?\[(?:\d+,?)+\]'
-        t.value = map(int, t.value.strip('/[]').split(','))
+        t.value = list(map(int, t.value.strip('/[]').split(',')))
         return t
 
     @classmethod
@@ -428,15 +428,15 @@ class SelectorParser(object):
     def p_selector_dotplus_selector(cls, p):
         'selector : selector DOTPLUS selector'
         # Expand ranges and wrap strings with lists in each selector:
-        for i in xrange(len(p[1])):
-            for j in xrange(len(p[1][i])):
-                if type(p[1][i][j]) in [int, str, unicode]:
+        for i in range(len(p[1])):
+            for j in range(len(p[1][i])):
+                if type(p[1][i][j]) in [int, str]:
                     p[1][i][j] = [p[1][i][j]]
                 elif type(p[1][i][j]) == slice:
                     p[1][i][j] = range(p[1][i][j].start, p[1][i][j].stop)
-        for i in xrange(len(p[3])):
-            for j in xrange(len(p[3][i])):
-                if type(p[3][i][j]) in [int, str, unicode]:
+        for i in range(len(p[3])):
+            for j in range(len(p[3][i])):
+                if type(p[3][i][j]) in [int, str]:
                     p[3][i][j] = [p[3][i][j]]
                 elif type(p[3][i][j]) == slice:
                     p[3][i][j] = range(p[3][i][j].start, p[3][i][j].stop)
@@ -612,7 +612,7 @@ class SelectorMethods(SelectorParser):
         if np.iterable(s):
 
             # Try to expand string:
-            if type(s) in [str, unicode]:
+            if type(s) is str:
                 try:
                     s_exp = cls.expand(s)
                 except:
@@ -631,7 +631,7 @@ class SelectorMethods(SelectorParser):
                     return False
 
             # A sequence of integers and/or strings is a valid port identifier:
-            elif set(map(type, s)).issubset([int, str, unicode]):
+            elif set(map(type, s)).issubset([int, str]):
                 return True
             else:
                 return False
@@ -663,7 +663,7 @@ class SelectorMethods(SelectorParser):
         """
 
         assert type(s) in [list, tuple]
-        if set(map(type, s)).issubset([int, long, str, unicode]):
+        if set(map(type, s)).issubset([int, str]):
             tokens = s
         else:
             assert len(s) == 1
@@ -673,7 +673,7 @@ class SelectorMethods(SelectorParser):
         for t in tokens:
             if type(t) == str:
                 result += '/'+t
-            elif type(t) in [int, long]:
+            elif type(t) is int:
                 result += '[%s]' % t
             else:
                 raise ValueError('Cannot convert to single port identifier.')
@@ -703,7 +703,7 @@ class SelectorMethods(SelectorParser):
         if isinstance(selector, Selector):
             return False
 
-        if type(selector) in [str, unicode]:
+        if type(selector) is str:
             if re.search(r'(?:\*)|(?:\:\])', selector):
                 return True
             else:
@@ -742,7 +742,7 @@ class SelectorMethods(SelectorParser):
         if isinstance(selector, Selector):
             return len(selector) == 0
 
-        if type(selector) in [str, unicode] and \
+        if type(selector) is str and \
            re.search('^\s*$', selector):
             return True
         if type(selector) in [list, tuple] and \
@@ -784,9 +784,9 @@ class SelectorMethods(SelectorParser):
             for token in tokens:
                 if type(token) == list:
                     token_types = set(map(type, token))
-                    if not (token_types.issubset([str, unicode, int, long])):
+                    if not (token_types.issubset([str, int])):
                         return False
-                elif type(token) not in [slice, str, unicode, int, long]:
+                elif type(token) not in [slice, str, int]:
                     return False
 
         # All tokens are valid:
@@ -809,7 +809,7 @@ class SelectorMethods(SelectorParser):
             (e.g., '/foo[0:2]'), False otherwise.
         """
 
-        assert type(s) in [str, unicode]
+        assert type(s) is str
         try:
             cls.parse(s)
         except:
@@ -837,7 +837,7 @@ class SelectorMethods(SelectorParser):
 
         if isinstance(s, Selector):
             return True
-        elif type(s) in [str, unicode]:
+        elif type(s) is str:
             return cls.is_selector_str(s)
         elif np.iterable(s):
             return cls.is_selector_seq(s)
@@ -892,7 +892,7 @@ class SelectorMethods(SelectorParser):
         #assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
-        if type(selector) in [str, unicode]:
+        if type(selector) is str:
             try:
                 p = cls.parse(selector)
             except:
@@ -910,15 +910,15 @@ class SelectorMethods(SelectorParser):
 
         max_levels = 0
         temp = []
-        for i in xrange(len(p)):
+        for i in range(len(p)):
             t = list(p[i])
             len_p = len(p[i])
             max_levels = max(max_levels, len_p)
-            for j in xrange(len_p):
+            for j in range(len_p):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
-                if type(t[j]) in [int, long, str, unicode]:
+                if type(t[j]) in [int, str]:
                     t[j] = [t[j]]
 
                 # Expand slices into ranges:
@@ -964,15 +964,15 @@ class SelectorMethods(SelectorParser):
 
         if isinstance(selector, Selector) or cls.is_ambiguous(selector):
             return False
-        if type(selector) in [str, unicode]:
+        if type(selector) is str:
             p = cls.parse(selector)
         elif type(selector) in [list, tuple]:
             p = selector
         else:
             raise ValueError('invalid selector type')
-        for i in xrange(len(p)):
-            for j in xrange(len(p[i])):
-                if type(p[i][j]) in [int, long, str, unicode]:
+        for i in range(len(p)):
+            for j in range(len(p[i])):
+                if type(p[i][j]) in [int, str]:
                     p[i][j] = [p[i][j]]
 
                 elif type(p[i][j]) == slice:
@@ -1038,7 +1038,7 @@ class SelectorMethods(SelectorParser):
         assert np.iterable(tokens)
         result = []
         for t in tokens:
-            if type(t) in [str, unicode, int, long]:
+            if type(t) in [str,  int]:
                 result.append('/'+str(t))
             elif type(t) == slice:
                 start = str(t.start) if t.start is not None else ''
@@ -1070,7 +1070,7 @@ class SelectorMethods(SelectorParser):
             selector.
         """
 
-        if isinstance(selector, basestring):
+        if isinstance(selector, str):
             return selector
         if isinstance(selector, Selector):
             return selector.str
@@ -1110,9 +1110,9 @@ class SelectorMethods(SelectorParser):
         assert len(set(map(len, id_list))) == 1
 
         # Collect all tokens for each level:
-        levels = [[] for i in xrange(max(map(len, id_list)))]
-        for i in xrange(len(id_list)):
-            for j in xrange(len(id_list[i])):
+        levels = [[] for i in range(max(map(len, id_list)))]
+        for i in range(len(id_list)):
+            for j in range(len(id_list[i])):
                 if not(id_list[i][j] in levels[j]):
                     levels[j].append(id_list[i][j])
 
@@ -1122,7 +1122,7 @@ class SelectorMethods(SelectorParser):
             """
 
             type_set = set(map(type, level))
-            if type_set in set([int, long]):
+            if type_set in set([int]):
 
                 # If a level only contains consecutive integers, convert it into an
                 # interval:
@@ -1134,14 +1134,14 @@ class SelectorMethods(SelectorParser):
                 # list:
                 else:
                     return ['['+','.join([str(i) for i in level])+']']
-            elif type_set in set([str, unicode]):
+            elif type_set in set([str]):
                 if len(level) == 1:
                     return level
                 else:
                     return ['['+','.join([s for s in level])+']']
             else:
-                level_int = sorted([x for x in level if type(x) in [int, long]])
-                level_str = sorted([x for x in level if type(x) in [str, unicode]])
+                level_int = sorted([x for x in level if type(x) in [int]])
+                level_str = sorted([x for x in level if type(x) in [str]])
                 return collapse_level(level_int)+collapse_level(level_str)
 
         # If a level contains multiple string AND integer tokens, convert it to
@@ -1272,7 +1272,7 @@ class SelectorMethods(SelectorParser):
         except:
             if isinstance(selector, Selector):
                 return selector.max_levels
-            elif type(selector) in [str, unicode]:
+            elif type(selector) is str:
                 try:
                     count = max(map(len, cls.parse(selector)))
                 except:
@@ -1332,7 +1332,7 @@ class SelectorMethods(SelectorParser):
                     continue
 
                 # Integers and strings must match exactly:
-                elif type(token) in [int, long, str, unicode]:
+                elif type(token) in [int, str]:
                     if row_sub[i] != token:
                         break
 
@@ -1389,7 +1389,7 @@ class SelectorMethods(SelectorParser):
                 raise ValueError('index row only is scalar')
             if tokens[0] == '*':
                 return True
-            elif type(tokens[0]) in [int, long, str, unicode]:
+            elif type(tokens[0]) in [int, str]:
                 if row == tokens[0]:
                     return True
             elif type(tokens[0]) == list:
@@ -1463,7 +1463,7 @@ class SelectorMethods(SelectorParser):
         max_levels = cls.max_levels(selector)
         if isinstance(selector, Selector):
             parse_list = selector.expanded
-        elif type(selector) in [str, unicode]:
+        elif type(selector) is str:
             try:
                 parse_list = cls.expand(selector, max_levels)
             except:
@@ -1656,7 +1656,7 @@ class SelectorMethods(SelectorParser):
         max_levels = max(max_levels_0, max_levels_1)
 
         selectors = []
-        for i in xrange(N_sel):
+        for i in range(N_sel):
 
             # Pad expanded selectors:
             sels_0[i] = list(sels_0[i])
@@ -1664,16 +1664,16 @@ class SelectorMethods(SelectorParser):
 
             n = len(sels_0[i])
             if n < max_levels:
-                sels_0[i].extend(['' for k in xrange(max_levels-n)])
+                sels_0[i].extend(['' for k in range(max_levels-n)])
             m = len(sels_1[i])
             if m < max_levels:
-                sels_1[i].extend(['' for k in xrange(max_levels-m)])
+                sels_1[i].extend(['' for k in range(max_levels-m)])
 
             # Concatenate:
             selectors.append(sels_0[i]+sels_1[i])
 
             # Extract level values:
-            for k in xrange(max_levels*2):
+            for k in range(max_levels*2):
                 if len(levels) < k+1:
                     levels.append([])
                 levels[k].append(selectors[-1][k])
@@ -1686,8 +1686,8 @@ class SelectorMethods(SelectorParser):
         labels = [[]]
 
         # Construct label indices:
-        for i in xrange(N_sel):
-            for j in xrange(max_levels*2):
+        for i in range(N_sel):
+            for j in range(max_levels*2):
                 if len(labels) < j+1:
                     labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
@@ -1740,7 +1740,7 @@ class SelectorMethods(SelectorParser):
         max_levels = max(max_levels_0, max_levels_1)
 
         selectors = []
-        for i, j in itertools.product(xrange(N_sel_0), xrange(N_sel_1)):
+        for i, j in itertools.product(range(N_sel_0), range(N_sel_1)):
 
             # Pad expanded selectors:
             sels_0[i] = list(sels_0[i])
@@ -1748,16 +1748,16 @@ class SelectorMethods(SelectorParser):
 
             n = len(sels_0[i])
             if n < max_levels:
-                sels_0[i].extend(['' for k in xrange(max_levels-n)])
+                sels_0[i].extend(['' for k in range(max_levels-n)])
             m = len(sels_1[j])
             if m < max_levels:
-                sels_1[j].extend(['' for k in xrange(max_levels-m)])
+                sels_1[j].extend(['' for k in range(max_levels-m)])
 
             # Concatenate:
             selectors.append(sels_0[i]+sels_1[j])
 
             # Extract level values:
-            for k in xrange(max_levels*2):
+            for k in range(max_levels*2):
                 if len(levels) < k+1:
                     levels.append([])
                 levels[k].append(selectors[-1][k])
@@ -1771,8 +1771,8 @@ class SelectorMethods(SelectorParser):
 
         # Construct label indices:
         N_sel = N_sel_0*N_sel_1
-        for i in xrange(N_sel):
-            for j in xrange(max_levels*2):
+        for i in range(N_sel):
+            for j in range(max_levels*2):
                 if len(labels) < j+1:
                     labels.append([])
                 labels[j].append(levels[j].index(selectors[i][j]))
@@ -1824,7 +1824,7 @@ class SelectorMethods(SelectorParser):
         selectors = tuple(cls.expand(selector))
 
         N_sel = len(selectors)
-        sel_lens =  map(len, selectors)
+        sel_lens =  list(map(len, selectors))
         max_levels = max(sel_lens) if N_sel else 0
 
         # NaNs in index are not supported by MultiIndex. Create from tuples
@@ -1844,22 +1844,22 @@ class SelectorMethods(SelectorParser):
                 return pd.MultiIndex.from_tuples(selectors, names=names)
 
         # Accumulate unique values for each level of the MultiIndex:
-        levels = [set() for i in xrange(max_levels)]
-        for i in xrange(N_sel):
-            for j in xrange(sel_lens[i]):
+        levels = [set() for i in range(max_levels)]
+        for i in range(N_sel):
+            for j in range(sel_lens[i]):
                 levels[j].add(selectors[i][j])
-            for j in xrange(sel_lens[i], max_levels):
+            for j in range(sel_lens[i], max_levels):
                 levels[j].add('')
 
         # Sort levels:
         levels = [sorted(level) for level in levels]
 
         # Construct label indices:
-        labels = [[] for i in xrange(max_levels)]
-        for i in xrange(N_sel):
-            for j in xrange(sel_lens[i]):
+        labels = [[] for i in range(max_levels)]
+        for i in range(N_sel):
+            for j in range(sel_lens[i]):
                 labels[j].append(levels[j].index(selectors[i][j]))
-            for j in xrange(sel_lens[i], max_levels):
+            for j in range(sel_lens[i], max_levels):
                 labels[j].append(levels[j].index(''))
 
         if not names:
@@ -1896,7 +1896,7 @@ class SelectorMethods(SelectorParser):
                 except:
                     pass
             parse_list = list(selector.expanded)
-        elif type(selector) in [str, unicode]:
+        elif type(selector) is str:
             if len(df.index.names[start:stop])>1:
                 try:
                     tks = cls.expand(selector)

@@ -19,7 +19,7 @@ from random import randint
 from .ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
 from .mixins import LoggerMixin
-import .mpi
+from . import mpi
 from .tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
 from .tools.logging import setup_logger
 from .tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
@@ -131,7 +131,7 @@ class Module(mpi.Worker):
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
         # closed after MPI.Finalize() is called, an error will occur):
-        for k, v in twiggy.emitters.iteritems():
+        for k, v in twiggy.emitters.items():
              if isinstance(v._output, MPIOutput):
                  atexit.register(v._output.close)
 
@@ -741,7 +741,8 @@ class Manager(mpi.WorkerManager):
             True if all of the required arguments are present, False otherwise.
         """
 
-        arg_names = set(mpi.getargnames(target.__init__))
+        tmp = mpi.getargnames(target.__init__)
+        arg_names = set(tmp['args'] + tmp['kwargs'])
         for required_arg in self.required_args:
             if required_arg not in arg_names:
                 return False

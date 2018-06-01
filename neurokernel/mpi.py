@@ -249,7 +249,7 @@ class WorkerManager(ProcessManager):
             d = self.intercomm.irecv(dest=MPI.ANY_SOURCE,
                                      tag=self._ctrl_tag)
         r_ctrl.append(d)
-        workers = range(len(self))
+        workers = list(range(len(self)))
         req = MPI.Request()
         while True:
             # Check for control messages from workers:
@@ -286,10 +286,10 @@ class WorkerManager(ProcessManager):
         """
 
         self.log_info('sending steps message (%s)' % steps)
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['steps', str(steps)], dest, self._ctrl_tag)
         self.log_info('sending start message')
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['start'], dest, self._ctrl_tag)
 
     def stop(self):
@@ -298,7 +298,7 @@ class WorkerManager(ProcessManager):
         """
 
         self.log_info('sending stop message')
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['stop'], dest, self._ctrl_tag)
 
     def quit(self):
@@ -307,7 +307,7 @@ class WorkerManager(ProcessManager):
         """
 
         self.log_info('sending quit message')
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['quit'], dest, self._ctrl_tag)
 
 if __name__ == '__main__':

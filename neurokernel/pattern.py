@@ -71,7 +71,7 @@ class Interface(object):
         self.sel = SelectorMethods()
         assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
-        names = [i for i in xrange(self.num_levels)]
+        names = [i for i in range(self.num_levels)]
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
@@ -129,7 +129,7 @@ class Interface(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        for k, v in data.iteritems():
+        for k, v in data.items():
             self.data[k].ix[idx] = v
 
     def __setitem__(self, key, value):
@@ -179,7 +179,7 @@ class Interface(object):
         else:
             s = self.sel.pad_selector(selector.expanded,
                                       len(self.index.levshape))
-        for k, v in data.iteritems():
+        for k, v in data.items():
             self.data[k].ix[s] = v
 
     @property
@@ -363,7 +363,7 @@ class Interface(object):
         """
 
         i = cls(','.join(d.keys()))
-        for k, v in d.iteritems():
+        for k, v in d.items():
             i[k] = v
         i.data.sort_index(inplace=True)
         return i
@@ -582,12 +582,12 @@ class Interface(object):
         # one level; we therefore pad the index with the smaller number of
         # levels before attempting the merge:
         if n_left_names > n_right_names:
-            for n in xrange(i.num_levels, i.num_levels+(n_left_names-n_right_names)):
+            for n in range(i.num_levels, i.num_levels+(n_left_names-n_right_names)):
                 new_col = str(n)
                 df_right[new_col] = ''
                 df_right.set_index(new_col, append=True, inplace=True)
         elif n_left_names < n_right_names:
-            for n in xrange(self.num_levels, self.num_levels+(n_right_names-n_left_names)):
+            for n in range(self.num_levels, self.num_levels+(n_right_names-n_left_names)):
                 new_col = str(n)
                 df_left[new_col] = ''
                 df_left.set_index(new_col, append=True, inplace=True)
@@ -1105,10 +1105,10 @@ class Pattern(object):
         # two interfaces:
         self.num_levels = {'from': self.interface.num_levels,
                            'to': self.interface.num_levels}
-        names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
-                ['to_%s' %i for i in xrange(self.num_levels['to'])]
-        levels = [[] for i in xrange(len(names))]
-        labels = [[] for i in xrange(len(names))]
+        names = ['from_%s' % i for i in range(self.num_levels['from'])]+ \
+                ['to_%s' %i for i in range(self.num_levels['to'])]
+        levels = [[] for i in range(len(names))]
+        labels = [[] for i in range(len(names))]
         idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
 
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
@@ -1201,8 +1201,8 @@ class Pattern(object):
         # Construct index from concatenated selectors if specified:
         names = p.data.index.names
         if (from_sel is None and to_sel is None):
-            levels = [[] for i in xrange(len(names))]
-            labels = [[] for i in xrange(len(names))]
+            levels = [[] for i in range(len(names))]
+            labels = [[] for i in range(len(names))]
             idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
         elif isinstance(from_sel, Selector) and isinstance(to_sel, Selector):
             if comb_op == '.+':
@@ -1276,8 +1276,8 @@ class Pattern(object):
         # i.e., from_0..from_N and to_0..to_N, where N is equal to
         # pat.interface.num_levels:
         num_levels = pat.interface.num_levels
-        if df_pat.index.names != ['from_%i' % i for i in xrange(num_levels)]+\
-           ['to_%i' % i for i in xrange(num_levels)]:
+        if df_pat.index.names != ['from_%i' % i for i in range(num_levels)]+\
+           ['to_%i' % i for i in range(num_levels)]:
             raise ValueError('incorrectly named pattern index levels')
 
         for t in df_pat.index.tolist():
@@ -1578,7 +1578,7 @@ class Pattern(object):
         # If the specified selectors correspond to existing entries,
         # set their attributes:
         if found:
-            for k, v in data.iteritems():
+            for k, v in data.items():
                 self.data[k].ix[idx] = v
 
         # Otherwise, populate a new DataFrame with the specified attributes:
@@ -1985,7 +1985,7 @@ class Pattern(object):
 
             # Replace NaNs with empty strings:
             d = {k: (v if str(v) != 'nan' else '') \
-                 for k, v in self.interface.data.ix[t].to_dict().iteritems()}
+                 for k, v in self.interface.data.ix[t].to_dict().items()}
 
             # Each node's name corresponds to the port identifier string:
             g.add_node(id, d)
