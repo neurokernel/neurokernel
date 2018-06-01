@@ -24,16 +24,16 @@ for k in env.keys():
 
 # Additional options to pass to mpiexec for debugging purposes; some
 # useful flags for debugging CUDA issues are
-# MPIEXEC_EXTRA_OPTS = ['--mca', 'mpi_common_cuda_verbose', '200', 
+# MPIEXEC_EXTRA_OPTS = ['--mca', 'mpi_common_cuda_verbose', '200',
 #                       '--mca', 'mpool_rgpusm_verbose', '100',
 #                       '--mca', 'mpi_common_cuda_gpu_mem_check_workaround', '0']
 # To prevent OpenMPI from being confused by virtual interfaces, one can
-# explicitly specify which interfaces to use (e.g., eth0) using 
+# explicitly specify which interfaces to use (e.g., eth0) using
 # MPIEXEC_EXTRA_OPTS = ['--mca', 'btl_tcp_if_include', 'eth0']
 MPIEXEC_EXTRA_OPTS = []
 
 # Get name of the file in which this module is imported:
-script_name = inspect.stack()[1][1]
+script_name = inspect.stack()[-1][1]
 parent_name = psutil.Process(os.getppid()).name()
 if not re.search('mpirun|mpiexec', parent_name):
 
@@ -58,4 +58,3 @@ if not re.search('mpirun|mpiexec', parent_name):
             sys.exit(0)
     else:
         sys.exit(0)
-
