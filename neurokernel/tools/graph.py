@@ -8,6 +8,7 @@ import glob
 import itertools
 import os.path
 import re
+from future.utils import iteritems
 
 import networkx as nx
 
@@ -58,14 +59,14 @@ def graph_to_df(g):
 
     # Extract the node/edge data:
     try:
-        node_data = {int(k): v for k, v in nodes.items()}
+        node_data = {int(k): v for k, v in iteritems(nodes)}
     except:
-        node_data = {k: v for k, v in nodes.items()}
+        node_data = {k: v for k, v in iteritems(nodes)}
 
     try:
-        edge_data = {(int(k1[0]), int(k1[1])): k2 for k1, k2 in edges.items()}
+        edge_data = {(int(k1[0]), int(k1[1])): k2 for k1, k2 in iteritems(edges)}
     except:
-        edge_data = {k1: k2 for k1, k2 in edges.items()}
+        edge_data = {k1: k2 for k1, k2 in iteritems(edges)}
 
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data).T

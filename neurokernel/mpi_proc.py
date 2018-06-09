@@ -12,6 +12,7 @@ from .routing_table import RoutingTable
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
 import dill
+from future.utils import iteritems
 
 # Fix for bug https://github.com/uqfoundation/dill/issues/81
 @dill.register(property)
@@ -92,7 +93,7 @@ def args_to_dict(f, *args, **kwargs):
     assert len(arg_names['args']) <= len(args)
     for arg, val in zip(arg_names['args'], args):
         d[arg] = val
-    for arg, val in kwargs.items():
+    for arg, val in iteritems(kwargs):
         if arg in d:
             raise ValueError('\'%s\' already specified in positional args' % arg)
         d[arg] = val

@@ -4,11 +4,13 @@
 Path-like row selector for pandas DataFrames with hierarchical MultiIndexes.
 """
 
+import pdb
 import copy
 import itertools
 import re
 import sys
 
+from past.builtins import basestring, long
 import numpy as np
 import pandas as pd
 import ply.lex as lex
@@ -70,7 +72,7 @@ class Selector(object):
         if isinstance(s, Selector):
             self._expanded = copy.copy(s._expanded)
             self._max_levels = copy.copy(s._max_levels)
-        elif isinstance(s, str): # python2 dependency
+        elif isinstance(s, basestring):
 
             # Save expanded selector as tuple because it shouldn't need to be
             # modified after expansion:
@@ -612,7 +614,7 @@ class SelectorMethods(SelectorParser):
         if np.iterable(s):
 
             # Try to expand string:
-            if type(s) is str:
+            if type(s) is basestring:
                 try:
                     s_exp = cls.expand(s)
                 except:
@@ -631,7 +633,8 @@ class SelectorMethods(SelectorParser):
                     return False
 
             # A sequence of integers and/or strings is a valid port identifier:
-            elif set(map(type, s)).issubset([int, str]):
+            elif all(map(lambda x: isinstance(x, (int, long, basestring)), s)):
+                #elif set(map(type, s)).issubset([int, basestring]):
                 return True
             else:
                 return False
@@ -663,7 +666,8 @@ class SelectorMethods(SelectorParser):
         """
 
         assert type(s) in [list, tuple]
-        if set(map(type, s)).issubset([int, str]):
+        # if set(map(type, s)).issubset([int, long, str, basestring]):
+        if all(map(lambda x: isinstance(x, (int, long, basestring)), s)):
             tokens = s
         else:
             assert len(s) == 1
@@ -673,7 +677,7 @@ class SelectorMethods(SelectorParser):
         for t in tokens:
             if type(t) == str:
                 result += '/'+t
-            elif type(t) is int:
+            elif type(t) in [int, long]:
                 result += '[%s]' % t
             else:
                 raise ValueError('Cannot convert to single port identifier.')
@@ -703,7 +707,7 @@ class SelectorMethods(SelectorParser):
         if isinstance(selector, Selector):
             return False
 
-        if type(selector) is str:
+        if isinstance(selector, basestring):
             if re.search(r'(?:\*)|(?:\:\])', selector):
                 return True
             else:
@@ -742,7 +746,7 @@ class SelectorMethods(SelectorParser):
         if isinstance(selector, Selector):
             return len(selector) == 0
 
-        if type(selector) is str and \
+        if isinstance(selector, basestring) and \
            re.search('^\s*$', selector):
             return True
         if type(selector) in [list, tuple] and \
@@ -783,10 +787,14 @@ class SelectorMethods(SelectorParser):
             # list of strings, or list of integers:
             for token in tokens:
                 if type(token) == list:
-                    token_types = set(map(type, token))
-                    if not (token_types.issubset([str, int])):
+                    # token_types = set(map(type, token))
+                    # if not (token_types.issubset([str, int])):
+                    if not all(map(
+                            lambda x: isinstance(x, (int, long, basestring)),
+                            token)):
                         return False
-                elif type(token) not in [slice, str, int]:
+                elif not isinstance(token, (slice, basestring, int, long)):
+                    # elif not type(token) not in [slice, str, int]:
                     return False
 
         # All tokens are valid:
@@ -809,7 +817,8 @@ class SelectorMethods(SelectorParser):
             (e.g., '/foo[0:2]'), False otherwise.
         """
 
-        assert type(s) is str
+        # assert type(s) is str
+        assert isinstance(s, basestring)
         try:
             cls.parse(s)
         except:
@@ -837,7 +846,8 @@ class SelectorMethods(SelectorParser):
 
         if isinstance(s, Selector):
             return True
-        elif type(s) is str:
+        # elif type(s) is str:
+        elif isinstance(s, basestring):
             return cls.is_selector_str(s)
         elif np.iterable(s):
             return cls.is_selector_seq(s)
@@ -892,7 +902,8 @@ class SelectorMethods(SelectorParser):
         #assert cls.is_selector(selector)
         assert not cls.is_ambiguous(selector)
 
-        if type(selector) is str:
+        #if type(selector) is str:
+        if isinstance(selector, basestring):
             try:
                 p = cls.parse(selector)
             except:
@@ -918,7 +929,8 @@ class SelectorMethods(SelectorParser):
 
                 # Wrap integers and strings in a list so that
                 # itertools.product() can iterate over them:
-                if type(t[j]) in [int, str]:
+                # if type(t[j]) in [int, str]:
+                if isinstance(t[j], (int, long, basestring)):
                     t[j] = [t[j]]
 
                 # Expand slices into ranges:
@@ -964,7 +976,8 @@ class SelectorMethods(SelectorParser):
 
         if isinstance(selector, Selector) or cls.is_ambiguous(selector):
             return False
-        if type(selector) is str:
+        # if type(selector) is str:
+        if isinstance(selector, basestring):
             p = cls.parse(selector)
         elif type(selector) in [list, tuple]:
             p = selector
@@ -972,7 +985,8 @@ class SelectorMethods(SelectorParser):
             raise ValueError('invalid selector type')
         for i in range(len(p)):
             for j in range(len(p[i])):
-                if type(p[i][j]) in [int, str]:
+                # if type(p[i][j]) in [int, str]:
+                if isinstance(p[i][j], (int, long, basestring)):
                     p[i][j] = [p[i][j]]
 
                 elif type(p[i][j]) == slice:
@@ -1038,7 +1052,8 @@ class SelectorMethods(SelectorParser):
         assert np.iterable(tokens)
         result = []
         for t in tokens:
-            if type(t) in [str,  int]:
+            # if type(t) in [str,  int]:
+            if isinstance(t, (int, long, basestring)):
                 result.append('/'+str(t))
             elif type(t) == slice:
                 start = str(t.start) if t.start is not None else ''
@@ -1070,7 +1085,7 @@ class SelectorMethods(SelectorParser):
             selector.
         """
 
-        if isinstance(selector, str):
+        if isinstance(selector, basestring):
             return selector
         if isinstance(selector, Selector):
             return selector.str
@@ -1121,8 +1136,9 @@ class SelectorMethods(SelectorParser):
             Recursively called function to collapse all values in a single level.
             """
 
-            type_set = set(map(type, level))
-            if type_set in set([int]):
+            # type_set = set(map(type, level))
+            # if type_set in set([int]):
+            if all(map(lambda x: isinstance(x, (int, long)), level)):
 
                 # If a level only contains consecutive integers, convert it into an
                 # interval:
@@ -1134,14 +1150,16 @@ class SelectorMethods(SelectorParser):
                 # list:
                 else:
                     return ['['+','.join([str(i) for i in level])+']']
-            elif type_set in set([str]):
+
+            elif all(map(lambda x: isinstance(x, basestring), level)):
+                # elif type_set in set([str]):
                 if len(level) == 1:
                     return level
                 else:
                     return ['['+','.join([s for s in level])+']']
             else:
-                level_int = sorted([x for x in level if type(x) in [int]])
-                level_str = sorted([x for x in level if type(x) in [str]])
+                level_int = sorted([x for x in level if isinstance(x, (int, long))])
+                level_str = sorted([x for x in level if isinstance(x, basestring)])
                 return collapse_level(level_int)+collapse_level(level_str)
 
         # If a level contains multiple string AND integer tokens, convert it to
@@ -1272,7 +1290,7 @@ class SelectorMethods(SelectorParser):
         except:
             if isinstance(selector, Selector):
                 return selector.max_levels
-            elif type(selector) is str:
+            elif isinstance(selector, basestring):
                 try:
                     count = max(map(len, cls.parse(selector)))
                 except:
@@ -1332,7 +1350,7 @@ class SelectorMethods(SelectorParser):
                     continue
 
                 # Integers and strings must match exactly:
-                elif type(token) in [int, str]:
+                elif isinstance(token, (int, long, basestring)):
                     if row_sub[i] != token:
                         break
 
@@ -1389,7 +1407,7 @@ class SelectorMethods(SelectorParser):
                 raise ValueError('index row only is scalar')
             if tokens[0] == '*':
                 return True
-            elif type(tokens[0]) in [int, str]:
+            elif isinstance(tokens[0], (int, long, basestring)):
                 if row == tokens[0]:
                     return True
             elif type(tokens[0]) == list:
@@ -1463,7 +1481,7 @@ class SelectorMethods(SelectorParser):
         max_levels = cls.max_levels(selector)
         if isinstance(selector, Selector):
             parse_list = selector.expanded
-        elif type(selector) is str:
+        elif isinstance(selector, basestring):
             try:
                 parse_list = cls.expand(selector, max_levels)
             except:
@@ -1896,7 +1914,7 @@ class SelectorMethods(SelectorParser):
                 except:
                     pass
             parse_list = list(selector.expanded)
-        elif type(selector) is str:
+        elif isinstance(selector, basestring):
             if len(df.index.names[start:stop])>1:
                 try:
                     tks = cls.expand(selector)
@@ -1922,10 +1940,15 @@ class SelectorMethods(SelectorParser):
             raise ValueError('Number of levels in selector exceeds number in row subinterval')
 
         if type(df.index) == pd.MultiIndex:
-            return df.select(lambda row: cls._multiindex_row_in(row, parse_list,
-                                                                start, stop))
+            # deprecated in pandas
+            # return df.select(lambda row: cls._multiindex_row_in(row, parse_list,
+            #                                                     start, stop))
+            return df.loc[df.index.map(lambda row: cls._multiindex_row_in(row, parse_list,
+                                                                start, stop))]
         else:
-            return df.select(lambda row: cls._index_row_in(row, parse_list))
+            # deprecated in pandas
+            # return df.select(lambda row: cls._index_row_in(row, parse_list))
+            return df.loc[df.index.map(lambda row: cls._index_row_in(row, parse_list))]
 
 # Set the option optimize=1 in the production version; need to perform these
 # assignments after definition of the rest of the class because the class'

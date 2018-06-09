@@ -8,6 +8,7 @@ from collections import OrderedDict
 import itertools
 import re
 
+from future.utils import iteritems
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -129,7 +130,7 @@ class Interface(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        for k, v in data.items():
+        for k, v in iteritems(data):
             self.data[k].ix[idx] = v
 
     def __setitem__(self, key, value):
@@ -179,7 +180,7 @@ class Interface(object):
         else:
             s = self.sel.pad_selector(selector.expanded,
                                       len(self.index.levshape))
-        for k, v in data.items():
+        for k, v in iteritems(data):
             self.data[k].ix[s] = v
 
     @property
@@ -363,7 +364,7 @@ class Interface(object):
         """
 
         i = cls(','.join(d.keys()))
-        for k, v in d.items():
+        for k, v in iteritems(d):
             i[k] = v
         i.data.sort_index(inplace=True)
         return i
@@ -1073,7 +1074,7 @@ class Pattern(object):
     """
 
     def __init__(self, *selectors, **kwargs):
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        columns = kwargs.get('columns', ['conn'])
         self.sel = SelectorMethods()
 
         # Force sets of identifiers to be disjoint so that no identifier can
@@ -1183,14 +1184,14 @@ class Pattern(object):
             Pattern instance.
         """
 
-        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
-        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
-        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
-        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
-        data = kwargs['data'] if kwargs.has_key('data') else None
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        comb_op = kwargs['comb_op'] if kwargs.has_key('comb_op') else '+'
-        validate = kwargs['validate'] if kwargs.has_key('validate') else True
+        from_sel = kwargs.get('from_sel', None)
+        to_sel = kwargs.get('to_sel', None)
+        gpot_sel = kwargs.get('gpot_sel', None)
+        spike_sel = kwargs.get('spike_sel', None)
+        data = kwargs.get('data', None)
+        columns = kwargs.get('columns', ['conn'])
+        comb_op = kwargs.get('comb_op', '+')
+        validate = kwargs.get('validate', True)
 
         # Create empty pattern:
         for s in selectors:
@@ -1337,13 +1338,13 @@ class Pattern(object):
             Pattern instance.
         """
 
-        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
-        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
-        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
-        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
-        data = kwargs['data'] if kwargs.has_key('data') else None
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        validate = kwargs['validate'] if kwargs.has_key('validate') else True
+        from_sel = kwargs.get('from_sel', None)
+        to_sel = kwargs.get('to_sel', None)
+        gpot_sel = kwargs.get('gpot_sel', None)
+        spike_sel = kwargs.get('spike_sel', None)
+        data = kwargs.get('data', None)
+        columns = kwargs.get('columns', ['conn'])
+        validate = kwargs.get('validate', True)
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel,
                                 gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='+', validate=validate)
@@ -1454,13 +1455,13 @@ class Pattern(object):
             Pattern instance.
         """
 
-        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
-        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
-        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
-        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
-        data = kwargs['data'] if kwargs.has_key('data') else None
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        validate = kwargs['validate'] if kwargs.has_key('validate') else True
+        from_sel = kwargs.get('from_sel', None)
+        to_sel = kwargs.get('to_sel', None)
+        gpot_sel = kwargs.get('gpot_sel', None)
+        spike_sel = kwargs.get('spike_sel', None)
+        data = kwargs.get('data', None)
+        columns = kwargs.get('columns', ['conn'])
+        validate = kwargs.get('validate', True)
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel,
                                 gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='.+', validate=validate)
@@ -1578,7 +1579,7 @@ class Pattern(object):
         # If the specified selectors correspond to existing entries,
         # set their attributes:
         if found:
-            for k, v in data.items():
+            for k, v in iteritems(data):
                 self.data[k].ix[idx] = v
 
         # Otherwise, populate a new DataFrame with the specified attributes:
@@ -1688,7 +1689,7 @@ class Pattern(object):
         if not duplicates:
             # Remove duplicate tuples from output without perturbing the order
             # of the remaining tuples:
-            return OrderedDict.fromkeys(idx).keys()
+            return list(OrderedDict.fromkeys(idx).keys())
         else:
             return idx
 
@@ -1774,7 +1775,7 @@ class Pattern(object):
                     idx.append(tmp1)
         # Remove duplicate tuples from output without perturbing the order
         # of the remaining tuples:
-        return OrderedDict.fromkeys(idx).keys()
+        return list(OrderedDict.fromkeys(idx).keys())
 
     def __len__(self):
         return self.data.__len__()
@@ -1893,12 +1894,12 @@ class Pattern(object):
         ports_to = []
         for n, data in g.nodes(data=True):
             assert SelectorMethods.is_identifier(n)
-            assert data.has_key('interface')
-            if not ports_by_int.has_key(data['interface']):
+            assert 'interface' in data
+            if not data['interface'] in ports_by_int:
                 ports_by_int[data['interface']] = []
             ports_by_int[data['interface']].append(n)
 
-            if data.has_key('type'):
+            if 'type' in data:
                 if data['type'] == 'gpot':
                     ports_gpot.append(n)
                 elif data['type'] == 'spike':
@@ -1985,7 +1986,7 @@ class Pattern(object):
 
             # Replace NaNs with empty strings:
             d = {k: (v if str(v) != 'nan' else '') \
-                 for k, v in self.interface.data.ix[t].to_dict().items()}
+                 for k, v in iteritems(self.interface.data.ix[t].to_dict())}
 
             # Each node's name corresponds to the port identifier string:
             g.add_node(id, d)
@@ -2000,7 +2001,7 @@ class Pattern(object):
 
             # Discard the 'conn' attribute because the existence of the edge
             # indicates that the connection exists:
-            if d.has_key('conn'):
+            if 'conn' in d:
                 d.pop('conn')
 
             g.add_edge(id_from, id_to, d)

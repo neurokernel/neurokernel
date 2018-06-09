@@ -8,6 +8,7 @@ import atexit
 from collections import OrderedDict
 import time
 
+from future.utils import iteritems
 import bidict
 from mpi4py import MPI
 import numpy as np
@@ -131,7 +132,7 @@ class Module(mpi.Worker):
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
         # closed after MPI.Finalize() is called, an error will occur):
-        for k, v in twiggy.emitters.items():
+        for k, v in iteritems(twiggy.emitters):
              if isinstance(v._output, MPIOutput):
                  atexit.register(v._output.close)
 

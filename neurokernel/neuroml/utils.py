@@ -6,9 +6,9 @@ Neurokernel NeuroML input/output routines.
 
 import networkx as nx
 
-from nml import parse, parseString, NeurokernelDoc
-from nml import Module, Interface, Pattern, PatternConnection, Port
-from nml import MLNeuron, LifNeuron, AlSynapse, PGGSynapse
+from .nml import parse, parseString, NeurokernelDoc
+from .nml import Module, Interface, Pattern, PatternConnection, Port
+from .nml import MLNeuron, LifNeuron, AlSynapse, PGGSynapse
 
 def write(nk_doc, file, root_name='nk'):
     """
@@ -36,12 +36,12 @@ def write(nk_doc, file, root_name='nk'):
     # limitation:
     try:
         nk_doc.export(file, 0, name_=root_name,
-                      namespacedef_=ns_def) 
+                      namespacedef_=ns_def)
     except:
         try:
             with open(file, 'w') as f:
                 nk_doc.export(f, 0, name_=root_name,
-                              namespacedef_=ns_def) 
+                              namespacedef_=ns_def)
         except:
             raise RuntimeError('cannot write file')
 
@@ -60,7 +60,7 @@ def load(file):
         Neurokernel NeuroML document root.
     """
 
-    try:        
+    try:
         nk_doc = parse(file)
     except:
         try:
@@ -168,8 +168,7 @@ def nml_module_to_graph(module):
 
     g = nx.DiGraph()
     for n in module.ml_neurons:
-        g.add_node(n.id)
-        g.node[n.id] = {
+        g.add_node(n.id, **{
             'model': 'MorrisLecar',
             'name': n.id,
             'extern': True if n.extern == 'true' else False,
@@ -183,10 +182,9 @@ def nml_module_to_graph(module):
             'offset': float(n.offset),
             'initV': float(n.init_v),
             'initn': float(n.initn)
-        }
+        })
     for n in module.lif_neurons:
-        g.add_node(n.id)
-        g.node[n.id] = {
+        g.add_node(n.id, **{
             'model': 'LeakyIAF',
             'name': n.id,
             'extern': True if n.extern == 'true' else False,
@@ -197,22 +195,23 @@ def nml_module_to_graph(module):
             'Vt': float(n.Vt),
             'R': float(n.R),
             'C': float(n.C)
-        }
+        })
 
     for s in module.al_synapses:
-        g.add_edge(s.from_, s.to, type='directed',
-                   attr_dict={
+        g.add_edge(s.from_, s.to,
+                   **{
                        'model': 'AlphaSynapse',
                        'name': s.id,
                        'class': int(s.class_),
                        'ar': float(s.ar),
                        'ad': float(s.ad),
                        'gmax': float(s.gmax),
-                       'reverse': float(s.reverse)
+                       'reverse': float(s.reverse),
+                       'type': 'directed'
                    })
     for s in module.pgg_synapses:
-        g.add_edge(s.from_, s.to, type='directed',
-                   attr_dict={
+        g.add_edge(s.from_, s.to,
+                   **{
                        'model': 'power_gpot_gpot',
                        'name': s.id,
                        'class': int(s.class_),
@@ -222,7 +221,8 @@ def nml_module_to_graph(module):
                        'saturation': float(s.saturation),
                        'delay': float(s.delay),
                        'reverse': float(s.reverse),
-                       'conductance': True if s.conductance == 'true' else False
+                       'conductance': True if s.conductance == 'true' else False,
+                       'type': 'directed'
                    })
 
     i = nx.Graph()

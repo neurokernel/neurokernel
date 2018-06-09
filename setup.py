@@ -59,7 +59,7 @@ if __name__ == "__main__":
         packages = PACKAGES,
         include_package_data = True,
         install_requires = [
-            'bidict >= 0.3.1',
+            'bidict >= 0.11.0',
             'dill >= 0.2.4',
             'futures >= 3.0.0',
             'h5py >= 2.5.0',

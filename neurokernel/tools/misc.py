@@ -91,7 +91,7 @@ def rand_bin_matrix(sh, N, dtype=np.double):
     >>> m = rand_bin_matrix((2, 3), 3)
     >>> set(m.flatten()) == set([0, 1])
     True
-    
+
     Parameters
     ----------
     sh : tuple
@@ -123,31 +123,31 @@ def catch_exception(func, disp, *args, **kwargs):
     >>> def f(x): x/0
     >>> catch_exception(f, sys.stdout.write, 1) # doctest: +ELLIPSIS
     f: integer division or modulo by zero (...:1)
-    
+
     Parameters
     ----------
     func : function
-        Function to execute. 
+        Function to execute.
     disp : function
         Function to use to display exception message.
     args : list
         Function arguments.
     kwargs : dict
         Named function arguments.
-        
+
     """
-    
+
     try:
         func(*args, **kwargs)
     except Exception as e:
-        
+
         # Find the line number of the innermost traceback frame:
         for fname in traceback.extract_tb(sys.exc_info()[2]):
             fname, lineno, fn, text = fname
 
         disp(func.__name__ + ': ' + e.__class__.__name__ + ': ' + str(e.message) + \
            ' (' + fname + ':' + str(lineno) + ')')
-             
+
 def memoized_property(fget):
     """
     Decorator for creating a property that only calls its getter once.
@@ -219,7 +219,7 @@ def openmpi_cuda_support(path='ompi_info'):
                 else:
                     return False
         return False
-    
+
 def renumber_in_order(arr):
     """
     Map unique array elements to in-order integers.
@@ -251,6 +251,6 @@ def renumber_in_order(arr):
     already_seen = {}
     for e in arr:
         if e not in already_seen:
-            already_seen[e] = c.next()
+            already_seen[e] = next(c)
         result.append(already_seen[e])
     return result
