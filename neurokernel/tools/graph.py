@@ -48,7 +48,7 @@ def graph_to_df(g):
 
     """
 
-    nx_major_version = nx.__version__.split('.')[0]
+    nx_major_version = int(nx.__version__.split('.')[0])
 
     if nx_major_version < 2:
         nodes = g.node

@@ -678,8 +678,7 @@ class Manager(mpi.WorkerManager):
             True if all of the required arguments are present, False otherwise.
         """
 
-        tmp = mpi.getargnames(target.__init__)
-        arg_names = set(tmp['args'] + tmp['kwargs'])
+        arg_names = set(mpi.getargnames(target.__init__))
         for required_arg in self.required_args:
             if required_arg not in arg_names:
                 return False

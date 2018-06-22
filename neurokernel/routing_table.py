@@ -169,7 +169,7 @@ class RoutingTable(object):
         Return subtable containing only those connections between specified identifiers.
         """
 
-        return RoutingTable(self.data.subgraph(ids))
+        return RoutingTable(self.data.subgraph(ids).copy())
 
     def to_df(self):
         """

@@ -17,20 +17,20 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 from random import randint
 
-from .ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+from neurokernel.ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
-from .mixins import LoggerMixin
-from . import mpi
-from .tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
-from .tools.logging import setup_logger
-from .tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
-from .tools.mpi import MPIOutput
-from .pattern import Interface, Pattern
-from .plsel import Selector, SelectorMethods
-from .pm import BasePortMapper
-from .pm_gpu import GPUPortMapper
-from .routing_table import RoutingTable
-from .uid import uid
+from neurokernel.mixins import LoggerMixin
+from neurokernel import mpi
+from neurokernel.tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
+from neurokernel.tools.logging import setup_logger
+from neurokernel.tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
+from neurokernel.tools.mpi import MPIOutput
+from neurokernel.pattern import Interface, Pattern
+from neurokernel.plsel import Selector, SelectorMethods
+from neurokernel.pm import BasePortMapper
+from neurokernel.pm_gpu import GPUPortMapper
+from neurokernel.routing_table import RoutingTable
+from neurokernel.uid import uid
 
 CTRL_TAG = 1
 
@@ -237,8 +237,6 @@ class Module(mpi.Worker):
             cuda.Context.synchronize()
             self.log_info('Elapsed time for creating array and PortMapper {} seconds'.format(time.time()-start))
 
-        # MPI Request object for resolving asynchronous transfers:
-        self.req = MPI.Request()
 
     def _init_gpu(self):
         """
@@ -504,7 +502,8 @@ class Module(mpi.Worker):
             if not self.time_sync:
                 self.log_info('receiving from %s' % src_id)
         if requests:
-            self.req.Waitall(requests)
+            req = MPI.Request()
+            req.Waitall(requests)
         if not self.time_sync:
             self.log_info('all data were received by %s' % self.id)
 
@@ -551,6 +550,9 @@ class Module(mpi.Worker):
         This method is invoked by the `run()` method before the main loop is
         started.
         """
+
+        # MPI Request object for resolving asynchronous transfers:
+        #self.req = MPI.Request()
 
         self.log_info('running code before body of worker %s' % self.rank)
 
@@ -742,8 +744,7 @@ class Manager(mpi.WorkerManager):
             True if all of the required arguments are present, False otherwise.
         """
 
-        tmp = mpi.getargnames(target.__init__)
-        arg_names = set(tmp['args'] + tmp['kwargs'])
+        arg_names = set(mpi.getargnames(target.__init__))
         for required_arg in self.required_args:
             if required_arg not in arg_names:
                 return False

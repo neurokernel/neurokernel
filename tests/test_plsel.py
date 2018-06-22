@@ -2,6 +2,7 @@
 
 from unittest import main, TestCase
 
+from past.builtins import long
 import numpy as np
 import pandas as pd
 from numpy.testing import assert_array_equal
@@ -15,7 +16,7 @@ df = pd.DataFrame(data={'data': np.random.rand(10),
                       'bar', 'bar', 'bar', 'baz', 'baz'],
                   1: ['qux', 'qux', 'mof', 'mof', 'mof',
                       'qux', 'qux', 'qux', 'qux', 'mof'],
-                  2: [0, 1, 0, 1, 2, 
+                  2: [0, 1, 0, 1, 2,
                       0, 1, 2, 0, 0]})
 df.set_index(0, append=False, inplace=True)
 df.set_index(1, append=True, inplace=True)
@@ -181,7 +182,7 @@ class test_path_like_selector(TestCase):
                                          ('foo','mof',0),
                                          ('foo','mof',1),
                                          ('foo','mof',2)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_list(self):
         result = self.sel.select(self.df, [['foo']])
@@ -190,32 +191,32 @@ class test_path_like_selector(TestCase):
                                          ('foo','mof',0),
                                          ('foo','mof',1),
                                          ('foo','mof',2)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_Selector(self):
         result = self.sel.select(self.df, Selector('/foo/qux[0:2]'))
         idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                          ('foo','qux',1)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_comma(self):
         result = self.sel.select(self.df, '/foo/qux,/baz/mof')
         idx = pd.MultiIndex.from_tuples([('foo','qux', 0),
                                          ('foo','qux', 1),
                                          ('baz','mof', 0)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_plus(self):
         result = self.sel.select(self.df, '/foo+/qux+[0,1]')
         idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                          ('foo','qux',1)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_dotplus(self):
         result = self.sel.select(self.df, '/[bar,baz].+/[qux,mof].+/[0,0]')
         idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                          ('baz','mof',0)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_paren(self):
         result = self.sel.select(self.df, '(/bar,/baz)')
@@ -224,7 +225,7 @@ class test_path_like_selector(TestCase):
                                          ('bar','qux',2),
                                          ('baz','qux',0),
                                          ('baz','mof',0)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_paren_plus(self):
         result = self.sel.select(self.df, '(/bar,/baz)+/qux')
@@ -232,7 +233,7 @@ class test_path_like_selector(TestCase):
                                          ('bar','qux',1),
                                          ('bar','qux',2),
                                          ('baz','qux',0)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_asterisk(self):
         result = self.sel.select(self.df, '/*/qux')
@@ -242,24 +243,24 @@ class test_path_like_selector(TestCase):
                                          ('bar','qux',1),
                                          ('bar','qux',2),
                                          ('baz','qux',0)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_integer_with_brackets(self):
         result = self.sel.select(self.df, '/bar/qux[1]')
         idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_integer_no_brackets(self):
         result = self.sel.select(self.df, '/bar/qux/1')
         idx = pd.MultiIndex.from_tuples([('bar','qux',1)], names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_integer_set(self):
         result = self.sel.select(self.df, '/foo/qux[0,1]')
         idx = pd.MultiIndex.from_tuples([('foo','qux',0),
                                          ('foo','qux',1)],
                                         names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_string_set(self):
         result = self.sel.select(self.df, '/foo/[qux,mof]')
@@ -269,7 +270,7 @@ class test_path_like_selector(TestCase):
                                          ('foo','mof',1),
                                          ('foo','mof',2)],
                                         names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_interval_no_bounds(self):
         result = self.sel.select(self.df, '/foo/mof[:]')
@@ -277,33 +278,33 @@ class test_path_like_selector(TestCase):
                                          ('foo','mof',1),
                                          ('foo','mof',2)],
                                         names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_interval_lower_bound(self):
         result = self.sel.select(self.df, '/foo/mof[1:]')
         idx = pd.MultiIndex.from_tuples([('foo','mof',1),
                                          ('foo','mof',2)],
                                         names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_interval_upper_bound(self):
         result = self.sel.select(self.df, '/foo/mof[:2]')
         idx = pd.MultiIndex.from_tuples([('foo','mof',0),
                                          ('foo','mof',1)],
                                         names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_interval_both_bounds(self):
         result = self.sel.select(self.df, '/bar/qux[0:2]')
         idx = pd.MultiIndex.from_tuples([('bar','qux',0),
                                          ('bar','qux',1)],
                                         names=[0, 1, 2])
-        assert_frame_equal(result, self.df.ix[idx])
+        assert_frame_equal(result, self.df.loc[idx])
 
     def test_select_order(self):
         data = np.random.rand(3)
         df = pd.DataFrame(data,
-                          pd.MultiIndex.from_tuples([('foo', i) for i in xrange(3)],
+                          pd.MultiIndex.from_tuples([('foo', i) for i in range(3)],
                                                     names=[0, 1]))
         assert_array_equal(self.sel.select(df, '/foo[2,1,0]').values.flatten(),
                            data[[2, 1, 0]])
@@ -318,9 +319,9 @@ class test_path_like_selector(TestCase):
         self.assertTrue(self.sel.are_disjoint('', ''))
         self.assertFalse(self.sel.are_disjoint('/foo', '/foo', ''))
 
-        self.assertTrue(self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
+        self.assertTrue(self.sel.are_disjoint([['foo', slice(0, 10), 'baz']],
                                               [['bar', slice(10, 20), 'qux']]))
-        self.assertFalse(self.sel.are_disjoint([['foo', slice(0, 10), 'baz']], 
+        self.assertFalse(self.sel.are_disjoint([['foo', slice(0, 10), 'baz']],
                                                [['foo', slice(5, 15), ['baz','qux']]]))
 
     def test_count_ports(self):
@@ -447,11 +448,11 @@ class test_path_like_selector(TestCase):
     def test_to_identifier(self):
         self.assertEqual(self.sel.to_identifier(['foo']), '/foo')
         self.assertEqual(self.sel.to_identifier(['foo', 0]), '/foo[0]')
-        self.assertEqual(self.sel.to_identifier(['foo', 0L]), '/foo[0]')
+        self.assertEqual(self.sel.to_identifier(['foo', long(0)]), '/foo[0]')
         self.assertRaises(Exception, self.sel.to_identifier, 'foo')
-        self.assertRaises(Exception, self.sel.to_identifier, 
+        self.assertRaises(Exception, self.sel.to_identifier,
                           [['foo', ['a', 'b']]])
-        self.assertRaises(Exception, self.sel.to_identifier, 
+        self.assertRaises(Exception, self.sel.to_identifier,
                           ['foo', (0, 2)])
 
     def test_index_to_selector(self):
@@ -477,7 +478,7 @@ class test_path_like_selector(TestCase):
         self.assertTrue(self.sel.is_expandable('[0:2]'))
 
         self.assertTrue(self.sel.is_expandable([['foo', [0, 1]]]))
-        self.assertTrue(self.sel.is_expandable([['foo', [0L, 1L]]]))
+        self.assertTrue(self.sel.is_expandable([['foo', [long(0), long(1)]]]))
         self.assertTrue(self.sel.is_expandable([['foo', 0],
                                                 ['foo', 1]]))
         self.assertTrue(self.sel.is_expandable([[[0, 1]]]))
@@ -531,14 +532,14 @@ class test_path_like_selector(TestCase):
         self.assertEqual(self.sel.is_selector([['foo', 'bar']]), True)
         self.assertEqual(self.sel.is_selector([('foo', 'bar')]), True)
         self.assertEqual(self.sel.is_selector([('foo', '*')]), True)
-        self.assertEqual(self.sel.is_selector([('foo', 'bar'), ('bar', 'qux')]), True)        
+        self.assertEqual(self.sel.is_selector([('foo', 'bar'), ('bar', 'qux')]), True)
         self.assertEqual(self.sel.is_selector([('foo', 0)]), True)
-        self.assertEqual(self.sel.is_selector([('foo', 0L)]), True)
+        self.assertEqual(self.sel.is_selector([('foo', long(0))]), True)
         self.assertEqual(self.sel.is_selector([('foo', slice(0, 2))]), True)
-        self.assertEqual(self.sel.is_selector([('foo', slice(0L, 2L))]), True)
+        self.assertEqual(self.sel.is_selector([('foo', slice(long(0), long(2)))]), True)
         self.assertEqual(self.sel.is_selector([('foo', slice(0, None))]), True)
         self.assertEqual(self.sel.is_selector([('foo', [0, 1])]), True)
-        self.assertEqual(self.sel.is_selector([('foo', [0L, 1L])]), True)
+        self.assertEqual(self.sel.is_selector([('foo', [long(0), long(1)])]), True)
         self.assertEqual(self.sel.is_selector([('foo', ['a', 'b'])]), True)
         self.assertEqual(self.sel.is_selector([('foo', ['a', 0])]), True)
 
@@ -634,7 +635,7 @@ class test_path_like_selector(TestCase):
         self.assertSequenceEqual(sel_padded,
                                  [['x', 'y', '', ''], ['a', 'b', 'c', '']])
         self.assertEqual(sel_id, id(sel_padded))
-        
+
         sel = [['x', 'y'], ['a', 'b', 'c']]
         sel_id = id(sel)
         sel_padded = self.sel.pad_parsed(sel, float('inf'), False)
@@ -647,24 +648,24 @@ class test_path_like_selector(TestCase):
         self.assertEqual(self.sel.tokens_to_str(['a']), '/a')
         self.assertEqual(self.sel.tokens_to_str(['a', 0]), '/a/0')
         self.assertEqual(self.sel.tokens_to_str(('a', 0)), '/a/0')
-        self.assertEqual(self.sel.tokens_to_str(('a', 0L)), '/a/0')
+        self.assertEqual(self.sel.tokens_to_str(('a', long(0))), '/a/0')
         self.assertEqual(self.sel.tokens_to_str(['a', '*']), '/a/*')
         self.assertEqual(self.sel.tokens_to_str(['a', 'b', 0]), '/a/b/0')
         self.assertEqual(self.sel.tokens_to_str(['a', 'b', [0, 1]]), '/a/b[0,1]')
         self.assertEqual(self.sel.tokens_to_str(['a', 'b', (0, 1)]), '/a/b[0,1]')
         self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(0, 5)]), '/a/b[0:5]')
-        self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(0L, 5L)]), '/a/b[0:5]')
+        self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(long(0), long(5))]), '/a/b[0:5]')
         self.assertEqual(self.sel.tokens_to_str(['a', 'b', slice(None, 5)]), '/a/b[:5]')
 
     def test_collapse(self):
         self.assertEqual(self.sel.collapse([]), '')
         self.assertEqual(self.sel.collapse([['a']]), '/a')
         self.assertEqual(self.sel.collapse([['a', 0]]), '/a/0')
-        self.assertEqual(self.sel.collapse([['a', 0L]]), '/a/0')
+        self.assertEqual(self.sel.collapse([['a', long(0)]]), '/a/0')
         self.assertEqual(self.sel.collapse([('a', 0)]), '/a/0')
         self.assertEqual(self.sel.collapse([['a', 'b', 0]]), '/a/b/0')
         self.assertEqual(self.sel.collapse([['a', 0], ['b', 0]]), '/a/0,/b/0')
         self.assertEqual(self.sel.collapse([['a', 'b', (0, 1)], ['c', 'd']]), '/a/b[0,1],/c/d')
-        
+
 if __name__ == '__main__':
     main()

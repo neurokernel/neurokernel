@@ -98,10 +98,10 @@ class BasePortMapper(object):
         pm = cls('')
         N = len(idx)
         if portmap is None:
-            pm.portmap = pd.Series.from_array(np.arange(N), idx)
+            pm.portmap = pd.Series(np.arange(N), idx)
         else:
             assert len(portmap) == N
-            pm.portmap = pd.Series.from_array(np.array(portmap), idx)
+            pm.portmap = pd.Series(np.array(portmap), idx)
         return pm
 
     @classmethod

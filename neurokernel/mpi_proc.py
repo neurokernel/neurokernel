@@ -60,12 +60,11 @@ def getargnames(f):
     For instance methods, the `self` argument is omitted.
     """
 
-    spec = inspect.getargspec(f)
-    args = spec.args[1:] if inspect.ismethod(f) or 'self' in spec.args else spec.args
-
-    kwargs_len = len(spec.defaults)
-    args_len = len(args) - kwargs_len
-    return {'args': args[:args_len], 'kwargs': args[args_len:]}
+    if sys.version_info.major == 2:
+        spec = inspect.getargspec(f)
+    else:
+        spec = inspect.getfullargspec(f)
+    return spec.args[1:] if inspect.ismethod(f) or 'self' in spec.args else spec.args
 
 
 def args_to_dict(f, *args, **kwargs):
@@ -90,8 +89,8 @@ def args_to_dict(f, *args, **kwargs):
     d = {}
 
     arg_names = getargnames(f)
-    assert len(arg_names['args']) <= len(args)
-    for arg, val in zip(arg_names['args'], args):
+    assert len(arg_names) >= len(args)
+    for arg, val in zip(arg_names, args):
         d[arg] = val
     for arg, val in iteritems(kwargs):
         if arg in d:

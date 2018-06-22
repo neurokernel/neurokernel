@@ -331,8 +331,7 @@ class Manager(base_gpu_onesided.Manager):
 
     def add(self, target, id, *args, **kwargs):
         assert issubclass(target, Module)
-        tmp = mpi.getargnames(target.__init__)
-        argnames = tmp['args'] + tmp['kwargs']
+        argnames = mpi.getargnames(target.__init__)
 
         # Selectors must be passed to the module upon instantiation;
         # the module manager must know about them to assess compatibility:

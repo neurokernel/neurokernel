@@ -9,6 +9,9 @@ import sys
 
 import numpy as np
 
+def is_method_or_function(x):
+    return inspect.ismethod(x) or inspect.isfunction(x)
+
 def all_global_vars(x):
     """
     Find all globals accessed by an object.
@@ -61,7 +64,7 @@ def all_global_vars(x):
                     pass
                 elif name in global_dict:
 
-                    # If an accessed symbol is a global that can be imported as-is, 
+                    # If an accessed symbol is a global that can be imported as-is,
                     # include it in the dict of globals; if it is a method of a class,
                     # recurse into it:
                     results[name] = global_dict[name]
@@ -80,7 +83,7 @@ def all_global_vars(x):
                 else:
                     # Check if symbol is the name is an attribute of a global (i.e.,
                     # can be imported):
-                    for r in results.keys():
+                    for r in list(results.keys()):
                         if hasattr(results[r], name) and \
                            inspect.ismodule(getattr(results[r], name)):
                             results[r+'.'+name] = getattr(results[r], name)
@@ -88,7 +91,6 @@ def all_global_vars(x):
         else:
             # Include globals of a class' parents:
             if inspect.isclass(x):
-
                 # Parent classes other than object should be included in a class'
                 # globals:
                 for b in x.__bases__:
@@ -97,7 +99,7 @@ def all_global_vars(x):
                     results.update(recursive(b, set([b.__name__]).union(seen), level))
 
             # Recurse into class/object methods:
-            for f in inspect.getmembers(x, predicate=inspect.ismethod):
+            for f in inspect.getmembers(x, predicate=is_method_or_function):
                 results.update(recursive(f[1], set([f[1].__name__]).union(seen), level))
         return results
     return recursive(x)

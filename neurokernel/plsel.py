@@ -614,7 +614,7 @@ class SelectorMethods(SelectorParser):
         if np.iterable(s):
 
             # Try to expand string:
-            if type(s) is basestring:
+            if isinstance(s, basestring):
                 try:
                     s_exp = cls.expand(s)
                 except:
@@ -626,7 +626,7 @@ class SelectorMethods(SelectorParser):
                         return False
 
             # If all entries are lists or tuples, try to expand:
-            elif all([(type(x) in [list, slice]) for x in s]):
+            elif all([(isinstance(x, (list, slice))) for x in s]):
                 if len(cls.expand(s)) == 1:
                     return True
                 else:
@@ -665,7 +665,7 @@ class SelectorMethods(SelectorParser):
         a sequence of tokens is not a valid selector).
         """
 
-        assert type(s) in [list, tuple]
+        assert isinstance(s, (list, tuple))
         # if set(map(type, s)).issubset([int, long, str, basestring]):
         if all(map(lambda x: isinstance(x, (int, long, basestring)), s)):
             tokens = s
@@ -675,9 +675,9 @@ class SelectorMethods(SelectorParser):
 
         result = ''
         for t in tokens:
-            if type(t) == str:
+            if isinstance(t, basestring):
                 result += '/'+t
-            elif type(t) in [int, long]:
+            elif isinstance(t, (int, long)):
                 result += '[%s]' % t
             else:
                 raise ValueError('Cannot convert to single port identifier.')
@@ -1697,7 +1697,7 @@ class SelectorMethods(SelectorParser):
                 levels[k].append(selectors[-1][k])
 
         # Discard duplicate level values:
-        levels = [sorted(set(level)) for level in levels]
+        levels = [list(set(level)) for level in levels]
 
         # Start with at least one label so that a valid Index will be returned
         # if the selector is empty:
@@ -1781,7 +1781,7 @@ class SelectorMethods(SelectorParser):
                 levels[k].append(selectors[-1][k])
 
         # Discard duplicate level values:
-        levels = [sorted(set(level)) for level in levels]
+        levels = [list(set(level)) for level in levels]
 
         # Start with at least one label so that a valid Index will be returned
         # if the selector is empty:
@@ -1870,7 +1870,7 @@ class SelectorMethods(SelectorParser):
                 levels[j].add('')
 
         # Sort levels:
-        levels = [sorted(level) for level in levels]
+        levels = [list(level) for level in levels]
 
         # Construct label indices:
         labels = [[] for i in range(max_levels)]
@@ -1910,7 +1910,7 @@ class SelectorMethods(SelectorParser):
             if len(df.index.names[start:stop])>1:
                 try:
                     tks = list(selector.expanded)
-                    return df[tks]
+                    return df.loc[tks]
                 except:
                     pass
             parse_list = list(selector.expanded)
@@ -1918,14 +1918,14 @@ class SelectorMethods(SelectorParser):
             if len(df.index.names[start:stop])>1:
                 try:
                     tks = cls.expand(selector)
-                    return df[tks]
+                    return df.loc[tks]
                 except:
                     pass
             parse_list = cls.parse(selector)
         elif type(selector) in [list, tuple]:
             try:
                 tks = cls.expand(selector)
-                return df[tks]
+                return df.loc[tks]
             except:
                 pass
             parse_list = selector

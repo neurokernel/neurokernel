@@ -5,7 +5,8 @@ Sample program.
 """
 
 import os
-from StringIO import StringIO
+from io import BytesIO
+from io import StringIO
 import sys
 from unittest import main, TestCase
 
@@ -30,6 +31,6 @@ class test_mpi_proc(TestCase):
         man.spawn()
         results=man.recv()
         self.assertEqual(results,'a=x b=y c=1')
-    
+
 if __name__ == '__main__':
     main()

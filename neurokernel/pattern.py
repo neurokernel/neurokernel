@@ -9,6 +9,7 @@ import itertools
 import re
 
 from future.utils import iteritems
+from past.builtins import basestring
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -131,7 +132,7 @@ class Interface(object):
                 raise ValueError('cannot assign specified value')
 
         for k, v in iteritems(data):
-            self.data[k].ix[idx] = v
+            self.data[k].loc[idx] = v
 
     def __setitem__(self, key, value):
         if type(key) == tuple:
@@ -181,7 +182,7 @@ class Interface(object):
             s = self.sel.pad_selector(selector.expanded,
                                       len(self.index.levshape))
         for k, v in iteritems(data):
-            self.data[k].ix[s] = v
+            self.data[k].loc[s] = v
 
     @property
     def index(self):
@@ -750,7 +751,7 @@ class Interface(object):
             idx = self.sel.expand(s, self.idx_levels)
             if not isinstance(self.data.index, pd.MultiIndex):
                 idx = [x[0] for x in idx]
-            d = self.data['interface'].ix[idx]
+            d = self.data['interface'].loc[idx]
 
             if isinstance(d, int):
                 return True
@@ -894,7 +895,7 @@ class Interface(object):
         for t in ids:
             selector = ''
             for s in t:
-                if type(s) in [str, unicode]:
+                if isinstance(s, basestring):
                     selector += '/'+s
                 else:
                     selector += '[%s]' % s
@@ -949,7 +950,7 @@ class Interface(object):
             idx = self.sel.expand(s, self.idx_levels)
             if not isinstance(self.data.index, pd.MultiIndex):
                 idx = [x[0] for x in idx]
-            d = self.data['interface'].ix[idx]
+            d = self.data['interface'].loc[idx]
             s = set(d)
             s.discard(np.nan)
             return s
@@ -1086,7 +1087,7 @@ class Pattern(object):
         for s in selectors:
             if isinstance(s, Selector) and len(s) != 0:
                 selector.extend(s.expanded)
-            elif type(s) in [str, unicode]:
+            elif isinstance(s, basestring):
                 selector.extend(self.sel.parse(s))
             elif np.iterable(s):
                 selector.extend(s)
@@ -1402,7 +1403,7 @@ class Pattern(object):
 
         # Sort the expanded ports so that the results are returned in
         # lexicographic order:
-        df = self.interface.data.ix[sorted(ports)]
+        df = self.interface.data.loc[sorted(ports)]
         if i is None:
             if tuples:
                 return df.index.tolist()
@@ -1580,7 +1581,7 @@ class Pattern(object):
         # set their attributes:
         if found:
             for k, v in iteritems(data):
-                self.data[k].ix[idx] = v
+                self.data[k].loc[idx] = v
 
         # Otherwise, populate a new DataFrame with the specified attributes:
         else:
@@ -1856,7 +1857,7 @@ class Pattern(object):
         self.data.index.names = index_names
 
     @classmethod
-    def from_graph(cls, g, return_key_order = True):
+    def from_graph(cls, g, return_key_order = False):
         """Convert a NetworkX directed graph into a Pattern instance.
 
         Parameters
@@ -1986,7 +1987,7 @@ class Pattern(object):
 
             # Replace NaNs with empty strings:
             d = {k: (v if str(v) != 'nan' else '') \
-                 for k, v in iteritems(self.interface.data.ix[t].to_dict())}
+                 for k, v in iteritems(self.interface.data.loc[t].to_dict())}
 
             # Each node's name corresponds to the port identifier string:
             g.add_node(id, d)
@@ -1997,7 +1998,7 @@ class Pattern(object):
             t_to = t[self.to_slice]
             id_from = self.sel.tokens_to_str(t_from)
             id_to = self.sel.tokens_to_str(t_to)
-            d = self.data.ix[t].to_dict()
+            d = self.data.loc[t].to_dict()
 
             # Discard the 'conn' attribute because the existence of the edge
             # indicates that the connection exists:

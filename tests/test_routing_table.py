@@ -30,7 +30,7 @@ class test_routingtable(TestCase):
         t = RoutingTable()
         t.data.add_node('a')
         t.data.add_node('b')
-        t.data.add_edge('a', 'b', {'data': 1})
+        t.data.add_edge('a', 'b', **{'data': 1})
         assert t['a', 'b'] == 1
         assert t['a', 'b', 'data'] == 1
 
@@ -38,7 +38,7 @@ class test_routingtable(TestCase):
         t = RoutingTable()
         t.data.add_node('a')
         t.data.add_node('b')
-        t.data.add_edge('a', 'b', {'data': [1, 2]})
+        t.data.add_edge('a', 'b', **{'data': [1, 2]})
         assert t['a', 'b'] == [1, 2]
         assert t['a', 'b', 'data'] == [1, 2]
 
@@ -46,7 +46,7 @@ class test_routingtable(TestCase):
         t = RoutingTable()
         t.data.add_node('a')
         t.data.add_node('b')
-        t.data.add_edge('a', 'b', {'x': 1, 'y': 2})
+        t.data.add_edge('a', 'b', **{'x': 1, 'y': 2})
         assert t['a', 'b'] == {'x': 1, 'y': 2}
         assert t['a', 'b', 'x'] == 1
 
