@@ -18,7 +18,8 @@ import psutil
 # (this approach should probably be modified to take some SLURM variables into
 # consideration):
 env = os.environ.copy()
-for k in env.keys():
+env_keys = list(env.keys())
+for k in env_keys:
     if k.startswith('SLURM'):
         del env[k]
 
