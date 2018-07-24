@@ -15,9 +15,9 @@ class RoutingTable(object):
     Simple class that stores pairs of strings that can signify
     one-hop routes between entities in a graph. Assigning a value to a
     pair that isn't in the class instance will result in the pair and value
-    being added to the class instance. All data associated with a specific 
+    being added to the class instance. All data associated with a specific
     connection is stored as a dict; if a non-dict is assigned to a connection,
-    it is stored in a dict with key 'data'. Specific values in the dict can be 
+    it is stored in a dict with key 'data'. Specific values in the dict can be
     retrieved by passing the desired key directly to the [] operator.
 
     Examples
@@ -90,7 +90,7 @@ class RoutingTable(object):
             else:
                 raise ValueError('cannot assign specified value')
         else:
-            if type(value) != dict:                
+            if type(value) != dict:
                 data = {'data': value}
             else:
                 data = value
@@ -99,17 +99,17 @@ class RoutingTable(object):
         # attributes if it already exists:
         if self.data.has_edge(key[0], key[1]):
             self.data.remove_edge(key[0], key[1])
-        self.data.add_edge(key[0], key[1], data)
+        self.data.add_edge(key[0], key[1], **data)
 
     def __getitem__(self, key):
         assert type(key) == tuple
         assert len(key) >= 2
         if len(key) > 2:
-            result = {k: self.data.edge[key[0]][key[1]][k] for k in key[2:]}
+            result = {k: self.data.get_edge_data(key[0], key[1])[k] for k in key[2:]}
         else:
-            result = self.data.edge[key[0]][key[1]]
+            result = self.data.get_edge_data(key[0], key[1])
         if len(result) == 1:
-            return result[result.keys()[0]]
+            return result[list(result.keys())[0]]
         else:
             return result
 
@@ -149,7 +149,7 @@ class RoutingTable(object):
 
         # Return empty list if the specified id isn't in the routing table:
         try:
-            return self.data.predecessors(dest_id)
+            return list(self.data.predecessors(dest_id))
         except nx.NetworkXError:
             return []
 
@@ -160,7 +160,7 @@ class RoutingTable(object):
 
         # Return empty list if the specified id isn't in the routing table:
         try:
-            return self.data.successors(src_id)
+            return list(self.data.successors(src_id))
         except nx.NetworkXError:
             return []
 
@@ -168,8 +168,8 @@ class RoutingTable(object):
         """
         Return subtable containing only those connections between specified identifiers.
         """
-        
-        return RoutingTable(self.data.subgraph(ids))
+
+        return RoutingTable(self.data.subgraph(ids).copy())
 
     def to_df(self):
         """
