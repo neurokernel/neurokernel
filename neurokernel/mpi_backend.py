@@ -33,14 +33,19 @@ import atexit
 import twiggy
 from mpi4py import MPI
 
-# The MPI._p_pickle attribute in the stable release of mpi4py 1.3.1
-# was renamed to pickle in subsequent dev revisions:
+# mpi4py has changed the method to override pickle with dill various times
 try:
-    MPI.pickle.dumps = dill.dumps
-    MPI.pickle.loads = dill.loads
+    # mpi4py 3.0.0
+    MPI.pickle.__init__(dill.dumps, dill.loads)
 except AttributeError:
-    MPI._p_pickle.dumps = dill.dumps
-    MPI._p_pickle.loads = dill.loads
+    try:
+        # mpi4py versions 1.3.1 through 2.x
+        MPI.pickle.dumps = dill.dumps
+        MPI.pickle.loads = dill.loads
+    except AttributeError:
+        # mpi4py pre 1.3.1
+        MPI._p_pickle.dumps = dill.dumps
+        MPI._p_pickle.loads = dill.loads
 
 # This import must match the corresponding import in neurokernel.tools.logging
 # so that the isinstance() check below for MPIOutput instances in transmitted

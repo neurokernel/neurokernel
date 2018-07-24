@@ -134,8 +134,9 @@ class test_port_mapper(TestCase):
         # indexes with dtype=object):
         pm = PortMapper('')
         assert_series_equal(pm.portmap,
-            pd.Series([], dtype=np.int_, index=pd.Index([], object)))
+            pd.Series([], dtype=np.int_, index=pd.MultiIndex(levels=[[]], labels=[[]], names=[0])))
         assert_array_equal(pm.data, np.array([]))
+
 
         # Non-empty selector, empty data:
         pm = PortMapper('/foo[0:3]')

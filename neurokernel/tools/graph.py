@@ -47,35 +47,26 @@ def graph_to_df(g):
         
     """
 
+    nx_major_version = nx.__version__.split('.')[0]
+
+    if nx_major_version < 2:
+        nodes = g.node
+        edges = g.edge
+    else:
+        nodes = g.nodes
+        edges = g.edges
+        
     # Extract the node/edge data:
     try:
-        node_data = {int(k): v for k, v in g.node.iteritems()}
+        node_data = {int(k): v for k, v in nodes.iteritems()}
     except:
-        node_data = {k: v for k, v in g.node.iteritems()}
+        node_data = {k: v for k, v in nodes.iteritems()}
 
     try:
-        if not isinstance(g, nx.MultiGraph):
-            edge_data = {(int(k1), int(k2)):v for k1 in g.edge.keys() \
-                             for k2, v in g.edge[k1].iteritems()}
-
-        else:
-
-            # Include the edge number in the index for multigraphs:
-            edge_data = {(int(k1), int(k2), int(m)):v for k1 in g.edge.keys() \
-                             for k2 in g.edge[k1].keys() \
-                             for m, v in g.edge[k1][k2].iteritems()}
+        edge_data = {(int(k1[0]), int(k1[1])): k2 for k1, k2 in edges.iteritems()}
     except:
-        if not isinstance(g, nx.MultiGraph):
-            edge_data = {(k1, k2):v for k1 in g.edge.keys() \
-                             for k2, v in g.edge[k1].iteritems()}
+        edge_data = {k1: k2 for k1, k2 in edges.iteritems()}
 
-        else:
-
-            # Include the edge number in the index for multigraphs:
-            edge_data = {(k1, k2, m):v for k1 in g.edge.keys() \
-                             for k2 in g.edge[k1].keys() \
-                             for m, v in g.edge[k1][k2].iteritems()}
-        
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data).T
     df_edge = pandas.DataFrame.from_dict(edge_data).T
