@@ -59,7 +59,7 @@ def graph_to_df(g):
         else:
             edge_data = {(k1, k2, m): v for k1 in g.edge \
                              for k2 in g.edge[k1] \
-                             for m, v in iteritems(g.edge[k1][k2])}}
+                             for m, v in iteritems(g.edge[k1][k2])}
     else:
         node_data = {k: v for k, v in iteritems(g.nodes)}
         edge_data = {k1: k2 for k1, k2 in iteritems(g.edges)}
