@@ -50,23 +50,19 @@ def graph_to_df(g):
 
     nx_major_version = int(nx.__version__.split('.')[0])
 
-    if nx_major_version < 2:
-        nodes = g.node
-        edges = g.edge
-    else:
-        nodes = g.nodes
-        edges = g.edges
-
     # Extract the node/edge data:
-    try:
-        node_data = {int(k): v for k, v in iteritems(nodes)}
-    except:
-        node_data = {k: v for k, v in iteritems(nodes)}
-
-    try:
-        edge_data = {(int(k1[0]), int(k1[1])): k2 for k1, k2 in iteritems(edges)}
-    except:
-        edge_data = {k1: k2 for k1, k2 in iteritems(edges)}
+    if nx_major_version < 2:
+        node_data = {k: v for k, v in iteritems(g.node)}
+        if not isinstance(g, nx.MultiGraph):
+            edge_data = {(k1, k2): v for k1 in g.edge \
+                                        for k2, v in iteritems(g.edge[k1])}
+        else:
+            edge_data = {(k1, k2, m): v for k1 in g.edge \
+                             for k2 in g.edge[k1] \
+                             for m, v in iteritems(g.edge[k1][k2])}}
+    else:
+        node_data = {k: v for k, v in iteritems(g.nodes)}
+        edge_data = {k1: k2 for k1, k2 in iteritems(g.edges)}
 
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data).T
