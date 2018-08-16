@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-import neurokernel.mpi_relaunch
-
+#import neurokernel.mpi_relaunch
 import cPickle as pickle
 import os
 import tempfile
@@ -14,6 +13,10 @@ from neurokernel.pattern import Pattern
 from neurokernel.plsel import Selector, SelectorMethods
 from neurokernel.core_gpu import Module, Manager, CTRL_TAG, GPOT_TAG, SPIKE_TAG
 import neurokernel.mpi as mpi
+from neurokernel.mpi_run import mpi_run,mpi_run_manager
+
+import warnings
+warnings.simplefilter("ignore")
 
 class MyModule1(Module):
     """
@@ -45,7 +48,7 @@ class MyModule1(Module):
             out_spike_data_gpu = gpuarray.to_gpu(np.asarray(self.out_spike_data,
                                                         self.data['spike'].dtype))
             self.pm['spike'][self.out_spike_ports] = out_spike_data_gpu
-            self.log_info('output spike port data: '+str(out_spike_data_gpu))
+            self.log_info('output spike port data: ' + str(out_spike_data_gpu))
 
 class MyModule2(Module):
     """
@@ -80,10 +83,15 @@ class MyModule2(Module):
         self.out_buf.append(in_spike_data)
 
     def post_run(self):
+        import cPickle as pickle
         if self.out_file_name:
             with open(self.out_file_name, 'w') as f:
                 pickle.dump(self.out_buf[1], f)
+
         super(MyModule2, self).post_run()
+
+def test_success(): 
+    print("HELLO WORLD")
 
 def make_sels(sel_in_gpot, sel_out_gpot, sel_in_spike, sel_out_spike):
     sel_in_gpot = Selector(sel_in_gpot)
@@ -101,13 +109,12 @@ def make_sels(sel_in_gpot, sel_out_gpot, sel_in_spike, sel_out_spike):
 
 from unittest import main, TestCase
 
-debug = False
+debug = True
 
-class test_core_gpu(TestCase):
-    def setUp(self):
-        self.man = Manager()
+class test_mpi_run(TestCase):
 
-    def test_transmit_spikes_one_to_one(self):
+    def test_mpi_run_manager(self):
+        man = Manager()
         m1_sel_in_gpot = Selector('')
         m1_sel_out_gpot = Selector('')
         m1_sel_in_spike = Selector('')
@@ -127,18 +134,18 @@ class test_core_gpu(TestCase):
         N2_spike = SelectorMethods.count_ports(m2_sel_spike)
 
         m1_id = 'm1'
-        self.man.add(MyModule1, m1_id,
+        man.add(MyModule1, m1_id,
                      m1_sel, m1_sel_in, m1_sel_out,
                      m1_sel_gpot, m1_sel_spike,
                      np.zeros(N1_gpot, dtype=np.double),
                      np.zeros(N1_spike, dtype=int),
-                     device=0, debug=debug, out_spike_data=[0, 0, 1, 1])
+                     device=0, debug=debug, out_spike_data=[1, 0, 1, 0])
 
         f, out_file_name = tempfile.mkstemp()
         os.close(f)
 
         m2_id = 'm2'
-        self.man.add(MyModule2, m2_id,
+        man.add(MyModule2, m2_id,
                      m2_sel, m2_sel_in, m2_sel_out,
                      m2_sel_gpot, m2_sel_spike,
                      np.zeros(N2_gpot, dtype=np.double),
@@ -158,86 +165,30 @@ class test_core_gpu(TestCase):
         pat12['/m1/out/spike[1]', '/m2/in/spike[1]'] = 1
         pat12['/m1/out/spike[2]', '/m2/in/spike[2]'] = 1
         pat12['/m1/out/spike[3]', '/m2/in/spike[3]'] = 1
-        self.man.connect(m1_id, m2_id, pat12, 0, 1)
+        man.connect(m1_id, m2_id, pat12, 0, 1)
 
         # Run emulation for 2 steps:
-        self.man.spawn()
-        self.man.start(2)
-        self.man.wait()
+        output = mpi_run_manager(man,2)
+        print(output)
 
         # Get output of m2:
         with open(out_file_name, 'r') as f:
             output = pickle.load(f)
 
         os.remove(out_file_name)
-        self.assertSequenceEqual(list(output), [0, 0, 1, 1])
+        self.assertSequenceEqual(list(output), [1, 0, 1, 0])
 
-    def test_transmit_spikes_one_to_many(self):
-        m1_sel_in_gpot = Selector('')
-        m1_sel_out_gpot = Selector('')
-        m1_sel_in_spike = Selector('')
-        m1_sel_out_spike = Selector('/m1/out/spike[0:4]')
-        m1_sel, m1_sel_in, m1_sel_out, m1_sel_gpot, m1_sel_spike = \
-            make_sels(m1_sel_in_gpot, m1_sel_out_gpot, m1_sel_in_spike, m1_sel_out_spike)
-        N1_gpot = SelectorMethods.count_ports(m1_sel_gpot)
-        N1_spike = SelectorMethods.count_ports(m1_sel_spike)
+    def test_mpi_run(self):
+        output = mpi_run(test_success)
+        self.assertTrue("HELLO WORLD" in output)
 
-        m2_sel_in_gpot = Selector('')
-        m2_sel_out_gpot = Selector('')
-        m2_sel_in_spike = Selector('/m2/in/spike[0:4]')
-        m2_sel_out_spike = Selector('')
-        m2_sel, m2_sel_in, m2_sel_out, m2_sel_gpot, m2_sel_spike = \
-            make_sels(m2_sel_in_gpot, m2_sel_out_gpot, m2_sel_in_spike, m2_sel_out_spike)
-        N2_gpot = SelectorMethods.count_ports(m2_sel_gpot)
-        N2_spike = SelectorMethods.count_ports(m2_sel_spike)
-
-        m1_id = 'm1'
-        self.man.add(MyModule1, m1_id,
-                     m1_sel, m1_sel_in, m1_sel_out,
-                     m1_sel_gpot, m1_sel_spike,
-                     np.zeros(N1_gpot, dtype=np.double),
-                     np.zeros(N1_spike, dtype=int),
-                     device=0, debug=debug, out_spike_data=[1, 0, 0, 0])
-
-        f, out_file_name = tempfile.mkstemp()
-        os.close(f)
-
-        m2_id = 'm2'
-        self.man.add(MyModule2, m2_id,
-                     m2_sel, m2_sel_in, m2_sel_out,
-                     m2_sel_gpot, m2_sel_spike,
-                     np.zeros(N2_gpot, dtype=np.double),
-                     np.zeros(N2_spike, dtype=int),
-                     device=1, debug=debug, out_file_name=out_file_name)
-
-        pat12 = Pattern(m1_sel, m2_sel)
-        pat12.interface[m1_sel_out_gpot] = [0, 'in', 'gpot']
-        pat12.interface[m1_sel_in_gpot] = [0, 'out', 'gpot']
-        pat12.interface[m1_sel_out_spike] = [0, 'in', 'spike']
-        pat12.interface[m1_sel_in_spike] = [0, 'out', 'spike']
-        pat12.interface[m2_sel_in_gpot] = [1, 'out', 'gpot']
-        pat12.interface[m2_sel_out_gpot] = [1, 'in', 'gpot']
-        pat12.interface[m2_sel_in_spike] = [1, 'out', 'spike']
-        pat12.interface[m2_sel_out_spike] = [1, 'in', 'spike']
-        pat12['/m1/out/spike[0]', '/m2/in/spike[0]'] = 1
-        pat12['/m1/out/spike[0]', '/m2/in/spike[1]'] = 1
-        pat12['/m1/out/spike[0]', '/m2/in/spike[2]'] = 1
-        pat12['/m1/out/spike[0]', '/m2/in/spike[3]'] = 1
-        self.man.connect(m1_id, m2_id, pat12, 0, 1)
-
-        # Run emulation for 2 steps:
-        self.man.spawn()
-        self.man.start(2)
-        self.man.wait()
-
-        # Get output of m2:
-        with open(out_file_name, 'r') as f:
-            output = pickle.load(f)
-
-        os.remove(out_file_name)
-        self.assertSequenceEqual(list(output), [1, 1, 1, 1])
+    def test_mpi_run_code(self):
+        code  = "\ndef func():"
+        code += "\n   print(\"HELLO AGAIN\")"
+        output = mpi_run(code)
+        self.assertTrue("HELLO AGAIN" in output)
 
 if __name__ == '__main__':
-    logger = mpi.setup_logger(screen=False,
+    logger = mpi.setup_logger(screen=True,
                               mpi_comm=MPI.COMM_WORLD, multiline=True)
     main()

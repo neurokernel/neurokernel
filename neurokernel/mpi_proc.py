@@ -7,6 +7,7 @@ Classes for managing MPI-based processes.
 import inspect
 import os
 import sys
+from routing_table import RoutingTable
 
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
@@ -20,14 +21,19 @@ def save_property(pickler, obj):
 import twiggy
 from mpi4py import MPI
 
-# The MPI._p_pickle attribute in the stable release of mpi4py 1.3.1
-# was renamed to pickle in subsequent dev revisions:
+# mpi4py has changed the method to override pickle with dill various times
 try:
-    MPI.pickle.dumps = dill.dumps
-    MPI.pickle.loads = dill.loads
+    # mpi4py 3.0.0
+    MPI.pickle.__init__(dill.dumps, dill.loads)
 except AttributeError:
-    MPI._p_pickle.dumps = dill.dumps
-    MPI._p_pickle.loads = dill.loads
+    try:
+        # mpi4py versions 1.3.1 through 2.x
+        MPI.pickle.dumps = dill.dumps
+        MPI.pickle.loads = dill.loads
+    except AttributeError:
+        # mpi4py pre 1.3.1
+        MPI._p_pickle.dumps = dill.dumps
+        MPI._p_pickle.loads = dill.loads
 
 from mixins import LoggerMixin
 from tools.logging import set_excepthook
@@ -254,7 +260,13 @@ class ProcessManager(LoggerMixin):
 
             # Next, serialize the routing table ONCE and then transmit it to all
             # of the child nodes:
-            self._intercomm.bcast(self.routing_table, root=MPI.ROOT)
+            try:
+                routing_table = self.routing_table
+            except:
+                routing_table = RoutingTable()
+                self.log_warning('Routing Table is null, using empty routing table.')
+
+            self._intercomm.bcast(routing_table, root=MPI.ROOT)
 
             # Transmit class to instantiate, globals required by the class, and
             # the constructor arguments; the backend will wait to receive

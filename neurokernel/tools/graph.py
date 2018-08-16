@@ -11,7 +11,7 @@ import re
 
 import networkx as nx
 
-# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF 
+# Work around bug in networkx < 1.9 that causes networkx to choke on GEXF
 # files with boolean attributes that contain the strings 'True' or 'False'
 # (bug already observed in https://github.com/networkx/networkx/pull/971)
 nx.readwrite.gexf.GEXF.convert_bool['false'] = False
@@ -27,7 +27,7 @@ def graph_to_df(g):
     """
     Convert a directed multigraph into pandas DataFrames.
 
-    Constructs two pandas DataFrame instances that respectively contain the 
+    Constructs two pandas DataFrame instances that respectively contain the
     specified graph's node and edge attributes.
 
     Parameters
@@ -44,38 +44,24 @@ def graph_to_df(g):
         access to the edges by origin node, destination node, and edge number
         (i.e., for multigraphs in which nodes connected by more than one
         edge with the same direction).
-        
+
     """
 
-    # Extract the node/edge data:
-    try:
-        node_data = {int(k): v for k, v in g.node.iteritems()}
-    except:
+    nx_major_version = int(nx.__version__.split('.')[0])
+
+    if nx_major_version < 2:
         node_data = {k: v for k, v in g.node.iteritems()}
-
-    try:
         if not isinstance(g, nx.MultiGraph):
-            edge_data = {(int(k1), int(k2)):v for k1 in g.edge.keys() \
-                             for k2, v in g.edge[k1].iteritems()}
-
+            edge_data = {(k1, k2): v for k1 in g.edge \
+                                        for k2, v in g.edge[k1].iteritems()}
         else:
-
-            # Include the edge number in the index for multigraphs:
-            edge_data = {(int(k1), int(k2), int(m)):v for k1 in g.edge.keys() \
-                             for k2 in g.edge[k1].keys() \
+            edge_data = {(k1, k2, m): v for k1 in g.edge \
+                             for k2 in g.edge[k1] \
                              for m, v in g.edge[k1][k2].iteritems()}
-    except:
-        if not isinstance(g, nx.MultiGraph):
-            edge_data = {(k1, k2):v for k1 in g.edge.keys() \
-                             for k2, v in g.edge[k1].iteritems()}
+    else:
+        node_data = {k: v for k, v in g.nodes.iteritems()}
+        edge_data = {k1: k2 for k1, k2 in g.edges.iteritems()}
 
-        else:
-
-            # Include the edge number in the index for multigraphs:
-            edge_data = {(k1, k2, m):v for k1 in g.edge.keys() \
-                             for k2 in g.edge[k1].keys() \
-                             for m, v in g.edge[k1][k2].iteritems()}
-        
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data).T
     df_edge = pandas.DataFrame.from_dict(edge_data).T
@@ -85,4 +71,3 @@ def graph_to_df(g):
     df_edge.index = pandas.MultiIndex.from_tuples(df_edge.index)
 
     return df_node, df_edge
-

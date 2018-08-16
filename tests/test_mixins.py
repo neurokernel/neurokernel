@@ -37,11 +37,11 @@ class test_loggermixin(TestCase):
 
         # All output to stdout is buffered within a single test before emission:
         self.assertEquals(sys.stdout.getvalue().strip(),
-                          'log:DEBUG:abc\n'
-                          'log:INFO:abc\n'
-                          'log:WARNING:abc\n'
-                          'log:ERROR:abc\n'
-                          'log:CRITICAL:abc')
+                          'log:DEBUG|abc\n'
+                          'log:INFO|abc\n'
+                          'log:WARNING|abc\n'
+                          'log:ERROR|abc\n'
+                          'log:CRITICAL|abc')
 
     def test_log_on(self):
         self.lm.log_on = False
