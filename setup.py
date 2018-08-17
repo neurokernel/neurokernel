@@ -62,6 +62,7 @@ if __name__ == "__main__":
             'bidict >= 0.11.0',
             'dill >= 0.2.4',
             'future >= 0.16.0',
+            'futures >= 3.0.0',
             'h5py >= 2.5.0',
             'lxml >= 3.3.0',
             'markupsafe >= 0.23',
