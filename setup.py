@@ -63,7 +63,7 @@ if __name__ == "__main__":
             'dill >= 0.2.4',
             'future >= 0.16.0',
             'futures >= 3.0.0',
-            'h5py >= 2.5.0',
+            'h5py >= 2.8.0',
             'lxml >= 3.3.0',
             'markupsafe >= 0.23',
             'matplotlib >= 1.4.3',
