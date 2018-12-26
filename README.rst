@@ -203,5 +203,5 @@ See the included `LICENSE`_ file for more information.
 
 Notes
 -----
-The Neurokernel Project is independent of the NeuroKernel Operating System
+The Neurokernel Project is independent of the `NeuroKernel Operating System <http://www.neurokernel.com/>`_
 developed by `NeuroDNA Inc. <http://www.neurodna.com>`_
