@@ -1111,7 +1111,7 @@ class Pattern(object):
                 ['to_%s' %i for i in range(self.num_levels['to'])]
         levels = [[] for i in range(len(names))]
         labels = [[] for i in range(len(names))]
-        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        idx = pd.MultiIndex(levels=levels, codes=labels, names=names)
 
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
 
@@ -1205,7 +1205,7 @@ class Pattern(object):
         if (from_sel is None and to_sel is None):
             levels = [[] for i in range(len(names))]
             labels = [[] for i in range(len(names))]
-            idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+            idx = pd.MultiIndex(levels=levels, codes=labels, names=names)
         elif isinstance(from_sel, Selector) and isinstance(to_sel, Selector):
             if comb_op == '.+':
                 idx = p.sel.make_index(Selector.concat(from_sel, to_sel), names)

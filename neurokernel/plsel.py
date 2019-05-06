@@ -1712,7 +1712,7 @@ class SelectorMethods(SelectorParser):
 
         if not names:
             names = range(len(levels))
-        return pd.MultiIndex(levels=levels, labels=labels, names=names)
+        return pd.MultiIndex(levels=levels, codes=labels, names=names)
 
     @classmethod
     def make_index_two_prod(cls, sel_0, sel_1, names=[]):
@@ -1797,7 +1797,7 @@ class SelectorMethods(SelectorParser):
 
         if not names:
             names = range(len(levels))
-        return pd.MultiIndex(levels=levels, labels=labels, names=names)
+        return pd.MultiIndex(levels=levels, codes=labels, names=names)
 
     @classmethod
     def make_index(cls, selector, names=[]):
@@ -1856,7 +1856,7 @@ class SelectorMethods(SelectorParser):
 
             if selectors == ((),):
                 return pd.MultiIndex(levels=[[] for _ in range(len(names))],
-                                     labels=[[] for _ in range(len(names))],
+                                     codes=[[] for _ in range(len(names))],
                                      names=names)
             else:
                 return pd.MultiIndex.from_tuples(selectors, names=names)
@@ -1882,7 +1882,7 @@ class SelectorMethods(SelectorParser):
 
         if not names:
             names = range(len(levels))
-        return pd.MultiIndex(levels=levels, labels=labels, names=names)
+        return pd.MultiIndex(levels=levels, codes=labels, names=names)
 
     @classmethod
     def select(cls, df, selector, start=None, stop=None):
