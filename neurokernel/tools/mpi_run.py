@@ -108,12 +108,13 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=False,
 
         # Prevent SLURM from preventing mpiexec from starting multiple processes
         env = os.environ.copy()
+        env_copy = env.copy()
         for k in env.keys():
             if k.startswith("SLURM"):
-                del env[k]
+                del env_copy[k]
 
         l.log_info("Calling: " + " ".join(command))
-        out = subprocess.check_output(command, env = env)
+        out = subprocess.check_output(command, env = env_copy)
 
     except Exception as e:
         l.log_error(str(e))
