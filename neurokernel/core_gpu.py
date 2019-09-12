@@ -123,7 +123,6 @@ class Module(mpi.Worker):
         if 'type' not in columns:
             raise ValueError('type column required')
 
-        MPI.Init()
         # Initialize GPU here so as to be able to initialize a port mapper
         # containing GPU memory:
         self._init_gpu()
