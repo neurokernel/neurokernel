@@ -10,6 +10,9 @@ import time
 
 from future.utils import iteritems
 import bidict
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 import numpy as np
 import pycuda.driver as cuda
@@ -120,6 +123,7 @@ class Module(mpi.Worker):
         if 'type' not in columns:
             raise ValueError('type column required')
 
+        MPI.Init()
         # Initialize GPU here so as to be able to initialize a port mapper
         # containing GPU memory:
         self._init_gpu()

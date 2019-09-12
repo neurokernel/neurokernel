@@ -20,6 +20,9 @@ def save_property(pickler, obj):
     pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel), obj=obj)
 
 import twiggy
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 
 # mpi4py has changed the method to override pickle with dill various times

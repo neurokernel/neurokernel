@@ -10,6 +10,9 @@ import re
 import subprocess
 import sys
 
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 
 from .mpi_proc import getargnames, Process, ProcessManager
