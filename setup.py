@@ -62,7 +62,6 @@ if __name__ == "__main__":
             'bidict >= 0.11.0',
             'dill >= 0.2.4',
             'future >= 0.16.0',
-            'futures >= 3.0.0',
             'h5py >= 2.8.0',
             'lxml >= 3.3.0',
             'markupsafe >= 0.23',
@@ -82,5 +81,6 @@ if __name__ == "__main__":
         extras_require = {
             'sphinx': ['sphinx >= 1.3'],
             'sphinx_rtd_theme': ['sphinx_rtd_theme >= 0.1.6'],
+            ':python_version == "2.7"': ['futures'],
             }
         )
