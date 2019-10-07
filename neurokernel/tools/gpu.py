@@ -6,9 +6,11 @@ import numpy as np
 import pycuda.driver as drv
 import pycuda.elementwise as elementwise
 import pycuda.gpuarray as gpuarray
-from pycuda.tools import dtype_to_ctype
+from pycuda.tools import dtype_to_ctype, context_dependent_memoize
+from pycuda.compiler import SourceModule
+import pycuda.driver as cuda
 
-# List of available numerical types provided by numpy: 
+# List of available numerical types provided by numpy:
 # XXX This try/except is an ugly hack to prevent the doc build on
 # ReadTheDocs from failing:
 try:
@@ -193,20 +195,74 @@ def set_by_inds(dest_gpu, ind, src_gpu, ind_which='dest'):
         raise ValueError('invalid value for `ind_which`')
     if not isinstance(ind, gpuarray.GPUArray):
         ind = gpuarray.to_gpu(ind)
-    try:
-        func = set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)]
-    except KeyError:
-        data_ctype = dtype_to_ctype(dest_gpu.dtype)
-        ind_ctype = dtype_to_ctype(ind.dtype)        
-        v = "{data_ctype} *dest, {ind_ctype} *ind, {data_ctype} *src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
-    
-        if ind_which == 'dest':
-            func = elementwise.ElementwiseKernel(v, "dest[ind[i]] = src[i]")
-        else:
-            func = elementwise.ElementwiseKernel(v, "dest[i] = src[ind[i]]")
-        set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)] = func
-    func(dest_gpu, ind, src_gpu, range=slice(0, N, 1))
-set_by_inds.cache = {}
+
+    if ind_which == 'dest':
+        func = get_set_by_inds_dest_kernel(dest_gpu.dtype, ind.dtype)
+    else:
+        func = get_set_by_inds_src_kernel(dest_gpu.dtype, ind.dtype)
+
+    func.prepared_async_call(func.grid, func.block, None,
+                             dest_gpu.gpudata, ind.gpudata, src_gpu.gpudata, N)
+    # try:
+    #     func = set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)]
+    # except KeyError:
+    #     data_ctype = dtype_to_ctype(dest_gpu.dtype)
+    #     ind_ctype = dtype_to_ctype(ind.dtype)
+    #     v = "{data_ctype} *dest, {ind_ctype} *ind, {data_ctype} *src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
+    #
+    #     if ind_which == 'dest':
+    #         func = elementwise.ElementwiseKernel(v, "dest[ind[i]] = src[i]")
+    #     else:
+    #         func = elementwise.ElementwiseKernel(v, "dest[i] = src[ind[i]]")
+    #     set_by_inds.cache[(dest_gpu.dtype, ind.dtype, ind_which)] = func
+    # func(dest_gpu, ind, src_gpu, range=slice(0, N, 1))
+# set_by_inds.cache = {}
+
+@context_dependent_memoize
+def get_set_by_inds_dest_kernel(data_dtype, ind_dtype):
+    template = """
+__global__ void update(%(data_ctype)s* dest, %(ind_ctype)s* ind,
+                       %(data_ctype)s* src, int N)
+{
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int total_threads = gridDim.x * blockDim.x;
+
+    for(int i = tid; i < N; i += total_threads)
+    {
+        dest[ind[i]] = src[i];
+    }
+}
+"""
+    mod = SourceModule(template % {"data_ctype": dtype_to_ctype(data_dtype),
+                                   "ind_ctype": dtype_to_ctype(ind_dtype)})
+    func = mod.get_function("update")
+    func.prepare('PPPi')
+    func.block = (128,1,1)
+    func.grid = (16 * cuda.Context.get_device().MULTIPROCESSOR_COUNT, 1)
+    return func
+
+@context_dependent_memoize
+def get_set_by_inds_src_kernel(data_dtype, ind_dtype):
+    template = """
+__global__ void update(%(data_ctype)s* dest, %(ind_ctype)s* ind,
+                       %(data_ctype)s* src, int N)
+{
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int total_threads = gridDim.x * blockDim.x;
+
+    for(int i = tid; i < N; i += total_threads)
+    {
+        dest[i] = src[ind[i]];
+    }
+}
+"""
+    mod = SourceModule(template % {"data_ctype": dtype_to_ctype(data_dtype),
+                                   "ind_ctype": dtype_to_ctype(ind_dtype)})
+    func = mod.get_function("update")
+    func.prepare('PPPi')
+    func.block = (128,1,1)
+    func.grid = (16 * cuda.Context.get_device().MULTIPROCESSOR_COUNT, 1)
+    return func
 
 def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
     """
@@ -258,15 +314,43 @@ def set_by_inds_from_inds(dest_gpu, ind_dest, src_gpu, ind_src):
         ind_dest = gpuarray.to_gpu(ind_dest)
     if not isinstance(ind_src, gpuarray.GPUArray):
         ind_src = gpuarray.to_gpu(ind_src)
-    try:
-        func = set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)]
-    except KeyError:
-        data_ctype = dtype_to_ctype(dest_gpu.dtype)
-        ind_ctype = dtype_to_ctype(ind_dest.dtype)        
-        v = "{data_ctype} *dest, {ind_ctype} *ind_dest,"\
-            "{data_ctype} *src, {ind_ctype} *ind_src".format(data_ctype=data_ctype, ind_ctype=ind_ctype) 
-        func = elementwise.ElementwiseKernel(v,
-                "dest[ind_dest[i]] = src[ind_src[i]]")
-        set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)] = func
-    func(dest_gpu, ind_dest, src_gpu, ind_src, range=slice(0, N, 1))
-set_by_inds_from_inds.cache = {}
+
+    func = set_by_inds_from_inds_kernel(dest_gpu.dtype, ind_dest.dtype)
+    func.prepared_async_call(func.grid, func.block, None,
+                             dest_gpu.gpudata, ind_dest.gpudata,
+                             src_gpu.gpudata, ind_src.gpudata, N)
+    # try:
+    #     func = set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)]
+    # except KeyError:
+    #     data_ctype = dtype_to_ctype(dest_gpu.dtype)
+    #     ind_ctype = dtype_to_ctype(ind_dest.dtype)
+    #     v = "{data_ctype} *dest, {ind_ctype} *ind_dest,"\
+    #         "{data_ctype} *src, {ind_ctype} *ind_src".format(data_ctype=data_ctype, ind_ctype=ind_ctype)
+    #     func = elementwise.ElementwiseKernel(v,
+    #             "dest[ind_dest[i]] = src[ind_src[i]]")
+    #     set_by_inds_from_inds.cache[(dest_gpu.dtype, ind_dest.dtype)] = func
+    # func(dest_gpu, ind_dest, src_gpu, ind_src, range=slice(0, N, 1))
+# set_by_inds_from_inds.cache = {}
+
+@context_dependent_memoize
+def set_by_inds_from_inds_kernel(data_dtype, ind_dtype):
+    template = """
+__global__ void update(%(data_ctype)s* dest, %(ind_ctype)s* ind_dest,
+                       %(data_ctype)s* src, %(ind_ctype)s* ind_src, int N)
+{
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int total_threads = gridDim.x * blockDim.x;
+
+    for(int i = tid; i < N; i += total_threads)
+    {
+        dest[ind_dest[i]] = src[ind_src[i]];
+    }
+}
+"""
+    mod = SourceModule(template % {"data_ctype": dtype_to_ctype(data_dtype),
+                                   "ind_ctype": dtype_to_ctype(ind_dtype)})
+    func = mod.get_function("update")
+    func.prepare('PPPPi')
+    func.block = (128,1,1)
+    func.grid = (16 * cuda.Context.get_device().MULTIPROCESSOR_COUNT, 1)
+    return func

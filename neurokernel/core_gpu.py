@@ -460,7 +460,7 @@ class Module(mpi.Worker):
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
         for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
-
+            
             # Copy data into destination buffer:
             if self._out_buf['gpot'][dest_id] is not None:
                 set_by_inds(self._out_buf['gpot'][dest_id],
@@ -570,6 +570,8 @@ class Module(mpi.Worker):
             self.intercomm.isend(['start_time', (self.rank, time.time())],
                                  dest=0, tag=self._ctrl_tag)
             self.log_info('sent start time to manager')
+        if self.print_timing:
+            self.total_run_time = {'run_time': 0., 'sync_time': 0.}
 
     def post_run(self):
         """
@@ -580,6 +582,8 @@ class Module(mpi.Worker):
         """
 
         self.log_info('running code after body of worker %s' % self.rank)
+        if self.print_timing:
+            print(self.total_run_time)
 
         # Stop timing the main loop before shutting down the emulation:
         if self.time_sync:
@@ -636,10 +640,20 @@ class Module(mpi.Worker):
         else:
 
             # Run the processing step:
+            if self.print_timing:
+                start1 = time.time()
             catch_exception(self.run_step, self.log_info)
+            if self.print_timing:
+                cuda.Context.synchronize()
+                self.total_run_time['run_time'] += time.time()-start1
 
             # Synchronize:
+            if self.print_timing:
+                start1 = time.time()
             catch_exception(self._sync, self.log_info)
+            if self.print_timing:
+                cuda.Context.synchronize()
+                self.total_run_time['sync_time'] += time.time()-start1
 
 class Manager(mpi.WorkerManager):
     """
