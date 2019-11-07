@@ -20,6 +20,8 @@ from .mixins import LoggerMixin
 from .tools.logging import setup_logger, set_excepthook
 from .tools.misc import memoized_property
 
+from tqdm import tqdm
+
 class Worker(Process):
     """
     MPI worker class.
@@ -34,12 +36,13 @@ class Worker(Process):
 
     def __init__(self, ctrl_tag=1, *args, **kwargs):
         super(Worker, self).__init__(*args, **kwargs)
-
+        
         # Tag used to distinguish control messages:
         self._ctrl_tag = ctrl_tag
 
         # Execution step counter:
         self.steps = 0
+        self.pbar = tqdm()
 
     # Define properties to perform validation when the maximum number of
     # execution steps set:
@@ -86,7 +89,7 @@ class Worker(Process):
         This method is invoked by the `run()` method after the main loop is
         started.
         """
-
+        self.pbar.close() # it should've already been closed in `run` but just to make sure.
         self.log_info('running code after body of worker %s' % self.rank)
 
         # Send acknowledgment message:
@@ -134,6 +137,7 @@ class Worker(Process):
                         running = False
                     else:
                         self.log_info('max steps set - not stopping')
+                    self.pbar.close()
 
                 # Set maximum number of execution steps:
                 elif msg[0] == 'steps':
@@ -141,6 +145,7 @@ class Worker(Process):
                         self.max_steps = float('inf')
                     else:
                         self.max_steps = int(msg[1])
+                        self.pbar.total = self.max_steps
                     self.log_info('setting maximum steps to %s' % self.max_steps)
 
                 # Quit:
@@ -167,11 +172,13 @@ class Worker(Process):
             if running:
                 self.do_work()
                 self.steps += 1
+                self.pbar.update()
                 self.log_info('execution step: %s' % self.steps)
 
             # Leave loop if maximum number of steps has been reached:
             if self.steps >= self.max_steps:
                 self.log_info('maximum steps reached')
+                self.pbar.close()
                 break
 
         self.post_run()
