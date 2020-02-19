@@ -59,10 +59,10 @@ if __name__ == "__main__":
         packages = PACKAGES,
         include_package_data = True,
         install_requires = [
-            'bidict >= 0.3.1',
+            'bidict >= 0.11.0',
             'dill >= 0.2.4',
-            'futures >= 3.0.0',
-            'h5py >= 2.5.0',
+            'future >= 0.16.0',
+            'h5py >= 2.8.0',
             'lxml >= 3.3.0',
             'markupsafe >= 0.23',
             'matplotlib >= 1.4.3',
@@ -81,5 +81,6 @@ if __name__ == "__main__":
         extras_require = {
             'sphinx': ['sphinx >= 1.3'],
             'sphinx_rtd_theme': ['sphinx_rtd_theme >= 0.1.6'],
+            ':python_version == "2.7"': ['futures'],
             }
         )

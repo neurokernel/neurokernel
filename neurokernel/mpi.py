@@ -10,12 +10,17 @@ import re
 import subprocess
 import sys
 
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 
-from mpi_proc import getargnames, Process, ProcessManager
-from mixins import LoggerMixin
-from tools.logging import setup_logger, set_excepthook
-from tools.misc import memoized_property
+from .mpi_proc import getargnames, Process, ProcessManager
+from .mixins import LoggerMixin
+from .tools.logging import setup_logger, set_excepthook
+from .tools.misc import memoized_property
+
+from tqdm import tqdm
 
 class Worker(Process):
     """
@@ -31,12 +36,13 @@ class Worker(Process):
 
     def __init__(self, ctrl_tag=1, *args, **kwargs):
         super(Worker, self).__init__(*args, **kwargs)
-
+        
         # Tag used to distinguish control messages:
         self._ctrl_tag = ctrl_tag
 
         # Execution step counter:
         self.steps = 0
+        self.pbar = tqdm()
 
     # Define properties to perform validation when the maximum number of
     # execution steps set:
@@ -83,7 +89,7 @@ class Worker(Process):
         This method is invoked by the `run()` method after the main loop is
         started.
         """
-
+        self.pbar.close() # it should've already been closed in `run` but just to make sure.
         self.log_info('running code after body of worker %s' % self.rank)
 
         # Send acknowledgment message:
@@ -131,6 +137,7 @@ class Worker(Process):
                         running = False
                     else:
                         self.log_info('max steps set - not stopping')
+                    self.pbar.close()
 
                 # Set maximum number of execution steps:
                 elif msg[0] == 'steps':
@@ -138,6 +145,7 @@ class Worker(Process):
                         self.max_steps = float('inf')
                     else:
                         self.max_steps = int(msg[1])
+                        self.pbar.total = self.max_steps
                     self.log_info('setting maximum steps to %s' % self.max_steps)
 
                 # Quit:
@@ -160,15 +168,17 @@ class Worker(Process):
             # Execute work method; the work method may send data back to the master
             # as a serialized control message containing two elements, e.g.,
             # self.intercomm.isend(['foo', str(self.rank)],
-            #                      dest=0, tag=self._ctrl_tag)            
+            #                      dest=0, tag=self._ctrl_tag)
             if running:
                 self.do_work()
                 self.steps += 1
+                self.pbar.update()
                 self.log_info('execution step: %s' % self.steps)
 
             # Leave loop if maximum number of steps has been reached:
             if self.steps >= self.max_steps:
                 self.log_info('maximum steps reached')
+                self.pbar.close()
                 break
 
         self.post_run()
@@ -204,7 +214,7 @@ class WorkerManager(ProcessManager):
         super(WorkerManager, self).__init__()
 
         # Validate control tag.
-        assert ctrl_tag != MPI.ANY_TAG                           
+        assert ctrl_tag != MPI.ANY_TAG
 
         # Tag used to distinguish MPI control messages:
         self._ctrl_tag = ctrl_tag
@@ -231,7 +241,7 @@ class WorkerManager(ProcessManager):
         """
         Process the specified deserialized message from a worker.
         """
-        
+
         self.log_info('got ctrl msg: %s' % str(msg))
 
     def wait(self):
@@ -249,7 +259,7 @@ class WorkerManager(ProcessManager):
             d = self.intercomm.irecv(dest=MPI.ANY_SOURCE,
                                      tag=self._ctrl_tag)
         r_ctrl.append(d)
-        workers = range(len(self))
+        workers = list(range(len(self)))
         req = MPI.Request()
         while True:
             # Check for control messages from workers:
@@ -286,10 +296,10 @@ class WorkerManager(ProcessManager):
         """
 
         self.log_info('sending steps message (%s)' % steps)
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['steps', str(steps)], dest, self._ctrl_tag)
         self.log_info('sending start message')
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['start'], dest, self._ctrl_tag)
 
     def stop(self):
@@ -298,7 +308,7 @@ class WorkerManager(ProcessManager):
         """
 
         self.log_info('sending stop message')
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['stop'], dest, self._ctrl_tag)
 
     def quit(self):
@@ -307,7 +317,7 @@ class WorkerManager(ProcessManager):
         """
 
         self.log_info('sending quit message')
-        for dest in xrange(len(self)):
+        for dest in range(len(self)):
             self.intercomm.isend(['quit'], dest, self._ctrl_tag)
 
 if __name__ == '__main__':
@@ -333,7 +343,7 @@ if __name__ == '__main__':
     man.add(MyWorker, 6, 7, 8)
     man.spawn()
 
-    # To run for a specific number of steps, run 
+    # To run for a specific number of steps, run
     # man.start(number_of_steps)
     man.start(100)
     man.wait()

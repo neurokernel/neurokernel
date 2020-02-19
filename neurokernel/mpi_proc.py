@@ -7,11 +7,12 @@ Classes for managing MPI-based processes.
 import inspect
 import os
 import sys
-from routing_table import RoutingTable
+from .routing_table import RoutingTable
 
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
 import dill
+from future.utils import iteritems
 
 # Fix for bug https://github.com/uqfoundation/dill/issues/81
 @dill.register(property)
@@ -19,6 +20,9 @@ def save_property(pickler, obj):
     pickler.save_reduce(property, (obj.fget, obj.fset, obj.fdel), obj=obj)
 
 import twiggy
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 
 # mpi4py has changed the method to override pickle with dill various times
@@ -35,10 +39,10 @@ except AttributeError:
         MPI._p_pickle.dumps = dill.dumps
         MPI._p_pickle.loads = dill.loads
 
-from mixins import LoggerMixin
-from tools.logging import set_excepthook
-from tools.misc import memoized_property
-from all_global_vars import all_global_vars
+from .mixins import LoggerMixin
+from .tools.logging import set_excepthook
+from .tools.misc import memoized_property
+from .all_global_vars import all_global_vars
 
 def getargnames(f):
     """
@@ -59,11 +63,12 @@ def getargnames(f):
     For instance methods, the `self` argument is omitted.
     """
 
-    spec = inspect.getargspec(f)
-    if inspect.ismethod(f):
-        return spec.args[1:]
+    if sys.version_info.major == 2:
+        spec = inspect.getargspec(f)
     else:
-        return spec.args
+        spec = inspect.getfullargspec(f)
+    return spec.args[1:] if inspect.ismethod(f) or 'self' in spec.args else spec.args
+
 
 def args_to_dict(f, *args, **kwargs):
     """
@@ -87,10 +92,10 @@ def args_to_dict(f, *args, **kwargs):
     d = {}
 
     arg_names = getargnames(f)
-    assert len(arg_names) <= args
+    assert len(arg_names) >= len(args)
     for arg, val in zip(arg_names, args):
         d[arg] = val
-    for arg, val in kwargs.iteritems():
+    for arg, val in iteritems(kwargs):
         if arg in d:
             raise ValueError('\'%s\' already specified in positional args' % arg)
         d[arg] = val
@@ -101,7 +106,7 @@ class Process(LoggerMixin):
     Process class.
     """
 
-    def __init__(self, *args, **kwargs):        
+    def __init__(self, *args, **kwargs):
         LoggerMixin.__init__(self, 'prc %s' % MPI.COMM_WORLD.Get_rank())
         set_excepthook(self.logger, True)
 
@@ -206,7 +211,7 @@ class ProcessManager(LoggerMixin):
         Parameters
         ----------
         target : Process
-            Class instantiate and run in MPI process. 
+            Class instantiate and run in MPI process.
         args : sequence
             Sequential arguments to pass to target class constructor.
         kwargs : dict
@@ -255,7 +260,7 @@ class ProcessManager(LoggerMixin):
 
             # First, transmit twiggy logging emitters to spawned processes so
             # that they can configure their logging facilities:
-            for i in self._targets.keys():
+            for i in self._targets:
                 self._intercomm.send(twiggy.emitters, i)
 
             # Next, serialize the routing table ONCE and then transmit it to all
@@ -273,7 +278,7 @@ class ProcessManager(LoggerMixin):
             # them and then start running the targets on the appropriate nodes.
             req = MPI.Request()
             r_list = []
-            for i in self._targets.keys():
+            for i in self._targets:
                 target_globals = all_global_vars(self._targets[i])
 
                 # Serializing atexit with dill appears to fail in virtualenvs
@@ -312,11 +317,11 @@ if __name__ == '__main__':
                           (MPI.COMM_WORLD.Get_rank(),
                            MPI.COMM_WORLD.Get_size(),
                            MPI.COMM_WORLD.Get_name()))
-        
+
     from tools.logging import setup_logger
 
     setup_logger(screen=True, multiline=True)
-    
+
     man = ProcessManager()
     man.add(MyProcess, 1, 2, a=3)
     man.add(MyProcess, 4, b=5, c=6)

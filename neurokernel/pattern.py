@@ -8,12 +8,14 @@ from collections import OrderedDict
 import itertools
 import re
 
+from future.utils import iteritems
+from past.builtins import basestring
 import networkx as nx
 import numpy as np
 import pandas as pd
 
-from plsel import Selector, SelectorMethods
-from pm import BasePortMapper
+from .plsel import Selector, SelectorMethods
+from .pm import BasePortMapper
 
 class Interface(object):
     """
@@ -71,7 +73,7 @@ class Interface(object):
         self.sel = SelectorMethods()
         assert not(self.sel.is_ambiguous(selector))
         self.num_levels = self.sel.max_levels(selector)
-        names = [i for i in xrange(self.num_levels)]
+        names = [i for i in range(self.num_levels)]
         idx = self.sel.make_index(selector, names)
         self.__validate_index__(idx)
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
@@ -129,8 +131,8 @@ class Interface(object):
             else:
                 raise ValueError('cannot assign specified value')
 
-        for k, v in data.iteritems():
-            self.data[k].ix[idx] = v
+        for k, v in iteritems(data):
+            self.data[k].loc[idx] = v
 
     def __setitem__(self, key, value):
         if type(key) == tuple:
@@ -179,8 +181,8 @@ class Interface(object):
         else:
             s = self.sel.pad_selector(selector.expanded,
                                       len(self.index.levshape))
-        for k, v in data.iteritems():
-            self.data[k].ix[s] = v
+        for k, v in iteritems(data):
+            self.data[k].loc[s] = v
 
     @property
     def index(self):
@@ -363,7 +365,7 @@ class Interface(object):
         """
 
         i = cls(','.join(d.keys()))
-        for k, v in d.iteritems():
+        for k, v in iteritems(d):
             i[k] = v
         i.data.sort_index(inplace=True)
         return i
@@ -582,12 +584,12 @@ class Interface(object):
         # one level; we therefore pad the index with the smaller number of
         # levels before attempting the merge:
         if n_left_names > n_right_names:
-            for n in xrange(i.num_levels, i.num_levels+(n_left_names-n_right_names)):
+            for n in range(i.num_levels, i.num_levels+(n_left_names-n_right_names)):
                 new_col = str(n)
                 df_right[new_col] = ''
                 df_right.set_index(new_col, append=True, inplace=True)
         elif n_left_names < n_right_names:
-            for n in xrange(self.num_levels, self.num_levels+(n_right_names-n_left_names)):
+            for n in range(self.num_levels, self.num_levels+(n_right_names-n_left_names)):
                 new_col = str(n)
                 df_left[new_col] = ''
                 df_left.set_index(new_col, append=True, inplace=True)
@@ -749,7 +751,7 @@ class Interface(object):
             idx = self.sel.expand(s, self.idx_levels)
             if not isinstance(self.data.index, pd.MultiIndex):
                 idx = [x[0] for x in idx]
-            d = self.data['interface'].ix[idx]
+            d = self.data['interface'].loc[idx]
 
             if isinstance(d, int):
                 return True
@@ -893,7 +895,7 @@ class Interface(object):
         for t in ids:
             selector = ''
             for s in t:
-                if type(s) in [str, unicode]:
+                if isinstance(s, basestring):
                     selector += '/'+s
                 else:
                     selector += '[%s]' % s
@@ -948,7 +950,7 @@ class Interface(object):
             idx = self.sel.expand(s, self.idx_levels)
             if not isinstance(self.data.index, pd.MultiIndex):
                 idx = [x[0] for x in idx]
-            d = self.data['interface'].ix[idx]
+            d = self.data['interface'].loc[idx]
             s = set(d)
             s.discard(np.nan)
             return s
@@ -1073,7 +1075,7 @@ class Pattern(object):
     """
 
     def __init__(self, *selectors, **kwargs):
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
+        columns = kwargs.get('columns', ['conn'])
         self.sel = SelectorMethods()
 
         # Force sets of identifiers to be disjoint so that no identifier can
@@ -1085,7 +1087,7 @@ class Pattern(object):
         for s in selectors:
             if isinstance(s, Selector) and len(s) != 0:
                 selector.extend(s.expanded)
-            elif type(s) in [str, unicode]:
+            elif isinstance(s, basestring):
                 selector.extend(self.sel.parse(s))
             elif np.iterable(s):
                 selector.extend(s)
@@ -1105,11 +1107,11 @@ class Pattern(object):
         # two interfaces:
         self.num_levels = {'from': self.interface.num_levels,
                            'to': self.interface.num_levels}
-        names = ['from_%s' % i for i in xrange(self.num_levels['from'])]+ \
-                ['to_%s' %i for i in xrange(self.num_levels['to'])]
-        levels = [[] for i in xrange(len(names))]
-        labels = [[] for i in xrange(len(names))]
-        idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+        names = ['from_%s' % i for i in range(self.num_levels['from'])]+ \
+                ['to_%s' %i for i in range(self.num_levels['to'])]
+        levels = [[] for i in range(len(names))]
+        labels = [[] for i in range(len(names))]
+        idx = pd.MultiIndex(levels=levels, codes=labels, names=names)
 
         self.data = pd.DataFrame(index=idx, columns=columns, dtype=object)
 
@@ -1183,14 +1185,14 @@ class Pattern(object):
             Pattern instance.
         """
 
-        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
-        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
-        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
-        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
-        data = kwargs['data'] if kwargs.has_key('data') else None
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        comb_op = kwargs['comb_op'] if kwargs.has_key('comb_op') else '+'
-        validate = kwargs['validate'] if kwargs.has_key('validate') else True
+        from_sel = kwargs.get('from_sel', None)
+        to_sel = kwargs.get('to_sel', None)
+        gpot_sel = kwargs.get('gpot_sel', None)
+        spike_sel = kwargs.get('spike_sel', None)
+        data = kwargs.get('data', None)
+        columns = kwargs.get('columns', ['conn'])
+        comb_op = kwargs.get('comb_op', '+')
+        validate = kwargs.get('validate', True)
 
         # Create empty pattern:
         for s in selectors:
@@ -1201,9 +1203,9 @@ class Pattern(object):
         # Construct index from concatenated selectors if specified:
         names = p.data.index.names
         if (from_sel is None and to_sel is None):
-            levels = [[] for i in xrange(len(names))]
-            labels = [[] for i in xrange(len(names))]
-            idx = pd.MultiIndex(levels=levels, labels=labels, names=names)
+            levels = [[] for i in range(len(names))]
+            labels = [[] for i in range(len(names))]
+            idx = pd.MultiIndex(levels=levels, codes=labels, names=names)
         elif isinstance(from_sel, Selector) and isinstance(to_sel, Selector):
             if comb_op == '.+':
                 idx = p.sel.make_index(Selector.concat(from_sel, to_sel), names)
@@ -1276,8 +1278,8 @@ class Pattern(object):
         # i.e., from_0..from_N and to_0..to_N, where N is equal to
         # pat.interface.num_levels:
         num_levels = pat.interface.num_levels
-        if df_pat.index.names != ['from_%i' % i for i in xrange(num_levels)]+\
-           ['to_%i' % i for i in xrange(num_levels)]:
+        if df_pat.index.names != ['from_%i' % i for i in range(num_levels)]+\
+           ['to_%i' % i for i in range(num_levels)]:
             raise ValueError('incorrectly named pattern index levels')
 
         for t in df_pat.index.tolist():
@@ -1337,13 +1339,13 @@ class Pattern(object):
             Pattern instance.
         """
 
-        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
-        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
-        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
-        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
-        data = kwargs['data'] if kwargs.has_key('data') else None
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        validate = kwargs['validate'] if kwargs.has_key('validate') else True
+        from_sel = kwargs.get('from_sel', None)
+        to_sel = kwargs.get('to_sel', None)
+        gpot_sel = kwargs.get('gpot_sel', None)
+        spike_sel = kwargs.get('spike_sel', None)
+        data = kwargs.get('data', None)
+        columns = kwargs.get('columns', ['conn'])
+        validate = kwargs.get('validate', True)
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel,
                                 gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='+', validate=validate)
@@ -1401,7 +1403,7 @@ class Pattern(object):
 
         # Sort the expanded ports so that the results are returned in
         # lexicographic order:
-        df = self.interface.data.ix[sorted(ports)]
+        df = self.interface.data.loc[sorted(ports)]
         if i is None:
             if tuples:
                 return df.index.tolist()
@@ -1454,13 +1456,13 @@ class Pattern(object):
             Pattern instance.
         """
 
-        from_sel = kwargs['from_sel'] if kwargs.has_key('from_sel') else None
-        to_sel = kwargs['to_sel'] if kwargs.has_key('to_sel') else None
-        gpot_sel = kwargs['gpot_sel'] if kwargs.has_key('gpot_sel') else None
-        spike_sel = kwargs['spike_sel'] if kwargs.has_key('spike_sel') else None
-        data = kwargs['data'] if kwargs.has_key('data') else None
-        columns = kwargs['columns'] if kwargs.has_key('columns') else ['conn']
-        validate = kwargs['validate'] if kwargs.has_key('validate') else True
+        from_sel = kwargs.get('from_sel', None)
+        to_sel = kwargs.get('to_sel', None)
+        gpot_sel = kwargs.get('gpot_sel', None)
+        spike_sel = kwargs.get('spike_sel', None)
+        data = kwargs.get('data', None)
+        columns = kwargs.get('columns', ['conn'])
+        validate = kwargs.get('validate', True)
         return cls._create_from(*selectors, from_sel=from_sel, to_sel=to_sel,
                                 gpot_sel=gpot_sel, spike_sel=spike_sel,
                                 data=data, columns=columns, comb_op='.+', validate=validate)
@@ -1578,8 +1580,8 @@ class Pattern(object):
         # If the specified selectors correspond to existing entries,
         # set their attributes:
         if found:
-            for k, v in data.iteritems():
-                self.data[k].ix[idx] = v
+            for k, v in iteritems(data):
+                self.data[k].loc[idx] = v
 
         # Otherwise, populate a new DataFrame with the specified attributes:
         else:
@@ -1649,45 +1651,48 @@ class Pattern(object):
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
         else:
-            to_f = lambda x: x['type'] == dest_type
-            to_int = self.interface.interface_ports(dest_int).data_select(to_f)
+            if dest_type == 'gpot':
+                to_int = self.interface.gpot_ports(dest_int)
+            elif dest_type == 'spike':
+                to_int = self.interface.spike_ports(dest_int)
+            else:
+                to_f = lambda x: x['type'] == dest_type
+                to_int = self.interface.interface_ports(dest_int).data_select(to_f)
 
         # Filter destination ports by specified ports:
         if dest_ports is None:
-            to_idx = to_int.index
+            to_idx = set(to_int.index)
         else:
-            to_idx = to_int[dest_ports].index
+            to_idx = set(to_int[dest_ports].index)
 
         # Filter source ports by specified type:
         if src_type is None:
             from_int = self.interface.interface_ports(src_int)
         else:
-            from_f = lambda x: x['type'] == src_type
-            from_int = self.interface.interface_ports(src_int).data_select(from_f)
-
-        from_idx = from_int.index
-
-        # Construct index from those rows in the pattern whose ports have been
-        # selected by the above code:
-        if isinstance(from_idx, pd.MultiIndex):
-            if isinstance(to_idx, pd.MultiIndex):
-                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice] in to_idx
+            if src_type == 'gpot':
+                from_int = self.interface.gpot_ports(src_int)
+            elif src_type == 'spike':
+                from_int = self.interface.spike_ports(src_int)
             else:
-                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice][0] in to_idx
-        else:
-            if isinstance(to_idx, pd.MultiIndex):
-                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice] in to_idx
-            else:
-                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice][0] in to_idx
-        idx = self.data.select(f).index
+                from_f = lambda x: x['type'] == src_type
+                from_int = self.interface.interface_ports(src_int).data_select(from_f)
+
+
+        from_idx = set(from_int.index)
+
+        idx = []
+        for x in self.data.index:
+            tmp1 = x[self.from_slice]
+            if tmp1 in from_idx:
+                if x[self.to_slice] in to_idx:
+                    idx.append(tmp1)
 
         if not duplicates:
-
             # Remove duplicate tuples from output without perturbing the order
             # of the remaining tuples:
-            return OrderedDict.fromkeys([x[self.from_slice] for x in idx]).keys()
+            return list(OrderedDict.fromkeys(idx).keys())
         else:
-            return [x[self.from_slice] for x in idx]
+            return idx
 
     def dest_idx(self, src_int, dest_int,
                  src_type=None, dest_type=None, src_ports=None):
@@ -1735,41 +1740,43 @@ class Pattern(object):
         if src_type is None:
             from_int = self.interface.interface_ports(src_int)
         else:
-            from_f = lambda x: x['type'] == src_type
-            from_int = self.interface.interface_ports(src_int).data_select(from_f)
+            if src_type == 'gpot':
+                from_int = self.interface.gpot_ports(src_int)
+            elif dest_type == 'spike':
+                from_int = self.interface.spike_ports(src_int)
+            else:
+                from_f = lambda x: x['type'] == src_type
+                from_int = self.interface.interface_ports(src_int).data_select(from_f)
 
         # Filter source ports by specified ports:
         if src_ports is None:
-            from_idx = from_int.index
+            from_idx = set(from_int.index)
         else:
-            from_idx = from_int[src_ports].index
+            from_idx = set(from_int[src_ports].index)
 
         # Filter destination ports by specified type:
         if dest_type is None:
             to_int = self.interface.interface_ports(dest_int)
         else:
-            to_f = lambda x: x['type'] == dest_type
-            to_int = self.interface.interface_ports(dest_int).data_select(to_f)
-
-        to_idx = to_int.index
-
-        # Construct index from those rows in the pattern whose ports have been
-        # selected by the above code:
-        if isinstance(from_idx, pd.MultiIndex):
-            if isinstance(to_idx, pd.MultiIndex):
-                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice] in to_idx
+            if dest_type == 'gpot':
+                to_int = self.interface.gpot_ports(dest_int)
+            elif dest_type == 'spike':
+                to_int = self.interface.spike_ports(dest_int)
             else:
-                f = lambda x: x[self.from_slice] in from_idx and x[self.to_slice][0] in to_idx
-        else:
-            if isinstance(to_idx, pd.MultiIndex):
-                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice] in to_idx
-            else:
-                f = lambda x: x[self.from_slice][0] in from_idx and x[self.to_slice][0] in to_idx
-        idx = self.data.select(f).index
+                to_f = lambda x: x['type'] == dest_type
+                to_int = self.interface.interface_ports(dest_int).data_select(to_f)
 
+        to_idx = set(to_int.index)
+
+        idx = []
+        for x in self.data.index:
+            tmp1 = x[self.to_slice]
+            if tmp1 in to_idx:
+                if x[self.from_slice] in from_idx:
+                    idx.append(tmp1)
         # Remove duplicate tuples from output without perturbing the order
         # of the remaining tuples:
-        return OrderedDict.fromkeys([x[self.to_slice] for x in idx]).keys()
+        return list(OrderedDict.fromkeys(idx).keys())
 
     def __len__(self):
         return self.data.__len__()
@@ -1850,7 +1857,7 @@ class Pattern(object):
         self.data.index.names = index_names
 
     @classmethod
-    def from_graph(cls, g):
+    def from_graph(cls, g, return_key_order = False):
         """Convert a NetworkX directed graph into a Pattern instance.
 
         Parameters
@@ -1858,10 +1865,16 @@ class Pattern(object):
         g : networkx.DiGraph
             Graph to convert. The node identifiers must be port identifiers.
 
+        return_key_order : bool
+            Whether to return the keys of all identifiers
+
         Returns
         -------
         p : Pattern
             Pattern instance.
+        key : List
+              A list of keys of identifier, of which the order determines
+              the numbering of interfaces
 
         Notes
         -----
@@ -1882,12 +1895,12 @@ class Pattern(object):
         ports_to = []
         for n, data in g.nodes(data=True):
             assert SelectorMethods.is_identifier(n)
-            assert data.has_key('interface')
-            if not ports_by_int.has_key(data['interface']):
+            assert 'interface' in data
+            if not data['interface'] in ports_by_int:
                 ports_by_int[data['interface']] = []
             ports_by_int[data['interface']].append(n)
 
-            if data.has_key('type'):
+            if 'type' in data:
                 if data['type'] == 'gpot':
                     ports_gpot.append(n)
                 elif data['type'] == 'spike':
@@ -1902,7 +1915,8 @@ class Pattern(object):
 
         # Create selectors for each interface number:
         selector_list = []
-        for interface in sorted(ports_by_int.keys()):
+        key_order = sorted(ports_by_int.keys())
+        for interface in key_order:
             selector_list.append(','.join(ports_by_int[interface]))
 
         p = cls.from_concat(*selector_list,
@@ -1914,7 +1928,11 @@ class Pattern(object):
 
         p.data.sort_index(inplace=True)
         p.interface.data.sort_index(inplace=True)
-        return p
+
+        if return_key_order:
+            return p, key_order
+        else:
+            return p
 
     @classmethod
     def split_multiindex(cls, idx, a, b):
@@ -1969,7 +1987,7 @@ class Pattern(object):
 
             # Replace NaNs with empty strings:
             d = {k: (v if str(v) != 'nan' else '') \
-                 for k, v in self.interface.data.ix[t].to_dict().iteritems()}
+                 for k, v in iteritems(self.interface.data.loc[t].to_dict())}
 
             # Each node's name corresponds to the port identifier string:
             g.add_node(id, d)
@@ -1980,11 +1998,11 @@ class Pattern(object):
             t_to = t[self.to_slice]
             id_from = self.sel.tokens_to_str(t_from)
             id_to = self.sel.tokens_to_str(t_to)
-            d = self.data.ix[t].to_dict()
+            d = self.data.loc[t].to_dict()
 
             # Discard the 'conn' attribute because the existence of the edge
             # indicates that the connection exists:
-            if d.has_key('conn'):
+            if 'conn' in d:
                 d.pop('conn')
 
             g.add_edge(id_from, id_to, d)

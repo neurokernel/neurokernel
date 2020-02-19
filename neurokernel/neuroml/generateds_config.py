@@ -5,7 +5,7 @@
 import lxml
 from lxml import objectify
 import re
-from config import variables
+from .config import variables
 import csv
 import sys
 
@@ -47,14 +47,14 @@ def traverse_doc(queue,rename):
     else:
         return None
 
-def pluralize(noun):                            
-    if re.search('[sxz]$', noun):             
-        return re.sub('$', 'es', noun)        
+def pluralize(noun):
+    if re.search('[sxz]$', noun):
+        return re.sub('$', 'es', noun)
     elif re.search('[^aeioudgkprt]h$', noun):
-        return re.sub('$', 'es', noun)       
-    elif re.search('[^aeiou]y$', noun):      
-        return re.sub('y$', 'ies', noun)     
-    else:                                    
+        return re.sub('$', 'es', noun)
+    elif re.search('[^aeiou]y$', noun):
+        return re.sub('y$', 'ies', noun)
+    else:
         return noun + 's'
 
 def _node_to_python(node):

@@ -8,6 +8,7 @@ import glob
 import itertools
 import os.path
 import re
+from future.utils import iteritems
 
 import networkx as nx
 
@@ -49,18 +50,19 @@ def graph_to_df(g):
 
     nx_major_version = int(nx.__version__.split('.')[0])
 
+    # Extract the node/edge data:
     if nx_major_version < 2:
-        node_data = {k: v for k, v in g.node.iteritems()}
+        node_data = {k: v for k, v in iteritems(g.node)}
         if not isinstance(g, nx.MultiGraph):
             edge_data = {(k1, k2): v for k1 in g.edge \
-                                        for k2, v in g.edge[k1].iteritems()}
+                                        for k2, v in iteritems(g.edge[k1])}
         else:
             edge_data = {(k1, k2, m): v for k1 in g.edge \
                              for k2 in g.edge[k1] \
-                             for m, v in g.edge[k1][k2].iteritems()}
+                             for m, v in iteritems(g.edge[k1][k2])}
     else:
-        node_data = {k: v for k, v in g.nodes.iteritems()}
-        edge_data = {k1: k2 for k1, k2 in g.edges.iteritems()}
+        node_data = {k: v for k, v in iteritems(g.nodes)}
+        edge_data = {k1: k2 for k1, k2 in iteritems(g.edges)}
 
     # Construct DataFrame instances:
     df_node = pandas.DataFrame.from_dict(node_data).T

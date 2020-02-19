@@ -25,13 +25,14 @@ import getopt
 import re as re_
 import base64
 import datetime as datetime_
+from future.utils import iteritems
 
 etree_ = None
 Verbose_import_ = False
 (
     XMLParser_import_none, XMLParser_import_lxml,
     XMLParser_import_elementtree
-) = range(3)
+) = list(range(3))
 XMLParser_import_library = None
 try:
     # lxml
@@ -90,7 +91,7 @@ def parsexml_(*args, **kwargs):
 
 try:
     from generatedssuper import GeneratedsSuper
-except ImportError, exp:
+except ImportError as exp:
 
     class GeneratedsSuper(object):
         tzoff_pattern = re_.compile(r'(\+|-)((0\d|1[0-3]):[0-5]\d|14:00)$')
@@ -369,7 +370,7 @@ except ImportError, exp:
             return None
         @classmethod
         def gds_reverse_node_mapping(cls, mapping):
-            return dict(((v, k) for k, v in mapping.iteritems()))
+            return dict(((v, k) for k, v in iteritems(mapping)))
 
 
 #
@@ -410,7 +411,7 @@ def showIndent(outfile, level, pretty_print=True):
 def quote_xml(inStr):
     if not inStr:
         return ''
-    s1 = (isinstance(inStr, basestring) and inStr or
+    s1 = (isinstance(inStr, str) and inStr or
           '%s' % inStr)
     s1 = s1.replace('&', '&amp;')
     s1 = s1.replace('<', '&lt;')
@@ -419,7 +420,7 @@ def quote_xml(inStr):
 
 
 def quote_attrib(inStr):
-    s1 = (isinstance(inStr, basestring) and inStr or
+    s1 = (isinstance(inStr, str) and inStr or
           '%s' % inStr)
     s1 = s1.replace('&', '&amp;')
     s1 = s1.replace('<', '&lt;')
@@ -1295,7 +1296,7 @@ class HHVariable(GeneratedsSuper):
             already_processed.add('rate')
             try:
                 self.rate = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (rate): %s' % exp)
         value = find_attr_value_('scale', node)
         if value is not None and 'scale' not in already_processed:
@@ -1719,7 +1720,7 @@ class PlasticityMechanism(GeneratedsSuper):
             already_processed.add('initReleaseProb')
             try:
                 self.init_release_prob = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (initReleaseProb): %s' % exp)
             self.validate_ZeroToOne(self.init_release_prob)    # validate type ZeroToOne
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -1813,7 +1814,7 @@ class SegmentParent(GeneratedsSuper):
             already_processed.add('fractionAlong')
             try:
                 self.fraction_along = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (fractionAlong): %s' % exp)
             self.validate_ZeroToOne(self.fraction_along)    # validate type ZeroToOne
         value = find_attr_value_('segment', node)
@@ -1821,7 +1822,7 @@ class SegmentParent(GeneratedsSuper):
             already_processed.add('segment')
             try:
                 self.segments = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.segments < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -1853,7 +1854,7 @@ class SegmentParent(GeneratedsSuper):
         volume = (pi/3)*length*(prox_diam**2+dist_diam**2+prox_diam*dist_diam)
 
         return volume
-    
+
     @property
     def area(self):
         from math import pi
@@ -1864,7 +1865,7 @@ class SegmentParent(GeneratedsSuper):
         length = self.length
 
         area = pi*(prox_diam+dist_diam)*sqrt((prox_diam-dist_diam)**2+length**2)
-        
+
         return area
     # end class SegmentParent
 
@@ -1968,28 +1969,28 @@ class Point3DWithDiam(GeneratedsSuper):
             already_processed.add('y')
             try:
                 self.y = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (y): %s' % exp)
         value = find_attr_value_('x', node)
         if value is not None and 'x' not in already_processed:
             already_processed.add('x')
             try:
                 self.x = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (x): %s' % exp)
         value = find_attr_value_('z', node)
         if value is not None and 'z' not in already_processed:
             already_processed.add('z')
             try:
                 self.z = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (z): %s' % exp)
         value = find_attr_value_('diameter', node)
         if value is not None and 'diameter' not in already_processed:
             already_processed.add('diameter')
             try:
                 self.diameter = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (diameter): %s' % exp)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
         pass
@@ -2067,7 +2068,7 @@ class ProximalDetails(GeneratedsSuper):
             already_processed.add('translationStart')
             try:
                 self.translation_start = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (translationStart): %s' % exp)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
         pass
@@ -2145,7 +2146,7 @@ class DistalDetails(GeneratedsSuper):
             already_processed.add('normalizationEnd')
             try:
                 self.normalization_end = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (normalizationEnd): %s' % exp)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
         pass
@@ -2226,7 +2227,7 @@ class Member(GeneratedsSuper):
             already_processed.add('segment')
             try:
                 self.segments = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.segments < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -2585,7 +2586,7 @@ class SegmentEndPoint(GeneratedsSuper):
             already_processed.add('segment')
             try:
                 self.segments = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.segments < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -2617,7 +2618,7 @@ class SegmentEndPoint(GeneratedsSuper):
         volume = (pi/3)*length*(prox_diam**2+dist_diam**2+prox_diam*dist_diam)
 
         return volume
-    
+
     @property
     def area(self):
         from math import pi
@@ -2628,7 +2629,7 @@ class SegmentEndPoint(GeneratedsSuper):
         length = self.length
 
         area = pi*(prox_diam+dist_diam)*sqrt((prox_diam-dist_diam)**2+length**2)
-        
+
         return area
     # end class SegmentEndPoint
 
@@ -3768,42 +3769,42 @@ class SpaceStructure(GeneratedsSuper):
             already_processed.add('ySpacing')
             try:
                 self.y_spacing = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (ySpacing): %s' % exp)
         value = find_attr_value_('zStart', node)
         if value is not None and 'zStart' not in already_processed:
             already_processed.add('zStart')
             try:
                 self.z_start = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (zStart): %s' % exp)
         value = find_attr_value_('yStart', node)
         if value is not None and 'yStart' not in already_processed:
             already_processed.add('yStart')
             try:
                 self.y_start = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (yStart): %s' % exp)
         value = find_attr_value_('zSpacing', node)
         if value is not None and 'zSpacing' not in already_processed:
             already_processed.add('zSpacing')
             try:
                 self.z_spacing = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (zSpacing): %s' % exp)
         value = find_attr_value_('xStart', node)
         if value is not None and 'xStart' not in already_processed:
             already_processed.add('xStart')
             try:
                 self.x_start = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (xStart): %s' % exp)
         value = find_attr_value_('xSpacing', node)
         if value is not None and 'xSpacing' not in already_processed:
             already_processed.add('xSpacing')
             try:
                 self.x_spacing = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (xSpacing): %s' % exp)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
         pass
@@ -4009,7 +4010,7 @@ class UnstructuredLayout(GeneratedsSuper):
             already_processed.add('number')
             try:
                 self.number = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.number < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4106,7 +4107,7 @@ class RandomLayout(GeneratedsSuper):
             already_processed.add('number')
             try:
                 self.number = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.number < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4204,7 +4205,7 @@ class GridLayout(GeneratedsSuper):
             already_processed.add('zSize')
             try:
                 self.z_size = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.z_size < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4213,7 +4214,7 @@ class GridLayout(GeneratedsSuper):
             already_processed.add('ySize')
             try:
                 self.y_size = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.y_size < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4222,7 +4223,7 @@ class GridLayout(GeneratedsSuper):
             already_processed.add('xSize')
             try:
                 self.x_size = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.x_size < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4342,7 +4343,7 @@ class Instance(GeneratedsSuper):
             already_processed.add('i')
             try:
                 self.i = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.i < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4351,7 +4352,7 @@ class Instance(GeneratedsSuper):
             already_processed.add('k')
             try:
                 self.k = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.k < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4360,7 +4361,7 @@ class Instance(GeneratedsSuper):
             already_processed.add('j')
             try:
                 self.j = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.j < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4369,7 +4370,7 @@ class Instance(GeneratedsSuper):
             already_processed.add('id')
             try:
                 self.id = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.id < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4471,21 +4472,21 @@ class Location(GeneratedsSuper):
             already_processed.add('y')
             try:
                 self.y = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (y): %s' % exp)
         value = find_attr_value_('x', node)
         if value is not None and 'x' not in already_processed:
             already_processed.add('x')
             try:
                 self.x = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (x): %s' % exp)
         value = find_attr_value_('z', node)
         if value is not None and 'z' not in already_processed:
             already_processed.add('z')
             try:
                 self.z = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (z): %s' % exp)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
         pass
@@ -4745,7 +4746,7 @@ class Connection(GeneratedsSuper):
             already_processed.add('preFractionAlong')
             try:
                 self.pre_fraction_along = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (preFractionAlong): %s' % exp)
             self.validate_ZeroToOne(self.pre_fraction_along)    # validate type ZeroToOne
         value = find_attr_value_('preCellId', node)
@@ -4757,7 +4758,7 @@ class Connection(GeneratedsSuper):
             already_processed.add('postFractionAlong')
             try:
                 self.post_fraction_along = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (postFractionAlong): %s' % exp)
             self.validate_ZeroToOne(self.post_fraction_along)    # validate type ZeroToOne
         value = find_attr_value_('postSegmentId', node)
@@ -4765,7 +4766,7 @@ class Connection(GeneratedsSuper):
             already_processed.add('postSegmentId')
             try:
                 self.post_segment_id = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.post_segment_id < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4779,7 +4780,7 @@ class Connection(GeneratedsSuper):
             already_processed.add('preSegmentId')
             try:
                 self.pre_segment_id = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.pre_segment_id < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -4789,7 +4790,7 @@ class Connection(GeneratedsSuper):
             already_processed.add('id')
             try:
                 self.id = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.id < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -5000,7 +5001,7 @@ class Input(GeneratedsSuper):
             already_processed.add('id')
             try:
                 self.id = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.id < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -6009,7 +6010,7 @@ class Population(Standalone):
             already_processed.add('size')
             try:
                 self.size = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         super(Population, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -8433,7 +8434,7 @@ class ChannelPopulation(Base):
             already_processed.add('number')
             try:
                 self.number = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.number < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -9219,7 +9220,7 @@ class SegmentGroup(Base):
         volume = (pi/3)*length*(prox_diam**2+dist_diam**2+prox_diam*dist_diam)
 
         return volume
-    
+
     @property
     def area(self):
         from math import pi
@@ -9230,7 +9231,7 @@ class SegmentGroup(Base):
         length = self.length
 
         area = pi*(prox_diam+dist_diam)*sqrt((prox_diam-dist_diam)**2+length**2)
-        
+
         return area
     # end class SegmentGroup
 
@@ -9359,7 +9360,7 @@ class Segment(BaseWithoutId):
             already_processed.add('id')
             try:
                 self.id = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             if self.id < 0:
                 raise_parse_error(node, 'Invalid NonNegativeInteger')
@@ -9411,7 +9412,7 @@ class Segment(BaseWithoutId):
         volume = (pi/3)*length*(prox_diam**2+dist_diam**2+prox_diam*dist_diam)
 
         return volume
-    
+
     @property
     def area(self):
         from math import pi
@@ -9422,7 +9423,7 @@ class Segment(BaseWithoutId):
         length = self.length
 
         area = pi*(prox_diam+dist_diam)*sqrt((prox_diam-dist_diam)**2+length**2)
-        
+
         return area
     # end class Segment
 
@@ -10137,7 +10138,7 @@ class GateHHRatesInf(Base):
             already_processed.add('instances')
             try:
                 self.instances = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('type', node)
         if value is not None and 'type' not in already_processed:
@@ -10322,7 +10323,7 @@ class GateHHRatesTau(Base):
             already_processed.add('instances')
             try:
                 self.instances = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('type', node)
         if value is not None and 'type' not in already_processed:
@@ -10496,7 +10497,7 @@ class GateHHTauInf(Base):
             already_processed.add('instances')
             try:
                 self.instances = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('type', node)
         if value is not None and 'type' not in already_processed:
@@ -10665,7 +10666,7 @@ class GateHHRates(Base):
             already_processed.add('instances')
             try:
                 self.instances = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('type', node)
         if value is not None and 'type' not in already_processed:
@@ -10856,7 +10857,7 @@ class GateHHUndetermined(Base):
             already_processed.add('instances')
             try:
                 self.instances = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('type', node)
         if value is not None and 'type' not in already_processed:
@@ -12421,7 +12422,7 @@ class Port(BaseWithoutId):
             already_processed.add('interface')
             try:
                 self.interface = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('identifier', node)
         if value is not None and 'identifier' not in already_processed:
@@ -12753,7 +12754,7 @@ class ModuleConnection(BaseWithoutId):
             already_processed.add('int1')
             try:
                 self.int1 = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         value = find_attr_value_('pat', node)
         if value is not None and 'pat' not in already_processed:
@@ -12775,7 +12776,7 @@ class ModuleConnection(BaseWithoutId):
             already_processed.add('int0')
             try:
                 self.int0 = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
         super(ModuleConnection, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -13451,7 +13452,7 @@ class PowerGpotGpotSynapse(Standalone):
             already_processed.add('class')
             try:
                 self.class_ = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             self.validate_synClassTypes(self.class_)    # validate type synClassTypes
         value = find_attr_value_('xsi:type', node)
@@ -13633,7 +13634,7 @@ class AlphaSynapse(Standalone):
             already_processed.add('class')
             try:
                 self.class_ = int(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise_parse_error(node, 'Bad integer attribute: %s' % exp)
             self.validate_synClassTypes(self.class_)    # validate type synClassTypes
         value = find_attr_value_('ad', node)
@@ -14182,7 +14183,7 @@ class BasePynnSynapse(BaseSynapse):
             already_processed.add('tau_syn')
             try:
                 self.tau_syn = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_syn): %s' % exp)
         value = find_attr_value_('xsi:type', node)
         if value is not None and 'xsi:type' not in already_processed:
@@ -14311,35 +14312,35 @@ class basePyNNCell(BaseCell):
             already_processed.add('tau_syn_I')
             try:
                 self.tau_syn_I = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_syn_I): %s' % exp)
         value = find_attr_value_('tau_syn_E', node)
         if value is not None and 'tau_syn_E' not in already_processed:
             already_processed.add('tau_syn_E')
             try:
                 self.tau_syn_E = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_syn_E): %s' % exp)
         value = find_attr_value_('i_offset', node)
         if value is not None and 'i_offset' not in already_processed:
             already_processed.add('i_offset')
             try:
                 self.i_offset = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (i_offset): %s' % exp)
         value = find_attr_value_('cm', node)
         if value is not None and 'cm' not in already_processed:
             already_processed.add('cm')
             try:
                 self.cm = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (cm): %s' % exp)
         value = find_attr_value_('v_init', node)
         if value is not None and 'v_init' not in already_processed:
             already_processed.add('v_init')
             try:
                 self.v_init = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_init): %s' % exp)
         value = find_attr_value_('xsi:type', node)
         if value is not None and 'xsi:type' not in already_processed:
@@ -16007,7 +16008,7 @@ class AlphaCondSynapse(BasePynnSynapse):
             already_processed.add('e_rev')
             try:
                 self.e_rev = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev): %s' % exp)
         super(AlphaCondSynapse, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -16091,7 +16092,7 @@ class ExpCondSynapse(BasePynnSynapse):
             already_processed.add('e_rev')
             try:
                 self.e_rev = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev): %s' % exp)
         super(ExpCondSynapse, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -16247,63 +16248,63 @@ class HH_cond_exp(basePyNNCell):
             already_processed.add('gbar_K')
             try:
                 self.gbar_K = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (gbar_K): %s' % exp)
         value = find_attr_value_('e_rev_E', node)
         if value is not None and 'e_rev_E' not in already_processed:
             already_processed.add('e_rev_E')
             try:
                 self.e_rev_E = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_E): %s' % exp)
         value = find_attr_value_('g_leak', node)
         if value is not None and 'g_leak' not in already_processed:
             already_processed.add('g_leak')
             try:
                 self.g_leak = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (g_leak): %s' % exp)
         value = find_attr_value_('e_rev_Na', node)
         if value is not None and 'e_rev_Na' not in already_processed:
             already_processed.add('e_rev_Na')
             try:
                 self.e_rev_Na = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_Na): %s' % exp)
         value = find_attr_value_('e_rev_I', node)
         if value is not None and 'e_rev_I' not in already_processed:
             already_processed.add('e_rev_I')
             try:
                 self.e_rev_I = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_I): %s' % exp)
         value = find_attr_value_('e_rev_K', node)
         if value is not None and 'e_rev_K' not in already_processed:
             already_processed.add('e_rev_K')
             try:
                 self.e_rev_K = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_K): %s' % exp)
         value = find_attr_value_('e_rev_leak', node)
         if value is not None and 'e_rev_leak' not in already_processed:
             already_processed.add('e_rev_leak')
             try:
                 self.e_rev_leak = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_leak): %s' % exp)
         value = find_attr_value_('v_offset', node)
         if value is not None and 'v_offset' not in already_processed:
             already_processed.add('v_offset')
             try:
                 self.v_offset = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_offset): %s' % exp)
         value = find_attr_value_('gbar_Na', node)
         if value is not None and 'gbar_Na' not in already_processed:
             already_processed.add('gbar_Na')
             try:
                 self.gbar_Na = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (gbar_Na): %s' % exp)
         super(HH_cond_exp, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -16428,35 +16429,35 @@ class basePyNNIaFCell(basePyNNCell):
             already_processed.add('tau_refrac')
             try:
                 self.tau_refrac = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_refrac): %s' % exp)
         value = find_attr_value_('v_thresh', node)
         if value is not None and 'v_thresh' not in already_processed:
             already_processed.add('v_thresh')
             try:
                 self.v_thresh = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_thresh): %s' % exp)
         value = find_attr_value_('tau_m', node)
         if value is not None and 'tau_m' not in already_processed:
             already_processed.add('tau_m')
             try:
                 self.tau_m = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_m): %s' % exp)
         value = find_attr_value_('v_reset', node)
         if value is not None and 'v_reset' not in already_processed:
             already_processed.add('v_reset')
             try:
                 self.v_reset = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_reset): %s' % exp)
         value = find_attr_value_('v_rest', node)
         if value is not None and 'v_rest' not in already_processed:
             already_processed.add('v_rest')
             try:
                 self.v_rest = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_rest): %s' % exp)
         value = find_attr_value_('xsi:type', node)
         if value is not None and 'xsi:type' not in already_processed:
@@ -17057,14 +17058,14 @@ class basePyNNIaFCondCell(basePyNNIaFCell):
             already_processed.add('e_rev_I')
             try:
                 self.e_rev_I = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_I): %s' % exp)
         value = find_attr_value_('e_rev_E', node)
         if value is not None and 'e_rev_E' not in already_processed:
             already_processed.add('e_rev_E')
             try:
                 self.e_rev_E = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (e_rev_E): %s' % exp)
         value = find_attr_value_('xsi:type', node)
         if value is not None and 'xsi:type' not in already_processed:
@@ -17291,35 +17292,35 @@ class EIF_cond_alpha_isfa_ista(basePyNNIaFCondCell):
             already_processed.add('a')
             try:
                 self.a = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (a): %s' % exp)
         value = find_attr_value_('delta_T', node)
         if value is not None and 'delta_T' not in already_processed:
             already_processed.add('delta_T')
             try:
                 self.delta_t = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (delta_T): %s' % exp)
         value = find_attr_value_('b', node)
         if value is not None and 'b' not in already_processed:
             already_processed.add('b')
             try:
                 self.b = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (b): %s' % exp)
         value = find_attr_value_('v_spike', node)
         if value is not None and 'v_spike' not in already_processed:
             already_processed.add('v_spike')
             try:
                 self.v_spike = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_spike): %s' % exp)
         value = find_attr_value_('tau_w', node)
         if value is not None and 'tau_w' not in already_processed:
             already_processed.add('tau_w')
             try:
                 self.tau_w = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_w): %s' % exp)
         super(EIF_cond_alpha_isfa_ista, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -17439,35 +17440,35 @@ class EIF_cond_exp_isfa_ista(basePyNNIaFCondCell):
             already_processed.add('a')
             try:
                 self.a = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (a): %s' % exp)
         value = find_attr_value_('delta_T', node)
         if value is not None and 'delta_T' not in already_processed:
             already_processed.add('delta_T')
             try:
                 self.delta_t = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (delta_T): %s' % exp)
         value = find_attr_value_('b', node)
         if value is not None and 'b' not in already_processed:
             already_processed.add('b')
             try:
                 self.b = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (b): %s' % exp)
         value = find_attr_value_('v_spike', node)
         if value is not None and 'v_spike' not in already_processed:
             already_processed.add('v_spike')
             try:
                 self.v_spike = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (v_spike): %s' % exp)
         value = find_attr_value_('tau_w', node)
         if value is not None and 'tau_w' not in already_processed:
             already_processed.add('tau_w')
             try:
                 self.tau_w = float(value)
-            except ValueError, exp:
+            except ValueError as exp:
                 raise ValueError('Bad float/double attribute (tau_w): %s' % exp)
         super(EIF_cond_exp_isfa_ista, self).buildAttributes(node, attrs, already_processed)
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
@@ -17721,7 +17722,7 @@ Usage: python <Parser>.py [ -s ] <in_xml_file>
 
 
 def usage():
-    print USAGE_TEXT
+    print(USAGE_TEXT)
     sys.exit(1)
 
 

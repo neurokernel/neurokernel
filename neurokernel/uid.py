@@ -19,7 +19,7 @@ def uid(n=5):
     """
 
     global _count
-    c = _count.next()
+    c = next(_count)
     if len(str(c)) > n:
         raise ValueError('UID width exceeded')
     return re.sub('\s', '0', ('{c:%i}' % n).format(c=c))

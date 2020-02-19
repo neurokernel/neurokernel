@@ -15,12 +15,12 @@ def func2(x):
 class test_all_global_vars(TestCase):
     def test_func(self):
         r = all_global_vars(func1)
-        assert r.has_key('random') and inspect.ismodule(r['random'])
+        assert 'random' in r and inspect.ismodule(r['random'])
 
     def test_func_imported(self):
         r = all_global_vars(func2)
-        assert len(r.keys()) == 1 and \
-            r.has_key('Integral') and inspect.isclass(r['Integral'])
+        assert len(list(r.keys())) == 1 and \
+            'Integral' in r and inspect.isclass(r['Integral'])
 
     def test_class_member(self):
         class Foo(object):
@@ -28,8 +28,8 @@ class test_all_global_vars(TestCase):
                 return random.random()+x
 
         r = all_global_vars(Foo)
-        assert len(r.keys()) == 1 and \
-            r.has_key('random') and inspect.ismodule(r['random'])
+        assert len(list(r.keys())) == 1 and \
+            'random' in r and inspect.ismodule(r['random'])
 
     def test_class_instance_member(self):
         class Foo(object):
@@ -37,8 +37,8 @@ class test_all_global_vars(TestCase):
                 return random.random()+x
 
         r = all_global_vars(Foo())
-        assert len(r.keys()) == 1 and \
-            r.has_key('random') and inspect.ismodule(r['random'])
+        assert len(list(r.keys())) == 1 and \
+            'random' in r and inspect.ismodule(r['random'])
 
     def test_class_member_calls_func(self):
         class Foo(object):
@@ -46,9 +46,9 @@ class test_all_global_vars(TestCase):
                 return func1(x)
 
         r = all_global_vars(Foo)
-        assert len(r.keys()) == 2 and \
-            r.has_key('random') and inspect.ismodule(r['random']) and \
-            r.has_key('func1') and inspect.isfunction(r['func1'])
+        assert len(list(r.keys())) == 2 and \
+            'random' in r and inspect.ismodule(r['random']) and \
+            'func1' in r and inspect.isfunction(r['func1'])
 
     def test_class_child(self):
         class Foo(object):
@@ -60,10 +60,10 @@ class test_all_global_vars(TestCase):
                 return super(Bar, self).foo(x)
 
         r = all_global_vars(Bar)
-        assert len(r.keys()) == 3 and \
-            r.has_key('random') and inspect.ismodule(r['random']) and \
-            r.has_key('Foo') and inspect.isclass(r['Foo']) and \
-            r.has_key('Bar') and inspect.isclass(r['Bar'])
+        assert len(list(r.keys())) == 3 and \
+            'random' in r and inspect.ismodule(r['random']) and \
+            'Foo' in r and inspect.isclass(r['Foo']) and \
+            'Bar' in r and inspect.isclass(r['Bar'])
 
     def test_class_in_func(self):
         class Foo(object):
@@ -74,8 +74,8 @@ class test_all_global_vars(TestCase):
             return Foo().foo(x)
 
         r = all_global_vars(bar)
-        assert len(r.keys()) == 2 and \
-            r.has_key('random') and inspect.ismodule(r['random'])
+        assert len(list(r.keys())) == 2 and \
+            'random' in r and inspect.ismodule(r['random'])
 
 if __name__ == '__main__':
     main()

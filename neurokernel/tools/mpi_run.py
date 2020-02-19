@@ -11,7 +11,7 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=False,
             log_screen=False, log_file_name='neurokernel.log'):
     """
     Run a function with mpiexec.
-    
+
     Implemented as a fix to 'import neurokernel.mpi_relaunch', which does not
     work within notebooks. Writes the source code for a function to a temporary
     file and then runs the temporary file using mpiexec. Returns the stdout of
@@ -35,7 +35,7 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=False,
         Whether or not to send log messages to the screen.
     log_file_name : str
         File to send log messages to.
-    
+
     Returns
     -------
     output : str
@@ -50,19 +50,19 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=False,
     """
 
     l = LoggerMixin("mpi_run()",log_on=log)
-    
+
     if callable(func):
         func_text = inspect.getsource(func)
         # Make a feeble attempt at fixing indentation. Will work for a nested function
         # that takes no args, not a member function that expects (self) or a class
         func_text = "\n" + re.sub(r"(^\s+)def ","def ",func_text) + "\n"
         func_name = func.__name__
-    else: 
+    else:
         func_text = "\n" + func + "\n"
         func_name = re.search('def *(.*)\(\):', func_text).group(1)
 
     target_text  = "\n"
-    
+
     if targets:
         for t in targets:
             target_text +=  "\n" + inspect.getsource(t) + "\n"
@@ -92,14 +92,14 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=False,
         from mpi4py import MPI
         #Write code for the function to a temp file
         temp = tempfile.NamedTemporaryFile(delete = delete_tempfile)
-        temp.write(target_text)
-        temp.write(func_text)
-        temp.write(main_code)
+        temp.write(bytearray(target_text, 'ascii'))
+        temp.write(bytearray(func_text, 'ascii'))
+        temp.write(bytearray(main_code, 'ascii'))
         temp.flush()
-        
+
         #Execute the code
-        #There's a bug in Open MPI v2 that prevents running this with mpiexec. Running 'from mpi4py import MPI' 
-        #does a basic mpi_relaunch which will work for the notebook code, but you give up some of the features 
+        #There's a bug in Open MPI v2 that prevents running this with mpiexec. Running 'from mpi4py import MPI'
+        #does a basic mpi_relaunch which will work for the notebook code, but you give up some of the features
         #of mpiexec.
         if MPI.Get_library_version().startswith("Open MPI v2"):
             command = ["python", temp.name]
@@ -108,23 +108,24 @@ def mpi_run(func, targets=None, delete_tempfile=True, log=False,
 
         # Prevent SLURM from preventing mpiexec from starting multiple processes
         env = os.environ.copy()
+        env_copy = env.copy()
         for k in env.keys():
             if k.startswith("SLURM"):
-                del env[k]
-        
+                del env_copy[k]
+
         l.log_info("Calling: " + " ".join(command))
-        out = subprocess.check_output(command, env = env)
+        out = subprocess.check_output(command, env = env_copy)
 
     except Exception as e:
         l.log_error(str(e))
         raise
 
-    finally:    
+    finally:
         #Closing the temp file closes and deletes it
         temp.close()
-    
+
     #Return the output
-    if "MPI_RUN_FAILURE" in out:
+    if b"MPI_RUN_FAILURE" in out:
         raise RuntimeError(out)
 
     return str(out)
@@ -134,7 +135,7 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
                     log_screen=False, log_file_name='neurokernel.log'):
     """
     Run the manager with mpiexec.
-    
+
     Implemented as a fix to 'import neurokernel.mpi_relaunch', which does not work
     in notebooks. Serializes the manager and sends it to a temporary file, then
     sends a function to mpi_run, which loads the manager in an mpiexec process and
@@ -144,7 +145,7 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
         man.wait()
     Returns the stdout of from the manager along with a string indicating whether
     or not the manager ran properly.
-    
+
     Parameters
     ----------
     man : neurokernel.core_gpu.Manager or neurokernel.core.Manager
@@ -162,15 +163,15 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
         Whether or not to send log messages to the screen.
     log_file_name : str
         File to send log messages to.
-    
+
     Returns
     -------
     output : str
         The stdout from the manager run with mpiexec cast to a string.
-    
+
     Usage
     -----
-    Returns the stdout from the manager 
+    Returns the stdout from the manager
     """
 
     l = LoggerMixin("mpi_run_manager()",log_on=log)
@@ -180,7 +181,7 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
     func_code += "\n    import dill"
     func_code += "\n    f = open(\"%s\",\"rb\")"
     func_code += "\n    man = dill.load(f)"
-    func_code += "\n    man.spawn()" 
+    func_code += "\n    man.spawn()"
     func_code += "\n    man.start(steps=%i)"
     func_code += "\n    man.wait()"
 
@@ -189,9 +190,9 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
         temp = tempfile.NamedTemporaryFile(delete = delete_tempfile)
         dill.dump(man, temp)
         temp.flush()
-        
+
         #Run the function using mpiexec
-        out = mpi_run(func_code % (temp.name,steps), targets, 
+        out = mpi_run(func_code % (temp.name,steps), targets,
                       delete_tempfile=delete_tempfile, log=log,
                       log_screen=log_screen, log_file_name=log_file_name)
 
@@ -199,10 +200,10 @@ def mpi_run_manager(man, steps, targets=None, delete_tempfile=True, log=False,
         l.log_error(str(e))
         raise
 
-    finally:    
+    finally:
         #Closing the temp file closes and deletes it
         temp.close()
-    
+
     #Return the output
     return str(out)
 
@@ -213,11 +214,11 @@ if __name__ == "__main__":
     from tools.logging import setup_logger
     setup_logger(screen=True, file_name='neurokernel.log', multiline=True)
 
-    def _test_success(): 
+    def _test_success():
         print("HELLO WORLD")
 
-    def _test_fail(): 
-        open("RANDOM_FILE", "r").read() 
+    def _test_fail():
+        open("RANDOM_FILE", "r").read()
 
     print("This should succeed:")
     print(mpi_run(_test_success))
@@ -229,4 +230,3 @@ if __name__ == "__main__":
 
     print("This should fail:")
     print(mpi_run(_test_fail))
-

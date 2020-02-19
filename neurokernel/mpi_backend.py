@@ -9,6 +9,7 @@ import importlib
 # Use dill for mpi4py object serialization to accomodate a wider range of argument
 # possibilities than possible with pickle:
 import dill
+from future.utils import iteritems
 
 # XXX This is a Neuroarch-related workaround required to compensate for dill's
 # inability to serialize namedtuple within a module:
@@ -68,7 +69,7 @@ emitters = parent.recv()
 # If any of the emitters contain MPIOutput instances, they need to be replaced
 # by newly initialized instances so that they write to valid file handles and
 # use the intercommunicator to the parent process:
-for k, v in emitters.iteritems():
+for k, v in iteritems(emitters):
     if isinstance(v._output, neurokernel.tools.mpi.MPIOutput):
         level = v.min_level
         name = v._output.filename
@@ -92,7 +93,7 @@ target, target_globals, kwargs = parent.recv()
 
 # Insert the transmitted globals into the current scope:
 globals()[target.__name__] = target
-for k, n in target_globals.iteritems():
+for k, n in iteritems(target_globals):
     globals()[k] = n
 
 # Add the routing table to the target arguments:
