@@ -77,6 +77,7 @@ if __name__ == "__main__":
             'scipy >= 0.11.0',
             'shutilwhich >= 1.1.0',
             'twiggy >= 0.4.7',
+            'tqdm'
         ],
         extras_require = {
             'sphinx': ['sphinx >= 1.3'],
