@@ -67,7 +67,7 @@ if __name__ == "__main__":
             'markupsafe >= 0.23',
             'matplotlib >= 1.4.3',
             'mpi4py >= 1.3.1',
-            'networkx >= 1.9.1',
+            'networkx <= 2.3',
             'numexpr >= 2.3',
             'numpy >= 1.9.2',
             'pandas >= 0.16.0',
