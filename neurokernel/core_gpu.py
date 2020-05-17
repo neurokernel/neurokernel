@@ -565,11 +565,12 @@ class Module(mpi.Worker):
         # Initialize transmission buffers:
         self._init_comm_bufs()
 
+        cuda.Context.Synchronize()
+
         # Start timing the main loop:
-        if self.time_sync:
-            self.intercomm.isend(['start_time', (self.rank, time.time())],
-                                 dest=0, tag=self._ctrl_tag)
-            self.log_info('sent start time to manager')
+        self.intercomm.isend(['start_time', (self.rank, time.time())],
+                             dest=0, tag=self._ctrl_tag)
+        self.log_info('sent start time to manager')
 
     def post_run(self):
         """
@@ -581,12 +582,12 @@ class Module(mpi.Worker):
 
         self.log_info('running code after body of worker %s' % self.rank)
 
+        cuda.Context.Synchronize()
         # Stop timing the main loop before shutting down the emulation:
-        if self.time_sync:
-            self.intercomm.isend(['stop_time', (self.rank, time.time())],
-                                 dest=0, tag=self._ctrl_tag)
+        self.intercomm.isend(['stop_time', (self.rank, time.time())],
+                             dest=0, tag=self._ctrl_tag)
 
-            self.log_info('sent stop time to manager')
+        self.log_info('sent stop time to manager')
 
         # Send acknowledgment message:
         self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
@@ -904,6 +905,8 @@ class Manager(mpi.WorkerManager):
                       '%s, %s, %s, %s' % \
                       (self.average_step_sync_time, self.average_throughput,
                        self.total_throughput, self.stop_time-self.start_time))
+        print('Execution completed in {} seconds'.format(
+                    self.stop_time-self.start_time))
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
