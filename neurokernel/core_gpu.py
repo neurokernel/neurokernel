@@ -898,7 +898,7 @@ class Manager(mpi.WorkerManager):
             else:
                 self.total_throughput = 0.0
 
-    def wait(self):
+    def wait(self, return_timing = False):
         super(Manager, self).wait()
         self.log_info('avg step sync time/avg per-step throughput' \
                       '/total transm throughput/run loop duration:' \
@@ -907,6 +907,8 @@ class Manager(mpi.WorkerManager):
                        self.total_throughput, self.stop_time-self.start_time))
         print('Execution completed in {} seconds'.format(
                     self.stop_time-self.start_time))
+        if return_timing:
+            return self.stop_time-self.start_time
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
