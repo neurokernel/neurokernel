@@ -565,7 +565,7 @@ class Module(mpi.Worker):
         # Initialize transmission buffers:
         self._init_comm_bufs()
 
-        cuda.Context.Synchronize()
+        cuda.Context.synchronize()
 
         # Start timing the main loop:
         self.intercomm.isend(['start_time', (self.rank, time.time())],
@@ -582,7 +582,7 @@ class Module(mpi.Worker):
 
         self.log_info('running code after body of worker %s' % self.rank)
 
-        cuda.Context.Synchronize()
+        cuda.Context.synchronize()
         # Stop timing the main loop before shutting down the emulation:
         self.intercomm.isend(['stop_time', (self.rank, time.time())],
                              dest=0, tag=self._ctrl_tag)
