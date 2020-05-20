@@ -396,7 +396,7 @@ class Interface(object):
         """
 
         assert isinstance(g, nx.Graph)
-        return cls.from_dict(g.node)
+        return cls.from_dict(g.nodes)
 
     @classmethod
     def from_selectors(cls, sel, sel_in='', sel_out='',
@@ -1990,7 +1990,7 @@ class Pattern(object):
                  for k, v in iteritems(self.interface.data.loc[t].to_dict())}
 
             # Each node's name corresponds to the port identifier string:
-            g.add_node(id, d)
+            g.add_node(id, **d)
 
         # Add all of the connections as edges:
         for t in self.data.index:
@@ -2005,7 +2005,7 @@ class Pattern(object):
             if 'conn' in d:
                 d.pop('conn')
 
-            g.add_edge(id_from, id_to, d)
+            g.add_edge(id_from, id_to, **d)
 
         return g
 

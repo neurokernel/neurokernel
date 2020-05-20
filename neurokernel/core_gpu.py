@@ -460,7 +460,7 @@ class Module(mpi.Worker):
         # module's port data array, copy them to a contiguous array, and
         # transmit the latter:
         for dest_id, dest_rank in zip(self._out_ids, self._out_ranks):
-            
+
             # Copy data into destination buffer:
             if self._out_buf['gpot'][dest_id] is not None:
                 set_by_inds(self._out_buf['gpot'][dest_id],
@@ -565,11 +565,12 @@ class Module(mpi.Worker):
         # Initialize transmission buffers:
         self._init_comm_bufs()
 
+        cuda.Context.synchronize()
+
         # Start timing the main loop:
-        if self.time_sync:
-            self.intercomm.isend(['start_time', (self.rank, time.time())],
-                                 dest=0, tag=self._ctrl_tag)
-            self.log_info('sent start time to manager')
+        self.intercomm.isend(['start_time', (self.rank, time.time())],
+                             dest=0, tag=self._ctrl_tag)
+        self.log_info('sent start time to manager')
         if self.print_timing:
             self.total_run_time = {'run_time': 0., 'sync_time': 0.}
 
@@ -585,12 +586,12 @@ class Module(mpi.Worker):
         if self.print_timing:
             print(self.total_run_time)
 
+        cuda.Context.synchronize()
         # Stop timing the main loop before shutting down the emulation:
-        if self.time_sync:
-            self.intercomm.isend(['stop_time', (self.rank, time.time())],
-                                 dest=0, tag=self._ctrl_tag)
+        self.intercomm.isend(['stop_time', (self.rank, time.time())],
+                             dest=0, tag=self._ctrl_tag)
 
-            self.log_info('sent stop time to manager')
+        self.log_info('sent stop time to manager')
 
         # Send acknowledgment message:
         self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
@@ -911,13 +912,17 @@ class Manager(mpi.WorkerManager):
             else:
                 self.total_throughput = 0.0
 
-    def wait(self):
+    def wait(self, return_timing = False):
         super(Manager, self).wait()
         self.log_info('avg step sync time/avg per-step throughput' \
                       '/total transm throughput/run loop duration:' \
                       '%s, %s, %s, %s' % \
                       (self.average_step_sync_time, self.average_throughput,
                        self.total_throughput, self.stop_time-self.start_time))
+        print('Execution completed in {} seconds'.format(
+                    self.stop_time-self.start_time))
+        if return_timing:
+            return self.stop_time-self.start_time
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

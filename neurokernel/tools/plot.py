@@ -14,7 +14,7 @@ def imdisp(f):
     """
     Display the specified image file using matplotlib.
     """
-    
+
     im = plt.imread(f)
     plt.imshow(im)
     plt.axis('off')
@@ -25,7 +25,7 @@ def show_pydot(g):
     """
     Display a networkx graph using pydot.
     """
-    
+
     fd = tempfile.NamedTemporaryFile()
     fd.close()
     p = nx.to_pydot(g)
@@ -47,9 +47,9 @@ def show_pygraphviz(g, prog='dot', graph_attr={}, node_attr={}, edge_attr={}):
         Global node display attributes.
     edge_attr : dict
         Global edge display attributes.
-    
+
     """
-    
+
     fd = tempfile.NamedTemporaryFile(suffix='.jpg')
     fd.close()
     p = nx.to_agraph(g)
