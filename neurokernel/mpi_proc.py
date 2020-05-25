@@ -24,6 +24,7 @@ import mpi4py
 mpi4py.rc.initialize = False
 mpi4py.rc.finalize = False
 from mpi4py import MPI
+from mpi4py.MPI import Info
 
 # mpi4py has changed the method to override pickle with dill various times
 try:
@@ -242,9 +243,15 @@ class ProcessManager(LoggerMixin):
 
         return MPI.Comm.Get_parent() == MPI.COMM_NULL
 
-    def spawn(self):
+    def spawn(self, **kwargs):
         """
         Spawn MPI processes for and execute each of the managed targets.
+
+        Parameters
+        ----------
+        kwargs: dict
+                options for the `info` argument in mpi spawn process.
+                see https://www.open-mpi.org/doc/v4.0/man3/MPI_Comm_spawn.3.php
         """
 
         if self._is_parent:
@@ -253,10 +260,18 @@ class ProcessManager(LoggerMixin):
             parent_dir = os.path.dirname(__file__)
             mpi_backend_path = os.path.join(parent_dir, 'mpi_backend.py')
 
+            # Set spawn option. Due to --oversubscribe, we will use none in binding
+            info = Info.Create()
+            info.Set('bind_to', "none")
+
+            for k, v in kwargs.items():
+                info.Set(k, v)
+
             # Spawn processes:
             self._intercomm = MPI.COMM_SELF.Spawn(sys.executable,
                                             args=[mpi_backend_path],
-                                            maxprocs=len(self))
+                                            maxprocs=len(self),
+                                            info = info)
 
             # First, transmit twiggy logging emitters to spawned processes so
             # that they can configure their logging facilities:
