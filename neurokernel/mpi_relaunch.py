@@ -42,7 +42,7 @@ if not re.search('mpirun|mpiexec', parent_name):
     # notebook because the overriden iostreams don't have a file
     # descriptor:
     try:
-        subprocess.call(['mpiexec', '--oversubscribe', '--bind-to', 'none', -np', '1']+MPIEXEC_EXTRA_OPTS+\
+        subprocess.call(['mpiexec', '--oversubscribe', '--bind-to', 'none', '-np', '1']+MPIEXEC_EXTRA_OPTS+\
                         [sys.executable, script_name]+sys.argv[1:],
                         env=env,
                         stdout=sys.stdout,
