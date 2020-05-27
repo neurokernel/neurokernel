@@ -8,6 +8,9 @@ import subprocess
 import sys
 import traceback
 
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 import numpy as np
 
@@ -109,7 +112,7 @@ def rand_bin_matrix(sh, N, dtype=np.double):
     result.ravel()[indices[:N]] = 1
     return result
 
-def catch_exception(func, disp, *args, **kwargs):
+def catch_exception(func, disp, debug, *args, **kwargs):
     """
     Catch and report exceptions when executing a function.
 
@@ -142,11 +145,18 @@ def catch_exception(func, disp, *args, **kwargs):
     except Exception as e:
 
         # Find the line number of the innermost traceback frame:
-        for fname in traceback.extract_tb(sys.exc_info()[2]):
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        # error = traceback.format_exception(exc_type, exc_value,
+        #                                    exc_traceback)
+        for fname in traceback.extract_tb(exc_traceback):
             fname, lineno, fn, text = fname
-
-        disp(func.__name__ + ': ' + e.__class__.__name__ + ': ' + str(e.message) + \
+        disp(func.__name__ + ': ' + e.__class__.__name__ + ': ' + str(e) + \
            ' (' + fname + ':' + str(lineno) + ')')
+        if debug:
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      file=sys.stderr)
+            raise e
+        return traceback.format_exception(exc_type, exc_value, exc_traceback)
 
 def memoized_property(fget):
     """
@@ -254,3 +264,7 @@ def renumber_in_order(arr):
             already_seen[e] = next(c)
         result.append(already_seen[e])
     return result
+
+
+class LPUExecutionError(Exception):
+    pass

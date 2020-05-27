@@ -7,6 +7,7 @@ Core Neurokernel classes.
 import atexit
 from collections import OrderedDict
 import time
+import sys
 
 from future.utils import iteritems
 import bidict
@@ -20,20 +21,20 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 from random import randint
 
-from neurokernel.ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+from .ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
-from neurokernel.mixins import LoggerMixin
-from neurokernel import mpi
-from neurokernel.tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
-from neurokernel.tools.logging import setup_logger
-from neurokernel.tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
-from neurokernel.tools.mpi import MPIOutput
-from neurokernel.pattern import Interface, Pattern
-from neurokernel.plsel import Selector, SelectorMethods
-from neurokernel.pm import BasePortMapper
-from neurokernel.pm_gpu import GPUPortMapper
-from neurokernel.routing_table import RoutingTable
-from neurokernel.uid import uid
+from .mixins import LoggerMixin
+from . import mpi
+from .tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
+from .tools.logging import setup_logger
+from .tools.misc import catch_exception, dtype_to_mpi, renumber_in_order, LPUExecutionError
+from .tools.mpi import MPIOutput
+from .pattern import Interface, Pattern
+from .plsel import Selector, SelectorMethods
+from .pm import BasePortMapper
+from .pm_gpu import GPUPortMapper
+from .routing_table import RoutingTable
+from .uid import uid
 
 CTRL_TAG = 1
 
@@ -557,7 +558,7 @@ class Module(mpi.Worker):
         # MPI Request object for resolving asynchronous transfers:
         #self.req = MPI.Request()
 
-        self.log_info('running code before body of worker %s' % self.rank)
+        super(Module, self).pre_run()
 
         # Initialize _out_port_dict and _in_port_dict attributes:
         self._init_port_dicts()
@@ -572,6 +573,7 @@ class Module(mpi.Worker):
                              dest=0, tag=self._ctrl_tag)
         self.log_info('sent start time to manager')
 
+
     def post_run(self):
         """
         Code to run after main loop.
@@ -580,18 +582,13 @@ class Module(mpi.Worker):
         started.
         """
 
-        self.log_info('running code after body of worker %s' % self.rank)
-
         cuda.Context.synchronize()
         # Stop timing the main loop before shutting down the emulation:
         self.intercomm.isend(['stop_time', (self.rank, time.time())],
                              dest=0, tag=self._ctrl_tag)
 
         self.log_info('sent stop time to manager')
-
-        # Send acknowledgment message:
-        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
-        self.log_info('done message sent to manager')
+        super(Module, self).post_run()
 
     def run_step(self):
         """
@@ -625,22 +622,34 @@ class Module(mpi.Worker):
         control message.
         """
 
-        # If the debug flag is set, don't catch exceptions so that
-        # errors will lead to visible failures:
-        if self.debug:
+        # Run the processing step:
+        self.catch_exception_run(self.run_step)
 
-            # Run the processing step:
-            self.run_step()
+        # Synchronize:
+        self.catch_exception_run(self._sync)
 
-            # Synchronize:
-            self._sync()
-        else:
+        # error = catch_exception(self.run_step, self.log_info, self.debug)
+        #
+        # if error is not None:
+        #     self.intercomm.isend(['error', (self.id, self.steps, error)],
+        #                          dest=0, tag=self._ctrl_tag)
+        #     self.log_info('error sent to manager')
 
-            # Run the processing step:
-            catch_exception(self.run_step, self.log_info)
+        # if self.debug:
+        #
+        #     # Run the processing step:
+        #     self.run_step()
+        #
+        #     # Synchronize:
+        #     self._sync()
+        # else:
+        #
+        #     # Run the processing step:
+        #     catch_exception(self.run_step, self.log_info)
+        #
+        #     # Synchronize:
+        #     catch_exception(self._sync, self.log_info)
 
-            # Synchronize:
-            catch_exception(self._sync, self.log_info)
 
 class Manager(mpi.WorkerManager):
     """
@@ -664,8 +673,10 @@ class Manager(mpi.WorkerManager):
 
     def __init__(self, required_args=['sel', 'sel_in', 'sel_out',
                                       'sel_gpot', 'sel_spike'],
-                 ctrl_tag=CTRL_TAG):
+                 ctrl_tag=CTRL_TAG, quit_on_error = True):
         super(Manager, self).__init__(ctrl_tag)
+        self.quit_on_error = quit_on_error
+        self._errors = []
 
         # Required constructor args:
         self.required_args = required_args
@@ -897,6 +908,11 @@ class Manager(mpi.WorkerManager):
                 self.total_throughput = self.total_sync_nbytes/self.total_sync_time
             else:
                 self.total_throughput = 0.0
+        elif msg[0] == 'error':
+            self._errors.append(msg[1])
+            if self.quit_on_error:
+                self.quit()
+
 
     def wait(self, return_timing = False):
         super(Manager, self).wait()
@@ -907,8 +923,16 @@ class Manager(mpi.WorkerManager):
                        self.total_throughput, self.stop_time-self.start_time))
         print('Execution completed in {} seconds'.format(
                     self.stop_time-self.start_time))
+        if self._errors:
+            print('An error occured during execution of LPU {} at step {}:'.format(
+                            self._errors[0][0], self._errors[0][1]),
+                  file = sys.stderr)
+            print(''.join(self._errors[0][2]), file = sys.stderr)
+            raise LPUExecutionError
+
         if return_timing:
             return self.stop_time-self.start_time
+
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

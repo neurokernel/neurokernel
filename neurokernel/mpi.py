@@ -18,7 +18,7 @@ from mpi4py import MPI
 from .mpi_proc import getargnames, Process, ProcessManager
 from .mixins import LoggerMixin
 from .tools.logging import setup_logger, set_excepthook
-from .tools.misc import memoized_property
+from .tools.misc import memoized_property, catch_exception
 
 from tqdm import tqdm
 
@@ -36,13 +36,14 @@ class Worker(Process):
 
     def __init__(self, ctrl_tag=1, *args, **kwargs):
         super(Worker, self).__init__(*args, **kwargs)
-        
+
         # Tag used to distinguish control messages:
         self._ctrl_tag = ctrl_tag
 
         # Execution step counter:
         self.steps = 0
         self.pbar = tqdm()
+        self.error = False
 
     # Define properties to perform validation when the maximum number of
     # execution steps set:
@@ -79,8 +80,8 @@ class Worker(Process):
         This method is invoked by the `run()` method before the main loop is
         started.
         """
-
         self.log_info('running code before body of worker %s' % self.rank)
+        self.post_run_complete = False
 
     def post_run(self):
         """
@@ -89,19 +90,36 @@ class Worker(Process):
         This method is invoked by the `run()` method after the main loop is
         started.
         """
-        self.pbar.close() # it should've already been closed in `run` but just to make sure.
-        self.log_info('running code after body of worker %s' % self.rank)
+        self._finalize()
 
-        # Send acknowledgment message:
-        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
-        self.log_info('done message sent to manager')
+    def _finalize(self):
+        if not self.post_run_complete:
+            self.pbar.close() # it should've already been closed in `run` but just to make sure.
+            self.log_info('running code after body of worker %s' % self.rank)
+
+            # Send acknowledgment message:
+            self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
+            self.log_info('done message sent to manager')
+            self.post_run_complete = True
+
+    def catch_exception_run(self, func, *args, **kwargs):
+        # If the debug flag is set, don't catch exceptions so that
+        # errors will lead to visible failures:
+        error = catch_exception(func, self.log_info, self.debug, *args, **kwargs)
+        if error is not None:
+            if not self.error:
+                self.intercomm.isend(['error', (self.id, self.steps, error)],
+                                     dest=0, tag=self._ctrl_tag)
+                self.log_info('error sent to manager')
+                self.error = True
 
     def run(self):
         """
         Main body of worker process.
         """
 
-        self.pre_run()
+        #self.pre_run()
+        self.catch_exception_run(self.pre_run)
 
         self.log_info('running body of worker %s' % self.rank)
 
@@ -150,11 +168,11 @@ class Worker(Process):
 
                 # Quit:
                 elif msg[0] == 'quit':
-                    if self.max_steps == float('inf'):
-                        self.log_info('quitting')
-                        break
-                    else:
-                        self.log_info('max steps set - not quitting')
+                    # if self.max_steps == float('inf'):
+                    self.log_info('quitting')
+                    break
+                    # else:
+                    #     self.log_info('max steps set - not quitting')
 
                 # Get next message:
                 r_ctrl = []
@@ -181,7 +199,10 @@ class Worker(Process):
                 self.pbar.close()
                 break
 
-        self.post_run()
+        #self.post_run()
+        self.catch_exception_run(self.post_run)
+        if not self.post_run_complete:
+            self._finalize()
 
 class WorkerManager(ProcessManager):
     """
