@@ -106,20 +106,8 @@ class Module(mpi.Worker):
                  id=None, device=None,
                  routing_table=None, rank_to_id=None,
                  debug=False, time_sync=False, print_timing=False):
-        # Generate a unique ID if none is specified:
-        if id is None:
-            self.id = uid()
-        else:
-            # If a unique ID was specified and the routing table is not empty
-            # (i.e., there are connections between multiple modules), the id
-            # must be a node in the routing table:
-            if routing_table is not None and len(routing_table.ids) and \
-                    not routing_table.has_node(id):
-                raise ValueError('routing table must contain specified '
-                                 'module ID: {}'.format(id))
-            self.id = id
-        # self.id will be used
-        super(Module, self).__init__(ctrl_tag, pbar_name = self.id)
+
+        super(Module, self).__init__(ctrl_tag)
         self.debug = debug
         self.time_sync = time_sync
         self.device = device
@@ -176,6 +164,20 @@ class Module(mpi.Worker):
         # Save routing table and mapping between MPI ranks and module IDs:
         self.routing_table = routing_table
         self.rank_to_id = rank_to_id
+
+        # Generate a unique ID if none is specified:
+        if id is None:
+            self.id = uid()
+        else:
+
+            # If a unique ID was specified and the routing table is not empty
+            # (i.e., there are connections between multiple modules), the id
+            # must be a node in the routing table:
+            if routing_table is not None and len(routing_table.ids) and \
+                    not routing_table.has_node(id):
+                raise ValueError('routing table must contain specified '
+                                 'module ID: {}'.format(id))
+            self.id = id
 
         # Reformat logger name:
         LoggerMixin.__init__(self, 'mod %s' % self.id)
@@ -239,6 +241,8 @@ class Module(mpi.Worker):
             cuda.Context.synchronize()
             self.log_info('Elapsed time for creating array and PortMapper {} seconds'.format(time.time()-start))
 
+    def progressbar_name(self):
+        return self.id
 
     def _init_gpu(self):
         """
