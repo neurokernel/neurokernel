@@ -34,7 +34,7 @@ class Worker(Process):
         MPI tag to identify control messages transmitted to worker nodes.
     """
 
-    def __init__(self, ctrl_tag=1, *args, **kwargs):
+    def __init__(self, ctrl_tag=1, pbar_name = 'worker', *args, **kwargs):
         super(Worker, self).__init__(*args, **kwargs)
 
         # Tag used to distinguish control messages:
@@ -42,7 +42,7 @@ class Worker(Process):
 
         # Execution step counter:
         self.steps = 0
-        self.pbar = tqdm()
+        self.pbar = tqdm(desc = pbar_name, position = self.rank)
         self.error = False
 
     # Define properties to perform validation when the maximum number of
@@ -155,7 +155,6 @@ class Worker(Process):
                         running = False
                     else:
                         self.log_info('max steps set - not stopping')
-                    self.pbar.close()
 
                 # Set maximum number of execution steps:
                 elif msg[0] == 'steps':
@@ -196,7 +195,6 @@ class Worker(Process):
             # Leave loop if maximum number of steps has been reached:
             if self.steps >= self.max_steps:
                 self.log_info('maximum steps reached')
-                self.pbar.close()
                 break
 
         #self.post_run()
