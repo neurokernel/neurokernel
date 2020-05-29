@@ -938,8 +938,6 @@ class Manager(mpi.WorkerManager):
                       '%s, %s, %s, %s' % \
                       (self.average_step_sync_time, self.average_throughput,
                        self.total_throughput, self.stop_time-self.start_time))
-        print('Execution completed in {} seconds'.format(
-                    self.stop_time-self.start_time))
         if self._errors:
             print('An error occured during execution of LPU {} at step {}:'.format(
                             self._errors[0][0], self._errors[0][1]),
@@ -947,9 +945,11 @@ class Manager(mpi.WorkerManager):
             print(''.join(self._errors[0][2]), file = sys.stderr)
             raise LPUExecutionError
 
-        if return_timing:
-            return self.stop_time-self.start_time
-
+    def timed_wait(self):
+        self.wait()
+        print('Execution completed in {} seconds'.format(
+                    self.stop_time-self.start_time))
+        return self.stop_time-self.start_time
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch
