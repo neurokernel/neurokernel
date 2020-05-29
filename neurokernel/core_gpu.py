@@ -74,6 +74,9 @@ class Module(mpi.Worker):
     device : int
         GPU device to use. May be set to None if the module does not perform
         GPU processing.
+    manager: bool
+        Managerless running mode flag. It False, run Module without a
+        manager. (default: True).
     routing_table : neurokernel.routing_table.RoutingTable
         Routing table describing data connections between modules. If no routing
         table is specified, the module will be executed in isolation.

@@ -32,6 +32,9 @@ class Worker(Process):
     ----------
     ctrl_tag : int
         MPI tag to identify control messages transmitted to worker nodes.
+    manager: bool
+        Managerless running mode flag. It False, run Module without a
+        manager. (default: True).
     """
 
     def __init__(self, ctrl_tag=1, manager = True, *args, **kwargs):

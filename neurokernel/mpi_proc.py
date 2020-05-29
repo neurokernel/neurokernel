@@ -105,6 +105,12 @@ def args_to_dict(f, *args, **kwargs):
 class Process(LoggerMixin):
     """
     Process class.
+
+    Parameters
+    ----------
+    manager: bool
+        Managerless running mode flag. It False, run Module without a
+        manager. (default: True).
     """
 
     def __init__(self, manager = True, *args, **kwargs):
