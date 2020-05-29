@@ -117,7 +117,7 @@ class Worker(Process):
                     self.log_info('error sent to manager')
                     self.error = True
         else:
-            func(*args, **kwargs)
+            error = catch_exception(func, self.log_info, True, *args, **kwargs)
 
     def run(self, steps = 0):
         """
