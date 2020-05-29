@@ -254,6 +254,10 @@ class ProcessManager(LoggerMixin):
                 see https://www.open-mpi.org/doc/v4.0/man3/MPI_Comm_spawn.3.php
         """
 
+        # Typcially MPI must be have intialized before spawning.
+        if not MPI.Is_initialized():
+            MPI.Init()
+
         if self._is_parent:
             # Find the path to the mpi_backend.py script (which should be in the
             # same directory as this module:
