@@ -34,8 +34,8 @@ class Worker(Process):
         MPI tag to identify control messages transmitted to worker nodes.
     """
 
-    def __init__(self, ctrl_tag=1, *args, **kwargs):
-        super(Worker, self).__init__(*args, **kwargs)
+    def __init__(self, ctrl_tag=1, manager = True, *args, **kwargs):
+        super(Worker, self).__init__(manager = manager, *args, **kwargs)
 
         # Tag used to distinguish control messages:
         self._ctrl_tag = ctrl_tag
@@ -98,23 +98,28 @@ class Worker(Process):
             self.pbar.close() # it should've already been closed in `run` but just to make sure.
             self.log_info('running code after body of worker %s' % self.rank)
 
-            # Send acknowledgment message:
-            self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
-            self.log_info('done message sent to manager')
+            if self.manager:
+                # Send acknowledgment message:
+                self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
+                self.log_info('done message sent to manager')
             self.post_run_complete = True
 
     def catch_exception_run(self, func, *args, **kwargs):
         # If the debug flag is set, don't catch exceptions so that
         # errors will lead to visible failures:
-        error = catch_exception(func, self.log_info, self.debug, *args, **kwargs)
-        if error is not None:
-            if not self.error:
-                self.intercomm.isend(['error', (self.id, self.steps, error)],
-                                     dest=0, tag=self._ctrl_tag)
-                self.log_info('error sent to manager')
-                self.error = True
 
-    def run(self):
+        if self.manager:
+            error = catch_exception(func, self.log_info, self.debug, *args, **kwargs)
+            if error is not None:
+                if not self.error:
+                    self.intercomm.isend(['error', (self.id, self.steps, error)],
+                                         dest=0, tag=self._ctrl_tag)
+                    self.log_info('error sent to manager')
+                    self.error = True
+        else:
+            func(*args, **kwargs)
+
+    def run(self, steps = 0):
         """
         Main body of worker process.
         """
@@ -126,63 +131,68 @@ class Worker(Process):
         self.log_info('running body of worker %s' % self.rank)
 
         # Start listening for control messages from parent process:
-        r_ctrl = []
-        try:
-            d = self.intercomm.irecv(source=0, tag=self._ctrl_tag)
-        except TypeError:
-            # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
-            d = self.intercomm.irecv(dest=0, tag=self._ctrl_tag)
-        r_ctrl.append(d)
+        if self.manager:
+            r_ctrl = []
+            try:
+                d = self.intercomm.irecv(source=0, tag=self._ctrl_tag)
+            except TypeError:
+                # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
+                d = self.intercomm.irecv(dest=0, tag=self._ctrl_tag)
+            r_ctrl.append(d)
+            req = MPI.Request()
 
         running = False
-        req = MPI.Request()
         self.steps = 0
+        if not self.manager:
+            self.max_steps = steps
+            self.pbar.total = self.max_steps
+            running = True
         while True:
+            if self.manager:
+                # Handle control messages (this assumes that only one control
+                # message will arrive at a time):
+                flag, msg_list = req.testall(r_ctrl)
+                if flag:
+                    msg = msg_list[0]
 
-            # Handle control messages (this assumes that only one control
-            # message will arrive at a time):
-            flag, msg_list = req.testall(r_ctrl)
-            if flag:
-                msg = msg_list[0]
+                    # Start executing work method:
+                    if msg[0] == 'start':
+                        self.log_info('starting')
+                        running = True
 
-                # Start executing work method:
-                if msg[0] == 'start':
-                    self.log_info('starting')
-                    running = True
+                    # Stop executing work method::
+                    elif msg[0] == 'stop':
+                        if self.max_steps == float('inf'):
+                            self.log_info('stopping')
+                            running = False
+                        else:
+                            self.log_info('max steps set - not stopping')
 
-                # Stop executing work method::
-                elif msg[0] == 'stop':
-                    if self.max_steps == float('inf'):
-                        self.log_info('stopping')
-                        running = False
-                    else:
-                        self.log_info('max steps set - not stopping')
+                    # Set maximum number of execution steps:
+                    elif msg[0] == 'steps':
+                        if msg[1] == 'inf':
+                            self.max_steps = float('inf')
+                        else:
+                            self.max_steps = int(msg[1])
+                        self.pbar.total = self.max_steps
+                        self.log_info('setting maximum steps to %s' % self.max_steps)
 
-                # Set maximum number of execution steps:
-                elif msg[0] == 'steps':
-                    if msg[1] == 'inf':
-                        self.max_steps = float('inf')
-                    else:
-                        self.max_steps = int(msg[1])
-                    self.pbar.total = self.max_steps
-                    self.log_info('setting maximum steps to %s' % self.max_steps)
+                    # Quit:
+                    elif msg[0] == 'quit':
+                        # if self.max_steps == float('inf'):
+                        self.log_info('quitting')
+                        break
+                        # else:
+                        #     self.log_info('max steps set - not quitting')
 
-                # Quit:
-                elif msg[0] == 'quit':
-                    # if self.max_steps == float('inf'):
-                    self.log_info('quitting')
-                    break
-                    # else:
-                    #     self.log_info('max steps set - not quitting')
-
-                # Get next message:
-                r_ctrl = []
-                try:
-                    d = self.intercomm.irecv(source=0, tag=self._ctrl_tag)
-                except TypeError:
-                    # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
-                    d = self.intercomm.irecv(dest=0, tag=self._ctrl_tag)
-                r_ctrl.append(d)
+                    # Get next message:
+                    r_ctrl = []
+                    try:
+                        d = self.intercomm.irecv(source=0, tag=self._ctrl_tag)
+                    except TypeError:
+                        # irecv() in mpi4py 1.3.1 stable uses 'dest' instead of 'source':
+                        d = self.intercomm.irecv(dest=0, tag=self._ctrl_tag)
+                    r_ctrl.append(d)
 
             # Execute work method; the work method may send data back to the master
             # as a serialized control message containing two elements, e.g.,
@@ -196,6 +206,7 @@ class Worker(Process):
 
             # Leave loop if maximum number of steps has been reached:
             if self.steps >= self.max_steps:
+                running = False
                 self.log_info('maximum steps reached')
                 break
 

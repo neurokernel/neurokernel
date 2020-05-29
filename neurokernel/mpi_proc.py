@@ -107,12 +107,13 @@ class Process(LoggerMixin):
     Process class.
     """
 
-    def __init__(self, *args, **kwargs):
-        LoggerMixin.__init__(self, 'prc %s' % MPI.COMM_WORLD.Get_rank())
+    def __init__(self, manager = True, *args, **kwargs):
+        LoggerMixin.__init__(self, 'prc %s' % MPI.COMM_WORLD.Get_rank() if manager else 0)
         set_excepthook(self.logger, True)
 
         self._args = args
         self._kwargs = kwargs
+        self.manager = manager
 
     @memoized_property
     def intracomm(self):
@@ -120,7 +121,7 @@ class Process(LoggerMixin):
         Intracommunicator to access peer processes.
         """
 
-        return MPI.COMM_WORLD
+        return MPI.COMM_WORLD if self.manager else None
 
     @memoized_property
     def intercomm(self):
@@ -128,7 +129,7 @@ class Process(LoggerMixin):
         Intercommunicator to access parent process.
         """
 
-        return MPI.Comm.Get_parent()
+        return MPI.Comm.Get_parent() if self.manager else None
 
     @memoized_property
     def rank(self):
@@ -136,7 +137,7 @@ class Process(LoggerMixin):
         MPI process rank.
         """
 
-        return MPI.COMM_WORLD.Get_rank()
+        return MPI.COMM_WORLD.Get_rank() if self.manager else 0
 
     @memoized_property
     def size(self):
@@ -144,9 +145,9 @@ class Process(LoggerMixin):
         Number of peer processes.
         """
 
-        return MPI.COMM_WORLD.Get_size()
+        return MPI.COMM_WORLD.Get_size() if self.manager else 1
 
-    def run(self):
+    def run(self, steps = 0):
         """
         Process body.
         """

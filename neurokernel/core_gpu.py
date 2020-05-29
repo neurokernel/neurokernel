@@ -104,10 +104,10 @@ class Module(mpi.Worker):
                  columns=['interface', 'io', 'type'],
                  ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG, spike_tag=SPIKE_TAG,
                  id=None, device=None,
-                 routing_table=None, rank_to_id=None,
+                 manager = True, routing_table=None, rank_to_id=None,
                  debug=False, time_sync=False, print_timing=False):
 
-        super(Module, self).__init__(ctrl_tag)
+        super(Module, self).__init__(ctrl_tag, manager)
         self.debug = debug
         self.time_sync = time_sync
         self.device = device
@@ -131,7 +131,8 @@ class Module(mpi.Worker):
         # This is needed to ensure that MPI_Finalize is called before PyCUDA
         # attempts to clean up; see
         # https://groups.google.com/forum/#!topic/mpi4py/by0Rd5q0Ayw
-        atexit.register(MPI.Finalize)
+        if self.manager:
+            atexit.register(MPI.Finalize)
 
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
@@ -277,6 +278,13 @@ class Module(mpi.Worker):
             else:
                 atexit.register(self.gpu_ctx.pop)
                 self.log_info('GPU %s initialized' % self.device)
+
+    def __del__(self):
+        try:
+            atexit.unregister(self.gpu_ctx.pop)
+            self.gpu_ctx.detach()
+        except:
+            pass
 
     def _init_port_dicts(self):
         """
@@ -563,17 +571,19 @@ class Module(mpi.Worker):
         super(Module, self).pre_run()
 
         # Initialize _out_port_dict and _in_port_dict attributes:
-        self._init_port_dicts()
+        if self.manager:
+            self._init_port_dicts()
 
-        # Initialize transmission buffers:
-        self._init_comm_bufs()
+            # Initialize transmission buffers:
+            self._init_comm_bufs()
 
         cuda.Context.synchronize()
 
         # Start timing the main loop:
-        self.intercomm.isend(['start_time', (self.rank, time.time())],
-                             dest=0, tag=self._ctrl_tag)
-        self.log_info('sent start time to manager')
+        if self.manager:
+            self.intercomm.isend(['start_time', (self.rank, time.time())],
+                                 dest=0, tag=self._ctrl_tag)
+            self.log_info('sent start time to manager')
 
 
     def post_run(self):
@@ -585,9 +595,10 @@ class Module(mpi.Worker):
         """
 
         cuda.Context.synchronize()
-        # Stop timing the main loop before shutting down the emulation:
-        self.intercomm.isend(['stop_time', (self.rank, time.time())],
-                             dest=0, tag=self._ctrl_tag)
+        if self.manager:
+            # Stop timing the main loop before shutting down the emulation:
+            self.intercomm.isend(['stop_time', (self.rank, time.time())],
+                                 dest=0, tag=self._ctrl_tag)
 
         self.log_info('sent stop time to manager')
         super(Module, self).post_run()
@@ -604,7 +615,7 @@ class Module(mpi.Worker):
 
         self.log_info('running execution step')
 
-    def run(self):
+    def run(self, steps = 0):
         """
         Body of process.
         """
@@ -613,7 +624,7 @@ class Module(mpi.Worker):
         with IgnoreKeyboardInterrupt():
 
             # Activate execution loop:
-            super(Module, self).run()
+            super(Module, self).run(steps = steps)
 
     def do_work(self):
         """
@@ -628,7 +639,8 @@ class Module(mpi.Worker):
         self.catch_exception_run(self.run_step)
 
         # Synchronize:
-        self.catch_exception_run(self._sync)
+        if self.manager:
+            self.catch_exception_run(self._sync)
 
         # error = catch_exception(self.run_step, self.log_info, self.debug)
         #
