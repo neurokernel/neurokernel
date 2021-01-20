@@ -622,12 +622,14 @@ class Module(mpi.Worker):
         """
         Body of process.
         """
-
-        # Don't allow keyboard interruption of process:
-        with IgnoreKeyboardInterrupt():
-
-            # Activate execution loop:
+        if not self.manager:
             super(Module, self).run(steps = steps)
+        else:
+        # Don't allow keyboard interruption of process:
+            with IgnoreKeyboardInterrupt():
+
+                # Activate execution loop:
+                super(Module, self).run(steps = steps)
 
     def do_work(self):
         """
