@@ -24,6 +24,7 @@ import mpi4py
 mpi4py.rc.initialize = False
 mpi4py.rc.finalize = False
 from mpi4py import MPI
+from mpi4py.MPI import Info
 
 # mpi4py has changed the method to override pickle with dill various times
 try:
@@ -104,14 +105,21 @@ def args_to_dict(f, *args, **kwargs):
 class Process(LoggerMixin):
     """
     Process class.
+
+    Parameters
+    ----------
+    manager: bool
+        Managerless running mode flag. It False, run Module without a
+        manager. (default: True).
     """
 
-    def __init__(self, *args, **kwargs):
-        LoggerMixin.__init__(self, 'prc %s' % MPI.COMM_WORLD.Get_rank())
+    def __init__(self, manager = True, *args, **kwargs):
+        LoggerMixin.__init__(self, 'prc %s' % MPI.COMM_WORLD.Get_rank() if manager else 0)
         set_excepthook(self.logger, True)
 
         self._args = args
         self._kwargs = kwargs
+        self.manager = manager
 
     @memoized_property
     def intracomm(self):
@@ -119,7 +127,7 @@ class Process(LoggerMixin):
         Intracommunicator to access peer processes.
         """
 
-        return MPI.COMM_WORLD
+        return MPI.COMM_WORLD if self.manager else None
 
     @memoized_property
     def intercomm(self):
@@ -127,7 +135,7 @@ class Process(LoggerMixin):
         Intercommunicator to access parent process.
         """
 
-        return MPI.Comm.Get_parent()
+        return MPI.Comm.Get_parent() if self.manager else None
 
     @memoized_property
     def rank(self):
@@ -135,7 +143,7 @@ class Process(LoggerMixin):
         MPI process rank.
         """
 
-        return MPI.COMM_WORLD.Get_rank()
+        return MPI.COMM_WORLD.Get_rank() if self.manager else 0
 
     @memoized_property
     def size(self):
@@ -143,9 +151,9 @@ class Process(LoggerMixin):
         Number of peer processes.
         """
 
-        return MPI.COMM_WORLD.Get_size()
+        return MPI.COMM_WORLD.Get_size() if self.manager else 1
 
-    def run(self):
+    def run(self, steps = 0):
         """
         Process body.
         """
@@ -242,10 +250,20 @@ class ProcessManager(LoggerMixin):
 
         return MPI.Comm.Get_parent() == MPI.COMM_NULL
 
-    def spawn(self):
+    def spawn(self, **kwargs):
         """
         Spawn MPI processes for and execute each of the managed targets.
+
+        Parameters
+        ----------
+        kwargs: dict
+                options for the `info` argument in mpi spawn process.
+                see https://www.open-mpi.org/doc/v4.0/man3/MPI_Comm_spawn.3.php
         """
+
+        # Typcially MPI must be have intialized before spawning.
+        if not MPI.Is_initialized():
+            MPI.Init()
 
         if self._is_parent:
             # Find the path to the mpi_backend.py script (which should be in the
@@ -253,10 +271,18 @@ class ProcessManager(LoggerMixin):
             parent_dir = os.path.dirname(__file__)
             mpi_backend_path = os.path.join(parent_dir, 'mpi_backend.py')
 
+            # Set spawn option. Due to --oversubscribe, we will use none in binding
+            info = Info.Create()
+            info.Set('bind_to', "none")
+
+            for k, v in kwargs.items():
+                info.Set(k, v)
+
             # Spawn processes:
             self._intercomm = MPI.COMM_SELF.Spawn(sys.executable,
                                             args=[mpi_backend_path],
-                                            maxprocs=len(self))
+                                            maxprocs=len(self),
+                                            info = info)
 
             # First, transmit twiggy logging emitters to spawned processes so
             # that they can configure their logging facilities:

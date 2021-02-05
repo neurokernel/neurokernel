@@ -7,6 +7,7 @@ Core Neurokernel classes.
 import atexit
 from collections import OrderedDict
 import time
+import sys
 
 from future.utils import iteritems
 import bidict
@@ -20,20 +21,20 @@ import pycuda.gpuarray as gpuarray
 import twiggy
 from random import randint
 
-from neurokernel.ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
+from .ctx_managers import IgnoreKeyboardInterrupt, OnKeyboardInterrupt, \
     ExceptionOnSignal, TryExceptionOnSignal
-from neurokernel.mixins import LoggerMixin
-from neurokernel import mpi
-from neurokernel.tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
-from neurokernel.tools.logging import setup_logger
-from neurokernel.tools.misc import catch_exception, dtype_to_mpi, renumber_in_order
-from neurokernel.tools.mpi import MPIOutput
-from neurokernel.pattern import Interface, Pattern
-from neurokernel.plsel import Selector, SelectorMethods
-from neurokernel.pm import BasePortMapper
-from neurokernel.pm_gpu import GPUPortMapper
-from neurokernel.routing_table import RoutingTable
-from neurokernel.uid import uid
+from .mixins import LoggerMixin
+from . import mpi
+from .tools.gpu import bufint, set_by_inds, set_by_inds_from_inds
+from .tools.logging import setup_logger
+from .tools.misc import catch_exception, dtype_to_mpi, renumber_in_order, LPUExecutionError
+from .tools.mpi import MPIOutput
+from .pattern import Interface, Pattern
+from .plsel import Selector, SelectorMethods
+from .pm import BasePortMapper
+from .pm_gpu import GPUPortMapper
+from .routing_table import RoutingTable
+from .uid import uid
 
 CTRL_TAG = 1
 
@@ -73,6 +74,9 @@ class Module(mpi.Worker):
     device : int
         GPU device to use. May be set to None if the module does not perform
         GPU processing.
+    manager: bool
+        Managerless running mode flag. It False, run Module without a
+        manager. (default: True).
     routing_table : neurokernel.routing_table.RoutingTable
         Routing table describing data connections between modules. If no routing
         table is specified, the module will be executed in isolation.
@@ -103,10 +107,10 @@ class Module(mpi.Worker):
                  columns=['interface', 'io', 'type'],
                  ctrl_tag=CTRL_TAG, gpot_tag=GPOT_TAG, spike_tag=SPIKE_TAG,
                  id=None, device=None,
-                 routing_table=None, rank_to_id=None,
+                 manager = True, routing_table=None, rank_to_id=None,
                  debug=False, time_sync=False, print_timing=False):
 
-        super(Module, self).__init__(ctrl_tag)
+        super(Module, self).__init__(ctrl_tag, manager)
         self.debug = debug
         self.time_sync = time_sync
         self.device = device
@@ -130,7 +134,8 @@ class Module(mpi.Worker):
         # This is needed to ensure that MPI_Finalize is called before PyCUDA
         # attempts to clean up; see
         # https://groups.google.com/forum/#!topic/mpi4py/by0Rd5q0Ayw
-        atexit.register(MPI.Finalize)
+        if self.manager:
+            atexit.register(MPI.Finalize)
 
         # Manually register the file close method associated with MPIOutput
         # so that it is called by atexit before MPI.Finalize() (if the file is
@@ -240,6 +245,8 @@ class Module(mpi.Worker):
             cuda.Context.synchronize()
             self.log_info('Elapsed time for creating array and PortMapper {} seconds'.format(time.time()-start))
 
+    def progressbar_name(self):
+        return self.id
 
     def _init_gpu(self):
         """
@@ -274,6 +281,13 @@ class Module(mpi.Worker):
             else:
                 atexit.register(self.gpu_ctx.pop)
                 self.log_info('GPU %s initialized' % self.device)
+
+    def __del__(self):
+        try:
+            atexit.unregister(self.gpu_ctx.pop)
+            self.gpu_ctx.detach()
+        except:
+            pass
 
     def _init_port_dicts(self):
         """
@@ -557,19 +571,23 @@ class Module(mpi.Worker):
         # MPI Request object for resolving asynchronous transfers:
         #self.req = MPI.Request()
 
-        self.log_info('running code before body of worker %s' % self.rank)
+        super(Module, self).pre_run()
 
         # Initialize _out_port_dict and _in_port_dict attributes:
-        self._init_port_dicts()
+        if self.manager:
+            self._init_port_dicts()
 
-        # Initialize transmission buffers:
-        self._init_comm_bufs()
+            # Initialize transmission buffers:
+            self._init_comm_bufs()
+
+        cuda.Context.synchronize()
 
         # Start timing the main loop:
-        if self.time_sync:
+        if self.manager:
             self.intercomm.isend(['start_time', (self.rank, time.time())],
                                  dest=0, tag=self._ctrl_tag)
             self.log_info('sent start time to manager')
+
 
     def post_run(self):
         """
@@ -579,18 +597,14 @@ class Module(mpi.Worker):
         started.
         """
 
-        self.log_info('running code after body of worker %s' % self.rank)
-
-        # Stop timing the main loop before shutting down the emulation:
-        if self.time_sync:
+        cuda.Context.synchronize()
+        if self.manager:
+            # Stop timing the main loop before shutting down the emulation:
             self.intercomm.isend(['stop_time', (self.rank, time.time())],
                                  dest=0, tag=self._ctrl_tag)
 
-            self.log_info('sent stop time to manager')
-
-        # Send acknowledgment message:
-        self.intercomm.isend(['done', self.rank], 0, self._ctrl_tag)
-        self.log_info('done message sent to manager')
+        self.log_info('sent stop time to manager')
+        super(Module, self).post_run()
 
     def run_step(self):
         """
@@ -604,16 +618,18 @@ class Module(mpi.Worker):
 
         self.log_info('running execution step')
 
-    def run(self):
+    def run(self, steps = 0):
         """
         Body of process.
         """
-
+        if not self.manager:
+            super(Module, self).run(steps = steps)
+        else:
         # Don't allow keyboard interruption of process:
-        with IgnoreKeyboardInterrupt():
+            with IgnoreKeyboardInterrupt():
 
-            # Activate execution loop:
-            super(Module, self).run()
+                # Activate execution loop:
+                super(Module, self).run(steps = steps)
 
     def do_work(self):
         """
@@ -624,22 +640,35 @@ class Module(mpi.Worker):
         control message.
         """
 
-        # If the debug flag is set, don't catch exceptions so that
-        # errors will lead to visible failures:
-        if self.debug:
+        # Run the processing step:
+        self.catch_exception_run(self.run_step)
 
-            # Run the processing step:
-            self.run_step()
+        # Synchronize:
+        if self.manager:
+            self.catch_exception_run(self._sync)
 
-            # Synchronize:
-            self._sync()
-        else:
+        # error = catch_exception(self.run_step, self.log_info, self.debug)
+        #
+        # if error is not None:
+        #     self.intercomm.isend(['error', (self.id, self.steps, error)],
+        #                          dest=0, tag=self._ctrl_tag)
+        #     self.log_info('error sent to manager')
 
-            # Run the processing step:
-            catch_exception(self.run_step, self.log_info)
+        # if self.debug:
+        #
+        #     # Run the processing step:
+        #     self.run_step()
+        #
+        #     # Synchronize:
+        #     self._sync()
+        # else:
+        #
+        #     # Run the processing step:
+        #     catch_exception(self.run_step, self.log_info)
+        #
+        #     # Synchronize:
+        #     catch_exception(self._sync, self.log_info)
 
-            # Synchronize:
-            catch_exception(self._sync, self.log_info)
 
 class Manager(mpi.WorkerManager):
     """
@@ -663,8 +692,10 @@ class Manager(mpi.WorkerManager):
 
     def __init__(self, required_args=['sel', 'sel_in', 'sel_out',
                                       'sel_gpot', 'sel_spike'],
-                 ctrl_tag=CTRL_TAG):
+                 ctrl_tag=CTRL_TAG, quit_on_error = True):
         super(Manager, self).__init__(ctrl_tag)
+        self.quit_on_error = quit_on_error
+        self._errors = []
 
         # Required constructor args:
         self.required_args = required_args
@@ -896,14 +927,31 @@ class Manager(mpi.WorkerManager):
                 self.total_throughput = self.total_sync_nbytes/self.total_sync_time
             else:
                 self.total_throughput = 0.0
+        elif msg[0] == 'error':
+            self._errors.append(msg[1])
+            if self.quit_on_error:
+                self.quit()
 
-    def wait(self):
+
+    def wait(self, return_timing = False):
         super(Manager, self).wait()
         self.log_info('avg step sync time/avg per-step throughput' \
                       '/total transm throughput/run loop duration:' \
                       '%s, %s, %s, %s' % \
                       (self.average_step_sync_time, self.average_throughput,
                        self.total_throughput, self.stop_time-self.start_time))
+        if self._errors:
+            print('An error occured during execution of LPU {} at step {}:'.format(
+                            self._errors[0][0], self._errors[0][1]),
+                  file = sys.stderr)
+            print(''.join(self._errors[0][2]), file = sys.stderr)
+            raise LPUExecutionError
+
+    def timed_wait(self):
+        self.wait()
+        print('Execution completed in {} seconds'.format(
+                    self.stop_time-self.start_time))
+        return self.stop_time-self.start_time
 
 if __name__ == '__main__':
     import neurokernel.mpi_relaunch

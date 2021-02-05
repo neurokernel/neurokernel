@@ -15,7 +15,7 @@ from setuptools import find_packages
 from setuptools import setup
 
 NAME =               'neurokernel'
-VERSION =            '0.1'
+VERSION =            '0.2.0'
 AUTHOR =             'Neurokernel Development Team'
 AUTHOR_EMAIL =       'neurokernel-dev@columbia.edu'
 URL =                'https://github.com/neurokernel/neurokernel/'
@@ -67,7 +67,7 @@ if __name__ == "__main__":
             'markupsafe >= 0.23',
             'matplotlib >= 1.4.3',
             'mpi4py >= 1.3.1',
-            'networkx <= 2.3',
+            'networkx >= 2.4',
             'numexpr >= 2.3',
             'numpy >= 1.9.2',
             'pandas >= 0.16.0',

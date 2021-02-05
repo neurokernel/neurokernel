@@ -13,6 +13,9 @@ import twiggy
 # Try to import various dependencies here so that they can be serialized
 # and transmitted to mpi_backend during model execution:
 try:
+    import mpi4py
+    mpi4py.rc.initialize = False
+    mpi4py.rc.finalize = False
     import mpi4py.MPI
 except ImportError:
     pass

@@ -4,6 +4,9 @@
 MPI utilities.
 """
 
+import mpi4py
+mpi4py.rc.initialize = False
+mpi4py.rc.finalize = False
 from mpi4py import MPI
 import twiggy
 
