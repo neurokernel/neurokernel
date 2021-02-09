@@ -15,7 +15,7 @@ from setuptools import find_packages
 from setuptools import setup
 
 NAME =               'neurokernel'
-VERSION =            '0.2.0'
+VERSION =            '0.3.0'
 AUTHOR =             'Neurokernel Development Team'
 AUTHOR_EMAIL =       'neurokernel-dev@columbia.edu'
 URL =                'https://github.com/neurokernel/neurokernel/'
@@ -70,10 +70,10 @@ if __name__ == "__main__":
             'networkx >= 2.4',
             'numexpr >= 2.3',
             'numpy >= 1.9.2',
-            'pandas >= 0.16.0',
+            'pandas >= 1.0.0',
             'ply >= 3.4',
             'psutil >= 2.2.1',
-            'pycuda >= 2015.1',
+            'pycuda >= 2020.1',
             'scipy >= 0.11.0',
             'shutilwhich >= 1.1.0',
             'twiggy >= 0.4.7',
