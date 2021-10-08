@@ -24,7 +24,7 @@ Prerequisites
 Neurokernel requires
 
 * Linux (other operating systems may work, but have not been tested);
-* Python 2.7 (Python 3.0 is not guaranteed to work);
+* Python;
 * at least one NVIDIA GPU with `Fermi
   <http://www.nvidia.com/content/pdf/fermi_white_papers/nvidia_fermi_compute_architecture_whitepaper.pdf>`_
   architecture or later;
@@ -68,96 +68,18 @@ Some of Neurokernel's demos require either `ffmpeg <http://www.fmpeg.org>`_ or `
 
 Installation
 ------------
-Download the latest Neurokernel code as follows: ::
-
-  git clone https://github.com/neurokernel/neurokernel.git
-
-Since Neurokernel requires a fair number of additional Python packages to run,
-it is recommended that it either be installed in a `virtualenv
-<http://www.virtualenv.org/>`_ or `conda <http://conda.io/>`_
-environment. Follow the relevant instructions below.
-
-Virtualenv
-^^^^^^^^^^
-See `this page <https://virtualenv.pypa.io/en/latest/installation.html>`_ for
-virtualenv installation information.
-
-Create a new virtualenv environment and install several required dependencies: ::
-
-  cd ~/
-  virtualenv NK
-  ~/NK/bin/pip install numpy cython numexpr pycuda
-
-If installation of PyCUDA fails because some of the CUDA development files or
-libraries are not found, you may need to specify where they are explicitly. For
-example, if CUDA is installed in ``/usr/local/cuda/``, try installing PyCUDA
-as follows::
-
-  CUDA_ROOT=/usr/local/cuda/ CFLAGS=-I${CUDA_ROOT}/include \
-  LDFLAGS=-L${CUDA_ROOT}/lib64 ~/NK/bin/pip install pycuda
-
-Replace ``${CUDA_ROOT}/lib`` with ``${CUDA_ROOT}/lib64`` if your system is
-running 64-bit Linux. If you continue to encounter installation problems, see
-the `PyCUDA Wiki <http://wiki.tiker.net/PyCuda/Installation>`_ for more information.
-
-Run the following to install the remaining Python package dependencies listed in
-`setup.py`: ::
-
-  cd ~/neurokernel
-  ~/NK/bin/python setup.py develop
 
 Conda
 ^^^^^
-*Note that conda packages are currently only available for 64-bit Ubuntu Linux
-14.04. If you would like packages for another distribution, please submit a
-request to the* |nk_developers|_.
+The easiest way to get neurokernel is to install it in a conda environment: ::
 
-.. _nk_developers: http://github.com/neurokernel/neurokernel/issues
-.. |nk_developers| replace:: *Neurokernel developers*
+  conda create -n nk python=3.7 c-compiler compilers cxx-compiler openmpi -c conda-forge -y
+  conda activate nk
+  python -m pip install neurokernel
 
-First, install the following Ubuntu packages:
+Make sure to enable CUDA support in the installed OpenMPI by setting: ::
 
-*  ``libibverbs1``
-*  ``libnuma1``
-*  ``libpmi0``
-*  ``libslurm26`` (``libslurm29`` for Ubuntu 16.04)
-*  ``libtorque2``
-
-These are required by the conda OpenMPI packages prepared
-for Neurokernel. Ensure that the stock Ubuntu OpenMPI packages are not installed
-because they may interfere with the ones that will be installed by conda. You
-also need to ensure that CUDA has been installed in
-``/usr/local/cuda``.
-
-Install conda by either installing `Anaconda
-<https://store.continuum.io/cshop/anaconda/>`_
-or `Miniconda <http://conda.pydata.org/miniconda.html>`_. Make sure that the
-following lines appear in your `~/.condarc` file so that conda can find the
-packages required by Neurokernel: ::
-
-   channels:
-   - neurokernel/channel/ubuntu1404
-   - defaults
-
-Create a new conda environment containing the packages required by Neurokernel
-by running the following command: ::
-
-   conda create -n NK neurokernel_deps
-
-PyCUDA packages compiled against several versions of CUDA are available. If you
-need one compiled against a specific version that differs from the one
-automatically installed by the above command, you will need to manually install
-it afterwards as follows (replace ``cuda75`` with the appropriate version): ::
-
-  source activate NK
-  conda install pycuda=2015.1.3=np110py27_cuda75_0
-  source deactivate
-
-Activate the new environment and install Neurokernel in it as follows: ::
-
-  source activate NK
-  cd ~/neurokernel
-  python setup.py develop
+  export OMPI_MCA_opal_cuda_support=true
 
 Examples
 --------
