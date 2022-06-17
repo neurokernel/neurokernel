@@ -60,7 +60,7 @@ if __name__ == "__main__":
         include_package_data = True,
         install_requires = [
             'bidict >= 0.11.0',
-            'dill >= 0.2.4',
+            'dill >= 0.2.4, <= 0.3.3',
             'future >= 0.16.0',
             'h5py >= 2.8.0',
             'lxml >= 3.3.0',
