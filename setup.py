@@ -15,7 +15,7 @@ from setuptools import find_packages
 from setuptools import setup
 
 NAME =               'neurokernel'
-VERSION =            '0.3.0'
+VERSION =            '0.3.1'
 AUTHOR =             'Neurokernel Development Team'
 AUTHOR_EMAIL =       'neurokernel-dev@columbia.edu'
 URL =                'https://github.com/neurokernel/neurokernel/'
