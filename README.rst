@@ -123,7 +123,3 @@ See the included `LICENSE`_ file for more information.
 
 .. _LICENSE: LICENSE.rst
 
-Notes
------
-The Neurokernel Project is independent of the NeuroKernel Operating System
-developed by `NeuroDNA Computer <http://www.neurokernel.com>`_.
